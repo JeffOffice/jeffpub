@@ -361,7 +361,8 @@ QByteArray offsetTable(const QVector<QByteArray> &entries, quint32 a, quint32 b,
     return out;
 }
 
-// A style sheet entry: a u16 word count, then a property block.
+// A style sheet entry: a u16 word count (counting itself and the block),
+// the property block, then two zero bytes.
 QByteArray styleEntry(const QVector<B> &props)
 {
     const QByteArray block = lengthPrefixed(props);
@@ -369,6 +370,7 @@ QByteArray styleEntry(const QVector<B> &props)
     putU16(out, quint32((block.size() + 2) / 2));
     out.append(block);
     if (out.size() % 2) out.append('\0');
+    out.append(QByteArray(2, '\0'));   // every entry is followed by two zero bytes
     return out;
 }
 
@@ -872,9 +874,16 @@ QByteArray PubWriter::write(QStringList *skipped)
     if (!m_text.isEmpty()) secs << Section{"TEXT", "TEXT", 0, m_text, false};
     // A one-style sheet: Normal (built-in id -1), 10 pt body font, 6 pt after.
     {
+        // Normal's character properties as Publisher writes them: size (twice),
+        // a font for each of 35 writing systems, text and highlight colors,
+        // and record 0x58. Publisher rejects a sheet whose Normal lacks these.
+        static const quint8 kScriptSlots[] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12,
+                                              0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1e, 0x1f, 0x21, 0x22, 0x23, 0x24, 0x27, 0x28, 0x2a, 0x2c};
         QVector<B> slotsB;
-        for (quint8 s = 0; s < 0x14; ++s) slotsB << rec(s, {u16(0x00, 0)});
-        const QByteArray normalChar = styleEntry({u32(0x0c, 127000, 0x22), rec(0x24, slotsB, 0x8a)});
+        for (quint8 s : kScriptSlots) slotsB << rec(s, {u16(0x00, 0)});
+        const QByteArray normalChar = styleEntry({u32(0x0c, 127000, 0x22), rec(0x24, slotsB, 0x8a), u32(0x39, 127000, 0x22),
+                                                  rec(0x44, {u32(0x00, 0, 0x22)}, 0x8a), rec(0x48, {u32(0x00, 0, 0x22)}, 0x8a),
+                                                  rec(0x58, {u16(0x00, 1, 0x12), u32(0x01, 0, 0x22), u32(0x02, 100000, 0x22)}, 0x8a)});
         const QByteArray normalPara = styleEntry({u32(0x13, 76200, 0x22), u16(0x30, 5, 0x12), u32(0x34, 1450850, 0x22)});
         QByteArray id0;
         putU16(id0, 0);
