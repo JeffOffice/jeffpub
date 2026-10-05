@@ -560,7 +560,10 @@ private:
     QVector<Run> m_charRuns, m_paraRuns;
     QVector<quint32> m_storyLengths;
     QVector<int> m_textIds;
-    QVector<QPair<int, quint32>> m_textShapes;   // text id -> text box sequence number
+    // Text boxes: text id, place in its chain of linked boxes, sequence number.
+    struct TextShape { int tid; int index; quint32 seq; };
+    QVector<TextShape> m_textShapes;
+    QHash<int, int> m_chainLength;   // text id -> boxes in its chain
 };
 
 QByteArray PubWriter::charProps(const QTextCharFormat &f)
@@ -806,6 +809,35 @@ QByteArray PubWriter::write(QStringList *skipped)
     const QVector<Prop> kInsets = {{0x0081, 36576}, {0x0082, 36576}, {0x0083, 36576}, {0x0084, 36576}};
     const QVector<Prop> kTail = {{0x0201, 0x08000000}, {0x0285, 0}, {0x02cb, 0}, {0x02cc, 0}, {0x02ce, 0}, {0x02cf, 0},
                                  {0x0384, 36576}, {0x0385, 36576}, {0x0386, 36576}, {0x0387, 36576}};
+    // Text boxes first: each chain of linked boxes is one story, numbered
+    // in page order by its first box, with a frame per box in chain order.
+    QHash<QString, QPair<int, int>> chainPos;   // box id -> text id, place in chain
+    for (int pi = 0; pi < m_doc.pages.size(); ++pi) {
+        std::function<void(const ItemPtr &)> find = [&](const ItemPtr &it) {
+            if (it->type() == ItemType::Group) {
+                for (const ItemPtr &c : static_cast<const GroupItem *>(it.get())->children) find(c);
+                return;
+            }
+            if (it->type() != ItemType::Text || m_doc.prevFrame(it->id)) return;
+            auto *t = static_cast<const TextItem *>(it.get());
+            const QTextDocument *sd = m_doc.storyDoc(t->storyId);
+            if (!sd) return;
+            const int tid = textId++;
+            addStory(tid, sd);
+            QVector<Frame> frames;
+            QSet<QString> seen;
+            for (const TextItem *box = t; box && !seen.contains(box->id);) {
+                seen.insert(box->id);
+                chainPos[box->id] = qMakePair(tid, int(frames.size()));
+                frames << Frame{box->rect, box->insets, false};
+                Item *nx = box->nextId.isEmpty() ? nullptr : m_doc.item(box->nextId);
+                box = nx && nx->type() == ItemType::Text ? static_cast<const TextItem *>(nx) : nullptr;
+            }
+            m_frames << frames;
+            m_chainLength[tid] = int(frames.size());
+        };
+        for (const ItemPtr &it : m_doc.pages[pi]->items) find(it);
+    }
     for (int pi = 0; pi < m_doc.pages.size(); ++pi) {
         std::function<void(const ItemPtr &)> visit = [&](const ItemPtr &it) {
             if (it->type() == ItemType::Group) {
@@ -820,17 +852,15 @@ QByteArray PubWriter::write(QStringList *skipped)
             };
             if (it->type() == ItemType::Text) {
                 auto *t = static_cast<const TextItem *>(it.get());
-                // A linked box after the first holds no text of its own here.
-                const QTextDocument *sd = m_doc.storyDoc(t->storyId);
-                if (!sd || m_doc.prevFrame(t->id)) {
+                // Every box of a chain names the chain's story.
+                const auto pos = chainPos.constFind(t->id);
+                if (pos == chainPos.cend()) {
                     ++skippedCount;
                     return;
                 }
                 const quint32 seq = next++;
-                const int tid = textId++;
-                addStory(tid, sd);
-                m_frames << QVector<Frame>{{t->rect, t->insets, false}};
-                m_textShapes << qMakePair(tid, seq);
+                const int tid = pos->first;
+                m_textShapes << TextShape{tid, pos->second, seq};
                 cw.put(seq, {0x01, pageSeq[pi], {flag(0x02), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
                                                  u32(0x27, quint32(tid)), u32(0xaa, quint32(emu(r.width()))), u32(0xab, quint32(emu(r.height()))),
                                                  u32(0xb7, 0)}});
@@ -1128,10 +1158,21 @@ QByteArray PubWriter::write(QStringList *skipped)
     // Tables appear only in 0x65, with 03 = 0.
     {
         QVector<B> map, stories;
-        for (const auto &ts : m_textShapes) map << rec(0x00, {u32(0x01, quint32(ts.first)), ref(0x03, ts.second, 0x68)});
+        // 0x61: a record per box, in story then chain order; 02 = place in the chain.
+        QVector<TextShape> boxes = m_textShapes;
+        std::sort(boxes.begin(), boxes.end(), [](const TextShape &a, const TextShape &b) {
+            return a.tid != b.tid ? a.tid < b.tid : a.index < b.index;
+        });
+        for (const TextShape &ts : boxes) {
+            QVector<B> f{u32(0x01, quint32(ts.tid))};
+            if (ts.index) f << u32(0x02, quint32(ts.index));
+            f << ref(0x03, ts.seq, 0x68);
+            map << rec(0x00, f);
+        }
         for (int i = 0; i < m_textIds.size(); ++i) {
             const int id = m_textIds[i];
             QVector<B> f{u32(0x01, quint32(id))};
+            if (m_chainLength.value(id, 1) > 1) f << u16(0x02, quint32(m_chainLength.value(id)));   // boxes in the chain
             if (m_tableTextIds.contains(id)) f << u16(0x03, 0, 0x10);
             // 07: the story's entry in the frame layout section.
             f << u32(0x07, quint32(i + 1)) << u32(0x08, 0xcb18967cu, 0x58) << u32(0x09, 0xcb18967cu, 0x58);

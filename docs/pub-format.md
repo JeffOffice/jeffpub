@@ -203,3 +203,12 @@ text box has one; a table has one per cell, in cell-list order):
 | 16 | 9525 for a text box, 0 for a cell |
 | 0b:1a 0, 0d 0, 11 0, 13:12 255, 14:0a, 15 1, 18 0, 1a:02, 1d:8a {00:22 = -4} | Fixed |
 
+### Linked text boxes
+
+A chain of linked boxes is one story. Every box has its own shape chunk
+and drawing shape, all naming the same text id (`27`, OPT 0x0080 and the
+ClientTextbox). The `0x61` map has a record per box in chain order, with
+`02` = its place in the chain (left out for the first); the story's `0x65`
+record has `02:18` = the number of boxes; its MCLD entry lists a frame per
+box in chain order. The boxes can be on different pages.
+

@@ -376,6 +376,53 @@ private Q_SLOTS:
         QVERIFY2(shapes >= 2, qPrintable(QString::number(shapes)));
     }
 
+    // A chain of linked text boxes (across two pages) is one story in .pub.
+    void pubWriterLinked()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        doc->addPage();
+        QString text = QStringLiteral("test14 linked boxes.");
+        for (int i = 1; i <= 60; ++i) text += QStringLiteral(" Sentence %1 flows on through the linked boxes.").arg(i);
+        const QString story = doc->createStory(text);
+        const QRectF rects[3] = {QRectF(72, 72, 220, 150), QRectF(320, 72, 220, 150), QRectF(72, 72, 220, 200)};
+        QVector<std::shared_ptr<jp::TextItem>> boxes;
+        for (int i = 0; i < 3; ++i) {
+            auto t = std::make_shared<jp::TextItem>();
+            t->rect = rects[i];
+            t->storyId = story;
+            if (i) boxes.last()->nextId = t->id;
+            boxes << t;
+            doc->pages[i < 2 ? 0 : 1]->items.push_back(t);
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("test14-linked.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        QVERIFY2(err.isEmpty(), qPrintable(err));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test14-linked.pub";
+            QFile::remove(out);
+            QFile::copy(path, out);
+        }
+        QString e1;
+        auto back = jp::importPublisherFile(path, &e1);
+        QVERIFY2(back, qPrintable(e1));
+        QVector<jp::TextItem *> got;
+        for (int pi = 0; pi < back->pages.size(); ++pi)
+            jp::walkItems(back->pages[pi]->items, [&](const jp::ItemPtr &it) {
+                if (it->type() == jp::ItemType::Text) got << static_cast<jp::TextItem *>(it.get());
+            });
+        QCOMPARE(got.size(), 3);
+        // One chain, in order, holding the whole text.
+        QVERIFY(!back->prevFrame(got[0]->id));
+        QCOMPARE(got[0]->nextId, got[1]->id);
+        QCOMPARE(got[1]->nextId, got[2]->id);
+        QVERIFY(got[2]->nextId.isEmpty());
+        QCOMPARE(got[1]->storyId, got[0]->storyId);
+        QCOMPARE(back->storyDoc(got[0]->storyId)->toPlainText(), text);
+        for (int i = 0; i < 3; ++i) QVERIFY(std::abs(got[i]->rect.left() - rects[i].left()) < 1 && std::abs(got[i]->rect.height() - rects[i].height()) < 1);
+    }
+
     // Two pages written to .pub read back as two pages, each with its own objects.
     void pubWriterPages()
     {
