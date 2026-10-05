@@ -92,6 +92,17 @@ static const QHash<QString, int> &stretches()
     return t;
 }
 
+QString interchangeFontName(const QString &family)
+{
+    // Only the open fonts drawn to the same character widths as a standard
+    // font; text laid out with one lays out the same with the other.
+    static const QHash<QString, QString> t{
+        {"Arimo", "Arial"}, {"Tinos", "Times New Roman"}, {"Cousine", "Courier New"},
+        {"Carlito", "Calibri"}, {"Caladea", "Cambria"}, {"Gelasio", "Georgia"},
+    };
+    return t.value(family, family);
+}
+
 int substituteStretch(const QString &family)
 {
     const int s = stretches().value(family, 100);

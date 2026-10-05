@@ -371,6 +371,8 @@ private Q_SLOTS:
         }
         QVERIFY(sawBold);
         QVERIFY(sawItalicRed);
+        // Arimo is saved as Arial, which it matches width for width.
+        QCOMPARE(sd->begin().begin().fragment().charFormat().fontFamilies().toStringList().value(0), QStringLiteral("Arial"));
         QVERIFY2(shapes >= 2, qPrintable(QString::number(shapes)));
     }
 

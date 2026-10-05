@@ -8,6 +8,7 @@
 
 #include "core/document.h"
 #include "core/items.h"
+#include "core/fonts.h"
 #include "io/cfb.h"
 #include "text/textprops.h"
 
@@ -494,7 +495,7 @@ private:
     // Fonts and text colors referenced from text.
     int fontIndex(const QString &family)
     {
-        const QString f = family.isEmpty() ? m_doc.fonts.body : family;
+        const QString f = interchangeFontName(family.isEmpty() ? m_doc.fonts.body : family);
         int i = m_fonts.indexOf(f);
         if (i < 0) {
             m_fonts << f;

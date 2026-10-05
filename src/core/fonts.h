@@ -10,7 +10,11 @@ namespace jp {
 int loadBundledFonts();                      // returns number of font files loaded
 void installFontSubstitutions();
 QString substituteFor(const QString &family); // empty if none / font available
-int substituteStretch(const QString &family);  // horizontal scale (percent) to imitate a condensed original, 100 if none
+int substituteStretch(const QString &family);
+// The name to write in files other programs read: a bundled font that is
+// metric-compatible with a standard one (Arimo, Carlito...) is written as
+// that standard font, which every Windows computer has.
+QString interchangeFontName(const QString &family);  // horizontal scale (percent) to imitate a condensed original, 100 if none
 // Weight a missing font's name implies ("Franklin Gothic Medium" -> 500), so its
 // substitute is set in that weight; 0 when the font is installed or no hint.
 int substituteWeight(const QString &family);
