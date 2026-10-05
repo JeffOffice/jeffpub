@@ -130,7 +130,7 @@ an offset and a length:
 | SYID | Text ids of the stories, in order |
 | BTEC / BTEP | Indexes into FDPC / FDPP |
 | STRS | Story lengths |
-| MCLD | Text frame layout per story |
+| MCLD | Text frame layout per story (below); required once a table is present |
 | FONT | Font table |
 | SGP, INK, PL | Small fixed sections; PL is the text color list (below) |
 | TCD | Table cell text ends (tables only) |
@@ -183,4 +183,23 @@ ClientAnchor names the table (`02:68`):
 - Line: `01` = 1 across or 2 down, then the grid box it runs along as grid
   lines: `04` first row, `05` first column, `06` last row, `07` last
   column. OPT 0x0181 = color, 0x01CB = width, 0x01FF = 0x001F0006.
+
+### Frame layout (MCLD)
+
+Publisher won't open a file with a table unless this section is present.
+It starts with the last entry number, the entry count and the entry
+numbers (1, 2, ...); each story's `0x65` record names its entry in field
+`07`. Then, per story in order: a length-prefixed `{00:0a, 01:22 =
+228600}`, a u32 frame count, and a length-prefixed record per frame (a
+text box has one; a table has one per cell, in cell-list order):
+
+| Field | Value |
+|---|---|
+| 00, 01, 02, 03 | Top, left, bottom, right in layout units: 147 per inch, absolute, with the page center at 110185200 EMU. Starts round up, ends round down. |
+| 04, 05 | Width, height (EMU) |
+| 06, 07, 08, 09 | Margins: top, left, bottom, right |
+| 0a | 82676 for a text box, 0 for a cell |
+| 12 | 0 for a text box, 219456000 for a cell |
+| 16 | 9525 for a text box, 0 for a cell |
+| 0b:1a 0, 0d 0, 11 0, 13:12 255, 14:0a, 15 1, 18 0, 1a:02, 1d:8a {00:22 = -4} | Fixed |
 

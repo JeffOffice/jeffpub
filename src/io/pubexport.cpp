@@ -49,7 +49,7 @@ struct B {
 int fixedSize(quint8 type)
 {
     switch (type) {
-    case 0x00: case 0x05: case 0x08: case 0x0a: case 0x78: return 0;
+    case 0x00: case 0x02: case 0x05: case 0x08: case 0x0a: case 0x78: return 0;
     case 0x07: case 0x10: case 0x12: case 0x18: case 0x1a: return 2;
     case 0x20: case 0x22: case 0x58: case 0x68: case 0x70: case 0xb8: return 4;
     case 0x28: return 8;
@@ -539,6 +539,10 @@ private:
     // stories' text ids, and the cell fill and border records, which live in
     // the table-format drawing.
     QVector<QPair<int, QVector<quint32>>> m_cellEnds;
+    // Each story's text frames (a text box, or a table's cells in list
+    // order) for the frame layout section, MCLD.
+    struct Frame { QRectF r; QMarginsF m; bool cell = false; };
+    QVector<QVector<Frame>> m_frames;
     QVector<int> m_tableTextIds;
     QVector<QByteArray> m_cellFormats;
 
@@ -822,6 +826,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 const quint32 seq = next++;
                 const int tid = textId++;
                 addStory(tid, sd);
+                m_frames << QVector<Frame>{{t->rect, t->insets, false}};
                 m_textShapes << qMakePair(tid, seq);
                 cw.put(seq, {0x01, pageSeq[pi], {flag(0x02), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
                                                  u32(0x27, quint32(tid)), u32(0xaa, quint32(emu(r.width()))), u32(0xab, quint32(emu(r.height()))),
@@ -907,12 +912,14 @@ QByteArray PubWriter::write(QStringList *skipped)
                 QTextDocument blank;
                 QVector<const QTextDocument *> docs;
                 QVector<B> cellRecs;
+                QVector<Frame> frames;
                 for (int row = 0; row < tb->rows; ++row) {
                     for (int col = 0; col < tb->cols; ++col) {
                         const TableCell &c = tb->cell(row, col);
                         if (c.covered) continue;
                         const QTextDocument *d = m_doc.storyDoc(c.storyId);
                         docs << (d ? d : &blank);
+                        frames << Frame{tb->cellRect(row, col).translated(tb->rect.topLeft()), c.margins, true};
                         const int r1 = std::min(tb->rows, row + std::max(1, c.rowSpan)) - 1;
                         const int c1 = std::min(tb->cols, col + std::max(1, c.colSpan)) - 1;
                         QVector<B> f;
@@ -927,6 +934,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 }
                 QVector<quint32> ends;
                 addStory(tid, docs, &ends);
+                m_frames << frames;
                 m_cellEnds << qMakePair(int(m_textIds.size()) - 1, ends);
                 m_tableTextIds << tid;
                 // Column then row edges: where each ends, and its size.
@@ -1118,10 +1126,12 @@ QByteArray PubWriter::write(QStringList *skipped)
     {
         QVector<B> map, stories;
         for (const auto &ts : m_textShapes) map << rec(0x00, {u32(0x01, quint32(ts.first)), ref(0x03, ts.second, 0x68)});
-        for (int id : m_textIds) {
+        for (int i = 0; i < m_textIds.size(); ++i) {
+            const int id = m_textIds[i];
             QVector<B> f{u32(0x01, quint32(id))};
             if (m_tableTextIds.contains(id)) f << u16(0x03, 0, 0x10);
-            f << u32(0x07, 1) << u32(0x08, 0xcb18967cu, 0x58) << u32(0x09, 0xcb18967cu, 0x58);
+            // 07: the story's entry in the frame layout section.
+            f << u32(0x07, quint32(i + 1)) << u32(0x08, 0xcb18967cu, 0x58) << u32(0x09, 0xcb18967cu, 0x58);
             stories << rec(0x00, f);
         }
         cw.put(283, {0x61, 282, map.isEmpty() ? QVector<B>{} : QVector<B>{u32(0x01, quint32(map.size())), list(0x02, map)}});
@@ -1291,6 +1301,41 @@ QByteArray PubWriter::write(QStringList *skipped)
         putU32(strs, 0);
         for (int i = 0; i < m_storyLengths.size(); ++i) strs.append(lengthPrefixed(i == 0 ? QVector<B>{u32(0x00, 5, 0x22)} : QVector<B>{}));
         secs << Section{"STRS", "PLC ", 0, strs, false};
+    }
+    if (!m_frames.isEmpty()) {
+        // Frame layout: the last entry number, the count and the numbers,
+        // then per story a column record and its frames. A frame gives its
+        // box in layout units (147 per inch, absolute, the page center at
+        // 110185200 EMU; top and left round up, bottom and right down), its
+        // size, its margins (top, left, bottom, right) and fixed settings.
+        // Publisher won't open a table without it.
+        const double unit = 914400.0 / 147;
+        const qint64 origin = 110185200;
+        const double pcx = ps.width() / 2, pcy = ps.height() / 2;
+        QByteArray mcld;
+        putU32(mcld, quint32(m_frames.size()));
+        putU32(mcld, quint32(m_frames.size()));
+        for (int i = 0; i < m_frames.size(); ++i) putU32(mcld, quint32(i + 1));
+        for (const QVector<Frame> &frames : m_frames) {
+            mcld += lengthPrefixed({flag(0x00, 0x0a), u32(0x01, 228600, 0x22)});
+            putU32(mcld, quint32(frames.size()));
+            for (const Frame &f : frames) {
+                auto at = [&](double pt, double center, bool start) {
+                    const double v = double(origin + emu(pt - center)) / unit;
+                    return quint32(qint64(start ? std::ceil(v - 0.01) : std::floor(v + 0.01)));
+                };
+                mcld += lengthPrefixed({u32(0x00, at(f.r.top(), pcy, true), 0x22), u32(0x01, at(f.r.left(), pcx, true), 0x22),
+                                        u32(0x02, at(f.r.bottom(), pcy, false), 0x22), u32(0x03, at(f.r.right(), pcx, false), 0x22),
+                                        u32(0x04, quint32(emu(f.r.width())), 0x22), u32(0x05, quint32(emu(f.r.height())), 0x22),
+                                        u32(0x06, quint32(emu(f.m.top())), 0x22), u32(0x07, quint32(emu(f.m.left())), 0x22),
+                                        u32(0x08, quint32(emu(f.m.bottom())), 0x22), u32(0x09, quint32(emu(f.m.right())), 0x22),
+                                        u32(0x0a, f.cell ? 0 : 82676, 0x22), u16(0x0b, 0, 0x1a), u32(0x0d, 0, 0x22), u32(0x11, 0, 0x22),
+                                        u32(0x12, f.cell ? 219456000 : 0, 0x22), u16(0x13, 255, 0x12), flag(0x14, 0x0a), u32(0x15, 1, 0x22),
+                                        u32(0x16, f.cell ? 0 : 9525, 0x22), u32(0x18, 0, 0x22), flag(0x1a, 0x02),
+                                        rec(0x1d, {u32(0x00, 0xfffffffcu, 0x22)}, 0x8a)});
+            }
+        }
+        secs << Section{"MCLD", "MCLD", 0, mcld, false};
     }
     {
         // Text colors: entry 0 the scheme's main color, entry 1 black, then
