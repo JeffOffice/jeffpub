@@ -36,6 +36,22 @@ int main(int argc, char **argv)
         return 2;
     }
     const QString cmd = args[1], in = args[2];
+    if (cmd == "setstream") {
+        // setstream <base.pub> <out.pub> <stream> <file>: replace one stream's bytes.
+        if (args.size() < 6) { out << "usage: jpubtool setstream <base> <out> <stream> <file>\n"; return 2; }
+        cfb::File base;
+        QString err;
+        QFile bf(in), rf(args[5]);
+        if (!bf.open(QIODevice::ReadOnly) || !cfb::read(bf.readAll(), &base, &err)) { out << "bad base: " << err << "\n"; return 1; }
+        if (!rf.open(QIODevice::ReadOnly)) { out << "can't read " << args[5] << "\n"; return 1; }
+        const QString sp = QString(args[4]).replace(QStringLiteral("\\x01"), QStringLiteral("\x01")).replace(QStringLiteral("\\x05"), QStringLiteral("\x05"));
+        if (!base.setStream(sp, rf.readAll())) { out << "no stream " << sp << "\n"; return 1; }
+        QFile o(args[3]);
+        if (!o.open(QIODevice::WriteOnly)) { out << "can't write\n"; return 1; }
+        o.write(cfb::write(base));
+        out << "OK\t" << args[3] << "\n";
+        return 0;
+    }
     if (cmd == "graft") {
         // graft <base.pub> <donor.pub> <out.pub> <stream>...: the base file
         // with the named streams taken from the donor. Finds which stream a
