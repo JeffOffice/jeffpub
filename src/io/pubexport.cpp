@@ -511,7 +511,7 @@ private:
             m_colors << v;
             i = m_colors.size() - 1;
         }
-        return i + 1;   // entry 0 is the scheme's main color
+        return i + 2;   // entries 0 and 1 are the scheme's main color and black
     }
     QByteArray charProps(const QTextCharFormat &f);
     QByteArray paraProps(const QTextBlockFormat &f);
@@ -556,7 +556,14 @@ QByteArray PubWriter::charProps(const QTextCharFormat &f)
     QColor color;
     if (!cref.isEmpty()) color = ColorRef::fromString(cref).resolve(m_doc.colors);
     else if (f.hasProperty(QTextFormat::ForegroundBrush)) color = f.foreground().color();
-    if (color.isValid()) p << rec(0x44, {u32(0x00, quint32(colorIndex(color)), 0x22)}, 0x8a);
+    if (color.isValid()) {
+        // The color (0x44) and the text fill (0x58: solid, that color, 100%
+        // opaque). Publisher draws the fill, so a run without it keeps the
+        // Normal style's fill and shows in the main color.
+        const quint32 ci = quint32(colorIndex(color));
+        p << rec(0x44, {u32(0x00, ci, 0x22)}, 0x8a)
+          << rec(0x58, {u16(0x00, 1, 0x12), u32(0x01, ci, 0x22), u32(0x02, 100000, 0x22)}, 0x8a);
+    }
     std::sort(p.begin(), p.end(), [](const B &a, const B &b) { return a.id < b.id; });
     return lengthPrefixed(p);
 }
@@ -949,14 +956,18 @@ QByteArray PubWriter::write(QStringList *skipped)
         secs << Section{"STRS", "PLC ", 0, strs, false};
     }
     {
-        // Text colors: entry 0 the scheme's main color, then each RGB used.
+        // Text colors: entry 0 the scheme's main color, entry 1 black, then
+        // each RGB used, as Publisher writes them.
         QByteArray pl;
-        putU32(pl, quint32(1 + m_colors.size()));
+        putU32(pl, quint32(2 + m_colors.size()));
         putU32(pl, 0x28);
         putU32(pl, 0);
         pl.append(lengthPrefixed({u32(0x01, 0x08000000, 0x22), u32(0x02, 0xffffffffu, 0x22), u32(0x03, 0x20000000, 0x22),
                                   u32(0x04, 0xffffffffu, 0x22), u32(0x05, 0xffffffffu, 0x22), rawCont(0x06, 0x82, QByteArray(2, '\0'))}));
-        for (quint32 c : m_colors) pl.append(lengthPrefixed({u32(0x01, c, 0x22), rawCont(0x06, 0x82, QByteArray(2, '\0'))}));
+        pl.append(lengthPrefixed({u32(0x01, 0, 0x22), rawCont(0x06, 0x82, QByteArray(2, '\0'))}));
+        for (quint32 c : m_colors)
+            pl.append(lengthPrefixed({u32(0x01, c, 0x22), u32(0x02, 0xffffffffu, 0x22), u32(0x03, 0x20000000, 0x22),
+                                      rawCont(0x06, 0x82, QByteArray(2, '\0'))}));
         secs << Section{"PL  ", "PL  ", 0, pl, false};
     }
     // Formatting page indexes need the pages' final offsets: lay out once,

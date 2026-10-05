@@ -103,7 +103,23 @@ an offset and a length:
 | STRS | Story lengths |
 | MCLD | Text frame layout per story |
 | FONT | Font table |
-| SGP, INK, PL | Small fixed sections; PL is the text color list |
+| SGP, INK, PL | Small fixed sections; PL is the text color list (below) |
 | TCD | Table cell text ends (tables only) |
 
 A blank file has no TEXT, FDPC, FDPP, BTEC, BTEP, STRS or MCLD sections.
+
+### Text color
+
+A run's color is two records that name the same entry in the PL list:
+`44:8a {00:22 index}` (the color) and `58:8a {00:12 1, 01:22 index,
+02:22 100000}` (the text fill: solid, that color, 100% opaque). Publisher
+draws the fill, so a run with only 0x44 keeps the Normal style's fill
+(index 0) and shows in the main color.
+
+PL is a u32 count, 0x28, 0, then length-prefixed entries. Entry 0 is the
+scheme's main color (`01:22 0x08000000`, 02/04/05 = 0xFFFFFFFF, 03 =
+0x20000000); entry 1 is black (`01:22 0`). A custom color is
+`01:22 BGR, 02:22 0xFFFFFFFF, 03:22 0x20000000`; a scheme color is
+`01:22 BGR, 02:22 0x08000000 + slot` plus an 03 value not yet decoded.
+Every entry ends with `06:82` holding two zero bytes. Files that use only
+scheme colors may have no PL section at all.
