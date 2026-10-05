@@ -291,6 +291,89 @@ private Q_SLOTS:
         QVERIFY(w.editor()->renderOptions().misspelled.contains(t->storyId));
     }
 
+    // Saving as .pub: pages, formatted text boxes, rectangles and ovals
+    // come back through the independent .pub reader (libmspub).
+    void pubWriterRoundTrip()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 300, 120);
+        t->storyId = doc->createStory();
+        {
+            QTextCursor c(doc->storyDoc(t->storyId));
+            QTextCharFormat plain;
+            plain.setFontFamilies(QStringList{QStringLiteral("Arimo")});
+            plain.setFontPointSize(18);
+            c.insertText(QStringLiteral("Hello "), plain);
+            QTextCharFormat bold = plain;
+            bold.setFontWeight(QFont::Bold);
+            c.insertText(QStringLiteral("bold "), bold);
+            QTextCharFormat red = plain;
+            red.setForeground(QColor(200, 0, 0));
+            red.setFontItalic(true);
+            c.insertText(QStringLiteral("red italic"), red);
+            QTextBlockFormat center;
+            center.setAlignment(Qt::AlignHCenter);
+            c.insertBlock(center, plain);
+            c.insertText(QStringLiteral("Second paragraph, centered"));
+        }
+        doc->pages[0]->items.push_back(t);
+        auto r = std::make_shared<jp::ShapeItem>();
+        r->shape = QStringLiteral("rect");
+        r->rect = QRectF(72, 300, 200, 100);
+        r->fill = jp::Fill::solid(jp::ColorRef::rgb(QColor(220, 30, 30)));
+        r->stroke = jp::Stroke::line(jp::ColorRef::rgb(Qt::black), 2);
+        doc->pages[0]->items.push_back(r);
+        auto e = std::make_shared<jp::ShapeItem>();
+        e->shape = QStringLiteral("ellipse");
+        e->rect = QRectF(320, 300, 150, 150);
+        e->fill = jp::Fill::solid(jp::ColorRef::rgb(QColor(30, 60, 200)));
+        e->stroke = jp::Stroke::none();
+        doc->pages[0]->items.push_back(e);
+
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("written.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        QVERIFY2(err.isEmpty(), qPrintable(err));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) QFile::copy(path, qEnvironmentVariable("JP_SHOT_DIR") + "/jeffpub-test.pub");
+        QString e1;
+        auto back = jp::importPublisherFile(path, &e1);
+        QVERIFY2(back, qPrintable(e1));
+        QCOMPARE(back->pages.size(), 1);
+        QCOMPARE(back->pageSize(), QSizeF(612, 792));
+        // Text: both paragraphs, with bold, italic and color where they were.
+        const jp::TextItem *bt = nullptr;
+        int shapes = 0;
+        QVector<QRectF> shapeRects;
+        jp::walkItems(back->pages[0]->items, [&](const jp::ItemPtr &it) {
+            if (it->type() == jp::ItemType::Text) bt = static_cast<const jp::TextItem *>(it.get());
+            if (it->type() == jp::ItemType::Shape) { ++shapes; shapeRects << it->rect; }
+        });
+        QVERIFY(bt);
+        QVERIFY(std::abs(bt->rect.left() - 72) < 1 && std::abs(bt->rect.width() - 300) < 1);
+        QTextDocument *sd = back->storyDoc(bt->storyId);
+        QVERIFY(sd);
+        QCOMPARE(sd->blockCount(), 2);
+        QCOMPARE(sd->begin().text(), QStringLiteral("Hello bold red italic"));
+        QCOMPARE(sd->begin().next().text(), QStringLiteral("Second paragraph, centered"));
+        QVERIFY(sd->begin().next().blockFormat().alignment() & Qt::AlignHCenter);
+        bool sawBold = false, sawItalicRed = false;
+        for (auto it = sd->begin().begin(); !it.atEnd(); ++it) {
+            const QTextCharFormat f = it.fragment().charFormat();
+            if (it.fragment().text().contains(QStringLiteral("bold"))) sawBold = f.fontWeight() >= QFont::Bold;
+            if (it.fragment().text().contains(QStringLiteral("red"))) {
+                const QString cref = f.stringProperty(jp::tp::ColorRefP);
+                const QColor c = cref.isEmpty() ? f.foreground().color() : jp::ColorRef::fromString(cref).resolve(back->colors);
+                sawItalicRed = f.fontItalic() && c.red() > 150 && c.green() < 60;
+            }
+            if (it.fragment().text().startsWith(QStringLiteral("Hello"))) QVERIFY(std::abs(f.fontPointSize() - 18) < 0.1);
+        }
+        QVERIFY(sawBold);
+        QVERIFY(sawItalicRed);
+        QVERIFY2(shapes >= 2, qPrintable(QString::number(shapes)));
+    }
+
     // Create PDF presets shrink pictures, Commercial press adds room for marks,
     // and a page range exports only those pages; printing separations makes
     // one sheet per plate with printer's marks.

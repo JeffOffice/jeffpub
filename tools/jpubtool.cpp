@@ -6,6 +6,7 @@
 
 #include "core/fonts.h"
 #include "io/cfb.h"
+#include "io/importers.h"
 #include "io/jpubfile.h"
 #include "io/pubimport.h"
 #include "render/renderer.h"
@@ -31,7 +32,7 @@ int main(int argc, char **argv)
     const QStringList args = app.arguments();
     QTextStream out(stdout);
     if (args.size() < 4) {
-        out << "usage: jpubtool render <file> <outdir> [dpi] | convert <in> <out.jpub> | repack <in.pub> <out.pub> | layout <file> x\n";
+        out << "usage: jpubtool render <file> <outdir> [dpi] | convert <in> <out.jpub> | repack <in.pub> <out.pub> | topub <in> <out.pub> | layout <file> x\n";
         return 2;
     }
     const QString cmd = args[1], in = args[2];
@@ -104,6 +105,12 @@ int main(int argc, char **argv)
                         << "\tpara=" << li.docStart << "\t" << li.text << "\n";
                 }
             });
+        return 0;
+    }
+    if (cmd == "topub") {
+        QString err;
+        if (!exportPublisher(*doc, args[3], &err)) { out << "save failed: " << err << "\n"; return 1; }
+        out << "OK\t" << args[3] << (err.isEmpty() ? QString() : QStringLiteral("\t") + err) << "\n";
         return 0;
     }
     if (cmd == "convert") {
