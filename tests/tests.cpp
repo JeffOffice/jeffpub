@@ -376,6 +376,116 @@ private Q_SLOTS:
         QVERIFY2(shapes >= 2, qPrintable(QString::number(shapes)));
     }
 
+    // Lines, turned shapes and pictures written to .pub read back in place.
+    void pubWriterObjects()
+    {
+        auto save = [](const jp::Document &d, const QString &name, QTemporaryDir &dir) {
+            const QString path = dir.filePath(name);
+            QString err;
+            if (!jp::exportPublisher(d, path, &err) || !err.isEmpty()) qWarning() << err;
+            if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+                const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/" + name;
+                QFile::remove(out);
+                QFile::copy(path, out);
+            }
+            return path;
+        };
+        auto line = std::make_shared<jp::LineItem>();
+        line->p1 = QPointF(100, 520);
+        line->p2 = QPointF(400, 450);
+        line->syncRect();
+        line->stroke = jp::Stroke::line(jp::ColorRef::rgb(QColor(200, 0, 0)), 3);
+        line->stroke.dash = jp::Stroke::DashLine;
+        line->stroke.endArrow = jp::Arrow::Triangle;
+        auto rect = std::make_shared<jp::ShapeItem>();
+        rect->rect = QRectF(72, 100, 200, 80);
+        rect->rotation = 30;
+        rect->fill = jp::Fill::solid(jp::ColorRef::rgb(QColor(30, 160, 60)));
+        rect->stroke = jp::Stroke::none();
+        auto oval = std::make_shared<jp::ShapeItem>();
+        oval->shape = QStringLiteral("ellipse");
+        oval->rect = QRectF(350, 100, 160, 60);
+        oval->rotation = 90;
+        oval->fill = jp::Fill::solid(jp::ColorRef::rgb(QColor(30, 60, 200)));
+        oval->stroke = jp::Stroke::none();
+        QImage img(40, 20, QImage::Format_RGB32);
+        img.fill(QColor(220, 30, 30));
+        for (int y = 0; y < 20; ++y)
+            for (int x = 20; x < 40; ++x) img.setPixelColor(x, y, QColor(30, 30, 220));
+        QByteArray png;
+        {
+            QBuffer b(&png);
+            b.open(QIODevice::WriteOnly);
+            img.save(&b, "PNG");
+        }
+
+        QTemporaryDir dir;
+        // Each object alone, with a label (text already opens in Publisher).
+        auto one = [&](const jp::ItemPtr &it, const QString &name, std::function<void(jp::Document &)> prep = {}) {
+            auto d = jp::Document::blank(QSizeF(612, 792));
+            if (prep) prep(*d);
+            auto label = std::make_shared<jp::TextItem>();
+            label->rect = QRectF(72, 36, 400, 40);
+            label->storyId = d->createStory();
+            QTextCursor(d->storyDoc(label->storyId)).insertText(QFileInfo(name).completeBaseName());
+            d->pages[0]->items.push_back(label);
+            d->pages[0]->items.push_back(it->clone());
+            return save(*d, name, dir);
+        };
+        one(line, QStringLiteral("test6-line.pub"));
+        one(rect, QStringLiteral("test7-rotated.pub"));
+        auto pic = std::make_shared<jp::PictureItem>();
+        pic->rect = QRectF(100, 600, 160, 80);
+        pic->imgRect = QRectF(0, 0, 160, 80);
+        one(pic, QStringLiteral("test8-picture.pub"), [&](jp::Document &d) { pic->imageId = d.addImage(png, QStringLiteral("png"), QStringLiteral("/tmp/two-colors.png")); });
+
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        pic->imageId = doc->addImage(png, QStringLiteral("png"), QStringLiteral("/tmp/two-colors.png"));
+        for (const jp::ItemPtr &it : jp::ItemList{line, rect, oval, pic}) doc->pages[0]->items.push_back(it);
+        const QString path = save(*doc, QStringLiteral("test9-all.pub"), dir);
+        QString e1;
+        auto back = jp::importPublisherFile(path, &e1);
+        QVERIFY2(back, qPrintable(e1));
+        const jp::LineItem *bl = nullptr;
+        const jp::PictureItem *bp = nullptr;
+        QVector<const jp::ShapeItem *> shapes;
+        jp::walkItems(back->pages[0]->items, [&](const jp::ItemPtr &it) {
+            if (it->type() == jp::ItemType::Line) bl = static_cast<const jp::LineItem *>(it.get());
+            if (it->type() == jp::ItemType::Picture) bp = static_cast<const jp::PictureItem *>(it.get());
+            if (it->type() == jp::ItemType::Shape) shapes << static_cast<const jp::ShapeItem *>(it.get());
+        });
+        auto near = [](QPointF a, QPointF b) { return QLineF(a, b).length() < 1.5; };
+        QVERIFY(bl);
+        QVERIFY2(near(bl->p1, line->p1) && near(bl->p2, line->p2),
+                 qPrintable(QStringLiteral("%1,%2 %3,%4").arg(bl->p1.x()).arg(bl->p1.y()).arg(bl->p2.x()).arg(bl->p2.y())));
+        QVERIFY(std::abs(bl->stroke.width - 3) < 0.1);
+        QVERIFY(bl->stroke.dash != jp::Stroke::SolidLine);
+        QCOMPARE(bl->stroke.color.resolve(back->colors), QColor(200, 0, 0));
+        QVERIFY(bl->stroke.endArrow != jp::Arrow::None);
+        QCOMPARE(bl->stroke.startArrow, jp::Arrow::None);
+        QCOMPARE(shapes.size(), 2);
+        // The rectangle comes back turned; the importer draws other shapes
+        // as outlines, so the oval is checked by where it lands.
+        for (const jp::ShapeItem *s : shapes) {
+            const QString got = QStringLiteral("rot %1 %2,%3 %4x%5").arg(s->rotation).arg(s->rect.x()).arg(s->rect.y()).arg(s->rect.width()).arg(s->rect.height());
+            if (s->customPath.isEmpty()) {
+                QVERIFY2(std::abs(s->rotation - 30) < 0.5, qPrintable(got));
+                QVERIFY2(QLineF(s->rect.center(), rect->rect.center()).length() < 1 && std::abs(s->rect.width() - 200) < 1 &&
+                             std::abs(s->rect.height() - 80) < 1, qPrintable(got));
+            } else {
+                const QRectF want = oval->bounds(), b = s->bounds();
+                QVERIFY2(std::abs(b.left() - want.left()) < 1 && std::abs(b.top() - want.top()) < 1 && std::abs(b.width() - want.width()) < 1 &&
+                             std::abs(b.height() - want.height()) < 1, qPrintable(got));
+            }
+        }
+        QVERIFY(bp);
+        QVERIFY(std::abs(bp->rect.left() - 100) < 1 && std::abs(bp->rect.width() - 160) < 1 && std::abs(bp->rect.height() - 80) < 1);
+        const QImage got = back->image(bp->imageId);
+        QCOMPARE(got.size(), QSize(40, 20));
+        QCOMPARE(got.pixelColor(5, 5), QColor(220, 30, 30));
+        QCOMPARE(got.pixelColor(35, 5), QColor(30, 30, 220));
+    }
+
     // Create PDF presets shrink pictures, Commercial press adds room for marks,
     // and a page range exports only those pages; printing separations makes
     // one sheet per plate with printer's marks.

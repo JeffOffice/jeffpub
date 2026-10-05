@@ -88,6 +88,35 @@ OPT and an empty ClientTextbox (0xF00D).
 Table cell formats are shapes with a ClientAnchor naming the table (see
 `third_party/libmspub/src/TableInfo.h`).
 
+Turned shapes put the angle in OPT 0x0004 (clockwise degrees, 16.16). The
+anchor is the unturned frame, except that between 45° and 135° (and 225°
+and 315°) it holds the frame turned a quarter about its center; the
+Contents size (aa, ab) matches the anchor. Sp flags 0x40 and 0x80 flip.
+
+### Lines
+
+A line is an `Sp` of type 32 (straight connector), flags 0x0B00 plus the
+flips that say which corner it starts from; the anchor is the box it spans.
+OPT holds the line props (0x01C0 color, 0x01CB width, 0x01FF 0x00080008,
+0x01CE dashes, 0x01D0/0x01D1 start and end arrowheads with sizes in
+0x01D2-0x01D5) and 0x0303 = 0. Its Contents chunk is type 0x20:
+`02:08, 03:08, 04:10 = 256, 0c, 0d, b7 = 0`, directory version 0x0102.
+
+### Pictures
+
+Each image is one `BSE` in a `BStoreContainer` (after `Dgg`), instance =
+type (5 JPEG, 6 PNG): two type bytes, a 16-byte id (MD4 of the data),
+tag 0x00FF, record size, use count, offset into `EscherDelayStm`, and four
+zero bytes. The delay stream holds the image records (0xF01E PNG with
+instance 0x6E0, 0xF01D JPEG with 0x46A, or 0x6E2 for CMYK): the id, a 0xFF
+byte, then the file. The shape is an `Sp` of type 1 whose OPT has 0x007F =
+0x00800080, 0x4104 = the store entry (from 1), 0xC105 = the name without
+extension (UTF-16, complex), 0x0106 = 1, 0x033F = 0x00100010, and crops in
+0x0100-0x0103 (16.16 fractions). The Contents chunk (type 1, directory
+version 0x0102, 0b = 1) is `02:08, 03:08, 0c, 0d, 34 = 0, 3a → name chunk,
+aa, ab`; the name chunk (type 0x66, parent the picture) holds `03` = the
+file name.
+
 ## Text (Quill/QuillSub/CONTENTS)
 
 Starts with a `CHNKINK` index of sections, each with a 4-letter name, an id,

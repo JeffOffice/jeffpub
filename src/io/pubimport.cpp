@@ -667,6 +667,17 @@ private:
         if (str(m_style["svg:stroke-linecap"]) == "round") st.cap = Qt::RoundCap;
         if (!str(m_style["draw:marker-start-path"]).isEmpty()) st.startArrow = Arrow::Triangle;
         if (!str(m_style["draw:marker-end-path"]).isEmpty()) st.endArrow = Arrow::Triangle;
+        // Arrowheads as .pub files store them: 1 triangle, 2 stealth,
+        // 3 diamond, 4 oval, 5 open; sizes 0-2.
+        static const Arrow kArrows[] = {Arrow::None, Arrow::Triangle, Arrow::Stealth, Arrow::Diamond, Arrow::Oval, Arrow::Open};
+        if (m_style["jp:arrow-start"]) {
+            st.startArrow = kArrows[std::clamp(m_style["jp:arrow-start"]->getInt(), 0, 5)];
+            if (m_style["jp:arrow-start-size"]) st.startSize = std::clamp(m_style["jp:arrow-start-size"]->getInt(), 0, 2);
+        }
+        if (m_style["jp:arrow-end"]) {
+            st.endArrow = kArrows[std::clamp(m_style["jp:arrow-end"]->getInt(), 0, 5)];
+            if (m_style["jp:arrow-end-size"]) st.endSize = std::clamp(m_style["jp:arrow-end-size"]->getInt(), 0, 2);
+        }
         return st;
     }
 

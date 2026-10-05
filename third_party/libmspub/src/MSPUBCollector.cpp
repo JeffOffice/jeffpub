@@ -1101,6 +1101,17 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
       {
         graphicsProps.insert("draw:stroke", "solid");
       }
+      // JeffPub patch: pass arrowheads on (style 1-5 as stored, size 0-2).
+      if (bool(info.m_beginArrow) && info.m_beginArrow.get().m_style != NO_ARROW)
+      {
+        graphicsProps.insert("jp:arrow-start", int(info.m_beginArrow.get().m_style));
+        graphicsProps.insert("jp:arrow-start-size", int(info.m_beginArrow.get().m_width));
+      }
+      if (bool(info.m_endArrow) && info.m_endArrow.get().m_style != NO_ARROW)
+      {
+        graphicsProps.insert("jp:arrow-end", int(info.m_endArrow.get().m_style));
+        graphicsProps.insert("jp:arrow-end-size", int(info.m_endArrow.get().m_width));
+      }
       m_painter->setStyle(graphicsProps);
       writeCustomShape(type, graphicsProps, m_painter, x, y, height, width,
                        false, foldedTransform, lines,

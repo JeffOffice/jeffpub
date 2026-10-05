@@ -14,7 +14,10 @@
 
 #include <QFile>
 #include <QFileInfo>
+#include <QBuffer>
+#include <QCryptographicHash>
 #include <QDir>
+#include <QImage>
 #include <QHash>
 #include <QMap>
 #include <QRandomGenerator>
@@ -147,6 +150,8 @@ struct Chunk {
     quint16 type = 0;
     quint32 parent = 0;   // 0: none
     QVector<B> body;
+    int dirVer = -1;      // directory stamps when they differ from the type's
+    int dirB = -1;
 };
 
 // Directory stamps for each chunk type, as every .pub file writes them.
@@ -167,6 +172,8 @@ DirInfo dirInfo(quint16 type, bool nonEmpty)
     case 0x4b: case 0x8a: return {0x0102, true, 0x14};
     case 0x4c: return {0x0102, true, 0x0f};
     case 0x01: return {0x0103, false, 0x16};
+    case 0x20: return {0x0102, false, 0x16};
+    case 0x66: return {0x0102, false, 1};
     default: return {0x0102, true, -1};
     }
 }
@@ -244,7 +251,9 @@ QByteArray ContentsWriter::build(const QString &path) const
             dir << flag(0x00, 0x78);
             continue;
         }
-        const DirInfo d = dirInfo(it->type, !it->body.isEmpty());
+        DirInfo d = dirInfo(it->type, !it->body.isEmpty());
+        if (it->dirVer >= 0) d.ver = quint16(it->dirVer);
+        if (it->dirB >= 0) d.v0b = it->dirB;
         QVector<B> f{u16(0x02, it->type), u32(0x04, offsets[s], 0xb8)};
         if (it->parent) f << ref(0x05, it->parent, 0x68);
         f << u16(0x06, d.ver, 0x10);
@@ -267,7 +276,9 @@ QByteArray ContentsWriter::build(const QString &path) const
 }
 
 // ---------------------------------------------------------------- Escher
-struct Prop { quint16 id; quint32 value; };
+// A drawing property. Complex ones (a name, say) carry their bytes, which
+// follow the property table; the value is then their length.
+struct Prop { quint16 id; quint32 value; QByteArray complex = {}; };
 
 QByteArray escherRecord(quint16 ver, quint16 inst, quint16 type, const QByteArray &body)
 {
@@ -281,13 +292,14 @@ QByteArray escherRecord(quint16 ver, quint16 inst, quint16 type, const QByteArra
 QByteArray escherContainer(quint16 type, const QByteArray &body) { return escherRecord(0xf, 0, type, body); }
 QByteArray escherProps(quint16 type, QVector<Prop> props)
 {
-    std::sort(props.begin(), props.end(), [](const Prop &a, const Prop &b) { return a.id < b.id; });
-    QByteArray body;
+    std::sort(props.begin(), props.end(), [](const Prop &a, const Prop &b) { return (a.id & 0x3fff) < (b.id & 0x3fff); });
+    QByteArray body, extra;
     for (const Prop &p : props) {
         putU16(body, p.id);
-        putU32(body, p.value);
+        putU32(body, p.complex.isEmpty() ? p.value : quint32(p.complex.size()));
+        extra += p.complex;
     }
-    return escherRecord(0x3, quint16(props.size()), type, body);
+    return escherRecord(0x3, quint16(props.size()), type, body + extra);
 }
 // Client data and anchors carry blocks after a u32 length.
 QByteArray clientBlocks(quint16 type, const QVector<B> &blocks) { return escherRecord(0x0, 0x1a, type, lengthPrefixed(blocks)); }
@@ -516,6 +528,12 @@ private:
     QByteArray charProps(const QTextCharFormat &f);
     QByteArray paraProps(const QTextBlockFormat &f);
     void addStory(int textId, const QTextDocument *doc);
+    int blipIndex(const QString &imageId);
+
+    // Pictures: one drawing-store entry per image (numbered from 1), its
+    // bytes kept in the delay stream.
+    struct Blip { QString imageId, fileName; QByteArray uid, record; quint16 kind = 6; quint32 refs = 0; };
+    QVector<Blip> m_blips;
 
     const Document &m_doc;
     QString m_path;
@@ -603,6 +621,63 @@ void PubWriter::addStory(int textId, const QTextDocument *doc)
     m_textIds << textId;
 }
 
+// A JPEG whose frame has four components is CMYK, which has its own record.
+static bool jpegIsCmyk(const QByteArray &d)
+{
+    int i = 2;
+    while (i + 9 < d.size() && quint8(d[i]) == 0xff) {
+        const quint8 m = quint8(d[i + 1]);
+        if (m >= 0xc0 && m <= 0xcf && m != 0xc4 && m != 0xc8 && m != 0xcc) return quint8(d[i + 9]) == 4;
+        i += 2 + ((quint8(d[i + 2]) << 8) | quint8(d[i + 3]));
+    }
+    return false;
+}
+
+int PubWriter::blipIndex(const QString &imageId)
+{
+    for (int i = 0; i < m_blips.size(); ++i) {
+        if (m_blips[i].imageId == imageId) {
+            ++m_blips[i].refs;
+            return i + 1;
+        }
+    }
+    const auto it = m_doc.images.constFind(imageId);
+    if (imageId.isEmpty() || it == m_doc.images.cend()) return -1;
+    // PNG and JPEG go in as they are; anything else is saved as PNG.
+    const QString fmt = it->format.toLower();
+    Blip b;
+    b.imageId = imageId;
+    QByteArray data;
+    bool converted = false;
+    if (fmt == QLatin1String("png")) data = it->bytes;
+    else if (fmt == QLatin1String("jpg") || fmt == QLatin1String("jpeg")) {
+        data = it->bytes;
+        b.kind = 5;
+    }
+    if (data.isEmpty()) {
+        const QImage img = it->image();
+        if (img.isNull()) return -1;
+        QBuffer buf(&data);
+        buf.open(QIODevice::WriteOnly);
+        img.save(&buf, "PNG");
+        b.kind = 6;
+        converted = true;
+    }
+    b.refs = 1;
+    b.uid = QCryptographicHash::hash(data, QCryptographicHash::Md4);
+    QString name = QFileInfo(it->sourcePath).fileName();
+    if (name.isEmpty()) name = QStringLiteral("picture%1.%2").arg(m_blips.size() + 1).arg(b.kind == 5 ? QStringLiteral("jpg") : QStringLiteral("png"));
+    else if (converted) name = QFileInfo(name).completeBaseName() + QStringLiteral(".png");
+    b.fileName = name;
+    QByteArray body = b.uid;
+    body.append(char(0xff));
+    body += data;
+    if (b.kind == 6) b.record = escherRecord(0x0, 0x6e0, 0xf01e, body);
+    else b.record = escherRecord(0x0, jpegIsCmyk(data) ? 0x6e2 : 0x46a, 0xf01d, body);
+    m_blips << b;
+    return int(m_blips.size());
+}
+
 QByteArray PubWriter::write(QStringList *skipped)
 {
     const QSizeF ps = m_doc.pageSize();
@@ -659,13 +734,66 @@ QByteArray PubWriter::write(QStringList *skipped)
         return clientBlocks(0xf010, {u32(0x01, quint32(qint32(emu(r.left() - cx)))), u32(0x02, quint32(qint32(emu(r.top() - cy)))),
                                      u32(0x03, quint32(qint32(emu(r.right() - cx)))), u32(0x04, quint32(qint32(emu(r.bottom() - cy))))});
     };
+    // Turned shapes keep their unturned frame, except that between 45° and
+    // 135° (and 225° and 315°) the anchor and size hold it turned a quarter.
+    auto turnedBox = [](const QRectF &r, double deg) {
+        const double a = std::fmod(std::fmod(deg, 360.0) + 360.0, 360.0);
+        if ((a >= 45 && a < 135) || (a >= 225 && a < 315)) {
+            QRectF b(0, 0, r.height(), r.width());
+            b.moveCenter(r.center());
+            return b;
+        }
+        return r;
+    };
+    auto rotationProp = [](QVector<Prop> &opt, double deg) {
+        const double a = std::fmod(std::fmod(deg, 360.0) + 360.0, 360.0);
+        if (a > 1e-6) opt << Prop{0x0004, quint32(std::llround(a * 65536.0))};
+    };
+    auto spRecord = [&](quint16 kind, quint32 flags, const Item *it) {
+        QByteArray d;
+        putU32(d, quint32(spid));
+        putU32(d, flags | (it->flipH ? 0x40 : 0) | (it->flipV ? 0x80 : 0));
+        return escherRecord(0x2, kind, 0xf00a, d);
+    };
+    // Outline: color, width, dashes and arrowheads.
+    auto strokeProps = [&](QVector<Prop> &opt, const Stroke &st) {
+        const bool lined = !st.isNone();
+        opt << Prop{0x01c0, lined ? bgr(st.color.resolve(m_doc.colors)) : 0x08000000} << Prop{0x01c2, 0x08000007}
+            << Prop{0x01cb, quint32(emu(lined ? st.width : 2))} << Prop{0x01ff, lined ? 0x00080008u : 0x00080000u};
+        if (!lined) return;
+        static const quint32 kDash[] = {0, 2, 2, 6, 8, 7, 9, 10};
+        if (st.dash != Stroke::SolidLine) opt << Prop{0x01ce, kDash[st.dash]};
+        if (st.dash == Stroke::RoundDot) opt << Prop{0x01d7, 0};
+        auto arrow = [](Arrow a) -> quint32 {
+            switch (a) {
+            case Arrow::Triangle: return 1;
+            case Arrow::Stealth: return 2;
+            case Arrow::Diamond: return 3;
+            case Arrow::Oval: return 4;
+            case Arrow::Open: return 5;
+            default: return 0;
+            }
+        };
+        if (st.startArrow != Arrow::None)
+            opt << Prop{0x01d0, arrow(st.startArrow)} << Prop{0x01d2, quint32(st.startSize)} << Prop{0x01d3, quint32(st.startSize)};
+        if (st.endArrow != Arrow::None)
+            opt << Prop{0x01d1, arrow(st.endArrow)} << Prop{0x01d4, quint32(st.endSize)} << Prop{0x01d5, quint32(st.endSize)};
+    };
+    const QVector<Prop> kInsets = {{0x0081, 36576}, {0x0082, 36576}, {0x0083, 36576}, {0x0084, 36576}};
+    const QVector<Prop> kTail = {{0x0201, 0x08000000}, {0x0285, 0}, {0x02cb, 0}, {0x02cc, 0}, {0x02ce, 0}, {0x02cf, 0},
+                                 {0x0384, 36576}, {0x0385, 36576}, {0x0386, 36576}, {0x0387, 36576}};
     for (int pi = 0; pi < m_doc.pages.size(); ++pi) {
         std::function<void(const ItemPtr &)> visit = [&](const ItemPtr &it) {
             if (it->type() == ItemType::Group) {
                 for (const ItemPtr &c : static_cast<const GroupItem *>(it.get())->children) visit(c);
                 return;
             }
-            const QRectF r = it->rect;
+            const QRectF r = turnedBox(it->rect, it->rotation);
+            auto finish = [&](quint32 seq, QByteArray sp) {
+                objs << Obj{seq, pi, escherContainer(0xf004, sp)};
+                pageShapes[pi] << seq;
+                ++spid;
+            };
             if (it->type() == ItemType::Text) {
                 auto *t = static_cast<const TextItem *>(it.get());
                 // A linked box after the first holds no text of its own here.
@@ -690,21 +818,14 @@ QByteArray PubWriter::write(QStringList *skipped)
                     opt[5].value = bgr(t->fill.color.resolve(m_doc.colors));
                     opt[7].value = 0x00100010;
                 }
+                rotationProp(opt, t->rotation);
                 QVector<Prop> topt = {{0x008d, 73152}, {0x017f, 0x00400040}, {0x01ff, 0x00400000}, {0x057f, 0x00080000},
                                       {0x05bf, 0x00080000}, {0x05ff, 0x00080000}, {0x063f, 0x00080000}, {0x06ff, 0x00020002}};
                 topt << kSideLines << kShadowFlags;
-                QByteArray sp = escherRecord(0x2, 202, 0xf00a, [&] {
-                    QByteArray d;
-                    putU32(d, quint32(spid));
-                    putU32(d, 0x0a00);
-                    return d;
-                }());
-                sp += escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(r);
+                QByteArray sp = spRecord(202, 0x0a00, t) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(r);
                 sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
                 sp += clientBlocks(0xf00d, {u32(0x01, quint32(tid))});
-                objs << Obj{seq, pi, escherContainer(0xf004, sp)};
-                pageShapes[pi] << seq;
-                ++spid;
+                finish(seq, sp);
                 return;
             }
             if (it->type() == ItemType::Shape) {
@@ -712,7 +833,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 int st = -1;
                 if (s->shape == QLatin1String("rect") && s->customPath.isEmpty()) st = 1;
                 else if (s->shape == QLatin1String("ellipse") && s->customPath.isEmpty()) st = 3;
-                if (st < 0 || s->rotation != 0 || !s->storyId.isEmpty()) {
+                if (st < 0 || !s->storyId.isEmpty()) {
                     ++skippedCount;
                     return;
                 }
@@ -721,34 +842,90 @@ QByteArray PubWriter::write(QStringList *skipped)
                                                  u32(0x34, 0), u32(0xaa, quint32(emu(r.width()))), u32(0xab, quint32(emu(r.height()))),
                                                  u32(0xb7, 0)}});
                 const bool filled = s->fill.type == Fill::Solid;
-                const bool lined = !s->stroke.isNone();
-                QVector<Prop> opt = {{0x0081, 36576}, {0x0082, 36576}, {0x0083, 36576}, {0x0084, 36576},
-                                     {0x0181, filled ? bgr(s->fill.color.resolve(m_doc.colors)) : 0x08000001}, {0x0183, 0x08000007},
-                                     {0x01bf, filled ? 0x00100010u : 0x00100000u},
-                                     {0x01c0, lined ? bgr(s->stroke.color.resolve(m_doc.colors)) : 0x08000000}, {0x01c2, 0x08000007},
-                                     {0x01cb, quint32(emu(lined ? s->stroke.width : 2))}, {0x01ff, lined ? 0x00080008u : 0x00080000u},
-                                     {0x0201, 0x08000000}, {0x0285, 0}, {0x02cb, 0}, {0x02cc, 0}, {0x02ce, 0}, {0x02cf, 0},
-                                     {0x0384, 36576}, {0x0385, 36576}, {0x0386, 36576}, {0x0387, 36576}};
+                QVector<Prop> opt = kInsets;
+                opt << Prop{0x0181, filled ? bgr(s->fill.color.resolve(m_doc.colors)) : 0x08000001} << Prop{0x0183, 0x08000007}
+                    << Prop{0x01bf, filled ? 0x00100010u : 0x00100000u};
+                strokeProps(opt, s->stroke);
+                opt << kTail;
+                rotationProp(opt, s->rotation);
                 QVector<Prop> topt = {{0x01ff, 0x00400000}, {0x06ff, 0x00020002}};
                 topt << kSideLines << kShadowFlags;
-                QByteArray sp = escherRecord(0x2, quint16(st), 0xf00a, [&] {
-                    QByteArray d;
-                    putU32(d, quint32(spid));
-                    putU32(d, 0x0a00);
-                    return d;
-                }());
-                sp += escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(r);
+                QByteArray sp = spRecord(quint16(st), 0x0a00, s) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(r);
                 sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
-                objs << Obj{seq, pi, escherContainer(0xf004, sp)};
-                pageShapes[pi] << seq;
-                ++spid;
+                finish(seq, sp);
+                return;
+            }
+            if (it->type() == ItemType::Line) {
+                // A straight connector: the anchor is the box the line spans,
+                // and flips say which corner it starts from.
+                auto *l = static_cast<const LineItem *>(it.get());
+                const quint32 seq = next++;
+                cw.put(seq, {0x20, pageSeq[pi], {flag(0x02), flag(0x03), u16(0x04, 256, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
+                                                 u32(0xb7, 0)}});
+                QVector<Prop> opt = kInsets;
+                opt << Prop{0x01bf, 0x00100000};
+                strokeProps(opt, l->stroke);
+                opt << kTail << Prop{0x0303, 0};
+                QVector<Prop> topt = kShadowFlags;
+                topt << kSideLines;
+                QByteArray d;
+                putU32(d, quint32(spid));
+                putU32(d, 0x0b00 | (l->p1.x() > l->p2.x() ? 0x40 : 0) | (l->p1.y() > l->p2.y() ? 0x80 : 0));
+                const QRectF box = QRectF(l->p1, l->p2).normalized();
+                QByteArray sp = escherRecord(0x2, 32, 0xf00a, d) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(box);
+                sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
+                finish(seq, sp);
+                return;
+            }
+            if (it->type() == ItemType::Picture) {
+                auto *pic = static_cast<const PictureItem *>(it.get());
+                const int blip = blipIndex(pic->imageId);
+                if (blip < 0) {
+                    ++skippedCount;
+                    return;
+                }
+                const quint32 seq = next++, nameSeq = next++;
+                const QString file = m_blips[blip - 1].fileName;
+                Chunk c{0x01, pageSeq[pi], {flag(0x02), flag(0x03), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}), u32(0x34, 0),
+                                            ref(0x3a, nameSeq), u32(0xaa, quint32(emu(r.width()))), u32(0xab, quint32(emu(r.height())))}};
+                c.dirVer = 0x0102;
+                c.dirB = 1;
+                cw.put(seq, c);
+                cw.put(nameSeq, {0x66, seq, {str(0x03, file)}});
+                QByteArray name;
+                const QString base = QFileInfo(file).completeBaseName();
+                for (QChar ch : base) putU16(name, ch.unicode());
+                putU16(name, 0);
+                QVector<Prop> opt = {{0x007f, 0x00800080}};
+                opt << kInsets << Prop{0x4104, quint32(blip)} << Prop{0xc105, 0, name} << Prop{0x0106, 1}
+                    << Prop{0x0181, 0x08000001} << Prop{0x0183, 0x08000007} << Prop{0x01bf, 0x00100000};
+                strokeProps(opt, pic->stroke);
+                opt << kTail << Prop{0x033f, 0x00100010};
+                // Cropping, as fractions of the picture (16.16) trimmed from each side.
+                const QRectF ir = pic->imgRect;
+                const QSizeF fs = pic->rect.size();
+                if (!ir.isEmpty()) {
+                    auto frac = [](double v) { return quint32(qint32(std::llround(v * 65536.0))); };
+                    const double t = -ir.top() / ir.height(), b = (ir.bottom() - fs.height()) / ir.height();
+                    const double lf = -ir.left() / ir.width(), rt = (ir.right() - fs.width()) / ir.width();
+                    if (std::abs(t) > 1e-4) opt << Prop{0x0100, frac(t)};
+                    if (std::abs(b) > 1e-4) opt << Prop{0x0101, frac(b)};
+                    if (std::abs(lf) > 1e-4) opt << Prop{0x0102, frac(lf)};
+                    if (std::abs(rt) > 1e-4) opt << Prop{0x0103, frac(rt)};
+                }
+                rotationProp(opt, pic->rotation);
+                QVector<Prop> topt = {{0x01ff, 0x00400000}, {0x06ff, 0x00020002}};
+                topt << kShadowFlags << kSideLines;
+                QByteArray sp = spRecord(1, 0x0a00, pic) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(r);
+                sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
+                finish(seq, sp);
                 return;
             }
             ++skippedCount;
         };
         for (const ItemPtr &it : m_doc.pages[pi]->items) visit(it);
     }
-    if (skipped && skippedCount) *skipped << QStringLiteral("%1 object(s) (pictures, tables, lines and some shapes) aren't saved to .pub yet").arg(skippedCount);
+    if (skipped && skippedCount) *skipped << QStringLiteral("%1 object(s) (tables, text art and some shapes) aren't saved to .pub yet").arg(skippedCount);
     const quint32 fontSeq = m_fonts.isEmpty() && m_textIds.isEmpty() ? 0 : next++;
     if (m_fonts.isEmpty()) m_fonts << m_doc.fonts.body;
 
@@ -987,7 +1164,7 @@ QByteArray PubWriter::write(QStringList *skipped)
     }
 
     // ---- drawing stream
-    QByteArray escher;
+    QByteArray escher, delay;
     {
         const int pageShapesCount = int(objs.size());
         // Default shape properties.
@@ -1010,7 +1187,26 @@ QByteArray PubWriter::write(QStringList *skipped)
         putU32(dgg, 3);
         QByteArray menu;
         for (quint32 v : {0x08000001u, 0x08000000u, 0x08000004u, 0x100000f7u}) putU32(menu, v);
-        escher += escherContainer(0xf000, escherRecord(0x0, 0, 0xf006, dgg) + escherProps(0xf00b, dggOpt) + escherProps(0xf122, dggTopt) +
+        // The picture store: an entry per image pointing into the delay stream.
+        QByteArray bstore;
+        if (!m_blips.isEmpty()) {
+            QByteArray entries;
+            for (const Blip &b : m_blips) {
+                QByteArray e;
+                e.append(char(b.kind));
+                e.append(char(b.kind));
+                e += b.uid;
+                putU16(e, 0x00ff);
+                putU32(e, quint32(b.record.size()));
+                putU32(e, b.refs);
+                putU32(e, quint32(delay.size()));
+                putU32(e, 0);
+                entries += escherRecord(0x2, b.kind, 0xf007, e);
+                delay += b.record;
+            }
+            bstore = escherRecord(0xf, quint16(m_blips.size()), 0xf001, entries);
+        }
+        escher += escherContainer(0xf000, escherRecord(0x0, 0, 0xf006, dgg) + bstore + escherProps(0xf00b, dggOpt) + escherProps(0xf122, dggTopt) +
                                               escherRecord(0x0, 4, 0xf11e, menu));
         auto spgrHead = [](quint32 groupId) {
             QByteArray sp;
@@ -1120,7 +1316,7 @@ QByteArray PubWriter::write(QStringList *skipped)
     add(quillSub, cfb::Entry::Stream, QStringLiteral("CONTENTS"), quill);
     const int escherSt = add(root, cfb::Entry::Storage, QStringLiteral("Escher"));
     add(escherSt, cfb::Entry::Stream, QStringLiteral("EscherStm"), escher);
-    add(escherSt, cfb::Entry::Stream, QStringLiteral("EscherDelayStm"), {});
+    add(escherSt, cfb::Entry::Stream, QStringLiteral("EscherDelayStm"), delay);
     add(root, cfb::Entry::Stream, QStringLiteral("\x01") + QStringLiteral("CompObj"),
         compObj(pubClsid, QStringLiteral("Publication"), QString(), QString()));
     add(root, cfb::Entry::Storage, QStringLiteral("VBA"));
