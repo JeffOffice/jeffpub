@@ -36,6 +36,26 @@ int main(int argc, char **argv)
         return 2;
     }
     const QString cmd = args[1], in = args[2];
+    if (cmd == "graft") {
+        // graft <base.pub> <donor.pub> <out.pub> <stream>...: the base file
+        // with the named streams taken from the donor. Finds which stream a
+        // strict reader objects to.
+        if (args.size() < 6) { out << "usage: jpubtool graft <base> <donor> <out> <stream>...\n"; return 2; }
+        cfb::File base, donor;
+        QString err;
+        QFile bf(in), df(args[3]);
+        if (!bf.open(QIODevice::ReadOnly) || !cfb::read(bf.readAll(), &base, &err)) { out << "bad base: " << err << "\n"; return 1; }
+        if (!df.open(QIODevice::ReadOnly) || !cfb::read(df.readAll(), &donor, &err)) { out << "bad donor: " << err << "\n"; return 1; }
+        for (int i = 5; i < args.size(); ++i) {
+            const QString sp = QString(args[i]).replace(QStringLiteral("\\x01"), QStringLiteral("\x01")).replace(QStringLiteral("\\x05"), QStringLiteral("\x05"));
+            if (donor.find(sp) < 0 || !base.setStream(sp, donor.stream(sp))) { out << "no stream " << sp << "\n"; return 1; }
+        }
+        QFile o(args[4]);
+        if (!o.open(QIODevice::WriteOnly)) { out << "can't write\n"; return 1; }
+        o.write(cfb::write(base));
+        out << "OK\t" << args[4] << "\n";
+        return 0;
+    }
     if (cmd == "repack") {
         // Rewrite a compound file with JeffPub's container writer, every
         // stream unchanged: tests the container layer against other readers.
