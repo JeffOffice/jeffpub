@@ -1019,7 +1019,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                                      {0x0384, 36576}, {0x0385, 36576}, {0x0386, 36576}, {0x0387, 36576}};
                 rotationProp(opt, tb->rotation);
                 QVector<Prop> topt = {{0x017f, 0x03800000}, {0x01ff, 0x00400000}, {0x054b, 0}, {0x058b, 0}, {0x05cb, 0}, {0x060b, 0},
-                                      {0x064b, 0}, {0x06ff, 0x00020002}};
+                                      {0x06ff, 0x00020002}};
                 topt << kSideLines;
                 QByteArray sp = spRecord(201, 0x0a00, tb) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(r);
                 sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
