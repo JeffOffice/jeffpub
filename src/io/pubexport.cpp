@@ -19,6 +19,7 @@
 #include <QDir>
 #include <QImage>
 #include <QHash>
+#include <QSet>
 #include <QMap>
 #include <QRandomGenerator>
 #include <QRawFont>
@@ -172,7 +173,8 @@ DirInfo dirInfo(quint16 type, bool nonEmpty)
     case 0x4b: case 0x8a: return {0x0102, true, 0x14};
     case 0x4c: return {0x0102, true, 0x0f};
     case 0x01: return {0x0103, false, 0x16};
-    case 0x20: return {0x0102, false, 0x16};
+    case 0x20: case 0x10: return {0x0102, false, 0x16};
+    case 0x63: return {0x0102, true, 1};
     case 0x66: return {0x0102, false, 1};
     default: return {0x0102, true, -1};
     }
@@ -527,8 +529,18 @@ private:
     }
     QByteArray charProps(const QTextCharFormat &f);
     QByteArray paraProps(const QTextBlockFormat &f);
-    void addStory(int textId, const QTextDocument *doc);
+    void addStory(int textId, const QTextDocument *doc) { addStory(textId, QVector<const QTextDocument *>{doc}); }
+    // A story from several documents in turn (a table's cells); cellEnds gets
+    // where each one's text ends.
+    void addStory(int textId, const QVector<const QTextDocument *> &docs, QVector<quint32> *cellEnds = nullptr);
     int blipIndex(const QString &imageId);
+
+    // Tables: each table story's cell ends (by story index), the table
+    // stories' text ids, and the cell fill and border records, which live in
+    // the table-format drawing.
+    QVector<QPair<int, QVector<quint32>>> m_cellEnds;
+    QVector<int> m_tableTextIds;
+    QVector<QByteArray> m_cellFormats;
 
     // Pictures: one drawing-store entry per image (numbered from 1), its
     // bytes kept in the delay stream.
@@ -598,9 +610,10 @@ QByteArray PubWriter::paraProps(const QTextBlockFormat &f)
     return lengthPrefixed(p);
 }
 
-void PubWriter::addStory(int textId, const QTextDocument *doc)
+void PubWriter::addStory(int textId, const QVector<const QTextDocument *> &docs, QVector<quint32> *cellEnds)
 {
     const quint32 start = quint32(512 + m_text.size());
+    for (const QTextDocument *doc : docs) {
     for (QTextBlock b = doc->begin(); b.isValid(); b = b.next()) {
         QTextCharFormat last = b.charFormat();
         for (auto it = b.begin(); !it.atEnd(); ++it) {
@@ -617,6 +630,10 @@ void PubWriter::addStory(int textId, const QTextDocument *doc)
         m_charRuns << Run{quint32(512 + m_text.size()), charProps(last)};
         m_paraRuns << Run{quint32(512 + m_text.size()), paraProps(b.blockFormat())};
     }
+        // A cell ends at its last paragraph mark (the last cell at the story's end).
+        if (cellEnds) *cellEnds << quint32((512 + m_text.size() - start) / 2 - 1);
+    }
+    if (cellEnds && !cellEnds->isEmpty()) cellEnds->last() += 1;
     m_storyLengths << quint32((512 + m_text.size() - start) / 2);
     m_textIds << textId;
 }
@@ -877,6 +894,139 @@ QByteArray PubWriter::write(QStringList *skipped)
                 finish(seq, sp);
                 return;
             }
+            if (it->type() == ItemType::Table) {
+                auto *tb = static_cast<const TableItem *>(it.get());
+                if (tb->rows <= 0 || tb->cols <= 0 || tb->cells.size() != tb->rows * tb->cols) {
+                    ++skippedCount;
+                    return;
+                }
+                const quint32 seq = next++, cellsSeq = next++;
+                const int tid = textId++;
+                // Cells in reading order; a merged cell is one entry spanning
+                // its rows and columns, and the cells under it are left out.
+                QTextDocument blank;
+                QVector<const QTextDocument *> docs;
+                QVector<B> cellRecs;
+                for (int row = 0; row < tb->rows; ++row) {
+                    for (int col = 0; col < tb->cols; ++col) {
+                        const TableCell &c = tb->cell(row, col);
+                        if (c.covered) continue;
+                        const QTextDocument *d = m_doc.storyDoc(c.storyId);
+                        docs << (d ? d : &blank);
+                        const int r1 = std::min(tb->rows, row + std::max(1, c.rowSpan)) - 1;
+                        const int c1 = std::min(tb->cols, col + std::max(1, c.colSpan)) - 1;
+                        QVector<B> f;
+                        if (row) f << u32(0x01, quint32(row));
+                        if (r1) f << u32(0x02, quint32(r1));
+                        if (col) f << u32(0x03, quint32(col));
+                        if (c1) f << u32(0x04, quint32(c1));
+                        f << u32(0x0a, quint32(emu(c.margins.left()))) << u32(0x0b, quint32(emu(c.margins.right())))
+                          << u32(0x0c, quint32(emu(c.margins.top()))) << u32(0x0d, quint32(emu(c.margins.bottom()))) << u32(0x0e, 114300);
+                        cellRecs << rec(0x00, f);
+                    }
+                }
+                QVector<quint32> ends;
+                addStory(tid, docs, &ends);
+                m_cellEnds << qMakePair(int(m_textIds.size()) - 1, ends);
+                m_tableTextIds << tid;
+                // Column then row edges: where each ends, and its size.
+                QVector<B> grid;
+                QVector<qint64> colEdge{0}, rowEdge{0};
+                double acc = 0;
+                for (int col = 0; col < tb->cols; ++col) {
+                    acc += tb->colW.value(col);
+                    colEdge << emu(acc);
+                    grid << rec(0x00, {u32(0x01, quint32(colEdge.last())), u32(0x02, quint32(colEdge.last() - colEdge[col]))});
+                }
+                acc = 0;
+                for (int row = 0; row < tb->rows; ++row) {
+                    acc += tb->rowH.value(row);
+                    rowEdge << emu(acc);
+                    grid << rec(0x00, {u32(0x01, quint32(rowEdge.last())), u32(0x02, quint32(rowEdge.last() - rowEdge[row]))});
+                }
+                cw.put(seq, {0x10, pageSeq[pi], {flag(0x02), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
+                                                 u32(0x27, quint32(tid)), flag(0x2a), u32(0x66, quint32(tb->rows)), u32(0x67, quint32(tb->cols)),
+                                                 u32(0x68, quint32(colEdge.last())), u32(0x69, quint32(rowEdge.last())), ref(0x6b, cellsSeq),
+                                                 list(0x6d, grid, 0x90), u32(0x70, 0xfffffffdu), u32(0xb7, 0)}});
+                cw.put(cellsSeq, {0x63, seq, {u16(0x01, quint32(cellRecs.size())), list(0x02, cellRecs)}});
+
+                // Fills: one record per grid cell, naming its column (03) and row (04).
+                auto formatShape = [&](const QVector<Prop> &o, const QVector<Prop> &t, const QVector<B> &where) {
+                    if (m_cellFormats.size() >= 1000) return;   // one id block's worth
+                    QByteArray d;
+                    putU32(d, quint32(0x0c03 + m_cellFormats.size()));
+                    putU32(d, 0x0a00);
+                    QVector<B> a = where;
+                    a.insert(where.isEmpty() || where.first().id != 0x01 ? 0 : 1, ref(0x02, seq, 0x68));
+                    m_cellFormats << escherContainer(0xf004, escherRecord(0x2, 1, 0xf00a, d) + escherProps(0xf00b, o) + escherProps(0xf122, t) +
+                                                                  clientBlocks(0xf010, a));
+                };
+                for (int row = 0; row < tb->rows; ++row) {
+                    for (int col = 0; col < tb->cols; ++col) {
+                        const TableCell &c = tb->cell(row, col);
+                        if (c.covered || c.fill.type != Fill::Solid) continue;
+                        const quint32 color = bgr(c.fill.color.resolve(m_doc.colors));
+                        for (int r = row; r < std::min(tb->rows, row + std::max(1, c.rowSpan)); ++r) {
+                            for (int k = col; k < std::min(tb->cols, col + std::max(1, c.colSpan)); ++k) {
+                                QVector<B> where;
+                                if (k) where << u32(0x03, quint32(k));
+                                if (r) where << u32(0x04, quint32(r));
+                                QVector<Prop> o = {{0x0181, color}, {0x0183, 0}, {0x01bf, 0x001f001c}, {0x01ff, 0x00080000}, {0x0285, 0},
+                                                   {0x02cb, 0}, {0x02cc, 0}, {0x02ce, 0}, {0x02cf, 0}};
+                                QVector<Prop> t = {{0x01bf, 0x00600000}, {0x01ff, 0x00400040}};
+                                t << kShadowFlags;
+                                formatShape(o, t, where);
+                            }
+                        }
+                    }
+                }
+                // Ruled lines: 01 = 1 across or 2 down, then the grid box it
+                // runs along (04 first row, 05 first column, 06 last row, 07
+                // last column, as grid lines); zero fields are left out.
+                QSet<QString> drawn;
+                auto rule = [&](int kind, int r0, int c0, int r1, int c1, const Stroke &st) {
+                    if (st.isNone()) return;
+                    const QString key = QStringLiteral("%1 %2 %3 %4 %5").arg(kind).arg(r0).arg(c0).arg(r1).arg(c1);
+                    if (drawn.contains(key)) return;
+                    drawn.insert(key);
+                    QVector<B> where{u32(0x01, quint32(kind))};
+                    if (r0) where << u32(0x04, quint32(r0));
+                    if (c0) where << u32(0x05, quint32(c0));
+                    if (r1) where << u32(0x06, quint32(r1));
+                    if (c1) where << u32(0x07, quint32(c1));
+                    QVector<Prop> o = kInsets;
+                    o << Prop{0x0181, bgr(st.color.resolve(m_doc.colors))} << Prop{0x0183, 0xffffffffu} << Prop{0x01bf, 0x001f001c}
+                      << Prop{0x01cb, quint32(emu(st.width))} << Prop{0x01d6, 2} << Prop{0x01ff, 0x001f0006} << kTail;
+                    QVector<Prop> t = {{0x01bf, 0x00600000}, {0x01ff, 0x03e00020}, {0x057f, 0x00080000}, {0x05bf, 0x00080000},
+                                       {0x05ff, 0x00080000}, {0x063f, 0x00080000}};
+                    t << kShadowFlags << kSideLines;
+                    formatShape(o, t, where);
+                };
+                for (int row = 0; row < tb->rows; ++row) {
+                    for (int col = 0; col < tb->cols; ++col) {
+                        const TableCell &c = tb->cell(row, col);
+                        if (c.covered) continue;
+                        const int r1 = std::min(tb->rows, row + std::max(1, c.rowSpan)), c1 = std::min(tb->cols, col + std::max(1, c.colSpan));
+                        rule(1, row, col, row, c1, c.border.top);
+                        rule(1, r1, col, r1, c1, c.border.bottom);
+                        rule(2, row, col, r1, col, c.border.left);
+                        rule(2, row, c1, r1, c1, c.border.right);
+                    }
+                }
+
+                QVector<Prop> opt = {{0x0080, quint32(tid)}, {0x0081, 0}, {0x0082, 0}, {0x0083, 0}, {0x0084, 0}, {0x017f, 0x00300000},
+                                     {0x01c0, 0x08000000}, {0x01c2, 0x08000007}, {0x01cb, 25400}, {0x01ff, 0x00080000}, {0x0201, 0x08000000},
+                                     {0x0384, 36576}, {0x0385, 36576}, {0x0386, 36576}, {0x0387, 36576}};
+                rotationProp(opt, tb->rotation);
+                QVector<Prop> topt = {{0x017f, 0x03800000}, {0x01ff, 0x00400000}, {0x054b, 0}, {0x058b, 0}, {0x05cb, 0}, {0x060b, 0},
+                                      {0x064b, 0}, {0x06ff, 0x00020002}};
+                topt << kSideLines;
+                QByteArray sp = spRecord(201, 0x0a00, tb) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(r);
+                sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
+                sp += clientBlocks(0xf00d, {u32(0x01, quint32(tid))});
+                finish(seq, sp);
+                return;
+            }
             if (it->type() == ItemType::Picture) {
                 auto *pic = static_cast<const PictureItem *>(it.get());
                 const int blip = blipIndex(pic->imageId);
@@ -925,7 +1075,7 @@ QByteArray PubWriter::write(QStringList *skipped)
         };
         for (const ItemPtr &it : m_doc.pages[pi]->items) visit(it);
     }
-    if (skipped && skippedCount) *skipped << QStringLiteral("%1 object(s) (tables, text art and some shapes) aren't saved to .pub yet").arg(skippedCount);
+    if (skipped && skippedCount) *skipped << QStringLiteral("%1 object(s) (text art and some shapes) aren't saved to .pub yet").arg(skippedCount);
     const quint32 fontSeq = m_fonts.isEmpty() && m_textIds.isEmpty() ? 0 : next++;
     if (m_fonts.isEmpty()) m_fonts << m_doc.fonts.body;
 
@@ -964,17 +1114,18 @@ QByteArray PubWriter::write(QStringList *skipped)
     textIndex << rec(0x0a, {u32(0x01, 0x08000000)}, 0x98);
     cw.put(282, {0x5b, 256, textIndex});
     // 0x61 maps each text id to its text box; 0x65 lists the stories.
-    if (m_textShapes.isEmpty()) {
-        cw.put(283, {0x61, 282, {}});
-        cw.put(284, {0x65, 282, {}});
-    } else {
+    // Tables appear only in 0x65, with 03 = 0.
+    {
         QVector<B> map, stories;
-        for (const auto &ts : m_textShapes) {
-            map << rec(0x00, {u32(0x01, quint32(ts.first)), ref(0x03, ts.second, 0x68)});
-            stories << rec(0x00, {u32(0x01, quint32(ts.first)), u32(0x07, 1), u32(0x08, 0xcb18967cu, 0x58), u32(0x09, 0xcb18967cu, 0x58)});
+        for (const auto &ts : m_textShapes) map << rec(0x00, {u32(0x01, quint32(ts.first)), ref(0x03, ts.second, 0x68)});
+        for (int id : m_textIds) {
+            QVector<B> f{u32(0x01, quint32(id))};
+            if (m_tableTextIds.contains(id)) f << u16(0x03, 0, 0x10);
+            f << u32(0x07, 1) << u32(0x08, 0xcb18967cu, 0x58) << u32(0x09, 0xcb18967cu, 0x58);
+            stories << rec(0x00, f);
         }
-        cw.put(283, {0x61, 282, {u32(0x01, quint32(map.size())), list(0x02, map)}});
-        cw.put(284, {0x65, 282, {u32(0x01, quint32(stories.size())), list(0x02, stories)}});
+        cw.put(283, {0x61, 282, map.isEmpty() ? QVector<B>{} : QVector<B>{u32(0x01, quint32(map.size())), list(0x02, map)}});
+        cw.put(284, {0x65, 282, stories.isEmpty() ? QVector<B>{} : QVector<B>{u32(0x01, quint32(stories.size())), list(0x02, stories)}});
     }
     // Palette: the color scheme.
     {
@@ -1122,6 +1273,15 @@ QByteArray PubWriter::write(QStringList *skipped)
         }
         secs << Section{"FONT", "FONT", 0, offsetTable(entries, 4, 4, 0), false};
     }
+    // Table cell ends: count - 1, 0, 0xff00, then each cell's end.
+    for (const auto &ce : m_cellEnds) {
+        QByteArray tcd;
+        putU32(tcd, quint32(ce.second.size() - 1));
+        putU32(tcd, 0);
+        putU32(tcd, 0xff00);
+        for (quint32 e : ce.second) putU32(tcd, e);
+        secs << Section{"TCD ", "PLC ", quint16(ce.first), tcd, false};
+    }
     if (!m_text.isEmpty()) {
         QByteArray strs;
         putU32(strs, quint32(m_storyLengths.size()));
@@ -1175,16 +1335,17 @@ QByteArray PubWriter::write(QStringList *skipped)
         QVector<Prop> dggTopt = {{0x01ff, 0x00400000}};
         dggTopt << kShadowFlags << kSideLines;
         QByteArray dgg;
-        putU32(dgg, 0x0c03);              // largest shape id + 1
+        const quint32 formats = quint32(m_cellFormats.size());
+        putU32(dgg, 0x0c03 + formats);    // largest shape id + 1
         putU32(dgg, 4);                   // clusters + 1
-        putU32(dgg, quint32(5 + pageShapesCount));
+        putU32(dgg, quint32(5 + pageShapesCount) + formats);
         putU32(dgg, 3);                   // drawings
         putU32(dgg, 1);
         putU32(dgg, quint32(1 + pageShapesCount));
         putU32(dgg, 2);
         putU32(dgg, 2);
         putU32(dgg, 3);
-        putU32(dgg, 3);
+        putU32(dgg, 3 + formats);
         QByteArray menu;
         for (quint32 v : {0x08000001u, 0x08000000u, 0x08000004u, 0x100000f7u}) putU32(menu, v);
         // The picture store: an entry per image pointing into the delay stream.
@@ -1242,7 +1403,10 @@ QByteArray PubWriter::write(QStringList *skipped)
             QVector<Prop> t2 = kShadowFlags;
             t2 << kSideLines;
             QByteArray s2 = escherRecord(0x2, 20, 0xf00a, sp2) + escherProps(0xf00b, o2) + escherProps(0xf122, t2) + clientBlocks(0xf010, {u32(0x01, 1)});
-            QByteArray dg = dgRecord(3, 3, 0x0c02) + escherContainer(0xf003, spgrHead(0x0c00) + escherContainer(0xf004, s1) + escherContainer(0xf004, s2));
+            QByteArray cellFormats;
+            for (const QByteArray &f : m_cellFormats) cellFormats += f;
+            QByteArray dg = dgRecord(3, 3 + formats, 0x0c02 + formats) +
+                            escherContainer(0xf003, spgrHead(0x0c00) + escherContainer(0xf004, s1) + escherContainer(0xf004, s2) + cellFormats);
             putU32(escher, 2);
             escher += escherContainer(0xf002, dg);
         }

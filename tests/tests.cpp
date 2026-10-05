@@ -376,6 +376,84 @@ private Q_SLOTS:
         QVERIFY2(shapes >= 2, qPrintable(QString::number(shapes)));
     }
 
+    // A table written to .pub reads back with its grid, text, merge, fills and rules.
+    void pubWriterTable()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TableItem>();
+        t->rows = 3;
+        t->cols = 2;
+        t->colW = {100, 150};
+        t->rowH = {30, 40, 50};
+        t->rect = QRectF(72, 144, 0, 0);
+        t->syncRect();
+        t->cells.resize(6);
+        const QStringList texts = {QStringLiteral("Name"), QStringLiteral("Amount"), QStringLiteral("Paper"), QStringLiteral("$5.00"),
+                                   QStringLiteral("Total due"), QString()};
+        for (int i = 0; i < 6; ++i) t->cells[i].storyId = doc->createStory(texts[i]);
+        const QColor gold(255, 230, 120), blue(0, 0, 200);
+        for (int c = 0; c < 2; ++c) {
+            t->cell(0, c).fill = jp::Fill::solid(jp::ColorRef::rgb(gold));
+            t->cell(0, c).border.bottom = jp::Stroke::line(jp::ColorRef::rgb(Qt::black), 1.5);
+        }
+        t->cell(1, 1).border.left = jp::Stroke::line(jp::ColorRef::rgb(blue), 1);
+        t->cell(2, 0).colSpan = 2;
+        t->cell(2, 1).covered = true;
+        doc->pages[0]->items.push_back(t);
+
+        // The table alone, then with a text box too (two stories).
+        QTemporaryDir dir;
+        QString path;
+        for (const QString name : {QStringLiteral("test10-table.pub"), QStringLiteral("test11-table-text.pub")}) {
+            if (name.startsWith(QLatin1String("test11"))) {
+                auto label = std::make_shared<jp::TextItem>();
+                label->rect = QRectF(72, 36, 400, 40);
+                label->storyId = doc->createStory(QStringLiteral("test11-table-text"));
+                doc->pages[0]->items.insert(doc->pages[0]->items.begin(), label);
+            }
+            path = dir.filePath(name);
+            QString err;
+            QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+            QVERIFY2(err.isEmpty(), qPrintable(err));
+            if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+                const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/" + name;
+                QFile::remove(out);
+                QFile::copy(path, out);
+            }
+        }
+        QString e1;
+        auto back = jp::importPublisherFile(path, &e1);
+        QVERIFY2(back, qPrintable(e1));
+        const jp::TableItem *bt = nullptr;
+        jp::walkItems(back->pages[0]->items, [&](const jp::ItemPtr &it) {
+            if (it->type() == jp::ItemType::Table) bt = static_cast<const jp::TableItem *>(it.get());
+        });
+        QVERIFY(bt);
+        QCOMPARE(bt->rows, 3);
+        QCOMPARE(bt->cols, 2);
+        QVERIFY2(std::abs(bt->rect.left() - 72) < 1 && std::abs(bt->rect.top() - 144) < 1,
+                 qPrintable(QStringLiteral("%1,%2").arg(bt->rect.left()).arg(bt->rect.top())));
+        QVERIFY(std::abs(bt->colW.value(0) - 100) < 1 && std::abs(bt->colW.value(1) - 150) < 1);
+        for (int r = 0; r < 3; ++r) QVERIFY2(std::abs(bt->rowH.value(r) - t->rowH[r]) < 1, qPrintable(QString::number(bt->rowH.value(r))));
+        auto text = [&](int r, int c) {
+            const QTextDocument *d = back->storyDoc(bt->cell(r, c).storyId);
+            return d ? d->toPlainText() : QString();
+        };
+        QCOMPARE(text(0, 0), QStringLiteral("Name"));
+        QCOMPARE(text(0, 1), QStringLiteral("Amount"));
+        QCOMPARE(text(1, 1), QStringLiteral("$5.00"));
+        QCOMPARE(text(2, 0), QStringLiteral("Total due"));
+        QCOMPARE(bt->cell(2, 0).colSpan, 2);
+        QCOMPARE(bt->cell(0, 1).fill.color.resolve(back->colors), gold);
+        QVERIFY(bt->cell(1, 0).fill.type != jp::Fill::Solid);
+        const jp::Stroke under = bt->cell(0, 0).border.bottom;
+        QVERIFY(!under.isNone() && std::abs(under.width - 1.5) < 0.1);
+        QCOMPARE(under.color.resolve(back->colors), QColor(Qt::black));
+        QVERIFY(!bt->cell(1, 1).border.left.isNone());
+        QCOMPARE(bt->cell(1, 1).border.left.color.resolve(back->colors), blue);
+        QVERIFY(bt->cell(1, 0).border.left.isNone());
+    }
+
     // Lines, turned shapes and pictures written to .pub read back in place.
     void pubWriterObjects()
     {

@@ -152,3 +152,35 @@ scheme's main color (`01:22 0x08000000`, 02/04/05 = 0xFFFFFFFF, 03 =
 `01:22 BGR, 02:22 0x08000000 + slot` plus an 03 value not yet decoded.
 Every entry ends with `06:82` holding two zero bytes. Files that use only
 scheme colors may have no PL section at all.
+
+## Tables
+
+A table is a Contents chunk of type 0x10 (directory version 0x0102, 0b =
+0x16): `02:08, 04:10 = 259, 0c, 0d, 27 = text id, 2a:08, 66 = rows, 67 =
+columns, 68 = width, 69 = height, 6b → cell list, 6d = edges, 70 =
+0xFFFFFFFD, b7 = 0`. The edges list (0x90) holds a record per column, then
+per row: `01` = where it ends, `02` = its size.
+
+The cell list (type 0x63, parent the table, directory 08 and 0b = 1) is
+`01:18 count, 02 list`; each cell has `01` first row, `02` last row, `03`
+first column, `04` last column (zero fields left out), `0a`-`0d` margins
+(left, right, top, bottom) and `0e = 114300`. A merged cell is one entry
+spanning its rows and columns; the cells under it are not listed. Cells
+can come in any order; their text follows the list order.
+
+All the cells' text is one story. Its `0x65` record adds `03:10 = 0`, and
+it has no `0x61` entry. A `TCD ` section (kind `PLC `, id = the story's
+index in SYID) holds: cells - 1, 0, 0xFF00, then each cell's end within
+the story (the position of its last paragraph mark; the last value is the
+story length).
+
+The drawing has an `Sp` of type 201 with OPT 0x0080 = text id, insets 0,
+0x017F = 0x00300000, and a ClientTextbox. Each cell fill and each ruled
+line is a shape of type 1 in the table-format drawing (drawing 3) whose
+ClientAnchor names the table (`02:68`):
+
+- Fill: `03` column, `04` row; OPT 0x0181 = color, 0x01BF = 0x001F001C.
+- Line: `01` = 1 across or 2 down, then the grid box it runs along as grid
+  lines: `04` first row, `05` first column, `06` last row, `07` last
+  column. OPT 0x0181 = color, 0x01CB = width, 0x01FF = 0x001F0006.
+
