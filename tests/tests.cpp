@@ -376,6 +376,53 @@ private Q_SLOTS:
         QVERIFY2(shapes >= 2, qPrintable(QString::number(shapes)));
     }
 
+    // Two pages written to .pub read back as two pages, each with its own objects.
+    void pubWriterPages()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        doc->addPage();
+        QCOMPARE(doc->pages.size(), 2);
+        for (int i = 0; i < 2; ++i) {
+            auto t = std::make_shared<jp::TextItem>();
+            t->rect = QRectF(72, 72 + 100 * i, 300, 60);
+            t->storyId = doc->createStory(i == 0 ? QStringLiteral("test13 page one") : QStringLiteral("Page two"));
+            doc->pages[i]->items.push_back(t);
+            auto sh = std::make_shared<jp::ShapeItem>();
+            sh->shape = i == 0 ? QStringLiteral("rect") : QStringLiteral("ellipse");
+            sh->rect = QRectF(100, 400, 150, 100);
+            sh->fill = jp::Fill::solid(jp::ColorRef::rgb(i == 0 ? QColor(220, 30, 30) : QColor(30, 60, 200)));
+            sh->stroke = jp::Stroke::none();
+            doc->pages[i]->items.push_back(sh);
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("test13-two-pages.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        QVERIFY2(err.isEmpty(), qPrintable(err));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test13-two-pages.pub";
+            QFile::remove(out);
+            QFile::copy(path, out);
+        }
+        QString e1;
+        auto back = jp::importPublisherFile(path, &e1);
+        QVERIFY2(back, qPrintable(e1));
+        QCOMPARE(back->pages.size(), 2);
+        for (int i = 0; i < 2; ++i) {
+            QString text;
+            int shapes = 0;
+            jp::walkItems(back->pages[i]->items, [&](const jp::ItemPtr &it) {
+                if (it->type() == jp::ItemType::Text) {
+                    const QTextDocument *d = back->storyDoc(static_cast<const jp::TextItem *>(it.get())->storyId);
+                    if (d) text = d->toPlainText();
+                }
+                if (it->type() == jp::ItemType::Shape) ++shapes;
+            });
+            QCOMPARE(text, i == 0 ? QStringLiteral("test13 page one") : QStringLiteral("Page two"));
+            QCOMPARE(shapes, 1);
+        }
+    }
+
     // A table written to .pub reads back with its grid, text, merge, fills and rules.
     void pubWriterTable()
     {

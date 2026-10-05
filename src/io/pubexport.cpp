@@ -723,7 +723,8 @@ QByteArray PubWriter::write(QStringList *skipped)
                           str(0x10, QStringLiteral("Your information was received")), str(0x13, QStringLiteral("FORMDATA.HTM")), u32(0x17, 1),
                           str(0x18, QStringLiteral("http://example.com/~user/ispscript.cgi"))};
     };
-    auto pageBody = [&](const QVector<quint32> &shapes, quint32 sub60, quint32 sub77, bool master, bool special, QSizeF scratch, QSizeF ext) {
+    auto pageBody = [&](const QVector<quint32> &shapes, quint32 sub60, quint32 sub77, bool master, bool special, QSizeF scratch, QSizeF ext,
+                        int index = 0) {
         QVector<B> b;
         if (!shapes.isEmpty()) {
             QVector<B> refs;
@@ -733,7 +734,9 @@ QByteArray PubWriter::write(QStringList *skipped)
         if (master) b << ref(0x03, 289);
         b << rec(0x05, {u32(0x01, quint32(scratch.width())), u32(0x02, quint32(scratch.height()))});
         QByteArray f06(8, '\0');
+        // A normal page: 2, then its index among the pages.
         f06[0] = char(special || master ? 0 : 2);
+        if (!special && !master) setU32(f06, 4, quint32(index));
         b << bytesB(0x06, 0x28, f06);
         b << ref(0x09, sub60) << ref(0x0b, sub77);
         if (!master) b << ref(0x0d, kMaster, 0x68);
@@ -1093,7 +1096,7 @@ QByteArray PubWriter::write(QStringList *skipped)
     for (quint32 s : kSpecial) pageList << ref(0x00, s);
     cw.put(256, {0x44, 0, {u32(0x01, quint32(pageList.size())), list(0x02, pageList), ref(0x03, 287), ref(0x04, 291), flag(0x08),
                            rec(0x12, {u32(0x01, quint32(pw)), u32(0x02, quint32(ph))}), ref(0x18, 259), ref(0x19, 261), ref(0x1a, 257),
-                           ref(0x20, 282), ref(0x21, 262), ref(0x22, 285), u32(0x23, 1), bytesB(0x2a, 0x38, {}), u16(0x2c, 5), u16(0x2d, 1),
+                           ref(0x20, 282), ref(0x21, 262), ref(0x22, 285), u32(0x23, quint32(pageSeq.size())), bytesB(0x2a, 0x38, {}), u16(0x2c, 5), u16(0x2d, 1),
                            ref(0x31, 278, 0x68), flag(0x39, 0x00), u32(0x3c, 1), u32(0x41, 0), ref(0x44, 292), flag(0x4d)}});
     cw.put(257, {0x72, 256, {}});
     cw.put(259, {0x73, 256, {}});
@@ -1104,7 +1107,7 @@ QByteArray PubWriter::write(QStringList *skipped)
     cw.put(264, {0x60, kMaster, {u32(0x05, 1)}});
     cw.put(265, {0x77, kMaster, webForm()});
     for (int i = 0; i < pageSeq.size(); ++i) {
-        cw.put(pageSeq[i], {0x43, 256, pageBody(pageShapes[i], pageSub[i].first, pageSub[i].second, false, false, scratch, ext)});
+        cw.put(pageSeq[i], {0x43, 256, pageBody(pageShapes[i], pageSub[i].first, pageSub[i].second, false, false, scratch, ext, i)});
         cw.put(pageSub[i].first, {0x60, pageSeq[i], {}});
         cw.put(pageSub[i].second, {0x77, pageSeq[i], webForm()});
     }
