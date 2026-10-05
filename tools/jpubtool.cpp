@@ -5,6 +5,7 @@
 //   jpubtool template <id|all> <outdir> [dpi]   render built-in templates
 
 #include "core/fonts.h"
+#include "io/cfb.h"
 #include "io/jpubfile.h"
 #include "io/pubimport.h"
 #include "render/renderer.h"
@@ -16,6 +17,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
+#include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QTextStream>
@@ -29,10 +31,24 @@ int main(int argc, char **argv)
     const QStringList args = app.arguments();
     QTextStream out(stdout);
     if (args.size() < 4) {
-        out << "usage: jpubtool render <file> <outdir> [dpi] | convert <in> <out.jpub>\n";
+        out << "usage: jpubtool render <file> <outdir> [dpi] | convert <in> <out.jpub> | repack <in.pub> <out.pub> | layout <file> x\n";
         return 2;
     }
     const QString cmd = args[1], in = args[2];
+    if (cmd == "repack") {
+        // Rewrite a compound file with JeffPub's container writer, every
+        // stream unchanged: tests the container layer against other readers.
+        QFile f(in);
+        if (!f.open(QIODevice::ReadOnly)) { out << "can't read " << in << "\n"; return 1; }
+        cfb::File c;
+        QString err;
+        if (!cfb::read(f.readAll(), &c, &err)) { out << "not a compound file: " << err << "\n"; return 1; }
+        QFile o(args[3]);
+        if (!o.open(QIODevice::WriteOnly)) { out << "can't write " << args[3] << "\n"; return 1; }
+        o.write(cfb::write(c));
+        out << "OK\t" << args[3] << "\n";
+        return 0;
+    }
     if (cmd == "template") {
         const double dpi = args.size() > 4 ? args[4].toDouble() : 60;
         QDir().mkpath(args[3]);
