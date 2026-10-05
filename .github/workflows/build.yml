@@ -1,0 +1,150 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            name: linux
+          - os: windows-2022
+            name: windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jurplel/install-qt-action@v4
+        if: runner.os == 'Linux'
+        with:
+          version: '6.8.3'
+          modules: 'qtimageformats'
+          cache: true
+
+      # Windows builds with MinGW-w64 (GCC), the compiler Qt ships for Windows.
+      - uses: jurplel/install-qt-action@v4
+        if: runner.os == 'Windows'
+        with:
+          version: '6.8.3'
+          arch: 'win64_mingw'
+          modules: 'qtimageformats'
+          tools: 'tools_mingw1310'
+          cache: true
+
+      - name: MinGW on PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "$env:IQTA_TOOLS\mingw1310_64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          pip install ninja
+
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libgl1-mesa-dev libxkbcommon-dev libfuse2
+
+      - name: Configure
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then CC=gcc CXX=g++; else CC=cc CXX=c++; fi
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        shell: bash
+        run: |
+          # Windows runners drop this program's console output, so results also go to a file.
+          if [ "$RUNNER_OS" = "Windows" ]; then T=build/jptests.exe; else T=build/jptests; fi
+          set +e
+          "$T" -v1 -o test-results.txt,txt -o -,txt
+          code=$?
+          echo "--- test-results.txt"; cat test-results.txt 2>/dev/null || echo "(no results file: the program did not start)"
+          echo "jptests exit code: $code"
+          exit $code
+        env:
+          QT_QPA_PLATFORM: offscreen
+
+      - name: Export check PDFs
+        shell: bash
+        run: |
+          # PDFs exported by this platform's build, to compare against Linux.
+          if [ "$RUNNER_OS" = "Windows" ]; then A=build/JeffPub79.exe; else A=build/JeffPub79; fi
+          mkdir -p pdf-check
+          "$A" --template newsletter-classic --export-pdf pdf-check/newsletter-classic.pdf || true
+          "$A" --template flyer-announce --export-pdf pdf-check/flyer-announce.pdf || true
+          "$A" tests/data/pub/poi-SampleBrochure.pub --export-pdf pdf-check/poi-SampleBrochure.pdf || true
+          "$A" tests/data/pub/poi-SampleNewsletter.pub --export-pdf pdf-check/poi-SampleNewsletter.pdf || true
+          ls -la pdf-check
+        env:
+          QT_QPA_PLATFORM: offscreen
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-check-${{ matrix.name }}
+          path: pdf-check
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/JeffPub79 | Out-Null
+          Copy-Item build/JeffPub79.exe dist/JeffPub79/
+          # Also copies the GCC runtime DLLs beside the program.
+          windeployqt --release --no-translations --no-system-d3d-compiler --no-opengl-sw dist/JeffPub79/JeffPub79.exe
+          Get-ChildItem dist/JeffPub79/*.dll | Select-Object -ExpandProperty Name
+          Copy-Item LICENSE, README.md dist/JeffPub79/
+          Copy-Item -Recurse resources/fonts dist/JeffPub79/fonts
+          Copy-Item -Recurse resources/dict dist/JeffPub79/dict
+
+      - name: Installer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ver = (Select-String -Path CMakeLists.txt -Pattern 'project\(JeffPub79 VERSION ([0-9.]+)').Matches[0].Groups[1].Value
+          makensis /DVERSION=$ver packaging/windows/installer.nsi
+          New-Item -ItemType Directory -Force installer | Out-Null
+          Move-Item packaging/windows/JeffPub79-Setup.exe installer/
+
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: JeffPub79-Setup
+          path: installer
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p dist/JeffPub79
+          cp build/JeffPub79 LICENSE README.md dist/JeffPub79/
+          cp -r resources/fonts resources/dict dist/JeffPub79/
+
+      - name: Linux packages (.deb and AppImage)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p tools-bin
+          curl -sSLo tools-bin/linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          curl -sSLo tools-bin/linuxdeploy-plugin-qt https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x tools-bin/*
+          export PATH="$PWD/tools-bin:$PATH" QMAKE="$QT_ROOT_DIR/bin/qmake" APPIMAGE_EXTRACT_AND_RUN=1
+          packaging/linux/build-packages.sh build linux-packages
+          # The packaged program must start on its own bundled Qt.
+          mkdir deb-check && dpkg-deb -x linux-packages/*.deb deb-check
+          env -u LD_LIBRARY_PATH QT_QPA_PLATFORM=offscreen deb-check/opt/jeffpub79/bin/JeffPub79 --template flyer-announce --export-pdf deb-check/check.pdf
+          test -s deb-check/check.pdf
+
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: JeffPub79-linux-packages
+          path: linux-packages
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JeffPub79-${{ matrix.name }}
+          path: dist/JeffPub79

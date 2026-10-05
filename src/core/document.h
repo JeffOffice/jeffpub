@@ -1,0 +1,210 @@
+#pragma once
+// The publication: page setup, master pages, pages, the shared scratch area,
+// text stories, embedded pictures, styles, schemes, business information and
+// the mail-merge recipient list.
+
+#include "core/items.h"
+
+#include <QByteArray>
+#include <QDateTime>
+#include <QImage>
+#include <QJsonObject>
+#include <QMap>
+#include <QSizeF>
+#include <QTextBlockFormat>
+#include <QTextCharFormat>
+#include <memory>
+
+class QTextDocument;
+
+namespace jp {
+
+constexpr double PT_PER_IN = 72.0;
+inline double in2pt(double in) { return in * PT_PER_IN; }
+
+struct ImageData {
+    QByteArray bytes;           // original file bytes (embedded)
+    QString format;             // "png", "jpg", "svg", ...
+    QSize pixelSize;
+    QString sourcePath;         // where it was inserted from (Graphics Manager)
+    bool linked = false;        // linked instead of embedded
+    QImage image() const;       // decoded, cached
+    mutable QImage cache;
+};
+
+struct Story {
+    QString id;
+    std::unique_ptr<QTextDocument> doc;
+    quint64 serial = nextSerial();   // unique per Story object, so caches never confuse a rebuilt story
+    static quint64 nextSerial();
+};
+
+struct RulerGuides {
+    QVector<double> h, v;       // page coordinates
+};
+
+struct GridGuides {
+    int cols = 1, rows = 1;
+    double colGap = 14.4, rowGap = 14.4;
+    bool centerGuide = false;
+    double baseline = 12, baselineOffset = 0;
+    double hBaseline = 12, hBaselineOffset = 0;
+    QJsonObject toJson() const;
+    static GridGuides fromJson(const QJsonObject &o);
+};
+
+struct PageBase {
+    QString id = newId("p");
+    ItemList items;
+    Fill background;
+    RulerGuides guides;
+};
+
+struct MasterPage : PageBase {
+    QString name = QStringLiteral("Master Page");
+    QString abbr = QStringLiteral("A");
+    bool twoPage = false;
+    GridGuides grid;
+};
+
+struct Page : PageBase {
+    QString masterId = QStringLiteral("A"); // empty = no master
+    QString title;
+};
+
+struct PageSetup {
+    enum Layout { OnePerSheet, Booklet, MultiplePerSheet, Envelope, FoldedCard, Labels };
+    enum Fold { SideFoldQuarter, TopFoldQuarter, SideFoldHalf, TopFoldHalf };
+    QSizeF size{612, 792};
+    QMarginsF margins{36, 36, 36, 36};
+    QString sizeName = QStringLiteral("Letter");
+    Layout layout = OnePerSheet;
+    Fold fold = SideFoldHalf;
+    QSizeF sheet{612, 792};
+    int gridRows = 1, gridCols = 1;
+    double gapH = 0, gapV = 0, sideMargin = 0, topMargin = 0;
+    QJsonObject toJson() const;
+    static PageSetup fromJson(const QJsonObject &o);
+};
+
+struct TextStyle {
+    QString name;
+    bool charOnly = false;
+    QString basedOn;
+    QString next;               // style for the following paragraph
+    QTextCharFormat chr;
+    QTextBlockFormat blk;
+    QJsonObject toJson() const;
+    static TextStyle fromJson(const QJsonObject &o);
+};
+
+struct BusinessInfo {
+    QString setName = QStringLiteral("Primary Business");
+    QString name, tagline, person, title, address, phone, fax, email, web;
+    QString logoImageId;
+    QString field(const QString &key) const;
+    void setField(const QString &key, const QString &v);
+    QJsonObject toJson() const;
+    static BusinessInfo fromJson(const QJsonObject &o);
+    static QStringList keys();
+    static QString label(const QString &key);
+};
+
+struct MergeSource {
+    QString path;
+    QStringList fields;
+    QVector<QStringList> rows;
+    QVector<bool> include;      // per row
+    QString pictureField;       // field holding picture file paths
+    bool isEmpty() const { return fields.isEmpty(); }
+    QString value(int row, const QString &field) const;
+    QVector<int> includedRows() const;
+    QJsonObject toJson() const;
+    static MergeSource fromJson(const QJsonObject &o);
+};
+
+struct DocProps {
+    QString title, subject, author, manager, company, category, keywords, comments;
+    QDateTime created = QDateTime::currentDateTime(), modified = QDateTime::currentDateTime();
+    QJsonObject toJson() const;
+    static DocProps fromJson(const QJsonObject &o);
+};
+
+struct PrintInfo {
+    enum ColorModel { RGB, SingleSpot, SpotColors, ProcessCMYK, ProcessPlusSpot };
+    ColorModel model = RGB;
+    QVector<QColor> spotColors;
+    bool embedFonts = true;
+};
+
+class Document {
+public:
+    Document();
+    ~Document();
+    Document(const Document &) = delete;
+    Document &operator=(const Document &) = delete;
+
+    PageSetup setup;
+    QVector<std::shared_ptr<MasterPage>> masters;
+    QVector<std::shared_ptr<Page>> pages;
+    ItemList scratch;
+    QMap<QString, std::shared_ptr<Story>> stories;
+    QMap<QString, ImageData> images;
+    ColorScheme colors;
+    FontScheme fonts;
+    QVector<TextStyle> styles;
+    QVector<BusinessInfo> biz;
+    int bizCurrent = 0;
+    MergeSource merge;
+    DocProps props;
+    PrintInfo print;
+    QString templateId;
+    QJsonObject templateOptions;
+    bool facingPages = false;   // default spread display
+
+    // pages
+    QSizeF pageSize() const { return setup.size; }
+    MasterPage *master(const QString &id) const;
+    MasterPage *masterFor(const Page &p) const;
+    std::shared_ptr<Page> addPage(int at = -1, const QString &masterId = QStringLiteral("A"));
+    int pageIndexOf(const QString &pageId) const;
+
+    // stories
+    Story *story(const QString &id) const;
+    QTextDocument *storyDoc(const QString &id) const;
+    QString createStory(const QString &text = QString());
+    QString copyStory(const QString &id);   // deep copy, returns new id
+    void removeStory(const QString &id);
+    void applyDefaultFont(QTextDocument *d) const;
+
+    // pictures
+    QString addImage(const QByteArray &bytes, const QString &format, const QString &sourcePath = QString());
+    QImage image(const QString &id) const;
+    QSize imageSize(const QString &id) const;
+
+    // items
+    struct Loc { Item *item = nullptr; ItemList *list = nullptr; int index = -1; int page = -1; QString masterId; bool scratch = false; GroupItem *parent = nullptr; };
+    Loc find(const QString &itemId) const;
+    Item *item(const QString &itemId) const { return find(itemId).item; }
+    ItemPtr itemPtr(const QString &itemId) const;
+    QVector<TextItem *> chainOf(const QString &frameId) const;   // whole linked chain in order
+    TextItem *prevFrame(const QString &frameId) const;
+    ItemPtr cloneItem(const Item &it);    // deep copy incl. stories
+    void forEachItem(const std::function<void(Item *, int page, const QString &master)> &fn) const;
+
+    // styles and info
+    const TextStyle *style(const QString &name) const;
+    BusinessInfo &business() { return biz[std::clamp(bizCurrent, 0, int(biz.size()) - 1)]; }
+    const BusinessInfo &business() const { return biz[std::clamp(bizCurrent, 0, int(biz.size()) - 1)]; }
+
+    // serialization (pictures are stored separately)
+    QJsonObject toJson() const;
+    void fromJson(const QJsonObject &o);
+    void resetDefaults();
+
+    static std::unique_ptr<Document> blank(const QSizeF &size, const QString &sizeName = QStringLiteral("Letter"), int pageCount = 1);
+};
+
+QVector<TextStyle> defaultStyles();
+
+} // namespace jp

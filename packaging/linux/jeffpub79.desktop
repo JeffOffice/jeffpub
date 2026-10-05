@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=JeffPub 79
+GenericName=Desktop Publishing
+Comment=Create and edit publications: flyers, newsletters, brochures, cards and more
+Exec=jeffpub79 %F
+Icon=jeffpub79
+Terminal=false
+Categories=Office;Publishing;Graphics;
+MimeType=application/x-jeffpub;application/vnd.ms-publisher;
+Keywords=publisher;pub;newsletter;flyer;brochure;layout;
+StartupWMClass=JeffPub79

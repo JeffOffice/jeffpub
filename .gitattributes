@@ -1,0 +1,4 @@
+resources/dict/** -text
+*.dat -text
+*.dic -text
+*.aff -text

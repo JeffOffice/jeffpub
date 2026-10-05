@@ -1,0 +1,835 @@
+#include "core/document.h"
+#include "io/cfb.h"
+#include "io/jpubfile.h"
+#include "io/pubimport.h"
+#include "core/fonts.h"
+#include "render/metafile.h"
+#include "text/storyio.h"
+#include "text/textengine.h"
+#include "text/textprops.h"
+#include "render/renderer.h"
+#include "render/shapes.h"
+#include "render/textart.h"
+#include "templates/templates.h"
+#include "app/appfuncs.h"
+#include "io/importers.h"
+#include <QPrinter>
+#include "app/icons.h"
+#include <QTabBar>
+#include <QTabWidget>
+#include "app/dialogs.h"
+#include "app/editor.h"
+#include "app/mainwindow.h"
+#include "app/ribbon.h"
+#include "app/updater.h"
+#include "app/widgets.h"
+#include "canvas/canvas.h"
+#include <QTemporaryDir>
+#include <QLineEdit>
+#include <QApplication>
+#include <QDialog>
+#include <QTimer>
+#include <QBuffer>
+#include <QAbstractItemView>
+#include <QPainter>
+
+#include <QTextCursor>
+#include <QTextDocument>
+#include <QDirIterator>
+#include <QtTest>
+
+using namespace jp;
+
+class Tests : public QObject {
+    Q_OBJECT
+private Q_SLOTS:
+    void initTestCase()
+    {
+        initCore();
+    }
+    void publisherSamplesImport_data()
+    {
+        QTest::addColumn<QString>("path");
+        QDir dir(QStringLiteral(JP_TEST_DATA "/pub"));
+        for (const QString &f : dir.entryList({"*.pub"}, QDir::Files)) QTest::newRow(qPrintable(f)) << dir.filePath(f);
+    }
+    void publisherSamplesImport()
+    {
+        QFETCH(QString, path);
+        QString err;
+        PubImportReport rep;
+        auto doc = importPublisherFile(path, &err, &rep);
+        QVERIFY2(doc, qPrintable(err));
+        QVERIFY(!doc->pages.isEmpty());
+        // Round trip through .jpub keeps everything.
+        auto back = publicationFromBytes(publicationBytes(*doc, QImage()), &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(back->pages.size(), doc->pages.size());
+        LayoutCache cache;
+        PaintContext ctx;
+        ctx.doc = doc.get();
+        ctx.cache = &cache;
+        for (int i = 0; i < doc->pages.size(); ++i) QVERIFY(!Renderer::renderToImage(ctx, i, 0.25).isNull());
+    }
+    void publisherFuzzFilesDoNotCrash()
+    {
+        QDir dir(QStringLiteral(JP_TEST_DATA "/pub/fuzz"));
+        for (const QString &f : dir.entryList({"*.pub"}, QDir::Files)) {
+            QString err;
+            auto doc = importPublisherFile(dir.filePath(f), &err);
+            if (doc) {
+                LayoutCache cache;
+                PaintContext ctx;
+                ctx.doc = doc.get();
+                ctx.cache = &cache;
+                for (int i = 0; i < doc->pages.size(); ++i) Renderer::renderToImage(ctx, i, 0.1);
+            }
+        }
+    }
+    void privateCorpus()
+    {
+        // Set JP_PUB_CORPUS to a folder of real .pub files to check them all (not part of CI).
+        const QString root = qEnvironmentVariable("JP_PUB_CORPUS");
+        if (root.isEmpty()) QSKIP("JP_PUB_CORPUS not set");
+        QDirIterator it(root, {"*.pub", "*.PUB"}, QDir::Files, QDirIterator::Subdirectories);
+        int ok = 0, total = 0;
+        QStringList failed;
+        while (it.hasNext()) {
+            const QString f = it.next();
+            QFile file(f);
+            if (!file.open(QIODevice::ReadOnly) || !isPublisherFile(file.read(8))) continue;
+            ++total;
+            QString err;
+            if (importPublisherFile(f, &err)) ++ok; else failed << f + ": " + err;
+            // Compound-file round trip on real files too.
+            file.seek(0);
+            const QByteArray bytes = file.readAll();
+            jp::cfb::File a, b;
+            if (!jp::cfb::read(bytes, &a, &err) || !jp::cfb::read(jp::cfb::write(a), &b, &err)) { failed << f + ": cfb " + err; continue; }
+            for (const QString &sp : a.streamPaths())
+                if (b.stream(sp) != a.stream(sp)) { failed << f + ": cfb stream " + sp; break; }
+        }
+        qInfo("%d of %d .pub files imported", ok, total);
+        for (const auto &f : failed) qWarning("%s", qPrintable(f));
+        QCOMPARE(ok, total);
+    }
+    // Every built-in template must open with all of its text visible: no text box
+    // (except a linked chain's last box, which may continue) and no shape text overflows.
+    void templatesFitTheirText()
+    {
+        QStringList problems;
+        for (const jp::TemplateInfo &t : jp::templates()) {
+            std::unique_ptr<jp::Document> doc = t.build(jp::TemplateOptions());
+            QVERIFY2(doc && !doc->pages.isEmpty(), qPrintable(t.id));
+            jp::LayoutCache cache;
+            jp::PaintContext ctx;
+            ctx.doc = doc.get();
+            ctx.cache = &cache;
+            ctx.opt.output = true;
+            for (int pi = 0; pi < doc->pages.size(); ++pi) {
+                ctx.pageNumber = pi + 1;
+                ctx.pageCount = int(doc->pages.size());
+                jp::walkItems(doc->pages[pi]->items, [&](const jp::ItemPtr &it) {
+                    if (auto *tx = dynamic_cast<jp::TextItem *>(it.get())) {
+                        if (!tx->nextId.isEmpty()) return;
+                        auto fl = cache.textFrame(*doc, *tx, pi + 1, ctx.opt);
+                        if (fl.layout && fl.layout->overflow())
+                            problems << QStringLiteral("%1 p%2 text \"%3\" used=%4 box=%5x%6").arg(t.id).arg(pi + 1).arg(doc->storyDoc(tx->storyId)->toPlainText().left(30)).arg(fl.layout->usedHeight(0)).arg(tx->rect.width()).arg(tx->rect.height());
+                    } else if (auto *sh = dynamic_cast<jp::ShapeItem *>(it.get())) {
+                        if (sh->storyId.isEmpty()) return;
+                        QPointF o;
+                        const jp::StoryLayout *l = jp::Renderer::shapeTextLayout(ctx, *sh, &o);
+                        if (l && l->overflow())
+                            problems << QStringLiteral("%1 p%2 shape %3 \"%4\"").arg(t.id).arg(pi + 1).arg(sh->shape, doc->storyDoc(sh->storyId)->toPlainText().left(30));
+                    }
+                });
+            }
+        }
+        QVERIFY2(problems.isEmpty(), qPrintable(problems.join('\n')));
+    }
+
+    // File > Export > PDF/A writes a file that identifies itself as PDF/A-1b
+    // and carries the sRGB output intent the standard requires.
+    void pdfaExport()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        jp::MainWindow w;
+        w.editor()->setDocument(jp::findTemplate(QStringLiteral("newsletter-classic"))->build(jp::TemplateOptions()));
+        const QString path = dir.filePath(QStringLiteral("archive.pdf"));
+        w.exportPdf(path, false, true);
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QByteArray pdf = f.readAll();
+        QVERIFY(pdf.size() > 10000);
+        QVERIFY2(pdf.contains("pdfaid:part"), "no PDF/A identification in the XMP metadata");
+        QVERIFY2(pdf.contains("GTS_PDFA1"), "no PDF/A output intent");
+    }
+
+    // PDF/A has no transparency, so see-through picture pixels are flattened
+    // onto what lies beneath them instead of turning white.
+    void flattenKeepsSeeThroughPictures()
+    {
+        auto doc = jp::Document::blank(QSizeF(300, 300));
+        doc->pages[0]->background = jp::Fill::solid(jp::ColorRef::rgb(QColor(40, 50, 70)));
+        QImage pic(100, 100, QImage::Format_ARGB32);
+        pic.fill(Qt::transparent);
+        QPainter pp(&pic);
+        pp.fillRect(QRect(0, 0, 50, 100), Qt::white);   // left half opaque white, right half clear
+        pp.end();
+        QByteArray png;
+        QBuffer buf(&png);
+        buf.open(QIODevice::WriteOnly);
+        pic.save(&buf, "PNG");
+        auto item = std::make_shared<jp::PictureItem>();
+        item->imageId = doc->addImage(png, "png");
+        item->rect = QRectF(100, 100, 100, 100);
+        item->imgRect = QRectF(0, 0, 100, 100);
+        doc->pages[0]->items.push_back(item);
+        QVERIFY(jp::Renderer::usesTransparency(*doc, *item));
+        jp::LayoutCache cache;
+        jp::PaintContext ctx;
+        ctx.doc = doc.get();
+        ctx.cache = &cache;
+        ctx.opt.output = true;
+        ctx.opt.flattenTransparency = true;
+        const QImage out = jp::Renderer::renderToImage(ctx, 0, 1.0);
+        QCOMPARE(QColor(out.pixel(125, 150)), QColor(Qt::white));          // opaque half
+        QCOMPARE(QColor(out.pixel(175, 150)), QColor(40, 50, 70));         // clear half shows the page
+    }
+
+    // Every command in the window runs without crashing or Qt warnings, with a
+    // fitting selection for its kind. Dialogs and menus it opens are closed.
+    void allCommandsRun()
+    {
+        static QStringList warnings;
+        static QString current;
+        warnings.clear();
+        QtMessageHandler prev = qInstallMessageHandler([](QtMsgType t, const QMessageLogContext &, const QString &m) {
+            // The offscreen test display can't size native windows; that note is not a fault.
+            if ((t == QtWarningMsg || t == QtCriticalMsg) && !m.contains(QLatin1String("This plugin does not support"))) warnings << current + ": " + m;
+        });
+        QTimer closer;
+        closer.setInterval(20);
+        QObject::connect(&closer, &QTimer::timeout, [] {
+            if (QWidget *pop = QApplication::activePopupWidget()) pop->close();
+            if (QWidget *mod = QApplication::activeModalWidget()) {
+                if (auto *d = qobject_cast<QDialog *>(mod)) d->reject();
+                else mod->close();
+            }
+        });
+        closer.start();
+        // Commands that end the session or open more windows are run elsewhere.
+        const QSet<QString> skip = {"file.exit", "win.new", "win.arrange", "win.cascade"};
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        QStringList ran;
+        for (const QString &id : w.actionIds()) {
+            if (skip.contains(id)) continue;
+            QAction *a = w.act(id);
+            if (!a) continue;
+            current = id;
+            const QString cat = id.section('.', 0, 0);
+            // Fresh publication: the flyer has a picture, shapes, TextArt and text;
+            // the newsletter's page 2 has a table.
+            const bool table = cat == "tbl";
+            w.editor()->setDocument(jp::findTemplate(table ? QStringLiteral("newsletter-classic") : QStringLiteral("flyer-event"))->build(jp::TemplateOptions()));
+            jp::Editor *ed = w.editor();
+            if (table) ed->setCurrentPage(1);
+            auto firstOf = [&](jp::ItemType t) -> QString {
+                for (const auto &it : ed->doc()->pages[ed->currentPage()]->items)
+                    if (it->type() == t) return it->id;
+                return {};
+            };
+            const QSet<QString> textCats = {"fmt", "para", "case", "dropcap", "style", "fit", "cols", "edit", "rev", "tb"};
+            if (table) ed->select(firstOf(jp::ItemType::Table));
+            else if (cat == "pic") ed->select(firstOf(jp::ItemType::Picture));
+            else if (cat == "wa") ed->select(firstOf(jp::ItemType::TextArt));
+            else if (cat == "shape" || cat == "fill" || cat == "line" || cat == "shadow" || cat == "obj" || cat == "arr" || cat == "wrap")
+                ed->select(firstOf(jp::ItemType::Shape));
+            else if (textCats.contains(cat)) {
+                const QString t = firstOf(jp::ItemType::Text);
+                ed->select(t);
+                ed->beginTextEdit(t, 0);
+                QTextCursor c = ed->cursor();
+                c.movePosition(QTextCursor::End, QTextCursor::KeepAnchor);
+                ed->setCursor(c);
+            }
+            QTest::qWait(45);   // the window updates command states 30 ms after a change
+            if (a->isEnabled()) {
+                a->trigger();
+                QCoreApplication::processEvents();
+                ran << id;
+            } else if (qEnvironmentVariableIsSet("JP_LIST_DISABLED")) {
+                fprintf(stderr, "disabled: %s\n", qPrintable(id));
+            }
+            ed->endTextEdit();
+        }
+        current.clear();
+        closer.stop();
+        qInstallMessageHandler(prev);
+        qInfo("ran %d of %d commands", int(ran.size()), int(w.actionIds().size()));
+        QVERIFY2(warnings.isEmpty(), qPrintable(warnings.mid(0, 40).join('\n')));
+    }
+
+    // Check spelling as you type: a misspelled word gets a range, a correct
+    // one doesn't, and suggestions include the fix.
+    void spellingAsYouType()
+    {
+        jp::MainWindow w;
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 300, 100);
+        t->storyId = doc->createStory(QStringLiteral("This is teh test."));
+        doc->pages[0]->items.push_back(t);
+        w.editor()->setDocument(std::move(doc));
+        const auto ranges = w.editor()->misspelledIn(t->storyId);
+        QCOMPARE(ranges.size(), 1);
+        QCOMPARE(ranges.first(), qMakePair(8, 11));
+        QVERIFY(jp::spellingSuggestions(QStringLiteral("teh")).contains(QStringLiteral("the")));
+        QVERIFY(w.editor()->renderOptions().misspelled.contains(t->storyId));
+    }
+
+    // Create PDF presets shrink pictures, Commercial press adds room for marks,
+    // and a page range exports only those pages; printing separations makes
+    // one sheet per plate with printer's marks.
+    void pdfPresetsAndPrintMarks()
+    {
+        jp::MainWindow w;
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        for (int i = 0; i < 3; ++i) doc->pages.push_back(std::make_shared<jp::Page>());
+        QImage noise(1600, 1600, QImage::Format_RGB32);
+        quint32 seed = 7;
+        for (int y = 0; y < noise.height(); ++y)
+            for (int x = 0; x < noise.width(); ++x) { seed = seed * 1664525u + 1013904223u; noise.setPixel(x, y, seed >> 8); }
+        QByteArray png;
+        QBuffer buf(&png);
+        buf.open(QIODevice::WriteOnly);
+        noise.save(&buf, "PNG");
+        auto item = std::make_shared<jp::PictureItem>();
+        item->imageId = doc->addImage(png, "png");
+        item->rect = QRectF(72, 72, 288, 288);   // 4 in: 400 dpi
+        item->imgRect = QRectF(0, 0, 288, 288);
+        item->fill = jp::Fill();
+        doc->pages[0]->items.push_back(item);
+        w.editor()->setDocument(std::move(doc));
+        QTemporaryDir dir;
+        auto pdfBytes = [&](jp::MainWindow::PdfSettings::Preset preset, int from = 0, int to = -1) {
+            jp::MainWindow::PdfSettings s;
+            s.preset = preset;
+            s.from = from;
+            s.to = to;
+            const QString path = dir.filePath(QStringLiteral("p%1-%2-%3.pdf").arg(int(preset)).arg(from).arg(to));
+            w.exportPdfTo(path, s);
+            QFile f(path);
+            f.open(QIODevice::ReadOnly);
+            return f.readAll();
+        };
+        auto pageCount = [](const QByteArray &pdf) { return int(pdf.count("/Type /Page\n") + pdf.count("/Type /Page\r") + pdf.count("/Type /Page ") + pdf.count("/Type /Page/")); };
+        const QByteArray minimum = pdfBytes(jp::MainWindow::PdfSettings::Minimum);
+        const QByteArray high = pdfBytes(jp::MainWindow::PdfSettings::HighQuality);
+        const QByteArray press = pdfBytes(jp::MainWindow::PdfSettings::CommercialPress);
+        QVERIFY2(minimum.size() * 4 < high.size(), qPrintable(QStringLiteral("%1 vs %2").arg(minimum.size()).arg(high.size())));
+        QVERIFY(high.size() < press.size());
+        QCOMPARE(pageCount(high), 4);
+        // 612 x 792 plus 48 pt of marks on every side.
+        const int mb = press.indexOf("/MediaBox");
+        QVERIFY2(press.mid(mb, 40).contains("708.000000 888.000000"), press.mid(mb, 40).constData());
+        QCOMPARE(pageCount(pdfBytes(jp::MainWindow::PdfSettings::Standard, 1, 2)), 2);
+
+        // Separations on tabloid paper with every mark: 4 pages x 2 plates.
+        QPrinter printer(QPrinter::HighResolution);
+        printer.setOutputFormat(QPrinter::PdfFormat);
+        printer.setOutputFileName(dir.filePath("plates.pdf"));
+        printer.setPageSize(QPageSize(QPageSize::Tabloid));
+        printer.setResolution(150);
+        printer.setFullPage(true);
+        QJsonObject opts{{"layout", "one"}, {"separations", true}, {"plates", "CK"}, {"cropMarks", true}, {"bleedMarks", true},
+                         {"registration", true}, {"densityBars", true}, {"colorBars", true}, {"jobInfo", true}, {"allowBleeds", true}};
+        jp::printDocument(w.editor(), &printer, opts);
+        QFile f(dir.filePath("plates.pdf"));
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QCOMPARE(pageCount(f.readAll()), 8);
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) QFile::copy(dir.filePath("plates.pdf"), qEnvironmentVariable("JP_SHOT_DIR") + "/plates.pdf");
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) QFile::copy(dir.filePath("p3-0--1.pdf"), qEnvironmentVariable("JP_SHOT_DIR") + "/press.pdf");
+        // A plate image: white stays blank, pure cyan is full ink on cyan only.
+        QImage rgb(2, 1, QImage::Format_RGB32);
+        rgb.setPixel(0, 0, qRgb(255, 255, 255));
+        rgb.setPixel(1, 0, qRgb(0, 255, 255));
+        QCOMPARE(qGray(jp::separationPlate(rgb, 0).pixel(0, 0)), 255);
+        QCOMPARE(qGray(jp::separationPlate(rgb, 0).pixel(1, 0)), 0);
+        QCOMPARE(qGray(jp::separationPlate(rgb, 1).pixel(1, 0)), 255);
+        QCOMPARE(qGray(jp::separationPlate(rgb, 3).pixel(1, 0)), 255);
+    }
+
+    // Edit Wrap Points: start from the outline, drag a point, add one on an
+    // edge, delete it, and text wraps around the new outline.
+    void editWrapPoints()
+    {
+        jp::MainWindow w;
+        w.resize(1200, 900);
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 400, 300);
+        t->storyId = doc->createStory(QString("Text flows around the shape. ").repeated(60));
+        doc->pages[0]->items.push_back(t);
+        auto sh = std::make_shared<jp::ShapeItem>();
+        sh->shape = QStringLiteral("ellipse");
+        sh->rect = QRectF(150, 150, 100, 100);
+        sh->fill = jp::Fill::solid(jp::ColorRef::rgb(Qt::red));
+        doc->pages[0]->items.push_back(sh);
+        w.editor()->setDocument(std::move(doc));
+        jp::Document *d = w.editor()->doc();
+        auto *tb = static_cast<jp::TextItem *>(d->pages[0]->items[0].get());
+        jp::Item *s = d->pages[0]->items[1].get();
+        w.editor()->select(s->id);
+        QTest::qWait(50);
+        w.act(QStringLiteral("wrap.edit"))->trigger();
+        QCOMPARE(w.editor()->wrapItem, s->id);
+        QCOMPARE(int(s->wrap.mode), int(jp::Wrap::Tight));
+        const int n = s->wrap.points.size();
+        QVERIFY2(n >= 8 && n <= 24, qPrintable(QString::number(n)));
+        // The starting outline follows the ellipse.
+        const QRectF wb = s->transform().map(s->wrap.points).boundingRect();
+        QVERIFY(std::abs(wb.left() - 150) < 2 && std::abs(wb.right() - 250) < 2);
+        jp::Canvas *c = w.canvas();
+        QWidget *vp = c->viewport();
+        auto view = [&](QPointF page) { return c->pageToView(page).toPoint(); };
+        // Drag the rightmost point 100 pt further right.
+        int ri = 0;
+        for (int i = 1; i < n; ++i)
+            if (s->wrap.points[i].x() > s->wrap.points[ri].x()) ri = i;
+        const QPointF from = s->transform().map(s->wrap.points[ri]), to = from + QPointF(100, 0);
+        QTest::mousePress(vp, Qt::LeftButton, Qt::NoModifier, view(from));
+        QTest::mouseMove(vp, view(from + QPointF(50, 0)));
+        QTest::mouseMove(vp, view(to));
+        QTest::mouseRelease(vp, Qt::LeftButton, Qt::NoModifier, view(to));
+        QCOMPARE(s->wrap.points.size(), n);
+        QVERIFY(std::abs(s->transform().map(s->wrap.points[ri]).x() - to.x()) < 2);
+        double right = 0;
+        for (const QPolygonF &o : jp::Renderer::wrapObstacles(*d, *tb)) right = std::max(right, o.boundingRect().right());
+        // Obstacles are in the text box's own coordinates.
+        QVERIFY2(right > to.x() - tb->rect.left() - 1, qPrintable(QString::number(right)));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) { QTest::qWait(100); c->grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/wrappoints.png"); }
+        // Dragging the middle of an edge adds a point.
+        const QPointF a = s->transform().map(s->wrap.points[0]), b = s->transform().map(s->wrap.points[1]);
+        const QPointF mid = (a + b) / 2;
+        QTest::mousePress(vp, Qt::LeftButton, Qt::NoModifier, view(mid));
+        QTest::mouseMove(vp, view(mid + QPointF(0, -10)));
+        QTest::mouseRelease(vp, Qt::LeftButton, Qt::NoModifier, view(mid + QPointF(0, -10)));
+        QCOMPARE(s->wrap.points.size(), n + 1);
+        // Ctrl+click deletes it again.
+        QTest::mouseClick(vp, Qt::LeftButton, Qt::ControlModifier, view(mid + QPointF(0, -10)));
+        QCOMPARE(s->wrap.points.size(), n);
+        // Undo walks back to the starting outline.
+        w.editor()->undo();
+        w.editor()->undo();
+        w.editor()->undo();
+        jp::Item *s2 = w.editor()->doc()->pages[0]->items[1].get();
+        QCOMPARE(s2->wrap.points.size(), n);
+        QVERIFY(std::abs(s2->transform().map(s2->wrap.points).boundingRect().right() - 250) < 2);
+        // Esc finishes.
+        w.editor()->select(s2->id);
+        w.editor()->setWrapItem(s2->id);
+        QTest::keyClick(vp, Qt::Key_Escape);
+        QVERIFY(w.editor()->wrapItem.isEmpty());
+    }
+
+    // Edit Points: drag a corner, Ctrl+click a point to delete it, Ctrl+click an
+    // edge to add one, all with real mouse events on the canvas.
+    void editPoints()
+    {
+        jp::MainWindow w;
+        w.resize(1200, 900);
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto sh = std::make_shared<jp::ShapeItem>();
+        sh->shape = QStringLiteral("rect");
+        sh->rect = QRectF(200, 200, 100, 100);
+        sh->fill = jp::Fill::solid(jp::ColorRef::rgb(Qt::red));
+        doc->pages[0]->items.push_back(sh);
+        w.editor()->setDocument(std::move(doc));
+        jp::ShapeItem *s = static_cast<jp::ShapeItem *>(w.editor()->doc()->pages[0]->items[0].get());
+        w.editor()->select(s->id);
+        QTest::qWait(50);
+        w.act(QStringLiteral("shape.editPoints"))->trigger();
+        QCOMPARE(w.editor()->pointsItem, s->id);
+        QVERIFY(!s->customPath.isEmpty());
+        jp::Canvas *c = w.canvas();
+        QWidget *vp = c->viewport();
+        auto view = [&](QPointF page) { return c->pageToView(page).toPoint(); };
+        // Drag the bottom-right corner (300,300) to (340,330).
+        QTest::mousePress(vp, Qt::LeftButton, Qt::NoModifier, view(QPointF(300, 300)));
+        QTest::mouseMove(vp, view(QPointF(320, 315)));
+        QTest::mouseMove(vp, view(QPointF(340, 330)));
+        QTest::mouseRelease(vp, Qt::LeftButton, Qt::NoModifier, view(QPointF(340, 330)));
+        QRectF b = s->transform().map(s->customPath).boundingRect();
+        QVERIFY2(std::abs(b.right() - 340) < 2 && std::abs(b.bottom() - 330) < 2, qPrintable(QStringLiteral("bounds %1,%2 %3x%4").arg(b.x()).arg(b.y()).arg(b.width()).arg(b.height())));
+        // The frame follows the outline.
+        QVERIFY(std::abs(s->rect.right() - 340) < 2);
+        const int before = s->customPath.elementCount();
+        // Ctrl+click the middle of the top edge adds a point.
+        QTest::mousePress(vp, Qt::LeftButton, Qt::ControlModifier, view(QPointF(250, 200)));
+        QTest::mouseRelease(vp, Qt::LeftButton, Qt::ControlModifier, view(QPointF(250, 200)));
+        QCOMPARE(s->customPath.elementCount(), before + 1);
+        // Ctrl+click that new point deletes it again.
+        QTest::mousePress(vp, Qt::LeftButton, Qt::ControlModifier, view(QPointF(250, 200)));
+        QTest::mouseRelease(vp, Qt::LeftButton, Qt::ControlModifier, view(QPointF(250, 200)));
+        QCOMPARE(s->customPath.elementCount(), before);
+        // Undo restores the drag's starting outline step by step.
+        w.editor()->undo();
+        w.editor()->undo();
+        w.editor()->undo();
+        b = w.editor()->doc()->pages[0]->items[0]->transform().map(static_cast<jp::ShapeItem *>(w.editor()->doc()->pages[0]->items[0].get())->customPath).boundingRect();
+        QVERIFY2(std::abs(b.right() - 300) < 1, "undo did not restore the corner");
+    }
+
+    // A narrow window collapses ribbon groups into buttons instead of cutting
+    // them off, and a collapsed group opens with its commands.
+    void ribbonCollapses()
+    {
+        jp::MainWindow w;
+        w.resize(800, 700);
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        QTest::qWait(50);
+        jp::RibbonTab *home = w.findChild<jp::Ribbon *>()->current();
+        QVERIFY(home->collapsedCount() > 0);
+        w.resize(2400, 700);
+        QTest::qWait(50);
+        QCOMPARE(home->collapsedCount(), 0);
+    }
+
+    // Compound-file round trip: every stream, class id and flag survives a
+    // read, write and read; libmspub imports the rewritten file the same way.
+    void cfbRoundTrip_data()
+    {
+        QTest::addColumn<QString>("path");
+        QDirIterator it(QStringLiteral(JP_TEST_DATA "/pub"), {"*.pub"}, QDir::Files);
+        QStringList files;
+        while (it.hasNext()) files << it.next();
+        files.sort();
+        for (const QString &f : files) QTest::newRow(qPrintable(QFileInfo(f).fileName())) << f;
+    }
+    void cfbRoundTrip()
+    {
+        QFETCH(QString, path);
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        const QByteArray original = file.readAll();
+        jp::cfb::File a, b;
+        QString err;
+        QVERIFY2(jp::cfb::read(original, &a, &err), qPrintable(err));
+        const QByteArray rewritten = jp::cfb::write(a);
+        QVERIFY2(jp::cfb::read(rewritten, &b, &err), qPrintable(err));
+        QCOMPARE(b.streamPaths(), a.streamPaths());
+        for (const QString &sp : a.streamPaths()) QVERIFY2(b.stream(sp) == a.stream(sp), qPrintable(sp));
+        QCOMPARE(b.entries.size(), a.entries.size());
+        for (int i = 0; i < a.entries.size(); ++i) {
+            QCOMPARE(b.entries[i].clsid, a.entries[i].clsid);
+            QCOMPARE(b.entries[i].stateBits, a.entries[i].stateBits);
+        }
+        // Independent reader: libmspub sees the same publication.
+        QTemporaryDir dir;
+        const QString out = dir.filePath(QStringLiteral("rewritten.pub"));
+        QFile o(out);
+        QVERIFY(o.open(QIODevice::WriteOnly));
+        o.write(rewritten);
+        o.close();
+        QString e1, e2;
+        auto d1 = jp::importPublisherFile(path, &e1);
+        auto d2 = jp::importPublisherFile(out, &e2);
+        QCOMPARE(bool(d2), bool(d1));
+        if (d1) {
+            QCOMPARE(d2->pages.size(), d1->pages.size());
+            // Item ids are generated afresh, so compare what is drawn.
+            jp::LayoutCache c1, c2;
+            jp::PaintContext p1, p2;
+            p1.doc = d1.get(); p1.cache = &c1; p1.opt.output = true;
+            p2.doc = d2.get(); p2.cache = &c2; p2.opt.output = true;
+            for (int i = 0; i < d1->pages.size(); ++i)
+                QVERIFY2(jp::Renderer::renderToImage(p1, i, 0.5) == jp::Renderer::renderToImage(p2, i, 0.5), qPrintable(QStringLiteral("page %1 differs").arg(i + 1)));
+        }
+    }
+
+    // Selecting text shows its size in the ribbon's size box, and the number
+    // has room to be seen (the field inside the box mustn't be padded away).
+    void fontSizeBoxShowsSelection()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 300, 100);
+        t->storyId = doc->createStory(QStringLiteral("Hello world"));
+        doc->pages[0]->items.push_back(t);
+        {
+            QTextCursor c(doc->storyDoc(t->storyId));
+            c.select(QTextCursor::Document);
+            QTextCharFormat f;
+            f.setFontPointSize(24);
+            c.mergeCharFormat(f);
+        }
+        w.editor()->setDocument(std::move(doc));
+        jp::Editor *ed = w.editor();
+        const QString id = ed->doc()->pages[0]->items[0]->id;
+        ed->select(id);
+        ed->beginTextEdit(id, 0);
+        QTextCursor c = ed->cursor();
+        c.setPosition(0);
+        c.setPosition(5, QTextCursor::KeepAnchor);
+        ed->setCursor(c);
+        QTest::qWait(80);
+        jp::SizeCombo *box = nullptr;
+        for (jp::SizeCombo *s : w.findChildren<jp::SizeCombo *>())
+            if (s->isVisible()) { box = s; break; }
+        QVERIFY(box);
+        QCOMPARE(box->currentText(), QStringLiteral("24"));
+        QLineEdit *le = box->lineEdit();
+        // Room for the widest size even with Windows' larger UI fonts (125%).
+        QFont big = le->font();
+        big.setPointSizeF(big.pointSizeF() * 1.25);
+        QVERIFY2(le->contentsRect().width() >= QFontMetrics(big).horizontalAdvance(QStringLiteral("288")),
+                 qPrintable(QStringLiteral("size field is %1 px wide").arg(le->contentsRect().width())));
+    }
+
+    // Tabbed dialogs open wide enough for every tab, and their color
+    // pickers draw as full-width fields.
+    void dialogTabsFit()
+    {
+        jp::installUiPolish();
+        jp::MainWindow w;
+        w.resize(1200, 800);
+        w.show();
+        jp::Fill fill;
+        bool checked = false;
+        QTimer::singleShot(300, [&] {
+            QWidget *mod = QApplication::activeModalWidget();
+            if (!mod) return;
+            auto *tabs = mod->findChild<QTabWidget *>();
+            if (tabs) {
+                QTabBar *bar = tabs->tabBar();
+                checked = true;
+                for (int i = 0; i < bar->count(); ++i)
+                    if (!bar->rect().contains(bar->tabRect(i))) checked = false;
+                for (auto *b : mod->findChildren<jp::ColorButton *>())
+                    if (b->isVisible() && b->width() < 120) checked = false;
+            }
+            if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) mod->grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/fillfx.png");
+            mod->close();
+        });
+        jp::fillEffectsDialog(&w, w.editor(), fill, QStringLiteral("Format Background"));
+        QVERIFY(checked);
+    }
+
+    // The thesaurus finds synonyms, including for inflected words.
+    void thesaurusFinds()
+    {
+        for (const char *w : {"happy", "Happy", "running", "houses", "quickly", "bigger"})
+            QVERIFY2(!jp::thesaurusLookup(QString::fromLatin1(w)).isEmpty(), w);
+        QVERIFY(jp::thesaurusLookup("zzxqv").isEmpty());
+    }
+
+    // Every font list row is the same height, and every name stays inside it.
+    void fontListRows()
+    {
+        jp::FontCombo combo;
+        auto *view = combo.view();
+        auto *model = combo.model();
+        const int n = qMin(model->rowCount(), 400);
+        QStyleOptionViewItem opt;
+        opt.initFrom(view);
+        opt.font = view->font();
+        const int h = view->itemDelegate()->sizeHint(opt, model->index(4, 0)).height();
+        QVERIFY(h >= 20 && h <= 40);
+        QImage img(260, h * n, QImage::Format_ARGB32);
+        img.fill(Qt::white);
+        QPainter p(&img);
+        for (int i = 0; i < n; ++i) {
+            const QModelIndex idx = model->index(i, 0);
+            QCOMPARE(view->itemDelegate()->sizeHint(opt, idx).height(), h);
+            opt.rect = QRect(0, i * h, 260, h);
+            view->itemDelegate()->paint(&p, opt, idx);
+        }
+        p.end();
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) img.save(qEnvironmentVariable("JP_SHOT_DIR") + "/fontlist.png");
+        // Every row draws something.
+        for (int i = 0; i < n; ++i) {
+            bool ink = false;
+            for (int y = i * h; y < (i + 1) * h && !ink; ++y)
+                for (int x = 0; x < 260 && !ink; ++x) ink = qGray(img.pixel(x, y)) < 200;
+            QVERIFY2(ink, qPrintable(model->index(i, 0).data().toString()));
+        }
+    }
+
+    // Update check compares versions numerically, previews before releases.
+    void updateVersionOrder()
+    {
+        QVERIFY(jp::Updater::isNewer("v0.1.6", "0.1.0"));
+        QVERIFY(jp::Updater::isNewer("v0.1.6", "v0.1.0-preview5"));
+        QVERIFY(jp::Updater::isNewer("v0.1.0-preview5", "v0.1.0-preview4"));
+        QVERIFY(jp::Updater::isNewer("0.1.10", "0.1.9"));
+        QVERIFY(!jp::Updater::isNewer("v0.1.6", "0.1.6"));
+        QVERIFY(!jp::Updater::isNewer("v0.1.0-preview5", "0.1.6"));
+        QVERIFY(jp::Updater::isNewer("v0.1.0", "v0.1.0-preview5"));
+    }
+
+    void metafileWmfRenders()
+    {
+        QFile f(QStringLiteral(JP_TEST_DATA "/pub/poi-SampleBrochure.pub"));
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        auto doc = importPublisher(f.readAll(), nullptr);
+        QVERIFY(doc);
+        int wmf = 0;
+        for (auto it = doc->images.cbegin(); it != doc->images.cend(); ++it) {
+            if (it->format != "wmf") continue;
+            ++wmf;
+            Metafile m;
+            QVERIFY(m.load(it->bytes));
+            const QImage img = m.toImage(200);
+            int painted = 0;
+            for (int y = 0; y < img.height(); y += 4)
+                for (int x = 0; x < img.width(); x += 4) painted += qAlpha(img.pixel(x, y)) > 0;
+            QVERIFY(painted > 10);
+        }
+        QVERIFY(wmf > 0);
+    }
+    void colorRefRoundTrip()
+    {
+        const ColorRef a = ColorRef::scheme(Accent2, 40);
+        QCOMPARE(ColorRef::fromString(a.toString()), a);
+        QCOMPARE(ColorRef::fromString("#1F5FAD").resolve(builtinColorSchemes()[0]), QColor("#1F5FAD"));
+        QVERIFY(builtinColorSchemes().size() >= 90);
+    }
+    void documentRoundTrip()
+    {
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<TextItem>();
+        t->storyId = doc->createStory("Hello world\nSecond paragraph");
+        doc->pages[0]->items.push_back(t);
+        auto s = std::make_shared<ShapeItem>();
+        s->shape = "star5";
+        doc->pages[0]->items.push_back(s);
+        QTextCursor c(doc->storyDoc(t->storyId));
+        c.movePosition(QTextCursor::End);
+        QTextCharFormat f;
+        f.setProperty(tp::Field, QStringLiteral("page"));
+        c.insertText(QString(QChar::ObjectReplacementCharacter), f);
+
+        const QByteArray bytes = publicationBytes(*doc, QImage());
+        QString err;
+        auto back = publicationFromBytes(bytes, &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(back->pages[0]->items.size(), size_t(2));
+        auto *t2 = static_cast<TextItem *>(back->pages[0]->items[0].get());
+        QCOMPARE(back->storyDoc(t2->storyId)->toPlainText(), doc->storyDoc(t->storyId)->toPlainText());
+        QCOMPARE(QJsonDocument(back->toJson()).toJson(), QJsonDocument(doc->toJson()).toJson());
+    }
+    void layoutFlowsAcrossFrames()
+    {
+        auto doc = Document::blank(QSizeF(612, 792));
+        QString text;
+        for (int i = 0; i < 40; ++i) text += QStringLiteral("Paragraph %1 has enough words to wrap across a narrow column of text.\n").arg(i);
+        const QString sid = doc->createStory(text);
+        FrameSpec a; a.size = QSizeF(144, 144); a.insets = QMarginsF(3, 3, 3, 3);
+        FrameSpec b = a;
+        LayoutEnv env; env.colors = doc->colors; env.fonts = doc->fonts;
+        StoryLayout one;
+        one.build(doc->storyDoc(sid), {a}, env);
+        QVERIFY(one.overflow());
+        StoryLayout two;
+        two.build(doc->storyDoc(sid), {a, b}, env);
+        QVERIFY(two.firstPosition(1) > two.firstPosition(0));
+        QVERIFY(two.lastPosition(0) <= two.firstPosition(1));
+        // Caret round trip
+        int fr = -1; QRectF r;
+        QVERIFY(two.caretRect(5, &fr, &r));
+        QCOMPARE(fr, 0);
+        QCOMPARE(two.hitTest(0, QPointF(r.x() + 0.1, r.center().y())), 5);
+    }
+    void fieldsDisplay()
+    {
+        auto doc = Document::blank(QSizeF(612, 792));
+        const QString sid = doc->createStory("Page ");
+        QTextCursor c(doc->storyDoc(sid));
+        c.movePosition(QTextCursor::End);
+        QTextCharFormat f;
+        f.setProperty(tp::Field, QStringLiteral("page"));
+        c.insertText(QString(QChar::ObjectReplacementCharacter), f);
+        FrameSpec a; a.size = QSizeF(300, 100); a.ctx.pageNumber = 12;
+        LayoutEnv env; env.colors = doc->colors; env.fonts = doc->fonts;
+        StoryLayout l;
+        l.build(doc->storyDoc(sid), {a}, env);
+        QVERIFY(!l.overflow());
+        int fr; QRectF r5, r6;
+        QVERIFY(l.caretRect(5, &fr, &r5));
+        QVERIFY(l.caretRect(6, &fr, &r6));
+        QVERIFY(r6.x() - r5.x() > 8);   // "12" is wider than one character
+    }
+    void renderSmoke()
+    {
+        auto doc = Document::blank(QSizeF(612, 792));
+        doc->colors = *findColorScheme("Seventy-Nine");
+        auto &items = doc->pages[0]->items;
+        auto band = std::make_shared<ShapeItem>();
+        band->rect = QRectF(0, 0, 612, 230);
+        band->fill = Fill::gradient(ColorRef::scheme(Accent1), ColorRef::scheme(Accent2), 0);
+        band->stroke = Stroke::none();
+        items.push_back(band);
+        auto wa = std::make_shared<TextArtItem>();
+        wa->rect = QRectF(60, 40, 492, 140);
+        wa->text = "Summer Concert";
+        applyTextArtStyle(*wa, textArtStyles()[11]);
+        wa->fill = Fill::solid(ColorRef::rgb(Qt::white));
+        wa->fx.shadow.on = true;
+        items.push_back(wa);
+        int x = 40;
+        for (const char *sh : {"star5", "heart", "rightArrow", "cloud", "wedgeRoundRectCallout", "fcDocument", "irregularSeal1"}) {
+            auto s = std::make_shared<ShapeItem>();
+            s->shape = sh;
+            s->rect = QRectF(x, 260, 70, 70);
+            s->fill = Fill::solid(ColorRef::scheme(Accent3));
+            s->fx.shadow.on = std::string(sh) == "heart";
+            items.push_back(s);
+            x += 78;
+        }
+        auto t = std::make_shared<TextItem>();
+        t->rect = QRectF(40, 360, 250, 380);
+        t->columns = 2;
+        t->stroke = Stroke::line(ColorRef::scheme(Accent4), 1);
+        QString text;
+        for (int i = 0; i < 6; ++i) text += "Bring a blanket and join your neighbors for an evening of music under the stars. Food trucks open at six.\n";
+        t->storyId = doc->createStory(text);
+        QTextCursor c(doc->storyDoc(t->storyId));
+        QTextBlockFormat bf;
+        bf.setProperty(tp::DropCapLines, 3);
+        c.mergeBlockFormat(bf);
+        items.push_back(t);
+        auto t2 = std::make_shared<TextItem>();
+        t2->rect = QRectF(310, 360, 260, 200);
+        t2->storyId = doc->createStory("");
+        t->nextId = t2->id;
+        items.push_back(t2);
+        auto pic = std::make_shared<PictureItem>();
+        pic->rect = QRectF(330, 580, 220, 160);
+        pic->maskShape = "ellipse";
+        items.push_back(pic);
+        LayoutCache cache;
+        PaintContext ctx;
+        ctx.doc = doc.get();
+        ctx.cache = &cache;
+        const QImage img = Renderer::renderToImage(ctx, 0, 1.5);
+        QVERIFY(!img.isNull());
+        const QString out = qEnvironmentVariable("JP_RENDER_OUT");
+        if (!out.isEmpty()) img.save(out);
+    }
+};
+
+QTEST_MAIN(Tests)
+#include "tests.moc"

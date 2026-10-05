@@ -1,0 +1,26 @@
+# Third-party code
+
+| Directory | Project | License | Version |
+|---|---|---|---|
+| `libmspub/` | [libmspub](https://wiki.documentfoundation.org/DLP/Libraries/libmspub), the `.pub` file parser | MPL-2.0 | see `libmspub/VERSION` |
+| `librevenge/` | [librevenge](https://sourceforge.net/p/libwpd/librevenge/), document interfaces and OLE2 streams | MPL-2.0 or LGPL-2.1+ | 0.0.5 |
+| `compat/` | JeffPub 79's minimal stand-ins for the Boost headers these libraries use | GPL-3.0 (this project) | — |
+
+zlib is downloaded at build time when the system has none.
+
+## JeffPub 79 changes
+
+These are the only modifications to the upstream sources. Each is marked with a `JeffPub 79` comment.
+
+- **No Boost.** `compat/boost/*` provides `optional` (on `std::optional`), `cstdint`, `numeric_cast`, a 2-D `multi_array`, and `trim`. librevenge's Boost.Spirit number parsing (`RVNGPropertyList.cpp`) and Boost.Archive base64 (`RVNGBinaryData.cpp`) are rewritten in plain C++.
+- **No ICU.** libmspub decodes UTF-16LE and windows-1252 itself. Other legacy codepages go through `libmspub::setDecodeHook()` (`inc/libmspub/jp_hooks.h`), which JeffPub implements with Qt. A small LCID table replaces `uloc_getLocaleForLCID`, and the encoding guess for Publisher 97/98 files defaults to windows-1252.
+- **Linked text boxes.** `MSPUBCollector.cpp` adds a `jp:text-id` property to each text object, so text boxes that share one story can be linked again on import. Upstream emits the full story into every box.
+- **Text direction.** `MSPUBParser.cpp` reads the OfficeArt `txflTextFlow` property (0x0088) and `MSPUBCollector.cpp` passes it on as `jp:text-flow`, so rotated text such as book spines imports as vertical text. Upstream ignores it and the text stacks letter by letter.
+- **Normal style inheritance.** `MSPUBCollector.cpp` gives paragraphs that name no style the document's Normal style (style sheet entry 0), which carries the default line spacing (typically 1.19 sp) and space after. It also reports the spacing in sp as `jp:line-spacing-sp`, including an explicit 1 sp. Upstream falls back to a flat 1 sp.
+- **Text outline.** `MSPUBParser.cpp` reads the character "line" container (0x59): outline color index and width. `MSPUBCollector.cpp` passes them as `jp:text-outline-color` and `jp:text-outline-width`.
+- **Table cell fills and borders.** Publisher stores each formatted cell's fill, and each ruled line, as a drawing shape with no page placement whose client anchor names the table (see `TableCellFormat` in `TableInfo.h`). `MSPUBParser.cpp` collects them and `MSPUBCollector.cpp` emits them as `fo:background-color` and `fo:border-*` on the cells. Upstream ignores them, so formatted tables import blank. Worked out from four one-change sample files (fill, horizontal and vertical borders).
+- **Default white fill.** `MSPUBParser.cpp` fills a shape that is marked filled but names no fill color with white, the drawing format's default. Upstream leaves such shapes unfilled, so they vanish (the white stars in a party invitation template).
+- **Tracing.** With `JP_PUB_TRACE` set, the parser prints style sheets, unknown character properties, shape records, drawing properties (including complex values), the content chunk list, table and cell records, every shape visited and painted, and the text-stream chunk list. This is used to reverse-engineer fields that are still unread.
+- Unused librevenge generators and the directory stream are not built.
+- **Metadata is optional.** `MSPUBParser.cpp` ignores errors while reading document properties instead of failing the whole import (affects two sample files in Apache POI's test set).
+- **Damaged OLE headers.** `RVNGOLEStream.cpp` rejects impossible block sizes instead of asserting (found by Apache POI's fuzz files).
