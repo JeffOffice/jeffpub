@@ -122,6 +122,15 @@ version 0x0102, 0b = 1) is `02:08, 03:08, 0c, 0d, 34 = 0, 3a → name chunk,
 aa, ab`; the name chunk (type 0x66, parent the picture) holds `03` = the
 file name.
 
+### Master pages
+
+The document chunk lists every master page first, then the pages, then
+the four special pages; its `2d` is the number of master pages. A master
+page is a page chunk (0x43) with `03` = its margin guides (0x4C), `0e` =
+its letter and `0f` = its description ("Master Page A"); a page names its
+master in `0d`. Older files show a two-page master as two master chunks
+with the same letter, and Publisher 2002 files use L and R.
+
 ### Fills, transparency and shadows
 
 These are OPT props on any shape, text box or Text Art. A solid fill is

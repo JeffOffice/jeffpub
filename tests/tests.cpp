@@ -1143,6 +1143,65 @@ private Q_SLOTS:
         }
     }
 
+    // Two master pages: each page keeps its own master and its objects.
+    void pubWriterTwoMasters()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792), QStringLiteral("Letter"), 3);
+        auto b = std::make_shared<jp::MasterPage>();
+        b->abbr = QStringLiteral("B");
+        b->id = QStringLiteral("B");
+        b->name = QStringLiteral("Chapter openers");
+        doc->masters << b;
+        auto footer = [&](jp::MasterPage *m, const QString &text, const QColor &c) {
+            auto t = std::make_shared<jp::TextItem>();
+            t->rect = QRectF(72, 700, 300, 40);
+            t->storyId = doc->createStory(text);
+            m->items.push_back(t);
+            auto bar = std::make_shared<jp::ShapeItem>();
+            bar->rect = QRectF(72, 690, 468, 6);
+            bar->fill = jp::Fill::solid(jp::ColorRef::rgb(c));
+            bar->stroke = jp::Stroke::none();
+            m->items.push_back(bar);
+        };
+        footer(doc->masters[0].get(), QStringLiteral("test28 master A (blue bar)"), QColor(30, 60, 200));
+        footer(b.get(), QStringLiteral("test28 master B (red bar)"), QColor(200, 30, 30));
+        const QStringList uses = {QStringLiteral("A"), QStringLiteral("B"), QStringLiteral("A")};
+        for (int i = 0; i < 3; ++i) {
+            doc->pages[i]->masterId = uses[i];
+            auto t = std::make_shared<jp::TextItem>();
+            t->rect = QRectF(72, 72, 400, 40);
+            t->storyId = doc->createStory(QStringLiteral("Page %1 uses master %2").arg(i + 1).arg(uses[i]));
+            doc->pages[i]->items.push_back(t);
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("test28-masters.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        QVERIFY2(err.isEmpty(), qPrintable(err));   // nothing left out
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test28-masters.pub";
+            QFile::remove(out);
+            QFile::copy(path, out);
+        }
+        QString e1;
+        auto back = jp::importPublisherFile(path, &e1);
+        QVERIFY2(back, qPrintable(e1));
+        QCOMPARE(back->pages.size(), 3);
+        QCOMPARE(back->masters.size(), 2);
+        for (int i = 0; i < 3; ++i) QCOMPARE(back->pages[i]->masterId, uses[i]);
+        auto footerText = [&](const QString &id) {
+            QString text;
+            const jp::MasterPage *m = back->master(id);
+            if (!m) return text;
+            jp::walkItems(m->items, [&](const jp::ItemPtr &it) {
+                if (it->type() == jp::ItemType::Text) text = back->storyDoc(static_cast<const jp::TextItem *>(it.get())->storyId)->toPlainText();
+            });
+            return text;
+        };
+        QCOMPARE(footerText(QStringLiteral("A")), QStringLiteral("test28 master A (blue bar)"));
+        QCOMPARE(footerText(QStringLiteral("B")), QStringLiteral("test28 master B (red bar)"));
+    }
+
     // Two pages written to .pub read back as two pages, each with its own objects.
     void pubWriterPages()
     {
