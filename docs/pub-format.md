@@ -92,6 +92,9 @@ Turned shapes put the angle in OPT 0x0004 (clockwise degrees, 16.16). The
 anchor is the unturned frame, except that between 45° and 135° (and 225°
 and 315°) it holds the frame turned a quarter about its center; the
 Contents size (aa, ab) matches the anchor. Sp flags 0x40 and 0x80 flip.
+Publisher flips first, then turns; a shape flipped one way (not both) is
+turned counterclockwise by the stored angle, so JeffPub (which always turns
+clockwise) stores the negative angle for it. Checked in Publisher.
 
 ### Lines
 
@@ -228,5 +231,9 @@ coordinate space (the frame in EMU), 0x0144 = 4, 0xC145 = the points
 count, 2, then: 0x4000 move, n lines, 0x2000 + n curves, 0x6001 close,
 0x8000 end). The .pub reader takes a segment's count from its low byte, so
 runs stay under 256. A freeform whose outline reaches past its frame gets
-a frame grown evenly around the same center.
+a frame grown evenly around the same center. Parts within one path (up to
+a 0x8000) fill alternately, so holes cut through; a shape whose parts
+merge on screen is written as its merged outline plus, when it has an
+outline, each part twice more (an even number of layers leaves the fill
+alone but draws the inner lines, like a smiley's eyes).
 

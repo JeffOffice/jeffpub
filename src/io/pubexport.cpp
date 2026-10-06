@@ -847,7 +847,10 @@ QByteArray PubWriter::write(QStringList *skipped)
         }
         return r;
     };
-    auto rotationProp = [](QVector<Prop> &opt, double deg) {
+    // Publisher flips a shape before turning it, and turns a shape flipped
+    // one way (not both) the other way round; JeffPub always turns clockwise.
+    auto rotationProp = [](QVector<Prop> &opt, const Item *it) {
+        const double deg = it->flipH != it->flipV ? -it->rotation : it->rotation;
         const double a = std::fmod(std::fmod(deg, 360.0) + 360.0, 360.0);
         if (a > 1e-6) opt << Prop{0x0004, quint32(std::llround(a * 65536.0))};
     };
@@ -948,7 +951,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                     opt[5].value = bgr(t->fill.color.resolve(m_doc.colors));
                     opt[7].value = 0x00100010;
                 }
-                rotationProp(opt, t->rotation);
+                rotationProp(opt, t);
                 QVector<Prop> topt = {{0x008d, 73152}, {0x017f, 0x00400040}, {0x01ff, 0x00400000}, {0x057f, 0x00080000},
                                       {0x05bf, 0x00080000}, {0x05ff, 0x00080000}, {0x063f, 0x00080000}, {0x06ff, 0x00020002}};
                 topt << kSideLines << kShadowFlags;
@@ -978,7 +981,19 @@ QByteArray PubWriter::write(QStringList *skipped)
                     outline = !s->customPath.isEmpty() ? s->customPath : shapePath(s->shape, fs, s->adj);
                     // Overlapping parts that merge on screen become one outline,
                     // since a freeform's parts fill alternately.
-                    if (outline.fillRule() == Qt::WindingFill && !open) outline = outline.simplified();
+                    // Inner lines (a smiley's eyes) would vanish in the merge, so
+                    // each part goes in twice more: an even number of extra
+                    // layers leaves the filled area alone but draws their lines.
+                    if (outline.fillRule() == Qt::WindingFill && !open) {
+                        int parts = 0;
+                        for (int k = 0; k < outline.elementCount(); ++k) parts += outline.elementAt(k).type == QPainterPath::MoveToElement;
+                        QPainterPath merged = outline.simplified();
+                        if (parts > 1 && !s->stroke.isNone()) {
+                            merged.addPath(outline);
+                            merged.addPath(outline);
+                        }
+                        outline = merged;
+                    }
                     if (outline.isEmpty()) {
                         ++skippedCount;
                         return;
@@ -1006,7 +1021,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                     << Prop{0x01bf, filled ? 0x00100010u : 0x00100000u};
                 strokeProps(opt, s->stroke);
                 opt << kTail;
-                rotationProp(opt, s->rotation);
+                rotationProp(opt, s);
                 if (st == 0) freeformProps(opt, outline, frame.size());
                 QVector<Prop> topt = {{0x01ff, 0x00400000}, {0x06ff, 0x00020002}};
                 topt << kSideLines << kShadowFlags;
@@ -1163,7 +1178,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 QVector<Prop> opt = {{0x0080, quint32(tid)}, {0x0081, 0}, {0x0082, 0}, {0x0083, 0}, {0x0084, 0}, {0x017f, 0x00300000},
                                      {0x01c0, 0x08000000}, {0x01c2, 0x08000007}, {0x01cb, 25400}, {0x01ff, 0x00080000}, {0x0201, 0x08000000},
                                      {0x0384, 36576}, {0x0385, 36576}, {0x0386, 36576}, {0x0387, 36576}};
-                rotationProp(opt, tb->rotation);
+                rotationProp(opt, tb);
                 QVector<Prop> topt = {{0x017f, 0x03800000}, {0x01ff, 0x00400000}, {0x054b, 0}, {0x058b, 0}, {0x05cb, 0}, {0x060b, 0},
                                       {0x06ff, 0x00020002}};
                 topt << kSideLines;
@@ -1209,7 +1224,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                     if (std::abs(lf) > 1e-4) opt << Prop{0x0102, frac(lf)};
                     if (std::abs(rt) > 1e-4) opt << Prop{0x0103, frac(rt)};
                 }
-                rotationProp(opt, pic->rotation);
+                rotationProp(opt, pic);
                 QVector<Prop> topt = {{0x01ff, 0x00400000}, {0x06ff, 0x00020002}};
                 topt << kShadowFlags << kSideLines;
                 QByteArray sp = spRecord(1, 0x0a00, pic) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(r);
