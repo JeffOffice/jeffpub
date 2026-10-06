@@ -325,6 +325,31 @@ private Q_SLOTS:
         if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) w.grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/print-preview.png");
     }
 
+    // Autoflow: a long story continues on new pages in linked boxes.
+    void autoflowNewPages()
+    {
+        jp::MainWindow w;
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        jp::Editor *ed = w.editor();
+        QString text;
+        for (int i = 0; i < 120; ++i) text += QStringLiteral("This is paragraph %1 of a long story that will not fit on one page at all.\n").arg(i + 1);
+        auto box = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 72, 468, 300), text));
+        ed->addItem(box);
+        const int added = jp::autoflowText(ed, box->id);
+        QVERIFY(added >= 2);
+        QCOMPARE(int(ed->doc()->pages.size()), 1 + added);
+        const auto chain = ed->doc()->chainOf(box->id);
+        QCOMPARE(int(chain.size()), 1 + added);
+        for (int i = 1; i < chain.size(); ++i) {
+            QCOMPARE(ed->doc()->find(chain[i]->id).page, i);
+            QCOMPARE(chain[i]->rect, box->rect);
+        }
+        jp::LayoutCache cache;
+        jp::RenderOptions opt;
+        QVERIFY(!cache.textFrame(*ed->doc(), *chain.last(), int(chain.size()), opt).layout->overflow());
+        QCOMPARE(jp::autoflowText(ed, box->id), 0);   // nothing more to do
+    }
+
     // "Always create backup copy" keeps the file as it was before saving.
     void saveBackupCopy()
     {

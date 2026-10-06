@@ -2347,6 +2347,66 @@ void pasteSpecialDialog(QWidget *p, Editor *ed)
 }
 
 
+// Autoflow: while a story doesn't fit, it continues on a new page after
+// the last box's page, in a linked text box placed like that box.
+int autoflowText(Editor *ed, const QString &boxId)
+{
+    Document *d = ed->doc();
+    auto overflows = [&] {
+        const QVector<TextItem *> chain = d->chainOf(boxId);
+        if (chain.isEmpty()) return false;
+        TextItem *last = chain.last();
+        const int pg = d->find(last->id).page;
+        if (pg < 0) return false;
+        // A fresh layout each time: the boxes change as pages are added.
+        LayoutCache cache;
+        RenderOptions opt;
+        const auto fl = cache.textFrame(*d, *last, pg + 1, opt);
+        return fl.layout && fl.layout->overflow();
+    };
+    int added = 0;
+    ed->beginChange(QStringLiteral("Autoflow"));
+    while (added < 500 && overflows()) {
+        TextItem *last = d->chainOf(boxId).last();
+        const int pg = d->find(last->id).page;
+        auto page = d->addPage(pg + 1, d->pages[pg]->masterId);
+        auto box = std::make_shared<TextItem>();
+        box->rect = last->rect;
+        box->rotation = last->rotation;
+        box->insets = last->insets;
+        box->columns = last->columns;
+        box->columnGap = last->columnGap;
+        box->fill = last->fill;
+        box->stroke = last->stroke;
+        box->hyphenate = last->hyphenate;
+        box->hyphenZone = last->hyphenZone;
+        box->storyId = last->storyId;
+        last->nextId = box->id;
+        page->items.push_back(box);
+        ++added;
+    }
+    ed->endChange();
+    return added;
+}
+
+// Offer autoflow when inserted text doesn't fit its box.
+static void offerAutoflow(QWidget *p, Editor *ed, const QString &boxId)
+{
+    Document *d = ed->doc();
+    const QVector<TextItem *> chain = d->chainOf(boxId);
+    if (chain.isEmpty() || d->find(chain.last()->id).page < 0) return;
+    TextItem *last = chain.last();
+    RenderOptions opt;
+    const auto fl = ed->cache().textFrame(*d, *last, d->find(last->id).page + 1, opt);
+    if (!fl.layout || !fl.layout->overflow()) return;
+    if (QMessageBox::question(p, QStringLiteral("Autoflow"),
+                              QStringLiteral("The inserted text doesn't fit in the text box. Do you want to continue it on new pages, in text boxes like this one?"))
+        != QMessageBox::Yes)
+        return;
+    const int n = autoflowText(ed, boxId);
+    Q_EMIT ed->status(QStringLiteral("Added %1 page%2 for the rest of the text.").arg(n).arg(n == 1 ? "" : "s"));
+}
+
 void insertFileDialog(QWidget *p, Editor *ed)
 {
     const QString f = QFileDialog::getOpenFileName(p, QStringLiteral("Insert Text"), QString(),
@@ -2359,6 +2419,11 @@ void insertFileDialog(QWidget *p, Editor *ed)
         ed->cursor().insertFragment(QTextDocumentFragment(&tmp));
         ed->endChange();
         ed->textEdited();
+        const QString box = ed->textTarget().itemId;
+        if (dynamic_cast<TextItem *>(ed->doc()->item(box))) {
+            ed->endTextEdit();
+            offerAutoflow(p, ed, box);
+        }
         return;
     }
     const QSizeF ps = ed->doc()->pageSize();
@@ -2366,6 +2431,7 @@ void insertFileDialog(QWidget *p, Editor *ed)
     auto t = std::static_pointer_cast<TextItem>(ed->newTextBox(content));
     loadTextFileInto(ed->doc()->storyDoc(t->storyId), f);
     ed->addItem(t);
+    offerAutoflow(p, ed, t->id);
 }
 
 // ---------------- Mail merge recipients ----------------
