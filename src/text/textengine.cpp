@@ -437,14 +437,17 @@ double naturalLineEm(const QFont &f, const QString &requestedFamily)
 // Single spacing in document points: the largest run's line height on the line.
 double singleSpacing(const QVector<QTextLayout::FormatRange> &ranges, int from, int len, const QFont &fallback)
 {
-    auto lineOf = [](const QFont &f) {
+    auto lineOf = [](const QFont &f, double size) {
         const QString fam = f.families().isEmpty() ? f.family() : f.families().first();
-        return f.pointSizeF() / fontPointFactor() * naturalLineEm(f, fam);
+        return size / fontPointFactor() * naturalLineEm(f, fam);
     };
     double m = 0;
     for (const auto &r : ranges)
-        if (r.start < from + len && r.start + r.length > from) m = std::max(m, lineOf(r.format.font()));
-    if (m <= 0) m = lineOf(fallback);
+        if (r.start < from + len && r.start + r.length > from) {
+            const QFont f = r.format.font();
+            m = std::max(m, lineOf(f, r.format.hasProperty(tp::LineSize) ? r.format.property(tp::LineSize).toDouble() : f.pointSizeF()));
+        }
+    if (m <= 0) m = lineOf(fallback, fallback.pointSizeF());
     return m;
 }
 
@@ -606,10 +609,16 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                     big.setFontCapitalization(QFont::MixedCase);
                     small.setFontCapitalization(QFont::MixedCase);
                     small.setFontPointSize(rf.fontPointSize() * 0.8);
+                    // Line spacing counts the letters at the full size (in
+                    // reference PDFs, a line of small capitals only is as far
+                    // from the next as one at the full size).
+                    small.setProperty(tp::LineSize, rf.fontPointSize());
                     // Tracking follows the smaller size.
                     if (const double tr = trackingSpace(cf, rf.font())) small.setFontLetterSpacing(rf.fontLetterSpacing() - 0.2 * tr);
                     int runStart = 0;
-                    auto isSmall = [&](int i) { return shown[i].isLower(); };
+                    // A soft hyphen (a possible break) goes with the letter before it,
+                    // so an invisible full-size mark doesn't deepen the line.
+                    auto isSmall = [&](int i) { return shown[i].isLower() || (shown[i] == QChar(0x00AD) && i > 0 && shown[i - 1].isLower()); };
                     for (int i = 1; i <= shown.size(); ++i)
                         if (i == shown.size() || isSmall(i) != isSmall(runStart)) {
                             ranges << QTextLayout::FormatRange{int(B->disp.size()) + runStart, i - runStart, isSmall(runStart) ? small : big};
