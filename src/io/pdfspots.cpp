@@ -132,7 +132,7 @@ bool addPdfSpotColors(const QString &path, const QVector<QColor> &colors, const 
     int changed = 0;
     for (Obj &o : objs) {
         const qsizetype s = o.body.indexOf("stream\n");
-        if (s < 0 || !o.body.left(s).contains("/FlateDecode")) continue;
+        if (s < 0 || !o.body.left(s).contains("/FlateDecode") || o.body.left(s).contains("/Image")) continue;
         const qsizetype e = o.body.lastIndexOf("endstream");
         if (e < s) continue;
         bool ok = false;
