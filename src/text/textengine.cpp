@@ -543,7 +543,7 @@ double singleSpacing(const QVector<QTextLayout::FormatRange> &ranges, int from, 
 
 // Descent (document points) of the substituted proprietary fonts on a line, or 0
 // when none is known; the baseline sits this far above the line's bottom.
-double knownDescent(const QVector<QTextLayout::FormatRange> &ranges, int from, int len)
+double knownDescent(const QVector<QTextLayout::FormatRange> &ranges, int from, int len, bool fullSize)
 {
     double d = 0;
     for (const auto &r : ranges)
@@ -552,7 +552,29 @@ double knownDescent(const QVector<QTextLayout::FormatRange> &ranges, int from, i
             const QString fam = requestedFamily(f);
             if (!isSubstituted(fam)) continue;
             const double kd = knownMetrics(fam, f.weight() >= QFont::DemiBold).descent;
-            if (kd > 0) d = std::max(d, f.pointSizeF() / fontPointFactor() * kd);
+            const double size = fullSize && r.format.hasProperty(tp::LineSize) ? r.format.property(tp::LineSize).toDouble() : f.pointSizeF();
+            if (kd > 0) d = std::max(d, size / fontPointFactor() * kd);
+        }
+    return d;
+}
+
+// The line's descent in document points from the fonts' own metrics, each
+// run as drawn or (fullSize) small capitals at the full size.
+double fontDescent(const QVector<QTextLayout::FormatRange> &ranges, int from, int len, bool fullSize)
+{
+    static QHash<QString, double> emCache;   // main thread only, like all layout
+    double d = 0;
+    for (const auto &r : ranges)
+        if (r.start < from + len && r.start + r.length > from) {
+            QFont f = r.format.font();
+            const QString key = emKey(f);
+            auto it = emCache.constFind(key);
+            if (it == emCache.constEnd()) {
+                f.setPixelSize(1000);
+                it = emCache.insert(key, QFontMetricsF(f).descent() / 1000);
+            }
+            const double size = fullSize && r.format.hasProperty(tp::LineSize) ? r.format.property(tp::LineSize).toDouble() : r.format.fontPointSize();
+            d = std::max(d, *it * size / fontPointFactor());
         }
     return d;
 }
@@ -916,10 +938,17 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                             continue;
                         }
                     }
-                    // Baseline one descent above the line's bottom; for a substituted
-                    // proprietary font, the original font's descent.
-                    const double kd = knownDescent(ranges, line.textStart(), std::max(1, line.textLength()));
-                    const double lead = kd > 0 ? textH - kd - line.ascent() : textH - line.height();
+                    // Baseline one descent above the text's bottom (for a substituted
+                    // proprietary font, the original font's descent). Set closer than
+                    // single, the whole line shrinks in proportion, its descent too,
+                    // small capitals at the full size: in Publisher's PDFs the baseline
+                    // sits spacing x (single - descent) below the top (0.75 and 0.94
+                    // spacing; Times, Futura, Oswald).
+                    const bool closer = bf.lineHeightType() == QTextBlockFormat::ProportionalHeight && h < single && single > 0;
+                    const double kd = knownDescent(ranges, line.textStart(), std::max(1, line.textLength()), closer);
+                    const double fd = kd > 0 ? 0 : fontDescent(ranges, line.textStart(), std::max(1, line.textLength()), closer);
+                    const double descent = kd > 0 ? kd : fd > 0 ? fd : line.height() - line.ascent();
+                    const double lead = (closer ? h / single * (single - descent) : textH - descent) - line.ascent();
                     // Align to baseline guides: the baseline moves down onto the next guide.
                     if (bf.boolProperty(tp::AlignToBaseline) && frames[f].baselineGrid > 0.5) {
                         const double grid = frames[f].baselineGrid * scale, origin = frames[f].baselineOrigin * scale;

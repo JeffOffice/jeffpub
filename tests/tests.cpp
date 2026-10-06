@@ -670,9 +670,13 @@ private Q_SLOTS:
         const double gap1 = lines[1].baseline - lines[0].baseline, gap2 = lines[2].baseline - lines[1].baseline;
         const double line = 0.75 * 100 * (1420.0 + 442 + 307) / 2048;   // a full-size line (Times New Roman)
         QVERIFY2(std::abs(gap1 - line) < 0.5, qPrintable(QString::number(gap1)));
-        // The full-size capitals' line is spaced the same; its deeper letters
-        // put its baseline higher by the difference in descent.
-        QVERIFY2(std::abs(gap2 - (line - 0.2 * 100 * 442.0 / 2048)) < 0.5, qPrintable(QString::number(gap2)));
+        // The full-size capitals' line sits the same way: set closer than
+        // single, a line's descent counts at the full size too (Age of Reason
+        // and North Carolina covers: baselines within 0.1 pt of Publisher's).
+        QVERIFY2(std::abs(gap2 - line) < 0.5, qPrintable(QString::number(gap2)));
+        // The first baseline: 0.75 x (single - descent) below the top.
+        const double single = 100 * (1420.0 + 442 + 307) / 2048, descent = 100 * 442.0 / 2048;
+        QVERIFY2(std::abs(lines[0].baseline - 0.75 * (single - descent)) < 0.5, qPrintable(QString::number(lines[0].baseline)));
     }
 
     // Text at a fractional size lays out at that size: Qt sizes fonts in
