@@ -15,7 +15,7 @@ Features JeffPub 79 has that Publisher never did, then the ones planned before v
 - [x] Barcodes: book ISBNs with or without a price add-on (hyphenated as the ISBN agency assigns them, for every country), EAN-13, UPC-A and EAN-8 with add-ons, Code 128 and Code 39, drawn as vector bars and editable after placing
 - [x] WebP and SVG pictures
 - [ ] macOS app (Apple silicon and Intel)
-- [ ] PDF/X-1a and PDF/X-4 export for commercial printers, with overprint settings and a print check before export
+- [~] PDF/X export for commercial printers, with a print check before export *(PDF/X-1a:2001 for U.S. web coated (SWOP) or European coated (FOGRA39) printing, checked for low-resolution pictures and missing fonts first; not yet: PDF/X-4, which needs a color profile JeffPub may bundle, and overprint settings)*
 - [ ] Automatic table of contents from heading styles, updated with one click
 - [ ] Footnotes and endnotes
 - [ ] Insert > Icons: a gallery of recolorable vector icons
@@ -55,7 +55,7 @@ Features JeffPub 79 has that Publisher never did, then the ones planned before v
 - [x] Mail merge and catalog merge printing
 
 ### Share and Export
-- [x] Create PDF (standard, minimum size, high quality, commercial press; page ranges; document properties; PDF/A; open the PDF after saving it)
+- [x] Create PDF (standard, minimum size, high quality, commercial press; page ranges; document properties; PDF/A; PDF/X-1a; open the PDF after saving it)
 - [x] Save pages as pictures: PNG, JPEG, GIF, TIFF, and BMP at a chosen resolution
 - [x] Web page export (single-file HTML)
 - [x] Pack and Go: Save for a Commercial Printer, Save for Another Computer (bundle fonts and linked pictures)

@@ -25,11 +25,7 @@ add_library(jpcore STATIC ${JP_CORE_SOURCES} ${JP_UI_SOURCES} resources/resource
 target_include_directories(jpcore PUBLIC src)
 target_link_libraries(jpcore PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Svg Qt6::PrintSupport Qt6::Network PRIVATE jp_libmspub jp_hunspell)
 target_compile_definitions(jpcore PUBLIC JP_VERSION="${PROJECT_VERSION}" QT_NO_KEYWORDS PRIVATE JP_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-if(MSVC)
-  target_compile_options(jpcore PUBLIC /W3 /utf-8 /permissive-)
-else()
-  target_compile_options(jpcore PUBLIC -Wall -Wextra -Wno-unused-parameter)
-endif()
+target_compile_options(jpcore PUBLIC -Wall -Wextra -Wno-unused-parameter)
 if(WIN32)
   # The system Save dialog (filedialogs.cpp).
   target_link_libraries(jpcore PRIVATE ole32 uuid shell32)

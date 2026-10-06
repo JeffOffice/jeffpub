@@ -18,6 +18,7 @@
 #include "app/appfuncs.h"
 #include "io/importers.h"
 #include "io/zip.h"
+#include "io/qtpdf.h"
 #include <QPrinter>
 #include "app/icons.h"
 #include <QTabBar>
@@ -1400,7 +1401,11 @@ private Q_SLOTS:
         });
         closer.start();
         // Commands that end the session or open more windows are run elsewhere.
-        const QSet<QString> skip = {"file.exit", "win.new", "win.arrange", "win.cascade"};
+        QSet<QString> skip = {"file.exit", "win.new", "win.arrange", "win.cascade"};
+#ifdef Q_OS_MACOS
+        // macOS always shows its own print panel, which a test can't close.
+        skip << QStringLiteral("file.printNow");
+#endif
         jp::MainWindow w;
         w.resize(1400, 900);
         w.show();
@@ -1511,6 +1516,96 @@ private Q_SLOTS:
             if (auto *mw = qobject_cast<jp::MainWindow *>(top); mw && mw != &w && mw->editor()->filePath().endsWith(QLatin1String("poi-SampleNewsletter.pub"))) other = mw;
         QVERIFY(other);
         other->close();
+    }
+
+    // PDF/X-1a:2001 for a commercial printer: everything in ink (the RGB
+    // photo and the flattened see-through shape become CMYK), no
+    // transparency, PDF 1.3, trim and bleed boxes, the printing condition,
+    // and the version keys a printer's preflight checks.
+    void pdfxExport()
+    {
+        jp::MainWindow w;
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        doc->props.title = QStringLiteral("Cover");
+        auto pic = std::make_shared<jp::PictureItem>();
+        QImage img(64, 64, QImage::Format_RGB32);
+        for (int y = 0; y < 64; ++y)
+            for (int x = 0; x < 64; ++x) img.setPixel(x, y, qRgb(x * 4, y * 4, 128));
+        QByteArray png;
+        QBuffer b(&png);
+        b.open(QIODevice::WriteOnly);
+        img.save(&b, "PNG");
+        pic->imageId = doc->addImage(png, "png");
+        pic->rect = QRectF(72, 72, 200, 200);
+        pic->imgRect = QRectF(0, 0, 200, 200);
+        doc->pages[0]->items.push_back(pic);
+        auto see = std::make_shared<jp::ShapeItem>();
+        see->shape = QStringLiteral("rect");
+        see->rect = QRectF(150, 150, 200, 200);
+        see->fill = jp::Fill::solid(jp::ColorRef::rgb(QColor(200, 30, 40)));
+        see->fill.transparency = 0.5;
+        doc->pages[0]->items.push_back(see);
+        auto grad = std::make_shared<jp::ShapeItem>();
+        grad->shape = QStringLiteral("ellipse");
+        grad->rect = QRectF(350, 500, 150, 100);
+        grad->fill = jp::Fill::solid(jp::ColorRef::rgb(QColor(20, 90, 200)));
+        doc->pages[0]->items.push_back(grad);
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 400, 400, 100);
+        t->storyId = doc->createStory(QStringLiteral("Ready for press"));
+        doc->pages[0]->items.push_back(t);
+        w.editor()->setDocument(std::move(doc));
+        QTemporaryDir dir;
+        for (bool press : {false, true}) {
+            const QString path = dir.filePath(press ? QStringLiteral("press.pdf") : QStringLiteral("plain.pdf"));
+            jp::MainWindow::PdfSettings s;
+            s.preset = press ? jp::MainWindow::PdfSettings::CommercialPress : jp::MainWindow::PdfSettings::HighQuality;
+            s.pdfx = true;
+            QVERIFY(w.exportPdfTo(path, s));
+            if (press && !qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+                QFile::remove(qEnvironmentVariable("JP_SHOT_DIR") + "/pdfx-press.pdf");
+                QFile::copy(path, qEnvironmentVariable("JP_SHOT_DIR") + "/pdfx-press.pdf");
+            }
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::ReadOnly));
+            const QByteArray pdf = f.readAll();
+            QVERIFY(pdf.startsWith("%PDF-1.3"));
+            QVERIFY(pdf.contains("/GTS_PDFXVersion (PDF/X-1:2001)") && pdf.contains("/GTS_PDFXConformance (PDF/X-1a:2001)"));
+            QVERIFY(pdf.contains("/Trapped /False") && pdf.contains("/OutputIntents [") && pdf.contains("/S /GTS_PDFX"));
+            QVERIFY(pdf.contains("/OutputConditionIdentifier (CGATS TR 001)") && pdf.contains("/RegistryName (http://www.color.org)"));
+            QVERIFY(!pdf.contains("DeviceRGB"));
+            QVERIFY(!pdf.contains("/SMask") && !pdf.contains("/ca ") && !pdf.contains("/CA "));
+            // Every picture in ink; the see-through shape was flattened into one.
+            jp::QtPdf parsed;
+            QVERIFY(parsed.load(path));
+            int pictures = 0;
+            for (const auto &o : parsed.objects)
+                if (jp::QtPdf::dictOf(o.body).contains("/Subtype /Image")) {
+                    ++pictures;
+                    QVERIFY(jp::QtPdf::dictOf(o.body).contains("/DeviceCMYK") || jp::QtPdf::dictOf(o.body).contains("/DeviceGray"));
+                }
+            QVERIFY(pictures >= 2);
+            // Trim is the page; with marks, the bleed reaches past it.
+            const double m = press ? (pdf.contains("/MediaBox [0 0 708") ? 48 : -1) : 0;
+            QVERIFY(m >= 0);
+            QVERIFY2(pdf.contains(QStringLiteral("/TrimBox [%1 %1 %2 %3]").arg(m, 0, 'f', 3).arg(m + 612, 0, 'f', 3).arg(m + 792, 0, 'f', 3).toLatin1()),
+                     pdf.mid(pdf.indexOf("/TrimBox"), 80).constData());
+            QVERIFY(pdf.contains("/BleedBox ["));
+            if (!press) QVERIFY(pdf.contains("/BleedBox [0.000 0.000 612.000 792.000]"));
+        }
+        // The check before a file for a printer: the 64-pixel picture over
+        // 200 points is 23 ppi; a font this computer lacks.
+        QStringList problems = jp::pressProblems(*w.editor()->doc());
+        QCOMPARE(problems.size(), 1);
+        QVERIFY(problems.first().contains(QLatin1String("23 ppi")));
+        QTextCursor c(w.editor()->doc()->storyDoc(t->storyId));
+        c.select(QTextCursor::Document);
+        QTextCharFormat f;
+        f.setFontFamilies({QStringLiteral("No Such Font Anywhere")});
+        c.mergeCharFormat(f);
+        problems = jp::pressProblems(*w.editor()->doc());
+        QCOMPARE(problems.size(), 2);
+        QVERIFY(problems.last().contains(QLatin1String("No Such Font Anywhere")));
     }
 
     // About: the third-party table fits its card at a modest window size

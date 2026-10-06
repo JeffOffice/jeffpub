@@ -59,6 +59,8 @@ public:
         int from = 0, to = -1;          // page indexes; to < 0 means the last page
         bool properties = true;         // title, author, subject and keywords
         bool archival = false;          // PDF/A-1b
+        bool pdfx = false;              // PDF/X-1a:2001 for a commercial printer
+        int pdfxCondition = 0;          // its printing condition (pdfXConditions())
         bool merged = false;
     };
     void exportPdfWithOptions();

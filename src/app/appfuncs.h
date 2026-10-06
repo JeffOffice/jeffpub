@@ -2,7 +2,7 @@
 // Commands implemented in their own files (sharing.cpp, proofing.cpp,
 // mainwindow_ribbon.cpp) and used from the window, backstage and task panes.
 // Declared here at namespace scope: block-scope declarations inside lambdas
-// resolve to the global namespace on MSVC and fail to link.
+// resolve to the global namespace on some compilers and fail to link.
 
 #include "core/style.h"
 
@@ -17,6 +17,7 @@ class QWidget;
 
 namespace jp {
 
+class Document;
 class Editor;
 class MainWindow;
 
@@ -32,6 +33,7 @@ Stroke currentBorderStroke();
 QImage proceduralTexture(const QString &name, int size);   // built-in texture fills
 int hyphenateStory(QTextDocument *doc);                   // returns hyphens inserted
 QVector<QPair<int, int>> misspellings(QTextDocument *doc); // [start, end) document ranges
+QStringList pressProblems(const Document &d);              // what a printer would object to (before PDF/X)
 QStringList spellingSuggestions(const QString &word, const QString &language = QString());   // language: BCP-47, "" US English
 void spellingAdd(const QString &word);                    // add to the user dictionary
 void spellingIgnore(const QString &word);                 // ignore for this session

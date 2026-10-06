@@ -9,6 +9,7 @@
 
 #include "io/importers.h"
 #include "io/pdfspots.h"
+#include "io/pdfx.h"
 #include "app/appfuncs.h"
 #include "app/backstage.h"
 #include "app/dialogs.h"
@@ -27,6 +28,10 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QPushButton>
+#include <QSet>
+#include <QTextBlock>
+#include <QFontDatabase>
 #include <QFileOpenEvent>
 #include <QUrl>
 #include <QGuiApplication>
@@ -416,6 +421,40 @@ void MainWindow::exportPdf(const QString &pathIn, bool merged, bool archival)
     exportPdfTo(path, s);
 }
 
+// What a printer would object to, checked before a PDF/X is made (the
+// Design Checker's final publishing checks): pictures under 150 ppi at their
+// printed size, and fonts this computer doesn't have (another stands in).
+// Transparency needs no warning: PDF/X flattens it.
+QStringList pressProblems(const Document &d)
+{
+    QStringList out;
+    QSet<QString> fonts;
+    for (int p = 0; p < d.pages.size(); ++p)
+        walkItems(d.pages[p]->items, [&](const ItemPtr &it) {
+            if (it->type() == ItemType::Picture) {
+                auto *pic = static_cast<PictureItem *>(it.get());
+                const QSize px = pic->imageId.isEmpty() ? QSize() : d.imageSize(pic->imageId);
+                const QString fmt = d.images.value(pic->imageId).format;
+                if (px.isValid() && fmt != QLatin1String("svg") && fmt != QLatin1String("wmf") && fmt != QLatin1String("emf") && pic->imgRect.width() > 0 &&
+                    pic->imgRect.height() > 0) {
+                    const double ppi = std::min(px.width() / (pic->imgRect.width() / 72.0), px.height() / (pic->imgRect.height() / 72.0));
+                    if (ppi < 150) out << QStringLiteral("A picture on page %1 has low resolution (%2 ppi; printers ask for 300).").arg(p + 1).arg(int(ppi));
+                }
+            }
+            if (it->type() == ItemType::Text)
+                if (QTextDocument *sd = d.storyDoc(static_cast<TextItem *>(it.get())->storyId))
+                    for (QTextBlock b = sd->begin(); b.isValid(); b = b.next())
+                        for (auto f = b.begin(); !f.atEnd(); ++f) {
+                            const QStringList fams = f.fragment().charFormat().fontFamilies().toStringList();
+                            if (!fams.isEmpty() && !QFontDatabase::hasFamily(fams.first()) && !fonts.contains(fams.first())) {
+                                fonts.insert(fams.first());
+                                out << QStringLiteral("The font \"%1\" isn't on this computer; another font stands in.").arg(fams.first());
+                            }
+                        }
+        });
+    return out;
+}
+
 void MainWindow::exportPdfWithOptions()
 {
     m_ed->endTextEdit();
@@ -447,10 +486,25 @@ void MainWindow::exportPdfWithOptions()
     auto *props = new QCheckBox(QStringLiteral("Include document properties (title, author, subject, keywords)"), &dlg);
     props->setChecked(true);
     auto *pdfa = new QCheckBox(QStringLiteral("PDF/A for long-term archiving"), &dlg);
+    auto *pdfx = new QCheckBox(QStringLiteral("PDF/X-1a for a commercial printer"), &dlg);
+    auto *condition = new QComboBox(&dlg);
+    for (const PdfXCondition &c : pdfXConditions()) condition->addItem(c.name);
+    condition->setCurrentIndex(std::clamp(Settings::get().value(QStringLiteral("pdf/pdfxCondition"), 0).toInt(), 0, condition->count() - 1));
+    pdfx->setChecked(Settings::get().value(QStringLiteral("pdf/pdfx"), false).toBool());
+    // One or the other: PDF/A keeps screen (RGB) color, PDF/X prints in ink.
+    auto syncStandards = [=] {
+        condition->setEnabled(pdfx->isChecked());
+        pdfa->setEnabled(!pdfx->isChecked());
+        if (pdfx->isChecked()) pdfa->setChecked(false);
+    };
+    QObject::connect(pdfx, &QCheckBox::toggled, &dlg, syncStandards);
+    syncStandards();
     auto *openAfter = new QCheckBox(QStringLiteral("Open the PDF after saving it"), &dlg);
     openAfter->setChecked(openPdfAfterSaving());
     form->addRow(props);
     form->addRow(pdfa);
+    form->addRow(pdfx);
+    form->addRow(QStringLiteral("Printing condition:"), condition);
     form->addRow(openAfter);
     v->addLayout(form);
     auto *bb = new QDialogButtonBox(QDialogButtonBox::Cancel, &dlg);
@@ -465,8 +519,28 @@ void MainWindow::exportPdfWithOptions()
     s.preset = PdfSettings::Preset(preset->currentIndex());
     s.properties = props->isChecked();
     s.archival = pdfa->isChecked();
+    s.pdfx = pdfx->isChecked();
+    s.pdfxCondition = condition->currentIndex();
+    Settings::get().setValue(QStringLiteral("pdf/pdfx"), s.pdfx);
+    Settings::get().setValue(QStringLiteral("pdf/pdfxCondition"), s.pdfxCondition);
     if (range->currentIndex() == 1) s.from = s.to = m_ed->currentPage();
     else if (range->currentIndex() == 2) { s.from = fromBox->value() - 1; s.to = std::max(s.from, toBox->value() - 1); }
+    // Before a file for a printer: what the printer would object to.
+    if (s.pdfx) {
+        const QStringList problems = pressProblems(*d);
+        if (!problems.isEmpty()) {
+            QMessageBox box(QMessageBox::Warning, QStringLiteral("Create PDF"),
+                            QStringLiteral("Before you send this to a printer:"), QMessageBox::NoButton, this);
+            box.setInformativeText(QStringLiteral("• ") + problems.mid(0, 8).join(QStringLiteral("\n• ")) +
+                                   (problems.size() > 8 ? QStringLiteral("\n• …and %1 more").arg(problems.size() - 8) : QString()));
+            QPushButton *anyway = box.addButton(QStringLiteral("Create PDF Anyway"), QMessageBox::AcceptRole);
+            QPushButton *check = box.addButton(QStringLiteral("Open Design Checker"), QMessageBox::ActionRole);
+            box.addButton(QMessageBox::Cancel);
+            box.exec();
+            if (box.clickedButton() == check) showTaskPane(QStringLiteral("designchecker"));
+            if (box.clickedButton() != anyway) return;
+        }
+    }
     const QString path = askSavePath(this, QStringLiteral("Create PDF"),
                                      (m_ed->filePath().isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/" + m_ed->displayName()
                                                                  : QFileInfo(m_ed->filePath()).absolutePath() + "/" + QFileInfo(m_ed->filePath()).completeBaseName()) + ".pdf",
@@ -509,6 +583,7 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
     pdf.setCreator(QStringLiteral("JeffPub 79"));
     const QString title = d->props.title.isEmpty() ? m_ed->displayName() : d->props.title;
     pdf.setTitle(title);
+    if (s.pdfx) s.archival = false;
     // PDF/A-1b: Qt embeds every font, writes the XMP identification and an sRGB
     // output intent, and leaves out transparency.
     if (s.archival) pdf.setPdfVersion(QPagedPaintDevice::PdfVersion_A1b);
@@ -516,7 +591,7 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
     // A publication set up for process-color printing (Commercial Print
     // Information) makes a CMYK PDF: colors given as ink amounts keep them.
     std::optional<InkOutput> inks;   // process colors give their inks
-    if (!s.archival && (d->print.model == PrintInfo::ProcessCMYK || d->print.usesSpots())) {
+    if (s.pdfx || (!s.archival && (d->print.model == PrintInfo::ProcessCMYK || d->print.usesSpots()))) {
         pdf.setColorModel(QPdfWriter::ColorModel::CMYK);
         inks.emplace();
     }
@@ -535,7 +610,7 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
     ctx.doc = d;
     ctx.cache = &m_ed->cache();
     ctx.opt.output = true;
-    ctx.opt.flattenTransparency = s.archival;   // PDF/A-1 allows no transparency
+    ctx.opt.flattenTransparency = s.archival || s.pdfx;   // PDF/A-1 and PDF/X-1a allow no transparency
     ctx.opt.maxImageDpi = s.preset == PdfSettings::Minimum ? 96 : s.preset == PdfSettings::Standard ? 150 : s.preset == PdfSettings::HighQuality ? 300 : 0;
     PrinterMarks marks;
     marks.crop = marks.bleed = marks.registration = marks.colorBars = marks.jobInfo = press;
@@ -574,8 +649,25 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
         if (!addPdfSpotColors(path, d->print.spotColors, names, &spotErr))
             QMessageBox::warning(this, QStringLiteral("Create PDF"), QStringLiteral("The PDF was made, but its spot colors are process colors: %1").arg(spotErr));
     }
+    // PDF/X-1a: pictures in CMYK, the page's trim and bleed, and the
+    // printing condition.
+    if (s.pdfx) {
+        PdfXOptions xo;
+        xo.condition = s.pdfxCondition;
+        const QSizeF media = ps + QSizeF(2 * margin, 2 * margin);
+        // PDF boxes count from the bottom left; the page sits margin in.
+        xo.trim = QRectF(margin, media.height() - margin - ps.height(), ps.width(), ps.height());
+        const double bleed = press ? std::min(marks.bleedSize, margin) : 0;
+        xo.bleed = xo.trim.adjusted(-bleed, -bleed, bleed, bleed);
+        QString xErr;
+        if (!makePdfX1a(path, xo, &xErr)) {
+            QApplication::restoreOverrideCursor();
+            QMessageBox::warning(this, QStringLiteral("Create PDF"), QStringLiteral("The PDF was made, but it isn't PDF/X: %1.").arg(xErr));
+            return false;
+        }
+    }
     QApplication::restoreOverrideCursor();
-    statusBar()->showMessage(QStringLiteral("Exported %1%2").arg(QFileInfo(path).fileName(), s.archival ? QStringLiteral(" (PDF/A)") : QString()), 5000);
+    statusBar()->showMessage(QStringLiteral("Exported %1%2").arg(QFileInfo(path).fileName(), s.pdfx ? QStringLiteral(" (PDF/X-1a)") : s.archival ? QStringLiteral(" (PDF/A)") : QString()), 5000);
     // Not for exports from the command line, which show no window.
     if (openPdfAfterSaving() && isVisible() && openFileHook) openFileHook(path);
     return true;

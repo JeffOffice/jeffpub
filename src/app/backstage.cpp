@@ -1413,6 +1413,12 @@ QWidget *Backstage::buildExport()
     row("file-text", QStringLiteral("Create PDF"), QStringLiteral("Preserves layout and fonts; text stays selectable. Choose the quality, from small files for email to commercial press."), [this] { m_win->exportPdfWithOptions(); });
     row("archive", QStringLiteral("Create PDF/A for Archiving"), QStringLiteral("An ISO 19005 (PDF/A-1b) file for long-term storage and court or records filing: every font embedded, standard sRGB color, no transparency."),
         [this] { m_win->exportPdf(QString(), false, true); });
+    row("printer-check", QStringLiteral("Create PDF/X for a Commercial Printer"),
+        QStringLiteral("An ISO 15930 (PDF/X-1a) file, the kind printers and print-on-demand services ask for: every color in ink, fonts embedded, no transparency, trim and bleed marked."),
+        [this] {
+            Settings::get().setValue(QStringLiteral("pdf/pdfx"), true);
+            m_win->exportPdfWithOptions();
+        });
     auto *openAfter = new QCheckBox(QStringLiteral("Open PDFs after saving them"), w);
     openAfter->setObjectName(QStringLiteral("openPdfAfter"));
     openAfter->setChecked(MainWindow::openPdfAfterSaving());
