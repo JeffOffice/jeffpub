@@ -473,7 +473,8 @@ public:
         const int kind = p["jp:list-kind"]->getInt();
         const int ch = p["jp:list-char"] ? p["jp:list-char"]->getInt() : 0;
         const int delim = p["jp:list-delim"] ? p["jp:list-delim"]->getInt() : -1;
-        const QString key = QStringLiteral("%1/%2/%3").arg(kind).arg(ch).arg(delim);
+        const double size = p["jp:list-size"] ? p["jp:list-size"]->getDouble() : 0;
+        const QString key = QStringLiteral("%1/%2/%3/%4").arg(kind).arg(ch).arg(delim).arg(size);
         const QTextBlock prev = m_cursor.block().previous();
         if (m_list && key == m_listKey && prev.isValid() && prev.textList() == m_list) {
             m_list->add(m_cursor.block());
@@ -481,13 +482,14 @@ public:
         }
         QTextListFormat lf;
         lf.setIndent(0);
+        if (size > 0) lf.setProperty(tp::BulletSize, size);   // the marker's own size
         if (kind == 23) {
             lf.setStyle(QTextListFormat::ListDisc);
-            // 0xB7 is the round bullet in the Symbol font; others keep their Symbol character.
-            if (ch && ch != 0xB7) {
-                lf.setProperty(tp::BulletChar, QString(QChar(ch)));
-                lf.setProperty(tp::BulletFont, QStringLiteral("Symbol"));
-            }
+            // 0xB7 is the round bullet in the Symbol font; others keep their Symbol
+            // character. Either way the bullet is Symbol's, which sets the
+            // height of the item's first line.
+            lf.setProperty(tp::BulletFont, QStringLiteral("Symbol"));
+            if (ch && ch != 0xB7) lf.setProperty(tp::BulletChar, QString(QChar(ch)));
         } else {
             // Publisher's numbering: 0 1 2 3, 1 I II, 2 i ii, 3 A B, 4 a b; punctuation
             // 2 "1.", 0 "1)", 1 "(1)".

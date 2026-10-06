@@ -322,6 +322,7 @@ static KnownMetrics knownMetrics(const QString &family)
     if (f == "calibri") return {(1536.0 + 512 + 452) / 2048, 512.0 / 2048};
     if (f == "lucida handwriting") return {(2098.0 + 727) / 2048, 727.0 / 2048};
     if (f == "juice itc") return {(1903.0 + 532) / 2048, 532.0 / 2048};
+    if (f == "symbol") return {(2059.0 + 450) / 2048, 450.0 / 2048};                    // hhea
     return {};
 }
 static bool isSubstituted(const QString &family) { return !substituteFor(family).isEmpty() || substituteStretch(family) != 100; }
@@ -611,7 +612,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
         const double before = bf.topMargin() * scale, after = bf.bottomMargin() * scale;
 
         // List marker.
-        double markerW = 0;
+        double markerW = 0, markerSingle = 0;
         if (QTextList *list = b.textList()) {
             const QTextListFormat lf = list->format();
             QString custom = bf.stringProperty(tp::BulletChar);
@@ -623,12 +624,19 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
             else B->marker = list->itemText(b);
             QTextCharFormat mf = ranges.isEmpty() ? resolveCharFormat(b.charFormat(), env) : ranges.first().format;
             B->markerFont = mf.font();
+            if (lf.hasProperty(tp::BulletSize))
+                B->markerFont.setPointSizeF(std::max(1.0, lf.property(tp::BulletSize).toDouble() * env.fontScale) * fontPointFactor());
             const QString bfont = lf.stringProperty(tp::BulletFont);
             if (!bfont.isEmpty() && !custom.isEmpty()) B->markerFont.setFamily(bfont);
             B->markerColor = mf.foreground().color();
             const QString bc = lf.stringProperty(tp::BulletColor);
             if (!bc.isEmpty()) B->markerColor = ColorRef::fromString(bc).resolve(env.colors);
             markerW = QFontMetricsF(B->markerFont).horizontalAdvance(B->marker) + 4 * scale;
+            // The bullet's own line height counts on the item's first line: a
+            // Symbol bullet (as .pub lists have) is taller than most text.
+            const QString mfam = bfont.isEmpty() ? requestedFamily(B->markerFont) : bfont;
+            const double known = knownMetrics(mfam).line;
+            markerSingle = B->markerFont.pointSizeF() / fontPointFactor() * (known > 0 ? known : naturalLineEm(B->markerFont, mfam));
         }
 
         // Drop cap metrics: cap height spans dropLines lines.
@@ -727,7 +735,8 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                             if (k > s0 && (iv.x1 - iv.x0) - (line.cursorToX(k) - line.cursorToX(s0)) < zone) line.setNumColumns(k - s0, std::max(1.0, iv.x1 - iv.x0));
                         }
                     }
-                    const double single = singleSpacing(ranges, line.textStart(), std::max(1, line.textLength()), base);
+                    double single = singleSpacing(ranges, line.textStart(), std::max(1, line.textLength()), base);
+                    if (line.textStart() == 0) single = std::max(single, markerSingle);
                     double h = lineHeightFor(bf, scale, single);
                     // .pub layouts add extra spacing between lines, never above the
                     // first line of a column: its baseline sits one ascent below the top.

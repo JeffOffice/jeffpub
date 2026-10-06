@@ -61,6 +61,7 @@ enum : int {
     NumberStart,                                 // int
     ListId,                                      // QString: blocks with the same id share numbering
     TabLeaders,                                  // QString per-tab leader characters
+    BulletSize,                                  // double points: a list marker's own size (list format)
 };
 
 // Publisher's two kinds of letter spacing. Tracking is a percentage (100

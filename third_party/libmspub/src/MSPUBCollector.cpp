@@ -1785,6 +1785,8 @@ librevenge::RVNGPropertyList MSPUBCollector::getParaStyleProps(const ParagraphSt
     ret.insert("jp:list-kind", style.m_listKind);
     ret.insert("jp:list-char", style.m_listChar);
     ret.insert("jp:list-delim", style.m_listDelim);
+    if (style.m_listSizeEmu)
+      ret.insert("jp:list-size", double(style.m_listSizeEmu) / 12700.0, librevenge::RVNG_GENERIC);   // points
   }
   unsigned dropCapLines = style.m_dropCapLines.get_value_or(
                             defaultStyle.m_dropCapLines.get_value_or(0));

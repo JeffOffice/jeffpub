@@ -377,6 +377,51 @@ private Q_SLOTS:
         QCOMPARE(jp::autoflowText(ed, box->id), 0);   // nothing more to do
     }
 
+    // A Symbol bullet (as .pub lists have) sets the height of its item's
+    // first line when it is taller than the text's, at the bullet's own size.
+    void listBulletLineHeight()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 120, 300);
+        t->storyId = doc->createStory(QString());
+        doc->pages[0]->items.push_back(t);
+        QTextDocument *d = doc->storyDoc(t->storyId);
+        QTextCursor c(d);
+        QTextCharFormat cf;
+        cf.setFontFamilies(QStringList{QStringLiteral("Times New Roman")});
+        cf.setFontPointSize(10);
+        QTextBlockFormat bf;
+        bf.setLineHeight(100, QTextBlockFormat::ProportionalHeight);
+        c.setBlockFormat(bf);
+        c.insertText(QStringLiteral("First item, long enough to wrap onto a second line"), cf);
+        QTextListFormat lf;
+        lf.setStyle(QTextListFormat::ListDisc);
+        lf.setProperty(jp::tp::BulletFont, QStringLiteral("Symbol"));
+        QTextList *list = c.createList(lf);
+        c.insertBlock(bf, cf);
+        c.insertText(QStringLiteral("Second item"), cf);
+        list->add(c.block());
+        auto heights = [&] {
+            jp::LayoutCache cache;
+            jp::RenderOptions opt;
+            QVector<double> h;
+            for (const auto &li : cache.textFrame(*doc, *t, 1, opt).layout->lineInfo(0)) h << li.rect.height();
+            return h;
+        };
+        QVector<double> h = heights();
+        QVERIFY(h.size() >= 3);
+        const double symbolLine = 10 * (2059.0 + 450) / 2048, timesLine = 10 * (1420.0 + 442 + 307) / 2048;
+        QVERIFY2(std::abs(h[0] - symbolLine) < 0.05, qPrintable(QString::number(h[0])));
+        QVERIFY2(std::abs(h[1] - timesLine) < 0.05, qPrintable(QString::number(h[1])));   // the item's second line
+        QVERIFY2(std::abs(h.last() - symbolLine) < 0.05, qPrintable(QString::number(h.last())));
+        // A smaller bullet no longer sets the height.
+        lf.setProperty(jp::tp::BulletSize, 8.0);
+        list->setFormat(lf);
+        h = heights();
+        QVERIFY2(std::abs(h[0] - timesLine) < 0.05, qPrintable(QString::number(h[0])));
+    }
+
     // All capitals show as capitals (Qt's layout ignores the setting), and
     // the text itself keeps its case.
     void allCapsShown()

@@ -341,6 +341,11 @@ Lists (FDPP): `57:8a {00:22 kind, 01:22 bullet character, 02:22 0}` where
 kind 23 is a bulleted list (0xB7 = the Symbol font's round bullet) and
 otherwise the numbering style (0 1 2 3, 1 I II, 2 i ii, 3 A B, 4 a b);
 numbered lists add `58:22` with the punctuation in the high half (2 "1.",
-0 "1)", 1 "(1)"). Publisher also writes `02:22` (the text size), `03:1a =
-31`, and a ¼" hanging indent (`0c` -228600, `0d` 228600).
+0 "1)", 1 "(1)"). Publisher also writes `02:22` (the bullet or number's
+size, EMU; usually the text size), `03:1a = 31`, and a ¼" hanging indent
+(`0c` -228600, `0d` 228600). The bullet is drawn in Symbol at that size, and
+an item's first line is as tall as the taller of the text's line and the
+bullet's (SymbolMT's hhea: 2059 + 450 over 2048 em, so 12.25 pt for a 10 pt
+bullet). Measured on reference PDFs: list items in 10 pt Times New Roman at
+single spacing sit 12.2 pt apart, not 10.6.
 

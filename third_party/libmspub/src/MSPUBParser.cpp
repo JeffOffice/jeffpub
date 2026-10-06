@@ -1613,6 +1613,10 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
     case PARAGRAPH_LIST_NUMBERING_DELIMITER:
       ret.m_listDelim = int(info.data >> 16);
       break;
+    case 0x02:
+      // JeffPub 79: a list's bullet or number size (EMU).
+      ret.m_listSizeEmu = info.data;
+      break;
     case PARAGRAPH_DROP_CAP_LINES:
       ret.m_dropCapLines = info.data;
       break;

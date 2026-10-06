@@ -792,12 +792,11 @@ QVector<B> PubWriter::paraBlocks(const QTextBlock &block)
             ch = 0;
             if (lf.numberSuffix() == QLatin1String(")")) delim = lf.numberPrefix() == QLatin1String("(") ? 1 : 0;
         }
-        double size = 10;
-        for (auto it = block.begin(); !it.atEnd(); ++it)
-            if (it.fragment().charFormat().hasProperty(QTextFormat::FontPointSize)) {
-                size = it.fragment().charFormat().fontPointSize();
-                break;
-            }
+        // The marker's size: its own, or the text's.
+        double size = lf.hasProperty(tp::BulletSize) ? lf.property(tp::BulletSize).toDouble() : 0;
+        for (auto it = block.begin(); size <= 0 && !it.atEnd(); ++it)
+            if (it.fragment().charFormat().hasProperty(QTextFormat::FontPointSize)) size = it.fragment().charFormat().fontPointSize();
+        if (size <= 0) size = 10;
         p << u32(0x02, quint32(emu(size)), 0x22) << u16(0x03, 31, 0x1a)
           << rec(0x57, {u32(0x00, kind, 0x22), u32(0x01, ch, 0x22), u32(0x02, 0, 0x22)}, 0x8a);
         if (!bullet) p << u32(0x58, delim << 16, 0x22);
