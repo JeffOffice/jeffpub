@@ -122,6 +122,13 @@ version 0x0102, 0b = 1) is `02:08, 03:08, 0c, 0d, 34 = 0, 3a → name chunk,
 aa, ab`; the name chunk (type 0x66, parent the picture) holds `03` = the
 file name.
 
+### Stories
+
+Chunk 0x65 lists the stories: each record has `01` = the text id, `02` =
+the number of boxes in a linked chain, `03` = 0 for a table, `04` (a flag
+of type 0x00) when the story isn't hyphenated automatically, `07` = its
+entry in the frame layout section (MCLD), and `08`/`09`.
+
 ### Master pages
 
 The document chunk lists every master page first, then the pages, then

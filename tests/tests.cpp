@@ -1143,6 +1143,33 @@ private Q_SLOTS:
         }
     }
 
+    // A story's automatic hyphenation setting survives .pub.
+    void pubWriterHyphenation()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        for (int i = 0; i < 2; ++i) {
+            auto t = std::make_shared<jp::TextItem>();
+            t->rect = QRectF(72, 72 + i * 100, 300, 60);
+            t->storyId = doc->createStory(i ? QStringLiteral("not hyphenated") : QStringLiteral("hyphenated"));
+            t->hyphenate = i == 0;
+            doc->pages[0]->items.push_back(t);
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("hyph.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        auto back = jp::importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        int checked = 0;
+        jp::walkItems(back->pages[0]->items, [&](const jp::ItemPtr &it) {
+            if (it->type() != jp::ItemType::Text) return;
+            const auto *t = static_cast<const jp::TextItem *>(it.get());
+            QCOMPARE(t->hyphenate, back->storyDoc(t->storyId)->toPlainText() == QStringLiteral("hyphenated"));
+            ++checked;
+        });
+        QCOMPARE(checked, 2);
+    }
+
     // Two master pages: each page keeps its own master and its objects.
     void pubWriterTwoMasters()
     {

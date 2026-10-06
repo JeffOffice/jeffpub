@@ -1372,7 +1372,11 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
         props.insert("jp:text-flow", (int)get(info.m_textFlow));
       // JeffPub 79: boxes that share a story carry the same text id.
       if (bool(info.m_textId))
+      {
         props.insert("jp:text-id", (int)get(info.m_textId));
+        if (m_notHyphenated.count(get(info.m_textId)))
+          props.insert("jp:no-hyphenation", true);
+      }
       m_painter->startTextObject(props);
       for (const auto &line : text)
       {

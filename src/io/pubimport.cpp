@@ -337,6 +337,8 @@ public:
             if (flow == 2) t->rotation = std::fmod(t->rotation + 180.0, 360.0);
         }
         t->wrap.mode = Wrap::None;
+        // Stories marked in the file as not hyphenated (others are).
+        if (p["jp:no-hyphenation"] && p["jp:no-hyphenation"]->getInt()) t->hyphenate = false;
         m_skipText = false;
         // Boxes sharing a story become a linked chain.
         if (p["jp:text-id"]) {

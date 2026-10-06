@@ -633,6 +633,7 @@ private:
     struct Frame { QRectF r; QMarginsF m; bool cell = false; };
     QVector<QVector<Frame>> m_frames;
     QVector<int> m_tableTextIds;
+    QSet<int> m_notHyphenated;   // stories without automatic hyphenation
     QVector<QByteArray> m_cellFormats;
 
     // Pictures: one drawing-store entry per image (numbered from 1), its
@@ -1161,6 +1162,7 @@ QByteArray PubWriter::write(QStringList *skipped)
             if (!sd) return;
             const int tid = textId++;
             addStory(tid, sd);
+            if (!t->hyphenate) m_notHyphenated << tid;
             QVector<Frame> frames;
             QSet<QString> seen;
             for (const TextItem *box = t; box && !seen.contains(box->id);) {
@@ -1679,6 +1681,7 @@ QByteArray PubWriter::write(QStringList *skipped)
             QVector<B> f{u32(0x01, quint32(id))};
             if (m_chainLength.value(id, 1) > 1) f << u16(0x02, quint32(m_chainLength.value(id)));   // boxes in the chain
             if (m_tableTextIds.contains(id)) f << u16(0x03, 0, 0x10);
+            if (m_notHyphenated.contains(id)) f << flag(0x04, 0x00);   // not hyphenated automatically
             // 07: the story's entry in the frame layout section.
             f << u32(0x07, quint32(i + 1)) << u32(0x08, 0xcb18967cu, 0x58) << u32(0x09, 0xcb18967cu, 0x58);
             stories << rec(0x00, f);

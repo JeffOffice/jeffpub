@@ -539,6 +539,16 @@ bool MSPUBParser::parseContents(librevenge::RVNGInputStream *input)
           return false;
         }
       }
+      // JeffPub patch: the story list (0x65) marks the stories that are
+      // not hyphenated automatically.
+      for (unsigned int unknownChunkIndex : m_unknownChunkIndices)
+      {
+        const ContentChunkReference &storyChunk = m_contentChunks.at(unknownChunkIndex);
+        if (storyChunk.type != 0x65)
+          continue;
+        input->seek(storyChunk.offset, librevenge::RVNG_SEEK_SET);
+        parseStoryListChunk(input, storyChunk);
+      }
       input->seek(documentChunk.offset, librevenge::RVNG_SEEK_SET);
       if (!parseDocumentChunk(input, documentChunk))
       {
@@ -2961,6 +2971,41 @@ PageType MSPUBParser::getPageTypeBySeqNum(unsigned seqNum)
     return DUMMY_PAGE;
   default:
     return NORMAL;
+  }
+}
+
+// JeffPub patch: each story's record: 01 = text id, and a 04 flag when the
+// story is not hyphenated automatically.
+void MSPUBParser::parseStoryListChunk(librevenge::RVNGInputStream *input, const ContentChunkReference &chunk)
+{
+  unsigned length = readU32(input);
+  while (stillReading(input, chunk.offset + length))
+  {
+    MSPUBBlockInfo info = parseBlock(input);
+    if (info.type == 0xA0)
+    {
+      while (stillReading(input, info.dataOffset + info.dataLength))
+      {
+        MSPUBBlockInfo subInfo = parseBlock(input);
+        if (subInfo.type == GENERAL_CONTAINER)
+        {
+          unsigned textId = 0;
+          bool noHyphens = false;
+          while (stillReading(input, subInfo.dataOffset + subInfo.dataLength))
+          {
+            MSPUBBlockInfo field = parseBlock(input, true);
+            if (field.id == 0x01)
+              textId = field.data;
+            else if (field.id == 0x04)
+              noHyphens = true;
+          }
+          if (noHyphens)
+            m_collector->setTextNotHyphenated(textId);
+        }
+        skipBlock(input, subInfo);
+      }
+    }
+    skipBlock(input, info);
   }
 }
 

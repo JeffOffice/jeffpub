@@ -117,6 +117,7 @@ public:
   void setShapeBeginArrow(unsigned seqNum, const Arrow &arrow);
   void setShapeEndArrow(unsigned seqNum, const Arrow &arrow);
   void setShapeLineOpacity(unsigned seqNum, double opacity);
+  void setTextNotHyphenated(unsigned textId) { m_notHyphenated.insert(textId); }
   void setShapePictureFlags(unsigned seqNum, unsigned flags);
   void setShapePictureTransparent(unsigned seqNum, ColorReference color);
 
@@ -161,6 +162,7 @@ private:
   std::vector<CharacterStyle> m_defaultCharStyles;
   std::vector<ParagraphStyle> m_defaultParaStyles;
   std::map<unsigned, unsigned> m_shapeTypesBySeqNum;
+  std::set<unsigned> m_notHyphenated; // JeffPub patch: text ids of stories without automatic hyphenation
   std::vector<Color> m_paletteColors;
   std::vector<unsigned> m_shapeSeqNumsOrdered;
   std::map<unsigned, unsigned> m_pageSeqNumsByShapeSeqNum;
