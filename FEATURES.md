@@ -21,7 +21,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 ### Open / Save / Save As / Close
 - [x] Open JeffPub publications (`.jpub`) and recent publications, with pinning
 - [~] Open `.pub` files (versions from 1998 to 2021), including linked text boxes, pictures, shapes, and tables *(partial: text, pictures, shapes and tables open; some picture crops, recolors and line spacing still differ from the original)*
-- [~] Save as `.pub` *(partial; each part checked by opening the saved file in another .pub program. Saved: pages, text boxes and linked text boxes, bold, italic, size, font and color of text, paragraph alignment and spacing above and below, rectangles, ovals and every other shape, lines with dashes and arrowheads, text inside shapes, rotation and flips, pictures with cropping, tables with merged cells, fills and borders, Text Art. Not saved yet: underline and other character effects, line spacing, indents, tabs, bullets and numbering, styles other than Normal, objects on master pages, gradient, pattern and picture fills, transparency, shadows, picture adjustments. Saving reports objects it leaves out)*
+- [~] Save as `.pub` *(partial; each part checked by opening the saved file in another .pub program. Saved: pages and the first master page, text boxes and linked text boxes, character formatting (font, size, bold, italic, underline, strikethrough, small and all caps, superscript and subscript, color, letter spacing and tracking), paragraphs (alignment, indents, spacing, line spacing, tab stops, bullets and numbering, direction is not), every shape (as Publisher's own where it matches, otherwise an exact outline), lines with dashes and arrowheads, text in shapes, rotation and flips, pictures with cropping, tables with merged cells, fills and borders, Text Art. Not saved yet: gradient, pattern and picture fills, transparency, shadows, picture adjustments and picture shapes, tab leaders, styles other than Normal, master pages after the first. Saving reports objects it leaves out)*
 - [x] Save, Save As, AutoRecover, and backup on save
 - [x] Close and prompt to save changes
 
@@ -47,7 +47,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 
 ## Home tab
 - [x] Clipboard: Paste (Keep Source Formatting, Keep Text Only, Paste Special), Cut, Copy, Format Painter (single use and locked)
-- [~] Font: font face with scheme fonts first, size, Grow Font, Shrink Font, Clear All Formatting, Bold, Italic, Underline (styles), Strikethrough, Subscript, Superscript, Change Case, Character Spacing, Font Color (scheme colors, tints, more colors, eyedropper), and the Font dialog *(partial: no eyedropper)*
+- [x] Font: font face with scheme fonts first, size, Grow Font, Shrink Font, Clear All Formatting, Bold, Italic, Underline (styles), Strikethrough, Subscript, Superscript, Change Case, Character Spacing, Font Color (scheme colors, tints, more colors, eyedropper), and the Font dialog
 - [x] Paragraph: Bullets (gallery and custom bullet character), Numbering (formats and starting number), Decrease and Increase Indent, Special Characters (show ¶), Align Left, Center, Right, Justify, and Distribute, Line Spacing, Paragraph Spacing, and the Paragraph dialog (indents, spacing, line breaks, tabs, baseline alignment)
 - [x] Styles: gallery, New Style, Modify Style, Import Styles (from a publication), and Styles by example
 - [x] Objects: Draw Text Box, Table, Pictures, Shapes
@@ -175,7 +175,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 
 ## Color and graphics
 - [x] Color schemes with 8 slots (Main, Accents 1–5, Hyperlink, Followed Hyperlink) and tints and shades of every scheme color
-- [~] Custom colors (RGB, HSL, CMYK, PANTONE-style spot color entry), recent colors, eyedropper, and transparency on fills, lines, and text *(partial: no eyedropper; spot colors are entered by name and value)*
+- [~] Custom colors (RGB, HSL, CMYK, PANTONE-style spot color entry), recent colors, eyedropper, and transparency on fills, lines, and text *(partial: spot colors are entered by name and value)*
 - [x] Fill effects: gradient (linear, radial, rectangular, path, with presets), texture, pattern, picture (stretch or tile), and tint
 - [x] Picture formats: PNG, JPEG, GIF, BMP, TIFF, WebP, SVG, and EMF/WMF **(EMF/WMF import is limited on Linux)**
 

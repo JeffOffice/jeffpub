@@ -14,6 +14,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
+#include <QKeyEvent>
 #include <QMouseEvent>
 #include <QScrollBar>
 #include <QTimer>
@@ -140,6 +141,14 @@ ColorPopup::ColorPopup(const ColorScheme &s, bool allowNone, const QString &none
         close();
     });
     v->addWidget(more);
+    auto *drop = new QPushButton(icon("pipette"), QStringLiteral("Eyedropper"), this);
+    drop->setFlat(true);
+    drop->setToolTip(QStringLiteral("Pick a color from anywhere on the page"));
+    connect(drop, &QPushButton::clicked, this, [this] {
+        Q_EMIT eyedropper();
+        close();
+    });
+    v->addWidget(drop);
 }
 
 QWidget *ColorPopup::swatch(const ColorRef &c, const QColor &shown, const QString &tip)
@@ -269,7 +278,88 @@ void ColorButton::openPopup()
         refreshIcon();
         Q_EMIT colorPicked(c);
     });
+    connect(pop, &ColorPopup::eyedropper, this, [this] {
+        pickColorFromWindow(window(), [this](const QColor &c) {
+            ColorPopup::addRecent(c);
+            m_current = ColorRef::rgb(c);
+            refreshIcon();
+            Q_EMIT colorPicked(m_current);
+        });
+    });
     pop->showBelow(this);
+}
+
+// ---------------- Eyedropper ----------------
+namespace {
+
+class EyedropperOverlay : public QWidget {
+public:
+    EyedropperOverlay(QWidget *window, std::function<void(const QColor &)> done)
+        : QWidget(window), m_done(std::move(done))
+    {
+        m_shot = window->grab().toImage();
+        setGeometry(window->rect());
+        setMouseTracking(true);
+        setCursor(Qt::CrossCursor);
+        setFocusPolicy(Qt::StrongFocus);
+        show();
+        raise();
+        setFocus();
+        grabKeyboard();
+    }
+    ~EyedropperOverlay() override { releaseKeyboard(); }
+
+protected:
+    QColor colorAt(const QPoint &p) const
+    {
+        const qreal dpr = m_shot.devicePixelRatio();
+        const QPoint px(int(p.x() * dpr), int(p.y() * dpr));
+        return m_shot.valid(px) ? m_shot.pixelColor(px) : QColor();
+    }
+    void mouseMoveEvent(QMouseEvent *e) override
+    {
+        m_pos = e->position().toPoint();
+        update();
+    }
+    void mousePressEvent(QMouseEvent *e) override
+    {
+        const QColor c = colorAt(e->position().toPoint());
+        auto done = m_done;
+        deleteLater();
+        if (e->button() == Qt::LeftButton && c.isValid()) done(c);
+    }
+    void keyPressEvent(QKeyEvent *e) override
+    {
+        if (e->key() == Qt::Key_Escape) deleteLater();
+    }
+    void paintEvent(QPaintEvent *) override
+    {
+        // A swatch beside the cursor with the color under it.
+        const QColor c = colorAt(m_pos);
+        if (!c.isValid()) return;
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        const QRect box(m_pos + QPoint(16, 16), QSize(96, 34));
+        p.setPen(QColor(0, 0, 0, 120));
+        p.setBrush(palette().window());
+        p.drawRoundedRect(box, 5, 5);
+        p.setBrush(c);
+        p.drawRect(QRect(box.topLeft() + QPoint(6, 6), QSize(22, 22)));
+        p.setPen(palette().text().color());
+        p.drawText(box.adjusted(34, 0, 0, 0), Qt::AlignVCenter, c.name().toUpper());
+    }
+
+private:
+    QImage m_shot;
+    QPoint m_pos;
+    std::function<void(const QColor &)> m_done;
+};
+
+} // namespace
+
+void pickColorFromWindow(QWidget *window, std::function<void(const QColor &)> done)
+{
+    if (window) new EyedropperOverlay(window, std::move(done));
 }
 
 // ---------------- Gallery ----------------

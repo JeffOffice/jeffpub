@@ -28,6 +28,7 @@ public:
 Q_SIGNALS:
     void picked(const ColorRef &c);
     void morePicked();
+    void eyedropper();   // the user wants to pick a color from the window
 
 private:
     QWidget *swatch(const ColorRef &c, const QColor &shown, const QString &tip);
@@ -200,5 +201,9 @@ private:
 };
 
 QWidget *popupFor(QWidget *content, QWidget *anchor);
+
+// Eyedropper: a crosshair over `window` until a click picks the color under
+// it (from a snapshot of the window) or Escape cancels.
+void pickColorFromWindow(QWidget *window, std::function<void(const QColor &)> done);
 
 } // namespace jp

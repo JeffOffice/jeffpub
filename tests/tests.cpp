@@ -1026,6 +1026,26 @@ private Q_SLOTS:
         QVERIFY(bt->cell(1, 0).border.left.isNone());
     }
 
+    // The eyedropper picks the color under the click from the window.
+    void eyedropperPicks()
+    {
+        QWidget win;
+        win.resize(200, 100);
+        win.setAutoFillBackground(true);
+        QPalette pal = win.palette();
+        pal.setColor(QPalette::Window, QColor(200, 30, 40));
+        win.setPalette(pal);
+        win.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&win));
+        QColor got;
+        jp::pickColorFromWindow(&win, [&](const QColor &c) { got = c; });
+        QWidget *overlay = nullptr;
+        for (QWidget *c : win.findChildren<QWidget *>(QString(), Qt::FindDirectChildrenOnly)) overlay = c;
+        QVERIFY(overlay);
+        QTest::mouseClick(overlay, Qt::LeftButton, {}, QPoint(50, 50));
+        QCOMPARE(got, QColor(200, 30, 40));
+    }
+
     // Inserting a symbol puts it in the text and at the front of the recently used list.
     void recentSymbols()
     {
