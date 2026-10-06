@@ -1692,6 +1692,11 @@ private Q_SLOTS:
         const QString path = dir.filePath(QStringLiteral("hyph.pub"));
         QString err;
         QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test29-hyphenation.pub";
+            QFile::remove(out);
+            QFile::copy(path, out);
+        }
         auto back = jp::importPublisherFile(path, &err);
         QVERIFY2(back, qPrintable(err));
         int checked = 0;
