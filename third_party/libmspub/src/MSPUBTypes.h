@@ -194,6 +194,7 @@ struct ParagraphStyle
   int m_listFontIndex = -1;     // the bullet's font in the font table (0x03)
   boost::optional<unsigned> m_dropCapLines;
   boost::optional<unsigned> m_dropCapLetters;
+  int m_direction = -1;   // JeffPub 79: 0x3A, 0xF3FF on a right-to-left paragraph
   ParagraphStyle() :
     m_align(), m_defaultCharStyleIndex(), m_lineSpacing(), m_spaceBeforeEmu(),
     m_spaceAfterEmu(), m_firstLineIndentEmu(), m_leftIndentEmu(),

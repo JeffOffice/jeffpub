@@ -1842,6 +1842,9 @@ librevenge::RVNGPropertyList MSPUBCollector::getParaStyleProps(const ParagraphSt
   {
     ret.insert("style:length", (int)dropCapLetters);
   }
+  // JeffPub patch: a right-to-left paragraph.
+  if ((style.m_direction >= 0 ? style.m_direction : defaultStyle.m_direction) == 0xF3FF)
+    ret.insert("jp:right-to-left", true);
   return ret;
 }
 

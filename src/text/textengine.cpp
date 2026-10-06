@@ -764,6 +764,13 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
         QTextOption opt;
         Qt::Alignment al = bf.alignment() & Qt::AlignHorizontal_Mask;
         if (!al) al = Qt::AlignLeft;
+        // A paragraph's left and right alignment are its start and end (as in
+        // .pub files): a right-to-left paragraph starts at the right. Qt's
+        // text layout takes them as the page's sides, so they swap here.
+        if (bf.layoutDirection() == Qt::RightToLeft && !(al & Qt::AlignAbsolute)) {
+            if (al & Qt::AlignLeft) al = (al & ~Qt::AlignLeft) | Qt::AlignRight;
+            else if (al & Qt::AlignRight) al = (al & ~Qt::AlignRight) | Qt::AlignLeft;
+        }
         opt.setAlignment(al);
         opt.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
         QList<QTextOption::Tab> tabs = bf.tabPositions();

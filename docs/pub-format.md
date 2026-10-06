@@ -338,8 +338,10 @@ values, then the ink's name). Ten book covers carry it, and each of their
 PDFs prints that color as a Separation of the named ink with the CMYK
 stand-in as its alternate; no file names a color without it being a spot
 ink. Other tags than `P2`, and where line and text colors keep a spot name,
-are not known yet. JeffPub reads it (the publication opens with spot colors
-and the ink in its list); it does not write it yet.
+are not known yet. JeffPub reads and writes it; Publisher showed a box saved
+by JeffPub this way as PANTONE 2727 C in its fill color list (test33, Oct 6).
+Character scaling (paragraph run property `0x20`, tenths of a percent, as
+tracking) was confirmed in the same file: 150% and 80% drawn as such.
 
 ### Text Art
 
@@ -364,6 +366,14 @@ path runs about 0.31 cap heights above the baseline (0.305 and 0.32), so the
 letters reach past the frame.
 
 ### Paragraph and character settings
+
+Right to left: a sample made in Publisher (Oct 6) holds two paragraph
+properties on its right-to-left paragraph only, `06:22` = 0 and `3a:12` =
+0xF3FF; `3a` appears in none of 247 left-to-right reference files (`06` = 0
+appears in 53 of them, so it isn't the direction). JeffPub reads `3a` =
+0xF3FF as right to left and writes both, as Publisher did. Alignment codes
+are the paragraph's start and end, so a right-to-left paragraph with the
+default alignment starts at the right.
 
 Seen in Publisher's files and written by JeffPub (paragraph runs, FDPP):
 `0c:22` first-line indent (EMU, negative for a hanging indent), `0d:22`

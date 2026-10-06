@@ -1574,6 +1574,9 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
       ret.m_align = readAlignment(info.data); // Is this correct?
       ret.m_alignRaw = int(info.data & 0xff);
       break;
+    case 0x3A: // JeffPub 79: Publisher writes 0xF3FF on a right-to-left paragraph (with 0x06 = 0)
+      ret.m_direction = int(info.data & 0xffff);
+      break;
     case PARAGRAPH_DEFAULT_CHAR_STYLE:
       ret.m_defaultCharStyleIndex = info.data;
       break;

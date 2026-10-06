@@ -399,6 +399,7 @@ public:
         else if (al == "end" || al == "right") bf.setAlignment(Qt::AlignRight);
         else if (al == "justify") bf.setAlignment(Qt::AlignJustify);
         else bf.setAlignment(Qt::AlignLeft);
+        if (p["jp:right-to-left"] && p["jp:right-to-left"]->getInt()) bf.setLayoutDirection(Qt::RightToLeft);
         if (p["fo:margin-left"]) bf.setLeftMargin(toPt(p["fo:margin-left"]));
         if (p["fo:margin-right"]) bf.setRightMargin(toPt(p["fo:margin-right"]));
         if (p["fo:text-indent"]) bf.setTextIndent(toPt(p["fo:text-indent"]));

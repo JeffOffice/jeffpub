@@ -831,6 +831,9 @@ QVector<B> PubWriter::paraBlocks(const QTextBlock &block)
     }
     // The paragraph's style: its place in the style sheet (Normal, 0, is left out).
     if (const int si = int(styleNames().indexOf(f.stringProperty(tp::StyleName))) + 1; si > 0) p << u16(0x19, quint32(si), 0x1a);
+    // Right to left, as Publisher writes it (a sample made in Publisher:
+    // 0x06 = 0 and 0x3A = 0xF3FF on the right-to-left paragraph only).
+    if (f.layoutDirection() == Qt::RightToLeft) p << u32(0x06, 0, 0x22) << u16(0x3a, 0xF3FF, 0x12);
     std::sort(p.begin(), p.end(), [](const B &a, const B &b) { return a.id < b.id; });
     return p;
 }
