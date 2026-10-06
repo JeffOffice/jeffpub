@@ -50,7 +50,7 @@ double Settings::fromUnit(double v) const { return v / perPoint(m_unit); }
 
 QString Settings::format(double pt, int decimals) const
 {
-    QString n = QString::number(toUnit(pt), 'f', m_unit == Unit::Point ? 1 : decimals);
+    QString n = QString::number(toUnit(pt), 'f', decimals);
     if (n.contains('.')) { while (n.endsWith('0')) n.chop(1); if (n.endsWith('.')) n.chop(1); }
     return n + unitSuffix();
 }

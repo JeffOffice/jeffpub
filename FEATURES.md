@@ -151,6 +151,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 - [x] Text wrapping: None, Square, Tight, Through, Top and Bottom, Edit Wrap Points, and wrap distances
 - [x] Format Object dialog: Colors and Lines, Size (with rotation and scale), Layout (position, wrap, distances), Picture, Text Box (margins, autofit, columns, vertical alignment), and Alt Text
 - [x] Measurement toolbar: x, y, width, height, rotation, tracking, text scaling, kerning, and line spacing
+- [x] Measurements to three decimal places in every unit (8.125", 1.234 cm, 10.125 pt), shown without trailing zeros and kept without rounding
 - [x] Scratch area shared across pages
 - [x] Rulers in in, cm, mm, pt, and pica, with movable origin and drag-out guides
 - [x] Context menus for every object type

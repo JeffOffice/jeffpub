@@ -160,6 +160,15 @@ private:
     bool m_updating = false;
 };
 
+// Number box that shows up to three decimal places, dropping trailing
+// zeros, and keeps six, so what's typed (8.125) isn't rounded.
+class DecimalSpin : public QDoubleSpinBox {
+    Q_OBJECT
+public:
+    explicit DecimalSpin(QWidget *parent = nullptr);
+    QString textFromValue(double v) const override;
+};
+
 // Spin box that shows and accepts measurements in the user's units.
 class MeasureSpin : public QDoubleSpinBox {
     Q_OBJECT

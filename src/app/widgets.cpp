@@ -721,22 +721,39 @@ SizeCombo::SizeCombo(QWidget *parent) : QComboBox(parent)
 void SizeCombo::setSize(double pt)
 {
     m_updating = true;
-    if (!lineEdit()->hasFocus()) setEditText(pt > 0 ? QString::number(std::round(pt * 10) / 10) : QString());
+    if (!lineEdit()->hasFocus()) setEditText(pt > 0 ? QString::number(std::round(pt * 1000) / 1000) : QString());   // up to three decimals
     m_updating = false;
 }
 
+// ---------------- DecimalSpin ----------------
+DecimalSpin::DecimalSpin(QWidget *parent) : QDoubleSpinBox(parent) { setDecimals(6); }
+
+QString DecimalSpin::textFromValue(double v) const
+{
+    QLocale l = locale();
+    l.setNumberOptions(QLocale::OmitGroupSeparator);
+    QString n = l.toString(v, 'f', 3);
+    if (n.contains(l.decimalPoint())) {
+        while (n.endsWith('0')) n.chop(1);
+        if (n.endsWith(l.decimalPoint())) n.chop(l.decimalPoint().size());
+    }
+    return n;
+}
+
 // ---------------- MeasureSpin ----------------
+// Values are points, kept to six places so measurements typed to three
+// decimals in any unit come back exactly.
 MeasureSpin::MeasureSpin(QWidget *parent) : QDoubleSpinBox(parent)
 {
     setRange(0, 72 * 240);
-    setDecimals(4);
+    setDecimals(6);
     setSingleStep(9);
     setKeyboardTracking(false);
     setFixedWidth(86);
     setAccelerated(true);
 }
 
-QString MeasureSpin::textFromValue(double v) const { return Settings::get().format(v, 2); }
+QString MeasureSpin::textFromValue(double v) const { return Settings::get().format(v, 3); }
 
 double MeasureSpin::valueFromText(const QString &text) const
 {

@@ -18,7 +18,7 @@ public:
     QString unitSuffix() const;
     double toUnit(double pt) const;
     double fromUnit(double v) const;
-    QString format(double pt, int decimals = 2) const;   // "1.25\""
+    QString format(double pt, int decimals = 3) const;   // "8.125\"", trailing zeros dropped
     bool parse(const QString &text, double *pt) const;   // accepts any unit suffix
 
     QStringList recentFiles() const;

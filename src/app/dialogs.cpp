@@ -86,9 +86,8 @@ MeasureSpin *measure(double pt, QWidget *p, double min = 0, double max = 72 * 24
 
 QDoubleSpinBox *points(double v, QWidget *p, double min = 0, double max = 1000, const QString &suffix = QStringLiteral(" pt"))
 {
-    auto *s = new QDoubleSpinBox(p);
+    auto *s = new DecimalSpin(p);
     s->setRange(min, max);
-    s->setDecimals(2);
     s->setValue(v);
     s->setSuffix(suffix);
     return s;
@@ -251,7 +250,7 @@ void fontDialog(QWidget *p, Editor *ed)
     auto *style = new QComboBox(&dlg.d);
     style->addItems({"Regular", "Italic", "Bold", "Bold Italic"});
     style->setCurrentIndex((cur.fontWeight() >= QFont::DemiBold ? 2 : 0) + (cur.fontItalic() ? 1 : 0));
-    auto *size = new QDoubleSpinBox(&dlg.d);
+    auto *size = new DecimalSpin(&dlg.d);
     size->setRange(0.5, 999);
     size->setValue(cur.hasProperty(QTextFormat::FontPointSize) ? cur.fontPointSize() : 11);
     auto *color = colorPick(ed, cur.stringProperty(tp::ColorRefP).isEmpty() ? ColorRef::scheme(Main) : ColorRef::fromString(cur.stringProperty(tp::ColorRefP)), false, &dlg.d);
@@ -349,7 +348,7 @@ void paragraphDialog(QWidget *p, Editor *ed, int tab)
     auto *before = points(bf.topMargin(), t1), *after = points(bf.bottomMargin(), t1);
     auto *lineType = new QComboBox(t1);
     lineType->addItems({"Single", "Multiple (sp)", "Exactly (pt)", "At least (pt)"});
-    auto *lineVal = new QDoubleSpinBox(t1);
+    auto *lineVal = new DecimalSpin(t1);
     lineVal->setRange(0.1, 1000);
     switch (bf.lineHeightType()) {
     case QTextBlockFormat::ProportionalHeight: lineType->setCurrentIndex(1); lineVal->setValue(bf.lineHeight() / 100); break;
@@ -638,7 +637,7 @@ void formatObjectDialog(QWidget *p, Editor *ed, int tab)
     auto *sz = new QWidget();
     auto *szf = new QFormLayout(sz);
     auto *h = measure(it->rect.height(), sz, 1), *w = measure(it->rect.width(), sz, 1);
-    auto *rot = new QDoubleSpinBox(sz);
+    auto *rot = new DecimalSpin(sz);
     rot->setRange(-360, 360);
     rot->setSuffix(QStringLiteral("°"));
     rot->setValue(it->rotation);
@@ -1535,7 +1534,7 @@ void styleDialog(QWidget *p, Editor *ed, const QString &styleName)
     font->addItem(QStringLiteral("(scheme font)"));
     font->addItems(QFontDatabase::families());
     if (s.chr.hasProperty(QTextFormat::FontFamilies)) font->setCurrentText(s.chr.fontFamilies().toStringList().value(0));
-    auto *size = new QDoubleSpinBox(&dlg.d);
+    auto *size = new DecimalSpin(&dlg.d);
     size->setRange(1, 999);
     size->setValue(s.chr.hasProperty(QTextFormat::FontPointSize) ? s.chr.fontPointSize() : 11);
     auto *bold = new QCheckBox(QStringLiteral("Bold"), &dlg.d), *italic = new QCheckBox(QStringLiteral("Italic"), &dlg.d);
@@ -1820,16 +1819,16 @@ void measurementWindow(QWidget *p, Editor *ed)
     auto *x = measure(0, win, -10000), *y = measure(0, win, -10000), *w = measure(0, win, 1), *h = measure(0, win, 1);
     x->setMinimum(-10000);
     y->setMinimum(-10000);
-    auto *rot = new QDoubleSpinBox(win);
+    auto *rot = new DecimalSpin(win);
     rot->setRange(-360, 360);
     rot->setSuffix(QStringLiteral("°"));
-    auto *track = new QDoubleSpinBox(win);
+    auto *track = new DecimalSpin(win);
     track->setRange(-50, 200);
     track->setSuffix(QStringLiteral(" pt"));
     auto *scale = new QSpinBox(win);
     scale->setRange(1, 600);
     scale->setSuffix(QStringLiteral("%"));
-    auto *line = new QDoubleSpinBox(win);
+    auto *line = new DecimalSpin(win);
     line->setRange(0.1, 20);
     line->setSuffix(QStringLiteral(" sp"));
     form->addRow(QStringLiteral("Horizontal position:"), x);
@@ -1868,7 +1867,7 @@ void measurementWindow(QWidget *p, Editor *ed)
             it->rotation = rot->value();
         });
     };
-    for (QDoubleSpinBox *s : {static_cast<QDoubleSpinBox *>(x), static_cast<QDoubleSpinBox *>(y), static_cast<QDoubleSpinBox *>(w), static_cast<QDoubleSpinBox *>(h), rot})
+    for (QDoubleSpinBox *s : {static_cast<QDoubleSpinBox *>(x), static_cast<QDoubleSpinBox *>(y), static_cast<QDoubleSpinBox *>(w), static_cast<QDoubleSpinBox *>(h), static_cast<QDoubleSpinBox *>(rot)})
         QObject::connect(s, &QDoubleSpinBox::editingFinished, win, applyGeom);
     QObject::connect(track, &QDoubleSpinBox::editingFinished, win, [=] {
         QTextCharFormat f;

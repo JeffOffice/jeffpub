@@ -23,6 +23,7 @@
 #include "app/ribbon.h"
 #include "app/updater.h"
 #include "app/widgets.h"
+#include "app/settings.h"
 #include "canvas/canvas.h"
 #include <QTemporaryDir>
 #include <QLineEdit>
@@ -1018,6 +1019,43 @@ private Q_SLOTS:
         QVERIFY(!bt->cell(1, 1).border.left.isNone());
         QCOMPARE(bt->cell(1, 1).border.left.color.resolve(back->colors), blue);
         QVERIFY(bt->cell(1, 0).border.left.isNone());
+    }
+
+    // Measurement boxes keep three decimal places in any unit, without rounding.
+    void measurementsThreeDecimals()
+    {
+        jp::Settings &st = jp::Settings::get();
+        const jp::Unit was = st.unit();
+        st.setUnit(jp::Unit::Inch);
+        jp::MeasureSpin m;
+        m.setRange(0, 72 * 240);
+        double pt = 0;
+        QVERIFY(st.parse(QStringLiteral("8.125"), &pt));
+        m.setValue(pt);
+        QCOMPARE(m.text(), QStringLiteral("8.125\""));
+        QCOMPARE(m.value(), 585.0);
+        QVERIFY(st.parse(QStringLiteral("11"), &pt));
+        m.setValue(pt);
+        QCOMPARE(m.text(), QStringLiteral("11\""));
+        QVERIFY(st.parse(QStringLiteral("0.003"), &pt));
+        m.setValue(pt);
+        QCOMPARE(m.text(), QStringLiteral("0.003\""));
+        st.setUnit(jp::Unit::Centimeter);
+        QVERIFY(st.parse(QStringLiteral("1.234"), &pt));
+        m.setValue(pt);
+        QCOMPARE(m.text(), QStringLiteral("1.234 cm"));
+        st.setUnit(jp::Unit::Point);
+        QVERIFY(st.parse(QStringLiteral("10.125"), &pt));
+        m.setValue(pt);
+        QCOMPARE(m.text(), QStringLiteral("10.125 pt"));
+        st.setUnit(was);
+        jp::DecimalSpin d;
+        d.setRange(0, 1000);
+        d.setSuffix(QStringLiteral(" pt"));
+        d.setValue(12.345);
+        QCOMPARE(d.text(), QStringLiteral("12.345 pt"));
+        d.setValue(12);
+        QCOMPARE(d.text(), QStringLiteral("12 pt"));
     }
 
     // Lines, turned shapes and pictures written to .pub read back in place.
