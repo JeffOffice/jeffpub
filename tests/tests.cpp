@@ -51,6 +51,7 @@
 #include <QTextBrowser>
 #include <QDirIterator>
 #include <QtTest>
+#include <QtEndian>
 #include <clocale>
 
 using namespace jp;
@@ -3035,6 +3036,111 @@ private Q_SLOTS:
         QCOMPARE(jp::packPubInks(QColor::fromCmykF(0, 0, 1, 0)), P(0x0001FE48u, 0u));                // read as Y 100
         QCOMPARE(jp::packPubInks(QColor::fromCmykF(0, 0, 0, 1)), P(0x0001FE28u, 0u));                // read as K 100
         QCOMPARE(jp::packPubInks(QColor::fromCmykF(0, 128 / 255.f, 1, 51 / 255.f)), P(0x67FF00E8u, 0u));   // read as M 50 Y 100 K 20
+    }
+
+    // JeffPub opens with the window size it had when it last closed.
+    void windowSizeKept()
+    {
+        {
+            jp::MainWindow w;
+            w.show();
+            w.resize(640, 480);   // within the test screen (a restored window is kept on screen)
+            QApplication::processEvents();
+            QVERIFY(w.close());
+        }
+        {
+            jp::MainWindow again;
+            QCOMPARE(again.size(), QSize(640, 480));
+        }
+        jp::Settings::get().setValue(QStringLiteral("ui/windowGeometry"), QVariant());
+        jp::MainWindow fresh;
+        QCOMPARE(fresh.size(), QSize(1400, 900));
+    }
+
+    // A spot color names its ink in the fill's extra drawing properties
+    // (0x01A1, as Publisher writes "P2,#003d007e00db0000,PANTONE 2727 C" on
+    // book covers whose PDFs print that ink on its own plate): the
+    // publication opens with that spot color, and its PDFs keep the ink.
+    void pubSpotColorRead()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        doc->print.model = jp::PrintInfo::ProcessCMYK;
+        auto box = std::make_shared<jp::ShapeItem>();
+        box->rect = QRectF(0, 0, 612, 792);
+        box->fill = jp::Fill::solid(jp::ColorRef::inks(QColor::fromCmykF(192 / 255.f, 102 / 255.f, 0, 0), QColor(0x3d, 0x7e, 0xdb)));
+        box->stroke = jp::Stroke::none();
+        doc->pages[0]->items.push_back(box);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("spot.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        jp::cfb::File c;
+        {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::ReadOnly));
+            QVERIFY2(jp::cfb::read(f.readAll(), &c, &err), qPrintable(err));
+        }
+        // Add the name to the record of extra properties that holds the
+        // fill's shown color (0x019E), growing the records around it.
+        const QString text = QStringLiteral("P2,#003d007e00db0000,PANTONE 2727 C");
+        QByteArray name(reinterpret_cast<const char *>(text.utf16()), text.size() * 2);
+        name.append(2, '\0');
+        auto u16 = [](quint16 v) { QByteArray b(2, 0); qToLittleEndian(v, b.data()); return b; };
+        auto u32 = [](quint32 v) { QByteArray b(4, 0); qToLittleEndian(v, b.data()); return b; };
+        int added = 0;
+        std::function<QByteArray(const QByteArray &)> rebuild = [&](const QByteArray &in) {
+            QByteArray out;
+            int at = 0;
+            while (at + 8 <= in.size()) {
+                quint16 vi = qFromLittleEndian<quint16>(in.constData() + at);
+                const quint16 type = qFromLittleEndian<quint16>(in.constData() + at + 2);
+                const quint32 len = qFromLittleEndian<quint32>(in.constData() + at + 4);
+                if (qint64(at) + 8 + len > in.size()) {   // not a record: the stream keeps a value between drawings
+                    out += in.mid(at, 4);
+                    at += 4;
+                    continue;
+                }
+                QByteArray body = in.mid(at + 8, len);
+                if ((vi & 0xF) == 0xF) {
+                    body = rebuild(body);
+                } else if (type == 0xF122) {
+                    const int n = vi >> 4;
+                    bool shown = false;
+                    for (int k = 0; k < n && k * 6 + 6 <= body.size(); ++k)
+                        shown |= (qFromLittleEndian<quint16>(body.constData() + k * 6) & 0x3FFF) == 0x019E;
+                    if (shown) {
+                        body = body.left(n * 6) + u16(0xC1A1) + u32(quint32(name.size())) + body.mid(n * 6) + name;
+                        vi = quint16((vi & 0xF) | ((n + 1) << 4));
+                        ++added;
+                    }
+                }
+                out += u16(vi) + u16(type) + u32(quint32(body.size())) + body;
+                at += 8 + int(len);
+            }
+            return out + in.mid(at);
+        };
+        QVERIFY(c.setStream(QStringLiteral("Escher/EscherStm"), rebuild(c.stream(QStringLiteral("Escher/EscherStm")))));
+        QCOMPARE(added, 1);
+        {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(jp::cfb::write(c));
+        }
+        auto back = jp::importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(back->print.model, jp::PrintInfo::SpotColors);
+        QCOMPARE(back->print.spotNames, QStringList{QStringLiteral("PANTONE 2727 C")});
+        const QColor ink = back->print.spotColors.value(0).toCmyk();
+        QCOMPARE(ink.cyan(), 192);
+        QCOMPARE(ink.magenta(), 102);
+        // The page still shows Publisher's screen color.
+        bool found = false;
+        for (const auto &it : back->pages[0]->items)
+            if (auto sh = std::dynamic_pointer_cast<jp::ShapeItem>(it); sh && sh->fill.type == jp::Fill::Solid) {
+                QCOMPARE(sh->fill.color.shownValue(), QColor(0x3d, 0x7e, 0xdb));
+                found = true;
+            }
+        QVERIFY(found);
     }
 
     // Process inks survive saving as .pub: the file keeps the color as shown

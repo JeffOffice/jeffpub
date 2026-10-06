@@ -132,7 +132,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     connect(&m_recoverTimer, &QTimer::timeout, this, &MainWindow::autoRecover);
     m_recoverTimer.start();
 
+    // The size, place and state (maximized...) the last window had when it
+    // closed; a window opened while another shows sits a little lower right.
     resize(1400, 900);
+    const QByteArray geometry = Settings::get().value(QStringLiteral("ui/windowGeometry")).toByteArray();
+    if (!geometry.isEmpty() && restoreGeometry(geometry))
+        for (QWidget *w : QApplication::topLevelWidgets())
+            if (w != this && w->inherits("jp::MainWindow") && w->isVisible()) {
+                move(pos() + QPoint(32, 32));
+                break;
+            }
     updateTitle();
     m_pages->refresh();
     refreshUi();
@@ -354,7 +363,12 @@ bool MainWindow::maybeSave()
 
 void MainWindow::closeEvent(QCloseEvent *e)
 {
-    if (maybeSave()) e->accept(); else e->ignore();
+    if (!maybeSave()) {
+        e->ignore();
+        return;
+    }
+    Settings::get().setValue(QStringLiteral("ui/windowGeometry"), saveGeometry());
+    e->accept();
 }
 
 void MainWindow::autoRecover()
