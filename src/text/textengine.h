@@ -2,8 +2,8 @@
 // Lays out one story across a chain of frames (linked text boxes), each with
 // columns, insets, vertical alignment and wrap obstacles. One QTextLayout is
 // kept per paragraph; each line is positioned in the frame it landed in. Line
-// y-coordinates are offset by frameIndex * kStride so that a single paragraph
-// can span frames while staying in one QTextLayout.
+// y-coordinates are offset by the heights of the frames before (frameY) so
+// that a single paragraph can span frames while staying in one QTextLayout.
 
 #include "core/color.h"
 #include "core/items.h"
@@ -67,8 +67,6 @@ struct PaintOptions {
 
 class StoryLayout {
 public:
-    static constexpr double kStride = 1.0e6;
-
     StoryLayout();
     ~StoryLayout();
 
@@ -113,8 +111,10 @@ public:
 
 private:
     const Block *blockAt(int pos, int *rel) const;
+    double frameY(int frame) const;   // where a frame's lines start in the paragraph layouts (frameCount() for overflow)
     std::vector<std::unique_ptr<Block>> m_blocks;
     QVector<FrameSpec> m_frames;
+    QVector<double> m_frameY;
     QVector<double> m_used;
     bool m_overflow = false;
     LayoutEnv m_env;

@@ -675,6 +675,66 @@ private Q_SLOTS:
         QVERIFY2(std::abs(gap2 - (line - 0.2 * 100 * 442.0 / 2048)) < 0.5, qPrintable(QString::number(gap2)));
     }
 
+    // Text at a fractional size lays out at that size: Qt sizes fonts in
+    // whole pixels (13.25 pt measured as 13, 13.5 as 14), which pushed a
+    // flyer's "Civilian homeland security" onto two lines.
+    void fractionalFontSizes()
+    {
+        auto endX = [](double size) {
+            QTextDocument doc;
+            QTextCursor c(&doc);
+            QTextCharFormat cf;
+            cf.setFontFamilies(QStringList{QStringLiteral("Times New Roman")});
+            cf.setFontPointSize(size);
+            c.insertText(QStringLiteral("Civilian homeland security"), cf);
+            jp::FrameSpec fs;
+            fs.size = QSizeF(1000, 200);
+            fs.insets = QMarginsF(0, 0, 0, 0);
+            fs.hyphenate = false;
+            jp::StoryLayout lay;
+            lay.build(&doc, {fs}, jp::LayoutEnv());
+            int frame = -1;
+            QRectF r;
+            lay.caretRect(doc.characterCount() - 1, &frame, &r);
+            return r.x();
+        };
+        const double w13 = endX(13), w1325 = endX(13.25), w135 = endX(13.5);
+        QVERIFY2(std::abs(w1325 / w13 - 13.25 / 13) < 0.003, qPrintable(QStringLiteral("%1 %2").arg(w13).arg(w1325)));
+        QVERIFY2(std::abs(w135 / w13 - 13.5 / 13) < 0.003, qPrintable(QStringLiteral("%1 %2").arg(w13).arg(w135)));
+    }
+
+    // A story through many linked boxes keeps its lines where they belong in
+    // the last boxes too (line positions once overflowed Qt's fixed-point
+    // range past the 33rd box).
+    void manyLinkedFrames()
+    {
+        QTextDocument doc;
+        QTextCursor c(&doc);
+        QTextCharFormat cf;
+        cf.setFontFamilies(QStringList{QStringLiteral("Arial")});
+        cf.setFontPointSize(11);
+        for (int i = 0; i < 40; ++i) {
+            if (i) c.insertBlock();
+            c.insertText(QStringLiteral("Box %1").arg(i + 1), cf);
+        }
+        QVector<jp::FrameSpec> frames;
+        for (int i = 0; i < 40; ++i) {
+            jp::FrameSpec fs;
+            fs.size = QSizeF(200, 20);
+            fs.insets = QMarginsF(0, 0, 0, 0);
+            frames << fs;
+        }
+        jp::StoryLayout lay;
+        lay.build(&doc, frames, jp::LayoutEnv());
+        QVERIFY(!lay.overflow());
+        for (int f : {0, 33, 39}) {
+            const auto lines = lay.lineInfo(f);
+            QCOMPARE(lines.size(), 1);
+            QVERIFY2(lines[0].baseline > 5 && lines[0].baseline < 20, qPrintable(QStringLiteral("box %1: %2").arg(f).arg(lines[0].baseline)));
+            QCOMPARE(lines[0].text, QStringLiteral("Box %1").arg(f + 1));
+        }
+    }
+
     void lineSpacingBelowLines()
     {
         auto doc = jp::Document::blank(QSizeF(612, 792));

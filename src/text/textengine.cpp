@@ -111,19 +111,109 @@ QString LayoutEnv::key() const
     return k;
 }
 
+// ---------- fine layout ----------
+// Qt sizes fonts in whole pixels: 13.25 pt text lays out as 13 pt and 13.5 pt
+// as 14, up to 4% off for fractional sizes (shrink-to-fit makes them common;
+// 1 pixel is 1 point here). So text is laid out at kFine times its size and
+// every measure that comes back is divided by it (8 x keeps sizes to within
+// 0.1% and positions within Qt's fixed-point range).
+namespace {
+constexpr double kFine = 8;
+
+QFont fineFont(QFont f)
+{
+    f.setPointSizeF(f.pointSizeF() * kFine);
+    if (f.letterSpacingType() == QFont::AbsoluteSpacing) f.setLetterSpacing(QFont::AbsoluteSpacing, f.letterSpacing() * kFine);
+    f.setWordSpacing(f.wordSpacing() * kFine);
+    return f;
+}
+
+// The other way: a font from a fine layout, in layout units.
+QFont pointFont(QFont f)
+{
+    f.setPointSizeF(f.pointSizeF() / kFine);
+    if (f.letterSpacingType() == QFont::AbsoluteSpacing) f.setLetterSpacing(QFont::AbsoluteSpacing, f.letterSpacing() / kFine);
+    f.setWordSpacing(f.wordSpacing() / kFine);
+    return f;
+}
+
+QTextCharFormat fineFormat(QTextCharFormat cf)
+{
+    if (cf.hasProperty(QTextFormat::FontPointSize)) cf.setFontPointSize(cf.fontPointSize() * kFine);
+    if (cf.hasProperty(QTextFormat::FontLetterSpacing) && cf.fontLetterSpacingType() == QFont::AbsoluteSpacing)
+        cf.setFontLetterSpacing(cf.fontLetterSpacing() * kFine);
+    if (cf.hasProperty(QTextFormat::FontWordSpacing)) cf.setFontWordSpacing(cf.fontWordSpacing() * kFine);
+    if (cf.hasProperty(QTextFormat::TextOutline)) {
+        QPen pen = cf.textOutline();
+        pen.setWidthF(pen.widthF() * kFine);
+        cf.setTextOutline(pen);
+    }
+    return cf;
+}
+
+QList<QTextLayout::FormatRange> fineRanges(const QVector<QTextLayout::FormatRange> &ranges)
+{
+    QList<QTextLayout::FormatRange> out;
+    out.reserve(ranges.size());
+    for (QTextLayout::FormatRange r : ranges) {
+        r.format = fineFormat(r.format);
+        out << r;
+    }
+    return out;
+}
+
+// Measures of a font in layout units.
+double advanceOf(const QFont &f, const QString &text) { return QFontMetricsF(fineFont(f)).horizontalAdvance(text) / kFine; }
+double capHeightOf(const QFont &f) { return QFontMetricsF(fineFont(f)).capHeight() / kFine; }
+double heightOf(const QFont &f) { return QFontMetricsF(fineFont(f)).height() / kFine; }
+
+// A line of a fine layout, in layout units.
+class PtLine {
+public:
+    explicit PtLine(const QTextLine &l) : m_l(l) {}
+    bool isValid() const { return m_l.isValid(); }
+    int textStart() const { return m_l.textStart(); }
+    int textLength() const { return m_l.textLength(); }
+    double ascent() const { return m_l.ascent() / kFine; }
+    double height() const { return m_l.height() / kFine; }
+    double naturalTextWidth() const { return m_l.naturalTextWidth() / kFine; }
+    double y() const { return m_l.y() / kFine; }
+    QPointF position() const { return m_l.position() / kFine; }
+    void setPosition(const QPointF &p) { m_l.setPosition(p * kFine); }
+    void setLineWidth(double w) { m_l.setLineWidth(w * kFine); }
+    void setNumColumns(int n, double w) { m_l.setNumColumns(n, w * kFine); }
+    double cursorToX(int pos) const { return m_l.cursorToX(pos) / kFine; }
+    int xToCursor(double x, QTextLine::CursorPosition cp) const { return m_l.xToCursor(x * kFine, cp); }
+    // Glyph runs in fine units: draw them through drawFine.
+    QList<QGlyphRun> glyphRuns(int from, int length) const { return m_l.glyphRuns(from, length); }
+
+private:
+    QTextLine m_l;
+};
+
+// Draws fine glyph runs with their origin at `at` (layout units).
+void drawFine(QPainter *p, const QPointF &at, const QList<QGlyphRun> &runs)
+{
+    p->save();
+    p->translate(at);
+    p->scale(1 / kFine, 1 / kFine);
+    for (const QGlyphRun &g : runs) p->drawGlyphRun(QPointF(0, 0), g);
+    p->restore();
+}
+} // namespace
+
 void drawPlainText(QPainter *p, const QPointF &baseline, const QFont &font, const QString &text)
 {
     if (text.isEmpty()) return;
-    QTextLayout tl(text, font);
+    QTextLayout tl(text, fineFont(font));
     tl.setCacheEnabled(true);
     tl.beginLayout();
     QTextLine line = tl.createLine();
     if (!line.isValid()) { tl.endLayout(); return; }
-    line.setLineWidth(1e6);
+    line.setLineWidth(1e7);
     line.setPosition(QPointF(0, 0));
     tl.endLayout();
-    const auto runs = line.glyphRuns();
-    for (const QGlyphRun &g : runs) p->drawGlyphRun(baseline - QPointF(0, line.ascent()), g);
+    drawFine(p, baseline - QPointF(0, line.ascent() / kFine), line.glyphRuns());
 }
 
 // ---------- formats ----------
@@ -499,6 +589,11 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
         return QRectF(content.left() + c * (cw + fs.gap), content.top(), cw, content.height());
     };
 
+    // Each frame's lines sit below the frames before it in the paragraph
+    // layouts (fine units must stay within Qt's fixed-point range).
+    m_frameY = QVector<double>(nF + 1, 0.0);
+    for (int i = 0; i < nF; ++i) m_frameY[i + 1] = m_frameY[i] + std::max(1.0, frames[i].size.height()) + 1000;
+
     int f = 0, c = 0;
     double y = 0;              // relative to column top
     double overflowY = 0;
@@ -642,17 +737,17 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
         }
         // Qt draws U+2028 as a line break; keep it.
         const QFont base = baseFontFor(b, env);
-        B->tl = std::make_unique<QTextLayout>(B->disp, base);
-        B->tl->setFormats(ranges);
+        B->tl = std::make_unique<QTextLayout>(B->disp, fineFont(base));
+        B->tl->setFormats(fineRanges(ranges));
         QTextOption opt;
         Qt::Alignment al = bf.alignment() & Qt::AlignHorizontal_Mask;
         if (!al) al = Qt::AlignLeft;
         opt.setAlignment(al);
         opt.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
         QList<QTextOption::Tab> tabs = bf.tabPositions();
-        for (auto &t : tabs) t.position *= scale;
+        for (auto &t : tabs) t.position *= scale * kFine;
         opt.setTabs(tabs);
-        opt.setTabStopDistance(36 * scale);
+        opt.setTabStopDistance(36 * scale * kFine);
         B->leaders = bf.stringProperty(tp::TabLeaders);
         if (bf.layoutDirection() == Qt::RightToLeft) opt.setTextDirection(Qt::RightToLeft);
         opt.setFlags(QTextOption::IncludeTrailingSpaces);
@@ -694,7 +789,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
             B->markerColor = mf.foreground().color();
             const QString bc = lf.stringProperty(tp::BulletColor);
             if (!bc.isEmpty()) B->markerColor = ColorRef::fromString(bc).resolve(env.colors);
-            markerW = QFontMetricsF(B->markerFont).horizontalAdvance(B->marker) + 4 * scale;
+            markerW = advanceOf(B->markerFont, B->marker) + 4 * scale;
             // The bullet's own line height counts on the item's first line: a
             // Symbol bullet (as .pub lists have) is taller than most text.
             const QString mfam = bfont.isEmpty() ? requestedFamily(B->markerFont) : bfont;
@@ -709,18 +804,17 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
             QFont df = dropFmt.font();
             const QString dfam = bf.stringProperty(tp::DropCapFont);
             if (!dfam.isEmpty()) df.setFamily(dfam);
-            const QFontMetricsF bm(base);
-            const double lineH = bm.height() * (bf.lineHeightType() == QTextBlockFormat::ProportionalHeight ? bf.lineHeight() / 100.0 : 1.0);
-            const double target = (dropLines - 1) * lineH + bm.capHeight();
+            const double lineH = heightOf(base) * (bf.lineHeightType() == QTextBlockFormat::ProportionalHeight ? bf.lineHeight() / 100.0 : 1.0);
+            const double target = (dropLines - 1) * lineH + capHeightOf(base);
             QFont probe = df;
             probe.setPointSizeF(100);
-            const double cap100 = std::max(1.0, QFontMetricsF(probe).capHeight());
+            const double cap100 = std::max(1.0, capHeightOf(probe));
             df.setPointSizeF(std::max(4.0, target * 100.0 / cap100));
             B->dropFont = df;
             B->dropColor = dropFmt.foreground().color();
             const QString dc = bf.stringProperty(tp::DropCapColor);
             if (!dc.isEmpty()) B->dropColor = ColorRef::fromString(dc).resolve(env.colors);
-            B->dropWidth = QFontMetricsF(df).horizontalAdvance(B->dropText) + 3 * scale;
+            B->dropWidth = advanceOf(df, B->dropText) + 3 * scale;
         }
 
         // Placing the paragraph's lines can be redone from the same spot:
@@ -738,7 +832,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
             else if (f < nF) y += before;  // space before also applies at the top of a frame
             // A raised cap rises above the first line: room for it.
             if (f < nF && B->dropUp && !B->dropText.isEmpty())
-                y += std::max(0.0, QFontMetricsF(B->dropFont).capHeight() - QFontMetricsF(base).capHeight());
+                y += std::max(0.0, capHeightOf(B->dropFont) - capHeightOf(base));
 
             // Estimate with the same rule the placed line will use, so wrap checks
             // see the obstacles the real line will meet.
@@ -746,7 +840,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
             B->tl->beginLayout();
             int lineNo = 0;
             while (true) {
-                QTextLine line = B->tl->createLine();
+                PtLine line(B->tl->createLine());
                 if (!line.isValid()) break;
                 double indL = leftM, indR = rightM;
                 if (lineNo == 0) {
@@ -760,7 +854,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                 for (int guard = 0; guard < 2000 && !placed; ++guard) {
                     if (f >= nF) {
                         line.setLineWidth(nF ? std::max(10.0, colRect(nF - 1, 0).width() - indL - indR) : 300);
-                        line.setPosition(QPointF(indL, nF * kStride + overflowY));
+                        line.setPosition(QPointF(indL, m_frameY[nF] + overflowY));
                         overflowY += line.height();
                         B->lines << Line{-1, 0, QRectF(indL, overflowY, line.naturalTextWidth(), line.height())};
                         // Blank paragraphs past the end don't count as overflow
@@ -837,7 +931,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                         advance();
                         continue;
                     }
-                    line.setPosition(QPointF(iv.x0, f * kStride + col.top() + y + lead));
+                    line.setPosition(QPointF(iv.x0, m_frameY[f] + col.top() + y + lead));
                     B->lines << Line{f, c, QRectF(iv.x0, col.top() + y, iv.x1 - iv.x0, h), below};
                     m_used[f] = std::max(m_used[f], col.top() + y + textH);
                     columnEmpty = false;
@@ -880,7 +974,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
         // justifies every line but the last), by spacing its letters out.
         if (bf.boolProperty(tp::Distribute) && !B->lines.isEmpty() && B->lines.last().frame >= 0) {
             const int li = int(B->lines.size()) - 1;
-            const QTextLine last = B->tl->lineAt(li);
+            const PtLine last(B->tl->lineAt(li));
             int n = last.textLength();
             while (n > 0 && B->disp.at(last.textStart() + n - 1).isSpace()) --n;
             const double room = B->lines[li].rect.width() - last.naturalTextWidth();
@@ -898,7 +992,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                     mid.length = std::min(e0, le) - mid.start;
                     QFont mf = mid.format.font();
                     mid.format.setFontLetterSpacingType(QFont::AbsoluteSpacing);
-                    mid.format.setFontLetterSpacing((mf.letterSpacingType() == QFont::AbsoluteSpacing ? mf.letterSpacing() : 0) + extra);
+                    mid.format.setFontLetterSpacing((mf.letterSpacingType() == QFont::AbsoluteSpacing ? mf.letterSpacing() : 0) + extra * kFine);
                     spread << mid;
                     if (e0 > le) { auto z = r; z.start = le; z.length = e0 - le; spread << z; }
                 }
@@ -921,12 +1015,12 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
     // Marker x for hanging lists: the line's left edge minus the hang.
     for (auto &B : m_blocks) {
         if (B->marker.isEmpty() || B->lines.isEmpty()) continue;
-        const QTextLine l0 = B->tl->lineAt(0);
+        const PtLine l0(B->tl->lineAt(0));
         const double lineX = l0.position().x();
         QTextBlock tb = doc->findBlock(B->docStart);
         const QTextBlockFormat bf = tb.blockFormat();
         const double ti = bf.textIndent() * scale, lm = bf.leftMargin() * scale;
-        const double markerW = QFontMetricsF(B->markerFont).horizontalAdvance(B->marker) + 4 * scale;
+        const double markerW = advanceOf(B->markerFont, B->marker) + 4 * scale;
         B->markerX = ti < 0 ? lineX + ti : lineX - markerW;
         Q_UNUSED(lm);
     }
@@ -947,7 +1041,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
         for (auto &B : m_blocks)
             for (int i = 0; i < B->lines.size(); ++i)
                 if (B->lines[i].frame == fi) {
-                    QTextLine tl = B->tl->lineAt(i);
+                    PtLine tl(B->tl->lineAt(i));
                     tl.setPosition(tl.position() + QPointF(0, shift));
                     B->lines[i].rect.translate(0, shift);
                 }
@@ -971,16 +1065,16 @@ QVector<StoryLayout::LineInfo> StoryLayout::lineInfo(int frame) const
     for (const auto &B : m_blocks)
         for (int i = 0; i < B->lines.size(); ++i) {
             if (B->lines[i].frame != frame) continue;
-            const QTextLine l = B->tl->lineAt(i);
+            const PtLine l(B->tl->lineAt(i));
             LineInfo li;
             li.rect = B->lines[i].rect;
-            li.baseline = l.y() - B->lines[i].frame * kStride + l.ascent();
+            li.baseline = l.y() - frameY(B->lines[i].frame) + l.ascent();
             li.text = B->disp.mid(l.textStart(), l.textLength());
             li.docStart = B->docStart;
             for (const auto &r : B->tl->formats())
                 if (r.start <= l.textStart() && r.start + r.length > l.textStart()) {
                     li.family = r.format.font().family() + QStringLiteral(" w%1%2").arg(r.format.font().weight()).arg(r.format.font().italic() ? QStringLiteral(" italic") : QString());
-                    li.pointSize = r.format.fontPointSize() / fontPointFactor();
+                    li.pointSize = r.format.fontPointSize() / kFine / fontPointFactor();
                 }
             v << li;
         }
@@ -988,6 +1082,12 @@ QVector<StoryLayout::LineInfo> StoryLayout::lineInfo(int frame) const
 }
 
 double StoryLayout::usedHeight(int frame) const { return frame >= 0 && frame < m_used.size() ? m_used[frame] : 0; }
+
+double StoryLayout::frameY(int frame) const
+{
+    if (m_frameY.isEmpty()) return 0;
+    return m_frameY[frame < 0 ? m_frameY.size() - 1 : std::min<int>(frame, m_frameY.size() - 1)];
+}
 
 int StoryLayout::firstPosition(int frame) const
 {
@@ -1003,7 +1103,7 @@ int StoryLayout::lastPosition(int frame) const
     for (const auto &B : m_blocks)
         for (int i = 0; i < B->lines.size(); ++i)
             if (B->lines[i].frame == frame) {
-                const QTextLine l = B->tl->lineAt(i);
+                const PtLine l(B->tl->lineAt(i));
                 out = B->docStart + B->docFromDisp(l.textStart() + l.textLength());
             }
     return out;
@@ -1040,11 +1140,11 @@ bool StoryLayout::caretRect(int pos, int *frame, QRectF *rect) const
     const int d = B->dispFromDoc(rel);
     int li = 0;
     for (int i = 0; i < B->lines.size(); ++i) {
-        const QTextLine l = B->tl->lineAt(i);
+        const PtLine l(B->tl->lineAt(i));
         if (d >= l.textStart() && (d < l.textStart() + l.textLength() || i == B->lines.size() - 1)) { li = i; break; }
         if (d >= l.textStart()) li = i;
     }
-    const QTextLine l = B->tl->lineAt(li);
+    const PtLine l(B->tl->lineAt(li));
     const Line &info = B->lines[li];
     if (frame) *frame = info.frame;
     const double x = l.cursorToX(d);
@@ -1071,7 +1171,7 @@ int StoryLayout::hitTest(int frame, const QPointF &pt) const
             if (score < bestScore) { bestScore = score; bestB = B.get(); bestLine = i; }
         }
     if (!bestB) return -1;
-    const QTextLine l = bestB->tl->lineAt(bestLine);
+    const PtLine l(bestB->tl->lineAt(bestLine));
     int d = l.xToCursor(pt.x(), QTextLine::CursorBetweenCharacters);
     // Stay before a trailing line break or space-wrapped end.
     if (bestLine < bestB->lines.size() - 1 && d >= l.textStart() + l.textLength()) d = l.textStart() + l.textLength() - 1;
@@ -1089,7 +1189,7 @@ int StoryLayout::moveVertical(int pos, int dir, double x) const
         for (int i = 0; i < B->lines.size(); ++i) {
             if (B->lines[i].frame < 0) continue;
             if (B.get() == cb) {
-                const QTextLine l = B->tl->lineAt(i);
+                const PtLine l(B->tl->lineAt(i));
                 if (d >= l.textStart() && (d < l.textStart() + l.textLength() || i == B->lines.size() - 1)) cur = flat.size();
             }
             flat << qMakePair(B.get(), i);
@@ -1102,7 +1202,7 @@ int StoryLayout::moveVertical(int pos, int dir, double x) const
         return B->docStart + B->docLen;
     }
     const Block *B = flat[t].first;
-    const QTextLine l = B->tl->lineAt(flat[t].second);
+    const PtLine l(B->tl->lineAt(flat[t].second));
     int nd = l.xToCursor(x, QTextLine::CursorBetweenCharacters);
     if (flat[t].second < B->lines.size() - 1 && nd >= l.textStart() + l.textLength()) nd = l.textStart() + l.textLength() - 1;
     return B->docStart + B->docFromDisp(nd);
@@ -1126,7 +1226,7 @@ int StoryLayout::lineEnd(int pos) const
     if (!B) return pos;
     const int d = B->dispFromDoc(rel);
     for (int i = 0; i < B->lines.size(); ++i) {
-        const QTextLine l = B->tl->lineAt(i);
+        const PtLine l(B->tl->lineAt(i));
         const int end = l.textStart() + l.textLength();
         if (d < end || i == B->lines.size() - 1) {
             int e = end;
@@ -1148,7 +1248,7 @@ QVector<QRectF> StoryLayout::rangeRects(int frame, int from, int to) const
         const int dt = B->dispFromDoc(std::min(to, be) - bs);
         for (int i = 0; i < B->lines.size(); ++i) {
             if (B->lines[i].frame != frame) continue;
-            const QTextLine l = B->tl->lineAt(i);
+            const PtLine l(B->tl->lineAt(i));
             const int ls = l.textStart(), le = l.textStart() + l.textLength();
             const int s = std::max(df, ls), e = std::min(dt, le);
             const bool paraEnd = (to > be) && i == B->lines.size() - 1;
@@ -1166,8 +1266,8 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
 {
     if (frame < 0 || frame >= m_frames.size()) return;
     const FrameSpec &fs = m_frames[frame];
-    const QPointF off(0, -frame * kStride);
-    const QRectF clip(-1e5, -1e4, 2e5, fs.size.height() + 2e4);
+    const QPointF off(0, -frameY(frame));
+    const QRectF clip(-1e5, -1e3, 2e5, fs.size.height() + 2e3);
     p->save();
     for (const auto &B : m_blocks) {
         bool any = false;
@@ -1178,7 +1278,7 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
             for (const auto &fr : B->fieldRanges)
                 for (int i = 0; i < B->lines.size(); ++i) {
                     if (B->lines[i].frame != frame) continue;
-                    const QTextLine l = B->tl->lineAt(i);
+                    const PtLine l(B->tl->lineAt(i));
                     const int s = std::max(fr.first, l.textStart()), e = std::min(fr.first + fr.second, l.textStart() + l.textLength());
                     if (s >= e) continue;
                     const double x1 = l.cursorToX(s), x2 = l.cursorToX(e);
@@ -1193,13 +1293,13 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
             const QString glow = er.format.stringProperty(tp::GlowRef);
             for (int i = 0; i < B->lines.size(); ++i) {
                 if (B->lines[i].frame != frame) continue;
-                const QTextLine l = B->tl->lineAt(i);
+                const PtLine l(B->tl->lineAt(i));
                 const int s = std::max(er.start, l.textStart()), e = std::min(er.start + er.length, l.textStart() + l.textLength());
                 if (s >= e) continue;
                 const auto runs = l.glyphRuns(s, e - s);
                 auto drawRuns = [&](const QPointF &d, const QColor &c) {
                     p->setPen(c);
-                    for (const QGlyphRun &r : runs) p->drawGlyphRun(off + d, r);
+                    drawFine(p, off + d, runs);
                 };
                 const double k = std::max(0.6, sz / 18.0);
                 if (!glow.isEmpty()) {
@@ -1216,7 +1316,11 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
             }
         }
 
-        B->tl->draw(p, off, {}, clip);
+        p->save();
+        p->translate(off);
+        p->scale(1 / kFine, 1 / kFine);
+        B->tl->draw(p, QPointF(0, 0), {}, QRectF(clip.topLeft() * kFine, clip.size() * kFine));
+        p->restore();
 
         // Tab leaders: the stop each tab goes to is the first one past where
         // it starts; its leader fills the gap, on a grid so rows line up.
@@ -1225,20 +1329,20 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
             const QList<QTextLayout::FormatRange> fmts = B->tl->formats();
             for (int i = 0; i < B->lines.size(); ++i) {
                 if (B->lines[i].frame != frame) continue;
-                const QTextLine l = B->tl->lineAt(i);
+                const PtLine l(B->tl->lineAt(i));
                 for (int k = l.textStart(); k < l.textStart() + l.textLength(); ++k) {
                     if (B->disp[k] != QLatin1Char('\t')) continue;
                     const double x0 = l.cursorToX(k), x1 = l.cursorToX(k + 1);
                     int idx = -1;
                     for (int s = 0; s < stops.size() && idx < 0; ++s)
-                        if (stops[s].position > x0 + 0.01) idx = s;
+                        if (stops[s].position / kFine > x0 + 0.01) idx = s;
                     if (idx < 0 || idx >= B->leaders.size() || B->leaders[idx].isSpace() || B->leaders[idx].isNull()) continue;
                     QTextCharFormat cf;
                     for (const auto &r : fmts)
                         if (k >= r.start && k < r.start + r.length) cf = r.format;
-                    const QFont f = cf.hasProperty(QTextFormat::FontFamilies) ? cf.font() : B->tl->font();
+                    const QFont f = pointFont(cf.hasProperty(QTextFormat::FontFamilies) ? cf.font() : B->tl->font());
                     const QString ch(B->leaders[idx]);
-                    const double w = QFontMetricsF(f).horizontalAdvance(ch);
+                    const double w = advanceOf(f, ch);
                     if (w <= 0.01) continue;
                     const double gap = w * 0.4;
                     double x = std::ceil((x0 + gap) / w) * w;
@@ -1259,11 +1363,11 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
                 const int ds = B->dispFromDoc(m.first - B->docStart), de = B->dispFromDoc(m.second - B->docStart);
                 for (int i = 0; i < B->lines.size(); ++i) {
                     if (B->lines[i].frame != frame) continue;
-                    const QTextLine l = B->tl->lineAt(i);
+                    const PtLine l(B->tl->lineAt(i));
                     const int s = std::max(ds, l.textStart()), e = std::min(de, l.textStart() + l.textLength());
                     if (s >= e) continue;
                     const double x1 = l.cursorToX(s), x2 = l.cursorToX(e);
-                    const double yb = l.position().y() - frame * kStride + l.ascent() + 2;
+                    const double yb = l.position().y() - frameY(frame) + l.ascent() + 2;
                     QPainterPath wave;
                     wave.moveTo(std::min(x1, x2), yb);
                     for (double x = std::min(x1, x2); x < std::max(x1, x2); x += 2) wave.lineTo(x + 1, yb + ((int(x / 2) % 2) ? -1 : 1));
@@ -1274,34 +1378,34 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
             }
 
         if (B->lines.first().frame == frame) {
-            const QTextLine l0 = B->tl->lineAt(0);
+            const PtLine l0(B->tl->lineAt(0));
             if (!B->marker.isEmpty()) {
                 p->setPen(B->markerColor);
-                drawPlainText(p, QPointF(B->markerX, l0.position().y() - frame * kStride + l0.ascent()), B->markerFont, B->marker);
+                drawPlainText(p, QPointF(B->markerX, l0.position().y() - frameY(frame) + l0.ascent()), B->markerFont, B->marker);
             }
             if (!B->dropText.isEmpty()) {
                 // A raised cap stands on the first line; a dropped one on the last line it spans.
                 const int n = B->dropUp ? 1 : std::min<int>(B->dropLines, B->lines.size());
-                const QTextLine ln = B->tl->lineAt(n - 1);
-                const double baseline = ln.position().y() - frame * kStride + ln.ascent();
+                const PtLine ln(B->tl->lineAt(n - 1));
+                const double baseline = ln.position().y() - frameY(frame) + ln.ascent();
                 p->setPen(B->dropColor);
                 drawPlainText(p, QPointF(l0.position().x() - B->dropWidth, baseline), B->dropFont, B->dropText);
             }
         }
 
         if (o.showSpecial) {
-            const QFont sf = B->tl->font();
+            const QFont sf = pointFont(B->tl->font());
             p->setPen(QColor(90, 120, 200));
             for (int i = 0; i < B->lines.size(); ++i) {
                 if (B->lines[i].frame != frame) continue;
-                const QTextLine l = B->tl->lineAt(i);
-                const double base = l.position().y() - frame * kStride + l.ascent();
+                const PtLine l(B->tl->lineAt(i));
+                const double base = l.position().y() - frameY(frame) + l.ascent();
                 for (int k = l.textStart(); k < l.textStart() + l.textLength(); ++k) {
                     const QChar ch = B->disp[k];
                     if (ch == ' ' || ch == '\t' || ch == QChar::LineSeparator) {
                         const double x1 = l.cursorToX(k), x2 = l.cursorToX(k + 1);
                         const QString mark = ch == ' ' ? QStringLiteral("·") : ch == '\t' ? QStringLiteral("→") : QStringLiteral("↵");
-                        const double w = QFontMetricsF(sf).horizontalAdvance(mark);
+                        const double w = advanceOf(sf, mark);
                         drawPlainText(p, QPointF((x1 + x2 - w) / 2, base), sf, mark);
                     }
                 }
