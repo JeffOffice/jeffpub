@@ -90,11 +90,11 @@ public:
     int lineEnd(int pos) const;
     QVector<QRectF> rangeRects(int frame, int from, int to) const;
     QVector<QRectF> lineRects(int frame) const;   // every line box in the frame, frame-local
-    struct LineInfo { QRectF rect; QString text; QString family; double pointSize = 0; int docStart = 0; };
+    struct LineInfo { QRectF rect; QString text; QString family; double pointSize = 0; int docStart = 0; double baseline = 0; };
     QVector<LineInfo> lineInfo(int frame) const;  // for diagnostics (jpubtool layout)
 
     struct Seg { int docPos, docLen, dispPos, dispLen; };
-    struct Line { int frame = -1; int column = 0; QRectF rect; };
+    struct Line { int frame = -1; int column = 0; QRectF rect; double below = 0; };   // below: the spacing under the text
     struct Block {
         int docStart = 0, docLen = 0;
         QString disp;

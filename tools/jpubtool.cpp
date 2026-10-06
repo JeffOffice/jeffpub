@@ -223,7 +223,7 @@ int main(int argc, char **argv)
                 QTextDocument *sd = doc->storyDoc(t->storyId);
                 for (const auto &li : fl.layout->lineInfo(fl.frame)) {
                     const QTextBlockFormat bf = sd ? sd->findBlock(li.docStart).blockFormat() : QTextBlockFormat();
-                    out << "    line y=" << li.rect.y() << " h=" << li.rect.height() << " x=" << li.rect.x() << " w=" << li.rect.width()
+                    out << "    line y=" << li.rect.y() << " h=" << li.rect.height() << " x=" << li.rect.x() << " w=" << li.rect.width() << " base=" << li.baseline
                         << "\t" << li.family << "\t" << li.pointSize << "\tlh=" << bf.lineHeightType() << ":" << bf.lineHeight()
                         << "\tpara=" << li.docStart << "\t" << li.text << "\n";
                 }

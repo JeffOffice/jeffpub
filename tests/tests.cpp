@@ -377,6 +377,52 @@ private Q_SLOTS:
         QCOMPARE(jp::autoflowText(ed, box->id), 0);   // nothing more to do
     }
 
+    // Extra line spacing goes below each line, as .pub layouts place it: the
+    // first line sits one ascent below the top, a paragraph after a more
+    // widely spaced one starts lower by that paragraph's extra, and a box
+    // holds as many lines as before.
+    void lineSpacingBelowLines()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 300, 400);
+        t->insets = QMarginsF(0, 0, 0, 0);
+        t->storyId = doc->createStory(QString());
+        doc->pages[0]->items.push_back(t);
+        QTextCursor c(doc->storyDoc(t->storyId));
+        QTextCharFormat cf;
+        cf.setFontFamilies(QStringList{QStringLiteral("Times New Roman")});
+        cf.setFontPointSize(10);
+        QTextBlockFormat wide, single;
+        wide.setLineHeight(150, QTextBlockFormat::ProportionalHeight);
+        single.setLineHeight(100, QTextBlockFormat::ProportionalHeight);
+        c.setBlockFormat(wide);
+        c.insertText(QStringLiteral("Widely spaced"), cf);
+        c.insertBlock(single, cf);
+        c.insertText(QStringLiteral("Single spaced"), cf);
+        jp::LayoutCache cache;
+        jp::RenderOptions opt;
+        const auto lines = cache.textFrame(*doc, *t, 1, opt).layout->lineInfo(0);
+        QCOMPARE(lines.size(), 2);
+        const double s = 10 * (1420.0 + 442 + 307) / 2048, kd = 10 * 442.0 / 2048;
+        QVERIFY2(std::abs(lines[0].baseline - (s - kd)) < 0.05, qPrintable(QString::number(lines[0].baseline)));
+        // The wide paragraph's extra half line comes before the next paragraph.
+        QVERIFY2(std::abs(lines[1].baseline - lines[0].baseline - 1.5 * s) < 0.05, qPrintable(QString::number(lines[1].baseline - lines[0].baseline)));
+        // A box exactly three wide lines tall still holds three lines.
+        doc->storyDoc(t->storyId)->setPlainText(QString());
+        QTextCursor c2(doc->storyDoc(t->storyId));
+        c2.setBlockFormat(wide);
+        c2.insertText(QStringLiteral("one\ntwo\nthree"), cf);
+        QTextCursor all(doc->storyDoc(t->storyId));
+        all.select(QTextCursor::Document);
+        all.mergeBlockFormat(wide);
+        t->rect.setHeight(s + 2 * 1.5 * s + 0.01);
+        jp::LayoutCache cache2;
+        const auto fl = cache2.textFrame(*doc, *t, 1, opt);
+        QCOMPARE(fl.layout->lineInfo(0).size(), 3);
+        QVERIFY(!fl.layout->overflow());
+    }
+
     // Bullets in symbol fonts: a .pub file keeps the bullet's font with its
     // character, and a missing symbol font's bullet shows as Unicode.
     void symbolFontBullets()

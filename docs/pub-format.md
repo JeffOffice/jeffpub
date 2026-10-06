@@ -167,6 +167,17 @@ the picture (0x0180 = 3); the fill always covers the shape's box, so a
 cropped or adjusted picture is saved as the part that shows, with the
 settings applied.
 
+### Line spacing
+
+Spacing given in lines (`34:22`, the "sp" value) adds the extra beyond one
+line *below* each line: a column's first line sits one ascent below its top,
+lines in a paragraph are the spacing apart, and a paragraph after a more
+widely spaced one starts lower by that paragraph's extra. Measured on
+reference PDFs: a 10 pt Times New Roman paragraph at 1 sp after one at
+1.19 sp starts 2 pt lower than single spacing alone gives, and the title
+lines of a cover after an empty 1.19 sp paragraph match within 0.2 pt.
+Whether a line fits in a box counts its text, not the spacing below it.
+
 ### Process colors
 
 A fill given as process inks keeps, in the tertiary OPT, the color as shown

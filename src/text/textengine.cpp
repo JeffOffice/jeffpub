@@ -752,12 +752,15 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                     }
                     double single = singleSpacing(ranges, line.textStart(), std::max(1, line.textLength()), base);
                     if (line.textStart() == 0) single = std::max(single, markerSingle);
-                    double h = lineHeightFor(bf, scale, single);
-                    // .pub layouts add extra spacing between lines, never above the
-                    // first line of a column: its baseline sits one ascent below the top.
-                    if (columnEmpty && h > single && bf.lineHeightType() == QTextBlockFormat::ProportionalHeight) h = single;
+                    const double h = lineHeightFor(bf, scale, single);
+                    // .pub layouts put a line's extra spacing below it: the first
+                    // line of a column sits one ascent below the top, and a
+                    // paragraph after one with wider spacing starts that much
+                    // lower. Whether a line fits counts its text, not that space.
+                    const double below = h > single && bf.lineHeightType() == QTextBlockFormat::ProportionalHeight ? h - single : 0;
+                    const double textH = h - below;
                     const bool firstInColumn = (y <= 0.001) && rowIdx == 0;
-                    if (col.top() + y + h > col.bottom() + 0.01 && !firstInColumn) {
+                    if (col.top() + y + textH > col.bottom() + 0.01 && !firstInColumn) {
                         advance();
                         continue;
                     }
@@ -774,7 +777,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                     // Baseline one descent above the line's bottom; for a substituted
                     // proprietary font, the original font's descent.
                     const double kd = knownDescent(ranges, line.textStart(), std::max(1, line.textLength()));
-                    const double lead = kd > 0 ? h - kd - line.ascent() : h - line.height();
+                    const double lead = kd > 0 ? textH - kd - line.ascent() : textH - line.height();
                     // Align to baseline guides: the baseline moves down onto the next guide.
                     if (bf.boolProperty(tp::AlignToBaseline) && frames[f].baselineGrid > 0.5) {
                         const double grid = frames[f].baselineGrid * scale, origin = frames[f].baselineOrigin * scale;
@@ -782,13 +785,13 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                         const double snapped = origin + std::ceil((base - origin) / grid - 1e-6) * grid;
                         if (snapped > base) y += snapped - base;
                     }
-                    if (col.top() + y + h > col.bottom() + 0.01 && !firstInColumn) {   // snapped past the bottom
+                    if (col.top() + y + textH > col.bottom() + 0.01 && !firstInColumn) {   // snapped past the bottom
                         advance();
                         continue;
                     }
                     line.setPosition(QPointF(iv.x0, f * kStride + col.top() + y + lead));
-                    B->lines << Line{f, c, QRectF(iv.x0, col.top() + y, iv.x1 - iv.x0, h)};
-                    m_used[f] = std::max(m_used[f], col.top() + y + h);
+                    B->lines << Line{f, c, QRectF(iv.x0, col.top() + y, iv.x1 - iv.x0, h), below};
+                    m_used[f] = std::max(m_used[f], col.top() + y + textH);
                     columnEmpty = false;
                     rowH = std::max(rowH, h);
                     if (++rowIdx >= row.size()) { y += rowH; rowActive = false; }
@@ -888,7 +891,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
         double top = 1e18, bottom = -1e18;
         for (const auto &B : m_blocks)
             for (const Line &l : B->lines)
-                if (l.frame == fi) { top = std::min(top, l.rect.top()); bottom = std::max(bottom, l.rect.bottom()); }
+                if (l.frame == fi) { top = std::min(top, l.rect.top()); bottom = std::max(bottom, l.rect.bottom() - l.below); }
         if (bottom < top) continue;
         const double usedH = bottom - col.top();
         const double shift = (col.height() - usedH) * (fs.valign == VAlign::Middle ? 0.5 : 1.0);
@@ -923,6 +926,7 @@ QVector<StoryLayout::LineInfo> StoryLayout::lineInfo(int frame) const
             const QTextLine l = B->tl->lineAt(i);
             LineInfo li;
             li.rect = B->lines[i].rect;
+            li.baseline = l.y() - B->lines[i].frame * kStride + l.ascent();
             li.text = B->disp.mid(l.textStart(), l.textLength());
             li.docStart = B->docStart;
             for (const auto &r : B->tl->formats())
