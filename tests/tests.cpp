@@ -642,6 +642,112 @@ private Q_SLOTS:
         for (int i = 0; i < 3; ++i) QVERIFY(std::abs(got[i]->rect.left() - rects[i].left()) < 1 && std::abs(got[i]->rect.height() - rects[i].height()) < 1);
     }
 
+    // Character effects, indents, spacing and line spacing written to .pub
+    // read back as they were.
+    void pubWriterTextFormats()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 468, 500);
+        t->storyId = doc->createStory();
+        {
+            QTextCursor c(doc->storyDoc(t->storyId));
+            QTextCharFormat plain;
+            plain.setFontFamilies(QStringList{QStringLiteral("Arimo")});
+            plain.setFontPointSize(12);
+            QTextBlockFormat b0;
+            b0.setBottomMargin(0);
+            c.setBlockFormat(b0);
+            c.insertText(QStringLiteral("test24 "), plain);
+            QTextCharFormat u = plain;
+            u.setFontUnderline(true);
+            c.insertText(QStringLiteral("underline"), u);
+            c.insertText(QStringLiteral(" "), plain);
+            QTextCharFormat sc = plain;
+            sc.setFontCapitalization(QFont::SmallCaps);
+            c.insertText(QStringLiteral("smallcaps"), sc);
+            c.insertText(QStringLiteral(" "), plain);
+            QTextCharFormat ac = plain;
+            ac.setFontCapitalization(QFont::AllUppercase);
+            c.insertText(QStringLiteral("allcaps"), ac);
+            c.insertText(QStringLiteral(" x"), plain);
+            QTextCharFormat sup = plain;
+            sup.setVerticalAlignment(QTextCharFormat::AlignSuperScript);
+            c.insertText(QStringLiteral("2"), sup);
+            c.insertText(QStringLiteral(" H"), plain);
+            QTextCharFormat sub = plain;
+            sub.setVerticalAlignment(QTextCharFormat::AlignSubScript);
+            c.insertText(QStringLiteral("2"), sub);
+            c.insertText(QStringLiteral("O"), plain);
+            QTextBlockFormat ind;
+            ind.setLeftMargin(72);
+            ind.setTextIndent(-18);
+            ind.setRightMargin(36);
+            ind.setTopMargin(12);
+            ind.setBottomMargin(0);
+            c.insertBlock(ind, plain);
+            c.insertText(QStringLiteral("Indented one inch with a hanging first line and a half inch on the right, after twelve points."));
+            QTextBlockFormat dbl;
+            dbl.setLineHeight(200, QTextBlockFormat::ProportionalHeight);
+            dbl.setBottomMargin(0);
+            c.insertBlock(dbl, plain);
+            c.insertText(QStringLiteral("Double spaced. Double spaced. Double spaced. Double spaced. Double spaced. Double spaced."));
+            QTextBlockFormat fixed;
+            fixed.setLineHeight(24, QTextBlockFormat::FixedHeight);
+            fixed.setBottomMargin(0);
+            c.insertBlock(fixed, plain);
+            c.insertText(QStringLiteral("Exactly 24 points between lines. Exactly 24 points between lines. Exactly 24 points."));
+        }
+        doc->pages[0]->items.push_back(t);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("test24-formats.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test24-formats";
+            QFile::remove(out + ".pub");
+            QFile::copy(path, out + ".pub");
+            QString e2;
+            jp::savePublication(*doc, out + ".jpub", QImage(), &e2);
+        }
+        QString e1;
+        auto back = jp::importPublisherFile(path, &e1);
+        QVERIFY2(back, qPrintable(e1));
+        const jp::TextItem *bt = nullptr;
+        jp::walkItems(back->pages[0]->items, [&](const jp::ItemPtr &it) {
+            if (it->type() == jp::ItemType::Text) bt = static_cast<const jp::TextItem *>(it.get());
+        });
+        QVERIFY(bt);
+        QTextDocument *d = back->storyDoc(bt->storyId);
+        QCOMPARE(d->blockCount(), 4);
+        QHash<QString, QTextCharFormat> fmt;
+        for (auto it = d->begin().begin(); !it.atEnd(); ++it) fmt[it.fragment().text().trimmed()] = it.fragment().charFormat();
+        QVERIFY(fmt.value(QStringLiteral("underline")).fontUnderline());
+        QCOMPARE(fmt.value(QStringLiteral("smallcaps")).fontCapitalization(), QFont::SmallCaps);
+        QCOMPARE(fmt.value(QStringLiteral("allcaps")).fontCapitalization(), QFont::AllUppercase);
+        QCOMPARE(fmt.value(QStringLiteral("2")).verticalAlignment() == QTextCharFormat::AlignSuperScript ||
+                     fmt.value(QStringLiteral("2")).verticalAlignment() == QTextCharFormat::AlignSubScript, true);
+        int supers = 0, subs = 0;
+        for (auto it = d->begin().begin(); !it.atEnd(); ++it) {
+            if (it.fragment().text() != QStringLiteral("2")) continue;
+            supers += it.fragment().charFormat().verticalAlignment() == QTextCharFormat::AlignSuperScript;
+            subs += it.fragment().charFormat().verticalAlignment() == QTextCharFormat::AlignSubScript;
+        }
+        QCOMPARE(supers, 1);
+        QCOMPARE(subs, 1);
+        const QTextBlockFormat bi = d->begin().next().blockFormat();
+        QVERIFY2(std::abs(bi.leftMargin() - 72) < 0.5 && std::abs(bi.textIndent() + 18) < 0.5 && std::abs(bi.rightMargin() - 36) < 0.5,
+                 qPrintable(QStringLiteral("%1 %2 %3").arg(bi.leftMargin()).arg(bi.textIndent()).arg(bi.rightMargin())));
+        QVERIFY(std::abs(bi.topMargin() - 12) < 0.5);
+        QVERIFY(std::abs(d->begin().blockFormat().bottomMargin()) < 0.01);
+        const QTextBlockFormat bd = d->begin().next().next().blockFormat();
+        QCOMPARE(bd.lineHeightType(), int(QTextBlockFormat::ProportionalHeight));
+        QVERIFY2(std::abs(bd.lineHeight() - 200) < 1, qPrintable(QString::number(bd.lineHeight())));
+        const QTextBlockFormat bf = d->lastBlock().blockFormat();
+        QCOMPARE(bf.lineHeightType(), int(QTextBlockFormat::FixedHeight));
+        QVERIFY2(std::abs(bf.lineHeight() - 24) < 0.1, qPrintable(QString::number(bf.lineHeight())));
+    }
+
     // Objects on the master page are saved there and come back there, once.
     void pubWriterMaster()
     {

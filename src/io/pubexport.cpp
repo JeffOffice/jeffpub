@@ -663,6 +663,11 @@ QByteArray PubWriter::charProps(const QTextCharFormat &f)
     p << rec(0x24, slots, 0x8a);
     if (f.fontWeight() >= QFont::DemiBold) p << flag(0x37, 0x0a);
     if (f.fontItalic()) p << flag(0x38, 0x0a);
+    if (f.fontUnderline()) p << u16(0x1e, 1, 0x12);   // single underline
+    if (f.fontCapitalization() == QFont::SmallCaps) p << flag(0x13, 0x0a);
+    else if (f.fontCapitalization() == QFont::AllUppercase) p << flag(0x14, 0x0a);
+    if (f.verticalAlignment() == QTextCharFormat::AlignSuperScript) p << u16(0x0f, 1, 0x12);
+    else if (f.verticalAlignment() == QTextCharFormat::AlignSubScript) p << u16(0x0f, 2, 0x12);
     if (size > 0) p << u32(0x39, quint32(emu(size)), 0x22);
     p << u32(0x3e, 1033, 0x22);
     const QString cref = f.stringProperty(tp::ColorRefP);
@@ -688,8 +693,25 @@ QByteArray PubWriter::paraProps(const QTextBlockFormat &f)
     if (a & Qt::AlignRight) p << u16(0x04, 1, 0x12);
     else if (a & Qt::AlignHCenter) p << u16(0x04, 2, 0x12);
     else if (a & Qt::AlignJustify) p << u16(0x04, 3, 0x12);
-    if (f.topMargin() > 0) p << u32(0x12, quint32(emu(f.topMargin())), 0x22);
-    if (f.bottomMargin() > 0) p << u32(0x13, quint32(emu(f.bottomMargin())), 0x22);
+    // Indents (EMU; the first line's can be negative for a hanging indent).
+    if (std::abs(f.textIndent()) > 0.001) p << u32(0x0c, quint32(qint32(emu(f.textIndent()))), 0x22);
+    if (f.leftMargin() > 0.001) p << u32(0x0d, quint32(emu(f.leftMargin())), 0x22);
+    if (f.rightMargin() > 0.001) p << u32(0x0e, quint32(emu(f.rightMargin())), 0x22);
+    // Spacing is always written, so Publisher's Normal style (6 pt after,
+    // 1.19 lines) doesn't fill in where JeffPub has none.
+    p << u32(0x12, quint32(emu(std::max(0.0, f.topMargin()))), 0x22) << u32(0x13, quint32(emu(std::max(0.0, f.bottomMargin()))), 0x22);
+    // Line spacing: in points, eighths of an EMU plus 1; in lines, what would
+    // be EMU at 96 pt (a multiple of 4) plus 2.
+    const int lht = f.lineHeightType();
+    quint32 spacing;
+    if ((lht == QTextBlockFormat::FixedHeight || lht == QTextBlockFormat::MinimumHeight) && f.lineHeight() > 0)
+        spacing = quint32(std::llround(f.lineHeight() * kEmuPerPt * 8)) | 1;
+    else {
+        const double lines = lht == QTextBlockFormat::ProportionalHeight && f.lineHeight() > 0 ? f.lineHeight() / 100.0 : 1.0;
+        spacing = quint32(4 * std::llround(lines * 914400.0 * 96 / 72 / 4)) + 2;
+    }
+    p << u32(0x34, spacing, 0x22);
+    std::sort(p.begin(), p.end(), [](const B &a, const B &b) { return a.id < b.id; });
     return lengthPrefixed(p);
 }
 

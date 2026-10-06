@@ -251,3 +251,16 @@ zero), `0x00C2` alignment (0 stretch, 1 center (default), 2 left, 3 right,
 which are set, the low half has bit 4 italic, 5 bold, 7 even height, 8 best
 fit, 10 stretch, 12 kern, 13 vertical, 14 Text Art.
 
+### Paragraph and character settings
+
+Seen in Publisher's files and written by JeffPub (paragraph runs, FDPP):
+`0c:22` first-line indent (EMU, negative for a hanging indent), `0d:22`
+left and `0e:22` right indent, `12:22` space before, `13:22` space after,
+`34:22` line spacing: in points as eighths of an EMU plus 1, or in lines as
+what would be EMU at 96 pt (a multiple of 4) plus 2 (1 line = 1219202;
+Normal's 1.19 lines = 1450850). JeffPub writes spacing and line spacing on
+every paragraph so Normal's own values (6 pt after, 1.19 lines) don't apply.
+
+Character runs (FDPC): `1e:12 = 1` underline, `13:0a` small caps, `14:0a`
+all caps, `0f:12` 1 superscript, 2 subscript.
+

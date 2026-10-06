@@ -437,9 +437,11 @@ public:
         if (c.isValid()) cf.setProperty(tp::ColorRefP, c.name().toUpper());
         const QColor bg = color(p["fo:background-color"]);
         if (bg.isValid()) cf.setProperty(tp::HighlightRefP, bg.name().toUpper());
+        // "super", "sub", or a raise like "50% 67%" (positive up, negative down).
         const QString pos = str(p["style:text-position"]);
-        if (pos.startsWith("super") || (!pos.isEmpty() && pos.toDouble() > 0 && !pos.startsWith('-'))) cf.setVerticalAlignment(QTextCharFormat::AlignSuperScript);
-        else if (pos.startsWith("sub") || pos.startsWith('-')) cf.setVerticalAlignment(QTextCharFormat::AlignSubScript);
+        const double raise = pos.section(' ', 0, 0).remove('%').toDouble();
+        if (pos.startsWith("super") || raise > 0) cf.setVerticalAlignment(QTextCharFormat::AlignSuperScript);
+        else if (pos.startsWith("sub") || raise < 0) cf.setVerticalAlignment(QTextCharFormat::AlignSubScript);
         if (str(p["fo:font-variant"]) == "small-caps") cf.setFontCapitalization(QFont::SmallCaps);
         if (str(p["fo:text-transform"]) == "uppercase") cf.setFontCapitalization(QFont::AllUppercase);
         if (str(p["style:text-outline"]) == "true") cf.setProperty(tp::OutlineRef, c.isValid() ? c.name().toUpper() : QStringLiteral("#000000"));
