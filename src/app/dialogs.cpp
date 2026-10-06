@@ -859,7 +859,7 @@ void characterSpacingDialog(QWidget *p, Editor *ed)
     });
     auto *kern = new QCheckBox(QStringLiteral("Automatic pair kerning for fonts"), &dlg.d);
     kern->setChecked(!cf.hasProperty(QTextFormat::FontKerning) || cf.fontKerning());
-    auto *kernFrom = points(cf.hasProperty(tp::KernAbove) ? cf.doubleProperty(tp::KernAbove) : 14.0, &dlg.d, 0, 1638);
+    auto *kernFrom = points(cf.hasProperty(tp::KernAbove) ? cf.property(tp::KernAbove).toDouble() : 14.0, &dlg.d, 0, 1638);
     kernFrom->setEnabled(kern->isChecked());
     QObject::connect(kern, &QCheckBox::toggled, kernFrom, &QWidget::setEnabled);
     auto *word = points(cf.fontWordSpacing(), &dlg.d, -50, 200);

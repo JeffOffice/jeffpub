@@ -18,9 +18,22 @@
 #include <QRandomGenerator>
 #include <QStandardPaths>
 #include <QTextBlock>
+#include <QTemporaryDir>
 #include <QTextDocument>
 
 namespace jp {
+
+// A mail header value: one line (a line break would start a header of its
+// own), with anything beyond ASCII encoded as mail headers require (RFC 2047).
+QString emlHeaderText(const QString &s)
+{
+    QString one = s;
+    one.replace(QLatin1Char('\r'), QLatin1Char(' ')).replace(QLatin1Char('\n'), QLatin1Char(' ')).replace(QLatin1Char('"'), QLatin1Char('\''));
+    for (QChar c : one)
+        if (c.unicode() >= 0x80 || c.unicode() < 0x20)
+            return QStringLiteral("=?UTF-8?B?") + QString::fromLatin1(one.toUtf8().toBase64()) + QStringLiteral("?=");
+    return one;
+}
 
 static QString emlEncode(const QByteArray &data)
 {
@@ -50,7 +63,7 @@ void emailCurrentPage(QWidget *parent, Editor *ed)
     QBuffer b(&png);
     b.open(QIODevice::WriteOnly);
     img.save(&b, "PNG");
-    QString eml = QStringLiteral("Subject: %1\r\nX-Unsent: 1\r\nMIME-Version: 1.0\r\nContent-Type: multipart/related; boundary=\"jp79\"\r\n\r\n").arg(ed->displayName());
+    QString eml = QStringLiteral("Subject: %1\r\nX-Unsent: 1\r\nMIME-Version: 1.0\r\nContent-Type: multipart/related; boundary=\"jp79\"\r\n\r\n").arg(emlHeaderText(ed->displayName()));
     eml += "--jp79\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<html><body><img src=\"cid:page\" alt=\"\"></body></html>\r\n";
     eml += "--jp79\r\nContent-Type: image/png\r\nContent-Transfer-Encoding: base64\r\nContent-ID: <page>\r\n\r\n" + emlEncode(png) + "--jp79--\r\n";
     saveEml(parent, ed->displayName(), eml);
@@ -61,9 +74,12 @@ void emailAsAttachment(QWidget *parent, Editor *ed, const QString &format)
     QByteArray data;
     QString fileName, mime;
     if (format == "pdf") {
-        const QString tmp = QDir::temp().filePath("jeffpub-share.pdf");
+        // A private folder of its own: a fixed name in the shared temporary
+        // folder could be a link another user placed there.
+        QTemporaryDir tmpDir;
+        const QString tmp = tmpDir.filePath(QStringLiteral("share.pdf"));
         auto *win = qobject_cast<MainWindow *>(parent->window());
-        if (win) win->exportPdf(tmp);
+        if (win && tmpDir.isValid()) win->exportPdf(tmp);
         QFile f(tmp);
         if (f.open(QIODevice::ReadOnly)) data = f.readAll();
         fileName = ed->displayName() + ".pdf";
@@ -73,9 +89,9 @@ void emailAsAttachment(QWidget *parent, Editor *ed, const QString &format)
         fileName = ed->displayName() + ".jpub";
         mime = "application/x-jeffpub";
     }
-    QString eml = QStringLiteral("Subject: %1\r\nX-Unsent: 1\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"jp79\"\r\n\r\n").arg(ed->displayName());
+    QString eml = QStringLiteral("Subject: %1\r\nX-Unsent: 1\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"jp79\"\r\n\r\n").arg(emlHeaderText(ed->displayName()));
     eml += "--jp79\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + QStringLiteral("Attached: %1").arg(fileName) + "\r\n";
-    eml += QStringLiteral("--jp79\r\nContent-Type: %1; name=\"%2\"\r\nContent-Disposition: attachment; filename=\"%2\"\r\nContent-Transfer-Encoding: base64\r\n\r\n").arg(mime, fileName);
+    eml += QStringLiteral("--jp79\r\nContent-Type: %1; name=\"%2\"\r\nContent-Disposition: attachment; filename=\"%2\"\r\nContent-Transfer-Encoding: base64\r\n\r\n").arg(mime, emlHeaderText(fileName));
     eml += emlEncode(data) + "--jp79--\r\n";
     saveEml(parent, ed->displayName(), eml);
 }

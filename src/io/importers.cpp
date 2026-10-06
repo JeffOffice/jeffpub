@@ -39,6 +39,9 @@ namespace jp {
 // A compact raw-DEFLATE decoder (RFC 1951) so .docx and .xlsx files can be read without zlib headers.
 namespace {
 struct Inflater {
+    // Text and table parts of an office document stay far below this; more
+    // is a decompression bomb (a few MB that inflate to gigabytes).
+    static constexpr qsizetype kMaxOut = 256 * 1024 * 1024;
     const uchar *in;
     qsizetype n, pos = 0;
     quint32 bitbuf = 0;
@@ -96,6 +99,7 @@ struct Inflater {
         while (ok) {
             int sym = decode(lencode);
             if (sym < 0) return false;
+            if (out.size() > kMaxOut) return false;
             if (sym < 256) out.append(char(sym));
             else if (sym == 256) return true;
             else {
@@ -122,7 +126,7 @@ struct Inflater {
                 if (pos + 4 > n) return false;
                 const int len = in[pos] | (in[pos + 1] << 8);
                 pos += 4;
-                if (pos + len > n) return false;
+                if (pos + len > n || out.size() + len > kMaxOut) return false;
                 out.append(reinterpret_cast<const char *>(in + pos), len);
                 pos += len;
             } else if (type == 1) {
@@ -174,7 +178,7 @@ struct Inflater {
 QMap<QString, QByteArray> readOfficeZip(const QByteArray &zip)
 {
     QMap<QString, QByteArray> out;
-    auto u16 = [&](qsizetype at) { return quint16(uchar(zip[at]) | (uchar(zip[at + 1]) << 8)); };
+    auto u16 = [&](qsizetype at) { return at >= 0 && at + 2 <= zip.size() ? quint16(uchar(zip[at]) | (uchar(zip[at + 1]) << 8)) : quint16(0); };
     auto u32 = [&](qsizetype at) { return quint32(u16(at)) | (quint32(u16(at + 2)) << 16); };
     qsizetype eocd = -1;
     for (qsizetype i = zip.size() - 22; i >= std::max<qsizetype>(0, zip.size() - 65557); --i)
@@ -187,11 +191,12 @@ QMap<QString, QByteArray> readOfficeZip(const QByteArray &zip)
         const quint32 csize = u32(p + 20);
         const int nlen = u16(p + 28), xlen = u16(p + 30), clen = u16(p + 32);
         const quint32 local = u32(p + 42);
+        if (p + 46 + nlen + xlen + clen > zip.size()) break;   // the name and extras must fit
         const QString name = QString::fromUtf8(zip.constData() + p + 46, nlen);
         p += 46 + nlen + xlen + clen;
-        if (local + 30 > quint32(zip.size())) continue;
+        if (qsizetype(local) + 30 > zip.size()) continue;
         const qsizetype data = local + 30 + u16(local + 26) + u16(local + 28);
-        if (data + csize > zip.size()) continue;
+        if (data + qsizetype(csize) > zip.size()) continue;
         if (method == 0) out.insert(name, zip.mid(data, csize));
         else if (method == 8) {
             Inflater inf{reinterpret_cast<const uchar *>(zip.constData() + data), qsizetype(csize)};
@@ -354,9 +359,16 @@ static QVector<QStringList> readXlsx(const QByteArray &data)
     QStringList row;
     int rowIndex = -1;
     QString cellRef, cellType;
+    // A column from its letters ("C" is 2), or -1 past the 16,384 columns a
+    // spreadsheet has (the row is padded up to the column).
     auto colOf = [](const QString &ref) {
         int c = 0;
-        for (QChar ch : ref) { if (!ch.isLetter()) break; c = c * 26 + (ch.toUpper().unicode() - 'A' + 1); }
+        for (QChar ch : ref) {
+            const QChar u = ch.toUpper();
+            if (u < QLatin1Char('A') || u > QLatin1Char('Z')) break;
+            c = c * 26 + (u.unicode() - 'A' + 1);
+            if (c > 16384) return -1;
+        }
         return c - 1;
     };
     while (!r.atEnd()) {
@@ -378,11 +390,12 @@ static QVector<QStringList> readVcf(const QString &text, QStringList *fields)
 {
     *fields = {"First Name", "Last Name", "Company", "Address Line 1", "City", "State", "ZIP Code", "Country", "Email", "Phone"};
     QVector<QStringList> rows;
-    QStringList cur;
+    QStringList cur;   // the card being read; empty outside one
     for (QString line : text.split('\n')) {
         line = line.trimmed();
         if (line.startsWith("BEGIN:VCARD", Qt::CaseInsensitive)) cur = QStringList(fields->size());
-        else if (line.startsWith("END:VCARD", Qt::CaseInsensitive)) rows << cur;
+        else if (cur.isEmpty()) continue;   // anything outside BEGIN/END belongs to no card
+        else if (line.startsWith("END:VCARD", Qt::CaseInsensitive)) { rows << cur; cur.clear(); }
         else if (line.startsWith("N:") || line.startsWith("N;")) {
             const QStringList p = line.section(':', 1).split(';');
             cur[1] = p.value(0); cur[0] = p.value(1);

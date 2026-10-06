@@ -14,6 +14,7 @@
 #include "templates/templates.h"
 #include "app/appfuncs.h"
 #include "io/importers.h"
+#include "io/zip.h"
 #include <QPrinter>
 #include "app/icons.h"
 #include <QTabBar>
@@ -135,6 +136,212 @@ private Q_SLOTS:
         for (const auto &story : doc->stories) text += story->doc->toPlainText();
         QVERIFY2(text.contains(QStringLiteral("A pull quote")) && text.contains(QStringLiteral("Plain text")), qPrintable(text));
     }
+    // The Open page's thumbnails read only the thumbnail out of each file.
+    void thumbnailWithoutLoadingFile()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        QImage thumb(40, 52, QImage::Format_RGB32);
+        thumb.fill(QColor(10, 120, 200));
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("t.jpub"));
+        QString err;
+        QVERIFY2(jp::savePublication(*doc, path, thumb, &err), qPrintable(err));
+        const QImage got = jp::publicationThumbnail(path);
+        QCOMPARE(got.size(), thumb.size());
+        QCOMPARE(got.pixelColor(5, 5), QColor(10, 120, 200));
+        QFile junk(dir.filePath(QStringLiteral("junk.jpub")));
+        QVERIFY(junk.open(QIODevice::WriteOnly));
+        junk.write(QByteArray(100, 'x'));
+        junk.close();
+        QVERIFY(jp::publicationThumbnail(junk.fileName()).isNull());
+    }
+
+    // A publication's name goes into an email's headers: a line break must
+    // not start a header of its own, and accented names are encoded.
+    void emailHeaderNames()
+    {
+        QCOMPARE(jp::emlHeaderText(QStringLiteral("Spring Flyer")), QStringLiteral("Spring Flyer"));
+        const QString forged = jp::emlHeaderText(QStringLiteral("Flyer\r\nBcc: someone@example.com"));
+        QVERIFY(!forged.contains(QLatin1Char('\n')) && !forged.contains(QLatin1Char('\r')));
+        QVERIFY(!jp::emlHeaderText(QStringLiteral("say \"hi\"")).contains(QLatin1Char('"')));
+        const QString accented = jp::emlHeaderText(QStringLiteral("Café menu"));
+        QVERIFY(accented.startsWith(QLatin1String("=?UTF-8?B?")));
+        QCOMPARE(QString::fromUtf8(QByteArray::fromBase64(accented.mid(10).chopped(2).toLatin1())), QStringLiteral("Café menu"));
+    }
+
+    // Mail-merge sources from elsewhere: a vCard with fields outside any card
+    // (once written into an empty list), and a spreadsheet cell at column
+    // "ZZZZZZZZZZ" (once padded with billions of empty cells).
+    void mergeSourcesHostile()
+    {
+        QTemporaryDir dir;
+        {
+            QFile f(dir.filePath(QStringLiteral("contacts.vcf")));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("N:Stray;Field\nTEL:555\nBEGIN:VCARD\nN:Doe;Jane\nEND:VCARD\nEMAIL:after@example.com\n");
+        }
+        jp::MergeSource m;
+        QString err;
+        QVERIFY2(jp::loadMergeSource(dir.filePath(QStringLiteral("contacts.vcf")), &m, &err), qPrintable(err));
+        QCOMPARE(m.rows.size(), 1);
+        QCOMPARE(m.rows[0].value(1), QStringLiteral("Doe"));
+
+        jp::ZipWriter z;
+        z.add(QStringLiteral("xl/worksheets/sheet1.xml"),
+              "<worksheet><sheetData><row><c r=\"A1\" t=\"inlineStr\"><is><t>Name</t></is></c></row>"
+              "<row><c r=\"ZZZZZZZZZZ2\" t=\"inlineStr\"><is><t>far</t></is></c><c r=\"A2\" t=\"inlineStr\"><is><t>Jane</t></is></c></row></sheetData></worksheet>");
+        {
+            QFile f(dir.filePath(QStringLiteral("list.xlsx")));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(z.finish());
+        }
+        jp::MergeSource x;
+        QVERIFY2(jp::loadMergeSource(dir.filePath(QStringLiteral("list.xlsx")), &x, &err), qPrintable(err));
+        for (const QStringList &r : x.rows) QVERIFY(r.size() <= 16384);
+    }
+
+    // A .jpub from someone else may claim anything: a huge table, a page a
+    // million miles wide, NaN geometry, or a zip directory whose names run
+    // past the end. It opens with sane values, or is refused, never crashes.
+    void jpubHostileContent()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TableItem>();
+        t->rows = 2;
+        t->cols = 2;
+        t->colW = {100, 100};
+        t->rowH = {30, 30};
+        t->rect = QRectF(72, 72, 0, 0);
+        t->syncRect();
+        t->cells.resize(4);
+        doc->pages[0]->items.push_back(t);
+        QMap<QString, QByteArray> entries;
+        QVERIFY(jp::readZip(jp::publicationBytes(*doc, QImage()), entries));
+        QJsonObject o = QJsonDocument::fromJson(entries["document.json"]).object();
+        QJsonObject setup = o["setup"].toObject();
+        setup["size"] = QJsonArray{1e12, -5};
+        o["setup"] = setup;
+        QJsonArray pages = o["pages"].toArray();
+        QJsonObject page = pages[0].toObject();
+        QJsonArray items = page["items"].toArray();
+        QJsonObject table = items[0].toObject();
+        table["rows"] = 100000;
+        table["cols"] = 100000;
+        table["rect"] = QJsonArray{1e300, -1e300, 5, 5};
+        items[0] = table;
+        page["items"] = items;
+        pages[0] = page;
+        o["pages"] = pages;
+        jp::ZipWriter z;
+        z.add(QStringLiteral("mimetype"), entries["mimetype"]);
+        z.add(QStringLiteral("document.json"), QJsonDocument(o).toJson());
+        QString err;
+        auto back = jp::publicationFromBytes(z.finish(), &err);
+        QVERIFY2(back, qPrintable(err));
+        QVERIFY(back->pageSize().width() <= 20000 && back->pageSize().height() >= 1);
+        const auto *bt = static_cast<const jp::TableItem *>(back->pages[0]->items[0].get());
+        QVERIFY(bt->rows <= 256 && bt->cols <= 256);
+        QCOMPARE(bt->cells.size(), qsizetype(bt->rows) * bt->cols);
+        QVERIFY(std::abs(bt->rect.x()) <= 1e6);
+
+        // A directory entry whose name length runs past the end of the file.
+        QByteArray zip = jp::publicationBytes(*doc, QImage());
+        const qsizetype dir = zip.lastIndexOf(QByteArray::fromHex("504b0102"));
+        QVERIFY(dir > 0);
+        zip[dir + 28] = char(0xFF);
+        zip[dir + 29] = char(0xFF);
+        QMap<QString, QByteArray> bad;
+        QVERIFY(!jp::readZip(zip, bad));
+    }
+
+    // Vector pictures inside .pub files come from the file, so their
+    // records may lie: a header shorter than it claims, a text length that is
+    // negative, a character count that wraps a 32-bit size check. Each must
+    // play without reading outside the picture (run under AddressSanitizer
+    // to see a stray read; a wrapped count crashed outright).
+    void metafileHostileRecords()
+    {
+        auto le16 = [](QByteArray &b, int v) { b.append(char(v & 0xFF)); b.append(char((v >> 8) & 0xFF)); };
+        auto le32 = [](QByteArray &b, quint32 v) { for (int i = 0; i < 4; ++i) b.append(char((v >> (8 * i)) & 0xFF)); };
+        auto play = [](const QByteArray &data) {
+            jp::Metafile m;
+            if (!m.load(data)) return;
+            QImage img(64, 64, QImage::Format_ARGB32);
+            img.fill(Qt::white);
+            QPainter p(&img);
+            m.play(&p, QRectF(0, 0, 64, 64));
+        };
+        // 1. An EMF cut off after its signature: 44 bytes, the header needs 88.
+        {
+            QByteArray emf;
+            le32(emf, 1);
+            le32(emf, 88);
+            while (emf.size() < 40) le32(emf, 0);
+            le32(emf, 0x464D4520u);
+            QCOMPARE(emf.size(), 44);
+            play(emf);
+        }
+        // 2. An EMF text record whose character count wraps "count * 2".
+        {
+            QByteArray emf;
+            le32(emf, 1);
+            le32(emf, 88);
+            for (int v : {0, 0, 100, 100, 0, 0, 2540, 2540}) le32(emf, quint32(v));   // bounds, frame
+            le32(emf, 0x464D4520u);
+            le32(emf, 0x10000);
+            le32(emf, 88 + 84);
+            le32(emf, 2);
+            le16(emf, 1);
+            le16(emf, 0);
+            for (int i = 0; i < 3; ++i) le32(emf, 0);
+            for (int v : {1024, 768, 320, 240}) le32(emf, quint32(v));   // device, millimeters
+            QCOMPARE(emf.size(), 88);
+            le32(emf, 84);   // EMR_EXTTEXTOUTW
+            le32(emf, 84);
+            for (int i = 0; i < 4; ++i) le32(emf, 0);   // bounds
+            le32(emf, 1);
+            le32(emf, 0);
+            le32(emf, 0);   // mode, scales
+            le32(emf, 10);
+            le32(emf, 10);   // reference point
+            le32(emf, 0x80000001u);   // characters: twice this wraps to 2
+            le32(emf, 76);            // the string, inside the record
+            le32(emf, 0);
+            for (int i = 0; i < 4; ++i) le32(emf, 0);   // clip
+            le32(emf, 0);                                // no spacing array
+            le32(emf, 0x00410041u);
+            le32(emf, 0x00410041u);
+            QCOMPARE(emf.size(), 88 + 84);
+            play(emf);
+        }
+        // 3. A WMF text record with a negative length (which once moved the
+        // reading position before the start of the picture).
+        {
+            QByteArray wmf;
+            le32(wmf, 0x9AC6CDD7u);
+            le16(wmf, 0);
+            for (int v : {0, 0, 1000, 1000}) le16(wmf, v);
+            le16(wmf, 1440);
+            le32(wmf, 0);
+            le16(wmf, 0);
+            le16(wmf, 1);
+            le16(wmf, 9);
+            le16(wmf, 0x300);
+            le32(wmf, 0);
+            le16(wmf, 0);
+            le32(wmf, 0);
+            le16(wmf, 0);
+            le32(wmf, 8);       // record of 8 words
+            le16(wmf, 0x0521);  // TEXTOUT
+            le16(wmf, -32768);  // length
+            for (int i = 0; i < 9; ++i) wmf.append(char('A'));
+            wmf.append(char(0));
+            le32(wmf, 3);
+            le16(wmf, 0);       // end of file
+            play(wmf);
+        }
+    }
+
     void publisherFuzzFilesDoNotCrash()
     {
         QDir dir(QStringLiteral(JP_TEST_DATA "/pub/fuzz"));
@@ -2814,6 +3021,44 @@ private Q_SLOTS:
         QCOMPARE(found, 1);
     }
 
+    // Table rules keep their width when read on a system that writes
+    // decimals with a comma.
+    void tableBordersAnyLocale()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TableItem>();
+        t->rows = 2;
+        t->cols = 2;
+        t->colW = {100, 150};
+        t->rowH = {30, 40};
+        t->rect = QRectF(72, 144, 0, 0);
+        t->syncRect();
+        t->cells.resize(4);
+        for (int i = 0; i < 4; ++i) t->cells[i].storyId = doc->createStory(QStringLiteral("cell"));
+        for (int c = 0; c < 2; ++c) t->cell(0, c).border.bottom = jp::Stroke::line(jp::ColorRef::rgb(Qt::black), 1.5);
+        doc->pages[0]->items.push_back(t);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("rules.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        const std::string before = setlocale(LC_NUMERIC, nullptr);
+        const char *comma = nullptr;
+        for (const char *l : {"de_DE.UTF-8", "de_DE.utf8", "de_AT.utf8", "fr_FR.UTF-8", "fr_FR.utf8"})
+            if (setlocale(LC_NUMERIC, l)) { comma = l; break; }
+        if (!comma) QSKIP("no comma-decimal locale on this system");
+        auto back = jp::importPublisherFile(path, &err);
+        setlocale(LC_NUMERIC, before.c_str());
+        QVERIFY2(back, qPrintable(err));
+        double widest = 0;
+        jp::walkItems(back->pages[0]->items, [&](const jp::ItemPtr &it) {
+            if (it->type() != jp::ItemType::Table) return;
+            for (const jp::TableCell &c : static_cast<const jp::TableItem *>(it.get())->cells)
+                for (const jp::Stroke *st : {&c.border.left, &c.border.right, &c.border.top, &c.border.bottom})
+                    if (!st->isNone()) widest = std::max(widest, st->width);
+        });
+        QVERIFY2(std::abs(widest - 1.5) < 0.05, qPrintable(QString::number(widest)));
+    }
+
     // A process color from a .pub file: the screen shows the color the file
     // shows, and a CMYK PDF and the plates get its exact inks.
     void processInksShownColor()
@@ -3388,6 +3633,15 @@ private Q_SLOTS:
         QVERIFY(jp::Updater::isNewer("v0.1.6", "0.1.0"));
         QVERIFY(jp::Updater::isNewer("v0.1.6", "v0.1.0-preview5"));
         QVERIFY(jp::Updater::isNewer("v0.1.0-preview5", "v0.1.0-preview4"));
+        // An installer runs only from this project's releases, with a plain
+        // version tag and the SHA-256 GitHub publishes.
+        const QString url = QStringLiteral("https://github.com/jeffsteinport/jeffpub79/releases/download/v0.1.17/JeffPub79-Setup.exe");
+        const QString digest = QStringLiteral("sha256:63e329c3c1a9aea0f90af5e2519c9315af365cb424a7bd00abb3ad9d201573e7");
+        QVERIFY(jp::Updater::trustedInstaller(url, QStringLiteral("v0.1.17"), digest));
+        QVERIFY(!jp::Updater::trustedInstaller(QStringLiteral("https://example.com/JeffPub79-Setup.exe"), QStringLiteral("v0.1.17"), digest));
+        QVERIFY(!jp::Updater::trustedInstaller(QStringLiteral("http://github.com/jeffsteinport/jeffpub79/releases/download/v0.1.17/x.exe"), QStringLiteral("v0.1.17"), digest));
+        QVERIFY(!jp::Updater::trustedInstaller(url, QStringLiteral("../../Startup/evil"), digest));   // the tag names the saved file
+        QVERIFY(!jp::Updater::trustedInstaller(url, QStringLiteral("v0.1.17"), QString()));          // nothing to check against
         QVERIFY(jp::Updater::isNewer("0.1.10", "0.1.9"));
         QVERIFY(!jp::Updater::isNewer("v0.1.6", "0.1.6"));
         QVERIFY(!jp::Updater::isNewer("v0.1.0-preview5", "0.1.6"));

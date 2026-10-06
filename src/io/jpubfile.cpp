@@ -95,11 +95,9 @@ std::unique_ptr<Document> loadPublication(const QString &path, QString *error)
 
 QImage publicationThumbnail(const QString &path)
 {
-    QFile f(path);
-    if (!f.open(QIODevice::ReadOnly)) return {};
-    QMap<QString, QByteArray> entries;
-    if (!readZip(f.readAll(), entries)) return {};
-    return QImage::fromData(entries.value("thumbnail.png"), "PNG");
+    // Just the thumbnail: a publication with large photos needn't be read
+    // whole to show its picture in a list of files.
+    return QImage::fromData(readZipEntry(path, QStringLiteral("thumbnail.png")), "PNG");
 }
 
 } // namespace jp

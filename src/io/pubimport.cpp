@@ -651,10 +651,17 @@ public:
             const QStringList parts = s.split(' ', Qt::SkipEmptyParts);
             Stroke st;
             st.width = 0.75;
+            // A width keeps the default unless it reads as a number (a ',' is
+            // taken as the decimal point, as some systems write it).
+            auto number = [](QString t, double *out) {
+                bool ok = false;
+                const double v = t.replace(QLatin1Char(','), QLatin1Char('.')).toDouble(&ok);
+                if (ok && v >= 0 && v < 1000) *out = v;
+            };
             for (const auto &part : parts) {
                 if (part.startsWith('#')) st.color = ColorRef::rgb(QColor(part));
-                else if (part.endsWith("in")) st.width = part.chopped(2).toDouble() * 72;
-                else if (part.endsWith("pt")) st.width = part.chopped(2).toDouble();
+                else if (part.endsWith("in")) { double v = st.width / 72; number(part.chopped(2), &v); st.width = v * 72; }
+                else if (part.endsWith("pt")) number(part.chopped(2), &st.width);
                 else if (part == "dashed") st.dash = Stroke::DashLine;
                 else if (part == "dotted") st.dash = Stroke::RoundDot;
                 else if (part == "double") st.compound = Stroke::Double;

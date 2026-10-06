@@ -52,7 +52,8 @@ QString FieldContext::resolve(const QString &code) const
         const QString key = oneLine ? arg.chopped(8) : arg;
         if (!doc) return QStringLiteral("[%1]").arg(key);
         QString v = doc->business().field(key);
-        if (oneLine) v = v.split(QRegularExpression(QStringLiteral("\\s*\\r?\\n\\s*")), Qt::SkipEmptyParts).join(QStringLiteral(", "));
+        static const QRegularExpression lineBreak(QStringLiteral("\\s*\\r?\\n\\s*"));
+        if (oneLine) v = v.split(lineBreak, Qt::SkipEmptyParts).join(QStringLiteral(", "));
         return v;
     }
     if (kind == "merge") {
@@ -147,13 +148,15 @@ QTextCharFormat resolveCharFormat(const QTextCharFormat &f, const LayoutEnv &env
                 r.setFontWeight(wt);
         }
     }
-    const double sz = f.hasProperty(QTextFormat::FontPointSize) ? f.fontPointSize() : 11.0;
+    // Sizes within the other program's range (to 1,638 pt): a file can claim
+    // anything, and a huge size makes drawing a single glyph very costly.
+    const double sz = std::clamp(f.hasProperty(QTextFormat::FontPointSize) ? f.fontPointSize() : 11.0, 0.5, 1638.0);
     r.setFontPointSize(std::max(1.0, sz * env.fontScale) * fontPointFactor());
     // Automatic pair kerning applies from a size up, 14 pt unless the text
     // says otherwise (smaller text keeps the font's plain widths, as .pub
     // files are laid out); text can also turn kerning off.
     {
-        const double kernFrom = f.hasProperty(tp::KernAbove) ? f.doubleProperty(tp::KernAbove) : 14.0;
+        const double kernFrom = f.hasProperty(tp::KernAbove) ? f.property(tp::KernAbove).toDouble() : 14.0;
         r.setFontKerning((!f.hasProperty(QTextFormat::FontKerning) || f.fontKerning()) && sz >= kernFrom);
     }
     // Unhinted design widths: hinting differs between Windows and Linux and
@@ -196,7 +199,7 @@ QTextCharFormat resolveCharFormat(const QTextCharFormat &f, const LayoutEnv &env
     if (!href.isEmpty()) r.setBackground(ColorRef::fromString(href).resolve(env.colors));
     const QString oref = f.stringProperty(tp::OutlineRef);
     if (!oref.isEmpty()) {
-        QPen pen(ColorRef::fromString(oref).resolve(env.colors), f.hasProperty(tp::OutlineWidth) ? f.doubleProperty(tp::OutlineWidth) : 0.5);
+        QPen pen(ColorRef::fromString(oref).resolve(env.colors), f.hasProperty(tp::OutlineWidth) ? f.property(tp::OutlineWidth).toDouble() : 0.5);
         pen.setJoinStyle(Qt::RoundJoin);
         r.setTextOutline(pen);
     }

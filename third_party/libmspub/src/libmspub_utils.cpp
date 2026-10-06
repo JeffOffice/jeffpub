@@ -11,7 +11,8 @@
 
 #include <cstdarg>
 #include <cstring>
-#include <string.h> // for memcpy
+#include <string.h>
+#include <cmath> // for memcpy
 
 #include <libmspub/jp_hooks.h>
 
@@ -385,6 +386,27 @@ static DecodeHook g_decodeHook = nullptr;
 void setDecodeHook(DecodeHook hook)
 {
   g_decodeHook = hook;
+}
+
+librevenge::RVNGString fixedNumber(double v, unsigned decimals)
+{
+  if (decimals > 9)
+    decimals = 9;
+  unsigned long long scale = 1;
+  for (unsigned i = 0; i < decimals; ++i)
+    scale *= 10;
+  const bool negative = v < 0;
+  const double a = std::fabs(v);
+  // Out of range or not a number: nothing sensible to write.
+  if (!(a < 1e15))
+    return librevenge::RVNGString("0");
+  const unsigned long long whole = (unsigned long long)std::llround(a * double(scale));
+  char buf[48];
+  if (decimals == 0)
+    snprintf(buf, sizeof buf, "%s%llu", negative && whole ? "-" : "", whole);
+  else
+    snprintf(buf, sizeof buf, "%s%llu.%0*llu", negative && whole ? "-" : "", whole / scale, int(decimals), whole % scale);
+  return librevenge::RVNGString(buf);
 }
 
 void appendCharacters(librevenge::RVNGString &text, const std::vector<unsigned char> &characters,

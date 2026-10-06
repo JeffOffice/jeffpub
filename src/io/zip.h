@@ -19,6 +19,9 @@ private:
 
 // Returns entries by name; empty map and false if the data is not a readable zip.
 bool readZip(const QByteArray &zip, QMap<QString, QByteArray> &out, QString *error = nullptr);
+// One stored entry read straight from a file (the directory, then just that
+// entry), without loading the rest; empty if it isn't there.
+QByteArray readZipEntry(const QString &path, const QString &name);
 
 quint32 crc32(const QByteArray &data);
 

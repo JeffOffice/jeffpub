@@ -1,5 +1,7 @@
 #include "core/items.h"
 
+#include <cmath>
+
 #include <QJsonArray>
 #include <QRandomGenerator>
 #include <QUuid>
@@ -33,10 +35,14 @@ QString itemTypeName(ItemType t)
 static const char *kTypeKeys[] = {"text", "picture", "shape", "line", "table", "textart", "group"};
 
 static QJsonArray rectJson(const QRectF &r) { return {r.x(), r.y(), r.width(), r.height()}; }
+// Geometry from a file is kept within 1,000,000 points (about 350 m) and
+// finite: drawing turns these into pixel integers, and a larger or NaN value
+// would overflow them.
+static double sane(double v) { return std::isfinite(v) ? std::clamp(v, -1e6, 1e6) : 0.0; }
 static QRectF rectFrom(const QJsonValue &v)
 {
     const auto a = v.toArray();
-    return a.size() == 4 ? QRectF(a[0].toDouble(), a[1].toDouble(), a[2].toDouble(), a[3].toDouble()) : QRectF();
+    return a.size() == 4 ? QRectF(sane(a[0].toDouble()), sane(a[1].toDouble()), sane(a[2].toDouble()), sane(a[3].toDouble())) : QRectF();
 }
 static QJsonArray marginsJson(const QMarginsF &m) { return {m.left(), m.top(), m.right(), m.bottom()}; }
 static QMarginsF marginsFrom(const QJsonValue &v, const QMarginsF &def)
@@ -492,8 +498,10 @@ QJsonObject TableItem::toJson() const
 void TableItem::fromJson(const QJsonObject &o)
 {
     Item::fromJson(o);
-    rows = o["rows"].toInt();
-    cols = o["cols"].toInt();
+    // Twice the other program's largest table: more is a damaged file, and
+    // rows x cols cells are made below.
+    rows = std::clamp(o["rows"].toInt(), 0, 256);
+    cols = std::clamp(o["cols"].toInt(), 0, 256);
     colW.clear(); rowH.clear(); cells.clear();
     for (const auto &v : o["colW"].toArray()) colW.push_back(v.toDouble());
     for (const auto &v : o["rowH"].toArray()) rowH.push_back(v.toDouble());

@@ -81,6 +81,7 @@ bool read(const QByteArray &bytes, File *out, QString *error)
     if (shift != 9 && shift != 12) return fail("unsupported sector size");
     const qsizetype ss = qsizetype(1) << shift;
     const int miniShift = u16(bytes, 32);
+    if (miniShift < 1 || miniShift > shift) return fail("unsupported mini sector size");
     const qsizetype mss = qsizetype(1) << miniShift;
     const quint32 numFat = u32(bytes, 44), firstDir = u32(bytes, 48), cutoff = u32(bytes, 56);
     const quint32 firstMiniFat = u32(bytes, 60), firstDifat = u32(bytes, 68), numDifat = u32(bytes, 72);
@@ -149,11 +150,15 @@ bool read(const QByteArray &bytes, File *out, QString *error)
 
     File f;
     QVector<int> map(raw.size(), -1);
-    std::function<void(quint32, QVector<quint32> &)> siblings = [&](quint32 n, QVector<quint32> &acc) {
-        if (n == NOSTREAM || n >= quint32(raw.size()) || acc.size() > raw.size()) return;
-        siblings(raw[n].left, acc);
+    // The sibling tree, in order. Each entry is visited once, so a tree that
+    // points back into itself (a damaged file) can't recurse forever.
+    QVector<bool> seen(raw.size(), false);
+    std::function<void(quint32, QVector<quint32> &, int)> siblings = [&](quint32 n, QVector<quint32> &acc, int depth) {
+        if (n == NOSTREAM || n >= quint32(raw.size()) || seen[n] || depth > 256) return;
+        seen[n] = true;
+        siblings(raw[n].left, acc, depth + 1);
         acc << n;
-        siblings(raw[n].right, acc);
+        siblings(raw[n].right, acc, depth + 1);
     };
     std::function<int(quint32)> add = [&](quint32 n) -> int {
         const Raw &r = raw[n];
@@ -178,7 +183,7 @@ bool read(const QByteArray &bytes, File *out, QString *error)
         f.entries << e;
         if (r.type == Entry::Storage || r.type == Entry::Root) {
             QVector<quint32> kids;
-            siblings(r.child, kids);
+            siblings(r.child, kids, 0);
             for (quint32 k : kids) {
                 if (map[k] >= 0 || (raw[k].type != Entry::Storage && raw[k].type != Entry::Stream)) continue;
                 const int ci = add(k);

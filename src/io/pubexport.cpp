@@ -18,6 +18,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QBuffer>
+#include <QSaveFile>
 #include <QCryptographicHash>
 #include <QDir>
 #include <QImage>
@@ -2248,8 +2249,12 @@ bool exportPublisher(const Document &doc, const QString &path, QString *error)
     QStringList skipped;
     PubWriter w(doc, path);
     const QByteArray bytes = w.write(&skipped);
-    QFile f(path);
-    if (!f.open(QIODevice::WriteOnly) || f.write(bytes) != bytes.size()) {
+    // Written beside the file and swapped in only when complete: a full disk
+    // or a crash leaves the old file as it was (often the only copy of a
+    // publication made in the other program).
+    QSaveFile f(path);
+    f.setDirectWriteFallback(true);   // some sync and security tools refuse the temporary file
+    if (!f.open(QIODevice::WriteOnly) || f.write(bytes) != bytes.size() || !f.commit()) {
         if (error) *error = f.errorString();
         return false;
     }

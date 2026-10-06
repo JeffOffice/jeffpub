@@ -26,6 +26,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QSaveFile>
 #include <QCloseEvent>
 #include <QDir>
 #include <QFileDialog>
@@ -140,7 +141,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     qApp->installEventFilter(this);
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow()
+{
+    // Children (the editor, panes, the ribbon) are destroyed after this body,
+    // when only the QWidget part of this window is left: a signal they send
+    // while going (the undo stack emits cleanChanged as it is destroyed)
+    // would call this window's slots on a half-destroyed object. Cut those
+    // connections, and the application-wide event filter, while whole.
+    qApp->removeEventFilter(this);
+    for (QObject *child : findChildren<QObject *>()) child->disconnect(this);
+}
 
 QAction *MainWindow::act(const QString &id) const
 {
@@ -635,9 +645,9 @@ bool MainWindow::exportHtmlTo(const QString &path)
         if (!map.isEmpty()) html += QStringLiteral("<map name=\"%1\">%2</map>").arg(map, areas);
     }
     html += "</body></html>";
-    QFile f(path);
-    if (!f.open(QIODevice::WriteOnly)) return false;
-    f.write(html.toUtf8());
+    QSaveFile f(path);
+    const QByteArray out = html.toUtf8();
+    if (!f.open(QIODevice::WriteOnly) || f.write(out) != out.size() || !f.commit()) return false;
     statusBar()->showMessage(QStringLiteral("Saved %1").arg(QFileInfo(path).fileName()), 5000);
     return true;
 }

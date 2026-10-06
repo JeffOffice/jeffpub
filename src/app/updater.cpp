@@ -3,6 +3,8 @@
 #include "app/settings.h"
 
 #include <QApplication>
+#include <QCryptographicHash>
+#include <QSaveFile>
 #include <QDate>
 #include <QDesktopServices>
 #include <QDir>
@@ -49,6 +51,14 @@ Updater::Updater(QWidget *window) : QObject(qApp), m_win(window) {}
 
 bool Updater::isNewer(const QString &candidate, const QString &current) { return versionKey(candidate) > versionKey(current); }
 
+bool Updater::trustedInstaller(const QString &url, const QString &tag, const QString &digest)
+{
+    static const QRegularExpression tagChars(QStringLiteral("^[A-Za-z0-9._-]{1,40}$"));
+    static const QRegularExpression sha(QStringLiteral("^sha256:[0-9a-fA-F]{64}$"));
+    return url.startsWith(QLatin1String("https://github.com/jeffsteinport/jeffpub79/releases/download/")) && tagChars.match(tag).hasMatch() &&
+           sha.match(digest).hasMatch();
+}
+
 void Updater::checkOnStartup()
 {
     Settings &st = Settings::get();
@@ -84,11 +94,16 @@ void Updater::check(bool interactive)
             const QString tag = rel.value("tag_name").toString();
             if (!isNewer(tag, QStringLiteral(JP_VERSION))) break;   // newest first: nothing newer
             if (!interactive && Settings::get().value(QStringLiteral("updates/skip")).toString() == tag) return;
-            QString setup;
+            QString setup, digest;
             for (const QJsonValue &a : rel.value("assets").toArray())
-                if (a.toObject().value("name").toString().endsWith(QLatin1String("Setup.exe"), Qt::CaseInsensitive))
+                if (a.toObject().value("name").toString().endsWith(QLatin1String("Setup.exe"), Qt::CaseInsensitive)) {
                     setup = a.toObject().value("browser_download_url").toString();
-            offer(tag, rel.value("body").toString(), rel.value("html_url").toString(), setup);
+                    digest = a.toObject().value("digest").toString();   // "sha256:..."
+                }
+            // Only an installer that can be checked is offered to run; the
+            // release page is offered either way.
+            if (!trustedInstaller(setup, tag, digest)) setup.clear();
+            offer(tag, rel.value("body").toString(), rel.value("html_url").toString(), setup, digest);
             return;
         }
         if (interactive)
@@ -97,7 +112,7 @@ void Updater::check(bool interactive)
     });
 }
 
-void Updater::offer(const QString &tag, const QString &notes, const QString &pageUrl, const QString &setupUrl)
+void Updater::offer(const QString &tag, const QString &notes, const QString &pageUrl, const QString &setupUrl, const QString &digest)
 {
     QString version = tag;
     if (version.startsWith('v')) version.remove(0, 1);
@@ -114,6 +129,7 @@ void Updater::offer(const QString &tag, const QString &notes, const QString &pag
 #else
     QPushButton *now = nullptr;
     Q_UNUSED(setupUrl);
+    Q_UNUSED(digest);
 #endif
     QPushButton *page = box.addButton(QStringLiteral("What's New"), QMessageBox::HelpRole);
     QPushButton *later = box.addButton(QStringLiteral("Later"), QMessageBox::RejectRole);
@@ -122,11 +138,12 @@ void Updater::offer(const QString &tag, const QString &notes, const QString &pag
     box.exec();
     if (box.clickedButton() == page) QDesktopServices::openUrl(QUrl(pageUrl));
     else if (box.clickedButton() == skip) Settings::get().setValue(QStringLiteral("updates/skip"), tag);
-    else if (now && box.clickedButton() == now) downloadAndRun(setupUrl, tag);
+    else if (now && box.clickedButton() == now) downloadAndRun(setupUrl, tag, digest, pageUrl);
 }
 
-void Updater::downloadAndRun(const QString &url, const QString &tag)
+void Updater::downloadAndRun(const QString &url, const QString &tag, const QString &digest, const QString &pageUrl)
 {
+    if (!trustedInstaller(url, tag, digest)) return;
     const QString dest = QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation)).filePath(QStringLiteral("JeffPub79-Setup-%1.exe").arg(tag));
     QNetworkRequest req{QUrl(url)};
     req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("JeffPub79/%1").arg(QStringLiteral(JP_VERSION)));
@@ -140,7 +157,7 @@ void Updater::downloadAndRun(const QString &url, const QString &tag)
     connect(r, &QNetworkReply::downloadProgress, progress, [progress](qint64 got, qint64 total) {
         if (total > 0) progress->setValue(int(got * 100 / total));
     });
-    connect(r, &QNetworkReply::finished, this, [this, r, progress, dest] {
+    connect(r, &QNetworkReply::finished, this, [this, r, progress, dest, digest, pageUrl] {
         r->deleteLater();
         progress->deleteLater();
         if (r->error() != QNetworkReply::NoError) {
@@ -148,12 +165,21 @@ void Updater::downloadAndRun(const QString &url, const QString &tag)
                 QMessageBox::warning(m_win, QStringLiteral("Update"), QStringLiteral("The download didn't finish: %1").arg(r->errorString()));
             return;
         }
-        QFile f(dest);
-        if (!f.open(QIODevice::WriteOnly) || f.write(r->readAll()) <= 0) {
+        const QByteArray bytes = r->readAll();
+        // Run only the installer GitHub lists for this release, byte for byte.
+        const QByteArray got = QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex();
+        if (bytes.isEmpty() || got != digest.mid(7).toLatin1().toLower()) {
+            QMessageBox::warning(m_win, QStringLiteral("Update"),
+                                 QStringLiteral("The downloaded installer didn't match the one published for this release, so it wasn't run. "
+                                                "You can download it from the release page instead."));
+            QDesktopServices::openUrl(QUrl(pageUrl));
+            return;
+        }
+        QSaveFile f(dest);
+        if (!f.open(QIODevice::WriteOnly) || f.write(bytes) != bytes.size() || !f.commit()) {
             QMessageBox::warning(m_win, QStringLiteral("Update"), QStringLiteral("JeffPub 79 couldn't save the installer to %1.").arg(QDir::toNativeSeparators(dest)));
             return;
         }
-        f.close();
         // Give every window a chance to save, then hand over to the installer.
         for (QWidget *w : QApplication::topLevelWidgets())
             if (w->inherits("jp::MainWindow") && w->isVisible() && !w->close()) return;

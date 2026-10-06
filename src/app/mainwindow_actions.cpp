@@ -1,3 +1,6 @@
+#include <QDir>
+#include <QRegularExpression>
+#include <QSaveFile>
 // Every command JeffPub 79 offers, as QActions used by the ribbon, menus and
 // keyboard shortcuts.
 
@@ -513,8 +516,15 @@ void MainWindow::createActions()
         const QByteArray data = QApplication::clipboard()->mimeData()->data("application/x-jeffpub-items");
         const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/BuildingBlocks";
         QDir().mkpath(dir);
-        QFile f(dir + "/" + name.trimmed() + ".json");
-        if (f.open(QIODevice::WriteOnly)) f.write(data);
+        // The name becomes a file name: characters a file name can't hold
+        // (or that would leave the folder) become dashes.
+        QString file = name.trimmed();
+        file.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]|^\\.+")), QStringLiteral("-"));
+        QSaveFile f(QDir(dir).filePath(file + ".json"));
+        if (!f.open(QIODevice::WriteOnly) || f.write(data) != data.size() || !f.commit()) {
+            QMessageBox::warning(this, QStringLiteral("Save as Building Block"), QStringLiteral("JeffPub 79 couldn't save the building block: %1").arg(f.errorString()));
+            return;
+        }
         statusBar()->showMessage(QStringLiteral("Saved \"%1\" to My Building Blocks.").arg(name.trimmed()), 4000);
     });
 

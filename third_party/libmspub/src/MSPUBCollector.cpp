@@ -1317,9 +1317,9 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
               const unsigned r0 = row, r1 = row + std::max(1u, unsigned(tableLayout[row][col].m_rowSpan));
               const unsigned c0 = col, c1 = col + std::max(1u, unsigned(tableLayout[row][col].m_colSpan));
               auto border = [&](const TableCellFormat &f) {
-                librevenge::RVNGString s;
                 const double pt = double(f.widthEmu ? f.widthEmu : 9525) / EMUS_IN_INCH * 72;
-                s.sprintf("%.3fpt solid ", pt);
+                librevenge::RVNGString s = fixedNumber(pt, 3);
+                s.append("pt solid ");
                 s.append(getColorString(ColorReference(f.hasColor ? f.color : 0).getFinalColor(m_paletteColors)));
                 return s;
               };

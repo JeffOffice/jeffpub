@@ -1,5 +1,7 @@
 #include "core/document.h"
 
+#include <cmath>
+
 #include "render/metafile.h"
 #include "text/storyio.h"
 #include "text/textprops.h"
@@ -121,6 +123,9 @@ PageSetup PageSetup::fromJson(const QJsonObject &o)
 {
     PageSetup s;
     s.size = sizeF(o["size"], s.size);
+    // From 1 point to 20,000 (the other program allows 241 inches, 17,352).
+    auto side = [](double v, double def) { return std::isfinite(v) ? std::clamp(v, 1.0, 20000.0) : def; };
+    s.size = QSizeF(side(s.size.width(), 612), side(s.size.height(), 792));
     s.margins = margF(o["margins"], s.margins);
     s.sizeName = o["sizeName"].toString(s.sizeName);
     s.layout = Layout(o["layout"].toInt());
@@ -594,7 +599,8 @@ CatalogArea CatalogArea::fromJson(const QJsonObject &o)
 {
     CatalogArea a;
     a.pageId = o["page"].toString();
-    a.rect = QRectF(o["x"].toDouble(), o["y"].toDouble(), o["w"].toDouble(), o["h"].toDouble());
+    auto sane = [](double v) { return std::isfinite(v) ? std::clamp(v, -1e6, 1e6) : 0.0; };
+    a.rect = QRectF(sane(o["x"].toDouble()), sane(o["y"].toDouble()), sane(o["w"].toDouble()), sane(o["h"].toDouble()));
     a.rows = std::clamp(o["rows"].toInt(2), 1, 50);
     a.cols = std::clamp(o["cols"].toInt(1), 1, 50);
     return a;

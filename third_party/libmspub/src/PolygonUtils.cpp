@@ -5880,16 +5880,19 @@ librevenge::RVNGPropertyList calcClipPath(const std::vector<Vertex> &verts, doub
   librevenge::RVNGString clipString;
   Vector2D vector(x + scaleX * verts[0].m_x, y + scaleY * verts[0].m_y);
   vector = transform.transformWithOrigin(vector, center);
-  librevenge::RVNGString sValue;
-  sValue.sprintf("M %f %f", (double)vector.m_x, (double)vector.m_y);
-  clipString.append(sValue);
+  // JeffPub 79: numbers written with '.' whatever the system's language.
+  clipString.append("M ");
+  clipString.append(fixedNumber(vector.m_x, 6));
+  clipString.append(" ");
+  clipString.append(fixedNumber(vector.m_y, 6));
   for (size_t i = 1; i < verts.size(); ++i)
   {
     Vector2D vector2(x + scaleX * verts[i].m_x, y + scaleY * verts[i].m_y);
     vector2 = transform.transformWithOrigin(vector2, center);
-    librevenge::RVNGString sValue2;
-    sValue2.sprintf(" L %f %f", (double)vector2.m_x, (double)vector2.m_y);
-    clipString.append(sValue2);
+    clipString.append(" L ");
+    clipString.append(fixedNumber(vector2.m_x, 6));
+    clipString.append(" ");
+    clipString.append(fixedNumber(vector2.m_y, 6));
   }
   clipString.append(" Z");
   vertices.insert("svg:clip-path", clipString);

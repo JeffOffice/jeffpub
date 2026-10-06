@@ -15,10 +15,14 @@ namespace jp {
 
 namespace {
 
+// Reads little-endian values from a picture's bytes, never outside them: a
+// read past the end gives 0 and stops further reads, and moves by lengths
+// from the file go through skip(), which never goes backwards.
 struct Reader {
     const uchar *d = nullptr;
     qsizetype n = 0, p = 0;
-    bool ok(qsizetype k) const { return p + k <= n; }
+    bool ok(qsizetype k) const { return p >= 0 && k >= 0 && p + k <= n; }
+    void skip(qsizetype k) { if (ok(k)) p += k; else p = n; }
     quint8 u8() { return ok(1) ? d[p++] : 0; }
     quint16 u16() { if (!ok(2)) { p = n; return 0; } quint16 v = qFromLittleEndian<quint16>(d + p); p += 2; return v; }
     qint16 s16() { return qint16(u16()); }
@@ -138,7 +142,7 @@ QImage dibFromPacked(const uchar *d, qsizetype len)
         const qsizetype bmiLen = hsz + colors * 3;
         return dibToImage(d, std::min(bmiLen, len), d + bmiLen, std::max<qsizetype>(0, len - bmiLen));
     }
-    const qsizetype bmiLen = hsz + masks + colors * 4;
+    const qsizetype bmiLen = qsizetype(hsz) + masks + qsizetype(colors) * 4;   // colors comes from the file
     if (bmiLen > len) return {};
     return dibToImage(d, bmiLen, d + bmiLen, len - bmiLen);
 }
@@ -301,7 +305,7 @@ private:
         o.font.setUnderline(underline);
         o.font.setStrikeOut(strike);
         // Negative heights are character (em) heights; positive include internal leading.
-        o.height = height < 0 ? -height : height * 0.82;
+        o.height = height < 0 ? -double(height) : height * 0.82;
         if (o.height <= 0) o.height = 12;
         o.escapement = escapement / 10.0;
         o.symbol = charset == 2;
@@ -475,21 +479,21 @@ private:
                 break;
             }
             case 0x0521: {
-                const int len = a.s16();
-                const QByteArray s(reinterpret_cast<const char *>(a.d + a.p), std::min<qsizetype>(len, a.n - a.p));
-                a.p += (len + 1) & ~1;
+                const int len = std::max(0, int(a.s16()));   // a negative length counts as none
+                const QByteArray s(reinterpret_cast<const char *>(a.d + a.p), std::clamp<qsizetype>(len, 0, a.n - a.p));
+                a.skip((len + 1) & ~1);
                 const double y = a.s16(), x = a.s16();
                 text(QPointF(x, y), decode(s), {});
                 break;
             }
             case 0x0A32: {
                 const double y = a.s16(), x = a.s16();
-                const int len = a.s16();
+                const int len = std::max(0, int(a.s16()));   // a negative length counts as none
                 const quint16 opts = a.u16();
                 QRectF clip;
                 if (opts & 0x06) { const double l = a.s16(), t = a.s16(), rr = a.s16(), b = a.s16(); clip = QRectF(QPointF(l, t), QPointF(rr, b)); }
-                const QByteArray s(reinterpret_cast<const char *>(a.d + a.p), std::min<qsizetype>(len, a.n - a.p));
-                a.p += (len + 1) & ~1;
+                const QByteArray s(reinterpret_cast<const char *>(a.d + a.p), std::clamp<qsizetype>(len, 0, a.n - a.p));
+                a.skip((len + 1) & ~1);
                 QVector<double> dx;
                 for (int i = 0; i < len && a.ok(2); ++i) dx << a.s16();
                 if ((opts & 0x02) && !clip.isNull()) { apply(); m_p->fillRect(clip.normalized(), m_dc.bkColor); }
@@ -552,7 +556,7 @@ private:
             auto rect32 = [&]() { const double l = a.s32(), t = a.s32(), rr = a.s32(), b = a.s32(); return QRectF(QPointF(l, t), QPointF(rr, b)); };
             switch (type) {
             case 1: {   // header
-                a.p += 16 + 16;   // bounds, frame
+                a.skip(16 + 16);   // bounds, frame
                 a.u32(); a.u32(); a.u32(); a.u32(); a.u16(); a.u16();
                 a.u32(); a.u32(); a.u32();
                 const double devX = a.s32(), devY = a.s32(), mmX = a.s32(), mmY = a.s32();
@@ -736,7 +740,7 @@ private:
                 if (mode == 5 || cb == 0) { m_p->setClipping(false); break; }
                 // RGNDATA: header (32 bytes) followed by rectangles in device units.
                 if (cb >= 32) {
-                    a.u32(); a.u32(); const quint32 nRects = a.u32(); a.u32(); a.p += 16;
+                    a.u32(); a.u32(); const quint32 nRects = a.u32(); a.u32(); a.skip(16);
                     QPainterPath region;
                     for (quint32 i = 0; i < nRects && a.ok(16); ++i) region.addRect(rect32().normalized());
                     m_p->setTransform(base);
@@ -752,12 +756,13 @@ private:
                 const QRectF rcl = rect32();
                 const quint32 offDx = a.u32();
                 QString s;
-                if (start + offString + nChars * (type == 84 ? 2 : 1) <= a.n) {
+                // In 64 bits: a count from the file could wrap a 32-bit product.
+                if (start + qsizetype(offString) + qsizetype(nChars) * (type == 84 ? 2 : 1) <= a.n) {
                     if (type == 84) for (quint32 i = 0; i < nChars; ++i) s += QChar(qFromLittleEndian<quint16>(a.d + start + offString + i * 2));
                     else s = decode(QByteArray(reinterpret_cast<const char *>(a.d + start + offString), nChars));
                 }
                 QVector<double> dx;
-                if (offDx && start + offDx + nChars * 4 <= a.n)
+                if (offDx && start + qsizetype(offDx) + qsizetype(nChars) * 4 <= a.n)
                     for (quint32 i = 0; i < nChars; ++i) dx << qFromLittleEndian<qint32>(a.d + start + offDx + i * 4);
                 if ((options & 0x02) && rcl.isValid()) { apply(); m_p->fillRect(rcl.normalized(), m_dc.bkColor); }
                 text(ref, s, dx);
@@ -773,7 +778,7 @@ private:
                     a.u32(); rop = a.u32(); cxd = a.s32(); cyd = a.s32();
                 } else {
                     xd = a.s32(); yd = a.s32(); cxd = a.s32(); cyd = a.s32(); rop = a.u32(); xs = a.s32(); ys = a.s32();
-                    a.p += 24; a.u32(); a.u32();
+                    a.skip(24); a.u32(); a.u32();
                     offBmi = a.u32(); cbBmi = a.u32(); offBits = a.u32(); cbBits = a.u32();
                     if (type == 77) { cxs = a.s32(); cys = a.s32(); }
                 }
@@ -825,6 +830,7 @@ bool Metafile::load(const QByteArray &data)
     const uchar *d = reinterpret_cast<const uchar *>(data.constData());
     const quint32 m = qFromLittleEndian<quint32>(d);
     if (m == 1) {
+        if (data.size() < 88) return false;   // the header is 88 bytes
         m_emf = true;
         const double bl = qFromLittleEndian<qint32>(d + 8), bt = qFromLittleEndian<qint32>(d + 12), br = qFromLittleEndian<qint32>(d + 16), bb = qFromLittleEndian<qint32>(d + 20);
         const double fl = qFromLittleEndian<qint32>(d + 24), ft = qFromLittleEndian<qint32>(d + 28), fr = qFromLittleEndian<qint32>(d + 32), fb = qFromLittleEndian<qint32>(d + 36);

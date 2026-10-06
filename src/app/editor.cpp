@@ -58,7 +58,12 @@ Editor::Editor(QObject *parent) : QObject(parent)
     connect(&m_undo, &QUndoStack::cleanChanged, this, [this](bool clean) { Q_EMIT modifiedChanged(!clean); });
 }
 
-Editor::~Editor() = default;
+Editor::~Editor()
+{
+    // Destroying the undo stack emits cleanChanged; nothing should hear about
+    // an editor that is going away.
+    blockSignals(true);
+}
 
 void Editor::setDocument(std::unique_ptr<Document> d, const QString &path)
 {
