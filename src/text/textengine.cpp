@@ -491,7 +491,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
             const int rel = frag.position() - b.position();
             const QString text = frag.text();
             const QTextCharFormat cf = frag.charFormat();
-            const QTextCharFormat rf = resolveCharFormat(cf, env);
+            QTextCharFormat rf = resolveCharFormat(cf, env);
             const QString field = cf.stringProperty(tp::Field);
             if (!field.isEmpty()) {
                 for (int i = 0; i < text.size(); ++i) {
@@ -544,6 +544,14 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                 } else {
                     shown = raw;
                     B->map << Seg{rel + start, int(raw.size()), int(B->disp.size()), int(raw.size())};
+                }
+                // All capitals (or all lowercase): Qt ignores these in a
+                // layout's format ranges, so the letters are changed here, one
+                // for one so positions still map.
+                if (rf.fontCapitalization() == QFont::AllUppercase || rf.fontCapitalization() == QFont::AllLowercase) {
+                    const bool up = rf.fontCapitalization() == QFont::AllUppercase;
+                    for (QChar &ch : shown) ch = up ? ch.toUpper() : ch.toLower();
+                    rf.setFontCapitalization(QFont::MixedCase);
                 }
                 const int len = int(shown.size());
                 QTextLayout::FormatRange fr{int(B->disp.size()), len, rf};
@@ -714,7 +722,9 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                         if (n > 1 && B->disp[s0 + n - 1] == QChar(0x00AD)) {
                             int k = s0 + n - 1;
                             while (k > s0 && !B->disp[k - 1].isSpace()) --k;
-                            if (k > s0 && (iv.x1 - iv.x0) - (line.cursorToX(k) - line.cursorToX(s0)) < zone) line.setNumColumns(k - s0);
+                            // The width is given again: without it Qt treats the line
+                            // as endless, and justified text spreads off the page.
+                            if (k > s0 && (iv.x1 - iv.x0) - (line.cursorToX(k) - line.cursorToX(s0)) < zone) line.setNumColumns(k - s0, std::max(1.0, iv.x1 - iv.x0));
                         }
                     }
                     const double single = singleSpacing(ranges, line.textStart(), std::max(1, line.textLength()), base);

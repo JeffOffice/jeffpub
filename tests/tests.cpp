@@ -277,7 +277,7 @@ private Q_SLOTS:
     {
         auto doc = jp::Document::blank(QSizeF(612, 792));
         auto t = std::make_shared<jp::TextItem>();
-        t->rect = QRectF(72, 72, 150, 200);
+        t->rect = QRectF(72, 72, 110, 200);
         t->storyId = doc->createStory(QStringLiteral("We met at the international conference today."));
         doc->pages[0]->items.push_back(t);
         auto firstLine = [&](double zone) {
@@ -285,11 +285,37 @@ private Q_SLOTS:
             jp::LayoutCache cache;
             jp::RenderOptions opt;
             const auto fl = cache.textFrame(*doc, *t, 1, opt);
-            return fl.layout ? fl.layout->lineInfo(0).value(0).text : QString();
+            return fl.layout ? fl.layout->lineInfo(0).value(0).text.remove(QChar(0x00AD)) : QString();
         };
         const QString tight = firstLine(0), loose = firstLine(200);
-        QVERIFY2(tight.contains(QChar(0x00AD)) || tight.endsWith(QLatin1Char('-')) || tight.contains(QStringLiteral("inter")), qPrintable(tight));
+        QVERIFY2(tight.contains(QStringLiteral("inter")), qPrintable(tight));
         QVERIFY2(!loose.contains(QStringLiteral("inter")), qPrintable(loose));
+        // A justified line the zone shortened still fits the box (Qt would
+        // otherwise spread its words over an endless line).
+        {
+            QTextCursor jc(doc->storyDoc(t->storyId));
+            jc.movePosition(QTextCursor::End);
+            jc.insertText(QStringLiteral(" We talked about everything we learned there."));
+            QTextBlockFormat jf;
+            jf.setAlignment(Qt::AlignJustify);
+            jc.mergeBlockFormat(jf);
+            t->hyphenZone = 200;
+            // Ink of the black plate inside the box: every word is drawn
+            // there, justified or not.
+            auto ink = [&] {
+                const QImage k = jp::renderPlate(*doc, 0, 3, 72);
+                int n = 0;
+                for (int y = 72; y < 272; ++y)
+                    for (int x = 72; x < 182; ++x) n += qGray(k.pixel(x, y)) < 128;
+                return n;
+            };
+            const int justified = ink();
+            QTextBlockFormat lf;
+            lf.setAlignment(Qt::AlignLeft);
+            jc.mergeBlockFormat(lf);
+            const int left = ink();
+            QVERIFY2(justified > left * 0.9, qPrintable(QStringLiteral("%1 vs %2").arg(justified).arg(left)));
+        }
         // Saved with the text box.
         t->hyphenZone = 30;
         QString err;
@@ -349,6 +375,29 @@ private Q_SLOTS:
         jp::RenderOptions opt;
         QVERIFY(!cache.textFrame(*ed->doc(), *chain.last(), int(chain.size()), opt).layout->overflow());
         QCOMPARE(jp::autoflowText(ed, box->id), 0);   // nothing more to do
+    }
+
+    // All capitals show as capitals (Qt's layout ignores the setting), and
+    // the text itself keeps its case.
+    void allCapsShown()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 400, 100);
+        t->storyId = doc->createStory(QStringLiteral("Report on the CIA"));
+        doc->pages[0]->items.push_back(t);
+        QTextDocument *d = doc->storyDoc(t->storyId);
+        QTextCursor c(d);
+        c.select(QTextCursor::Document);
+        QTextCharFormat caps;
+        caps.setFontCapitalization(QFont::AllUppercase);
+        c.mergeCharFormat(caps);
+        jp::LayoutCache cache;
+        jp::RenderOptions opt;
+        const auto fl = cache.textFrame(*doc, *t, 1, opt);
+        QVERIFY(fl.layout);
+        QCOMPARE(fl.layout->lineInfo(0).value(0).text.remove(QChar(0x00AD)).trimmed(), QStringLiteral("REPORT ON THE CIA"));
+        QCOMPARE(d->toPlainText(), QStringLiteral("Report on the CIA"));
     }
 
     // Tracking adds the font's average character width times the percentage
