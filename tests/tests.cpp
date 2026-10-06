@@ -1973,6 +1973,28 @@ private Q_SLOTS:
         // The Commercial Print tab lists the spot colors.
         jp::MainWindow w;
         w.editor()->setDocument(std::move(doc));
+        // A PDF names the ink: Separation colors at the spot's strength.
+        {
+            QTemporaryDir pd;
+            const QString pdfPath = pd.filePath(QStringLiteral("spot.pdf"));
+            QVERIFY(w.exportPdfTo(pdfPath, jp::MainWindow::PdfSettings()));
+            if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) { QFile::remove(qEnvironmentVariable("JP_SHOT_DIR") + "/spot.pdf"); QFile::copy(pdfPath, qEnvironmentVariable("JP_SHOT_DIR") + "/spot.pdf"); }
+            QFile pf(pdfPath);
+            QVERIFY(pf.open(QIODevice::ReadOnly));
+            const QByteArray bytes = pf.readAll();
+            QVERIFY(bytes.contains("/Separation /Harbor#20Blue /DeviceCMYK"));
+            QVERIFY(bytes.contains("startxref"));
+            QByteArray text;
+            for (qsizetype at = 0; (at = bytes.indexOf(">>\nstream\n", at)) >= 0; at += 10) {
+                const qsizetype st = at + 10, en = bytes.indexOf("\nendstream", st);
+                QByteArray sized(4, 0);
+                qToBigEndian<quint32>(quint32(16 * 1024 * 1024), sized.data());
+                text += qUncompress(sized + bytes.mid(st, en - st));
+            }
+            QVERIFY2(text.contains("/CSspot0 cs 1 scn"), text.left(300).constData());
+            QVERIFY(text.contains("/CSspot0 cs 0.5 scn") || text.contains("/CSspot0 cs 0.4"));
+            QVERIFY(text.contains("/CSpcmyk cs"));   // the red stays process
+        }
         QTimer::singleShot(0, [] {
             auto *dlg = qobject_cast<QDialog *>(QApplication::activeModalWidget());
             QVERIFY(dlg);
@@ -2042,6 +2064,7 @@ private Q_SLOTS:
         QTemporaryDir dir;
         const QString path = dir.filePath(QStringLiteral("cmyk.pdf"));
         QVERIFY(w.exportPdfTo(path, jp::MainWindow::PdfSettings()));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) { QFile::remove(qEnvironmentVariable("JP_SHOT_DIR") + "/cmyk.pdf"); QFile::copy(path, qEnvironmentVariable("JP_SHOT_DIR") + "/cmyk.pdf"); }
         QFile f(path);
         QVERIFY(f.open(QIODevice::ReadOnly));
         const QByteArray pdf = f.readAll();

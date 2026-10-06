@@ -8,6 +8,7 @@
 #include <QSpinBox>
 
 #include "io/importers.h"
+#include "io/pdfspots.h"
 #include "app/appfuncs.h"
 #include "app/backstage.h"
 #include "app/dialogs.h"
@@ -480,7 +481,7 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
     else if (s.properties) pdf.setDocumentXmpMetadata(pdfXmp(d->props, title));
     // A publication set up for process-color printing (Commercial Print
     // Information) makes a CMYK PDF: colors given as ink amounts keep them.
-    if (!s.archival && (d->print.model == PrintInfo::ProcessCMYK || d->print.model == PrintInfo::ProcessPlusSpot))
+    if (!s.archival && (d->print.model == PrintInfo::ProcessCMYK || d->print.usesSpots()))
         pdf.setColorModel(QPdfWriter::ColorModel::CMYK);
     const QSizeF ps = d->pageSize();
     pdf.setPageSize(QPageSize(ps + QSizeF(2 * margin, 2 * margin), QPageSize::Point, QString(), QPageSize::ExactMatch));
@@ -528,6 +529,14 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
         }
     }
     p.end();
+    // Spot colors become Separation colors named for their inks.
+    if (!s.archival && d->print.usesSpots() && !d->print.spotColors.isEmpty()) {
+        QStringList names;
+        for (int k2 = 0; k2 < d->print.spotColors.size(); ++k2) names << d->print.spotName(k2);
+        QString spotErr;
+        if (!addPdfSpotColors(path, d->print.spotColors, names, &spotErr))
+            QMessageBox::warning(this, QStringLiteral("Create PDF"), QStringLiteral("The PDF was made, but its spot colors are process colors: %1").arg(spotErr));
+    }
     QApplication::restoreOverrideCursor();
     statusBar()->showMessage(QStringLiteral("Exported %1%2").arg(QFileInfo(path).fileName(), s.archival ? QStringLiteral(" (PDF/A)") : QString()), 5000);
     return true;

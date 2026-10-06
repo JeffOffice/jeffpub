@@ -8,7 +8,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 
 ### Info
 - [x] Business Information: create, edit, and switch between named sets (name, tagline, contact person, title, address, phone/fax/email, logo)
-- [~] Commercial Print Information: color model (RGB, process CMYK, spot colors, process + spot) and embedded-font management *(partial: spot colors are entered by name and color and print on their own separation plates; a process-color publication makes a CMYK PDF with colors entered as CMYK kept exactly, but PDFs show spot colors as process colors)*
+- [x] Commercial Print Information: color model (RGB, process CMYK, spot colors, process + spot) and embedded-font management *(spot colors are named inks: they print on their own separation plates and are Separation colors in PDFs; a process-color publication makes a CMYK PDF, with colors entered as CMYK kept exactly)*
 - [x] Run Design Checker from Info
 - [x] Publication properties (title, author, subject, keywords, comments)
 
