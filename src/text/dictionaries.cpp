@@ -127,7 +127,7 @@ QString root()
 {
     static const QString dir = [] {
         const QString app = QCoreApplication::applicationDirPath();
-        QStringList dirs{app + "/dict", app + "/../share/jeffpub79/dict", app + "/../dict"};
+        QStringList dirs{app + "/dict", app + "/../share/jeffpub79/dict", app + "/../dict", app + "/../Resources/dict"};
 #ifdef JP_SOURCE_DIR
         dirs << QStringLiteral(JP_SOURCE_DIR) + "/resources/dict";
 #endif

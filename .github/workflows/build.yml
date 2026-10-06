@@ -15,6 +15,10 @@ jobs:
             name: linux
           - os: windows-2022
             name: windows
+          # One app for Apple silicon and Intel Macs (Qt's macOS build is
+          # universal), unsigned for now.
+          - os: macos-14
+            name: macos
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +40,20 @@ jobs:
           tools: 'tools_mingw1310'
           cache: true
 
+      - uses: jurplel/install-qt-action@v4
+        if: runner.os == 'macOS'
+        with:
+          version: '6.8.3'
+          host: 'mac'
+          target: 'desktop'
+          arch: 'clang_64'
+          modules: 'qtimageformats'
+          cache: true
+
+      - name: Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew list ninja >/dev/null 2>&1 || brew install ninja
+
       - name: MinGW on PATH (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -51,7 +69,9 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then CC=gcc CXX=g++; else CC=cc CXX=c++; fi
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX
+          EXTRA=""
+          if [ "$RUNNER_OS" = "macOS" ]; then EXTRA="-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0"; fi
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX $EXTRA
 
       - name: Build
         run: cmake --build build --parallel
@@ -84,7 +104,9 @@ jobs:
         shell: bash
         run: |
           # PDFs exported by this platform's build, to compare against Linux.
-          if [ "$RUNNER_OS" = "Windows" ]; then A=build/JeffPub79.exe; else A=build/JeffPub79; fi
+          if [ "$RUNNER_OS" = "Windows" ]; then A=build/JeffPub79.exe
+          elif [ "$RUNNER_OS" = "macOS" ]; then A=build/JeffPub79.app/Contents/MacOS/JeffPub79
+          else A=build/JeffPub79; fi
           mkdir -p pdf-check
           "$A" --template newsletter-classic --export-pdf pdf-check/newsletter-classic.pdf || true
           "$A" --template flyer-announce --export-pdf pdf-check/flyer-announce.pdf || true
@@ -153,6 +175,30 @@ jobs:
         with:
           name: JeffPub79-linux-packages
           path: linux-packages
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          ver=$(sed -n 's/^project(JeffPub79 VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          mkdir -p dist macos-dmg
+          cp -R build/JeffPub79.app dist/
+          "$QT_ROOT_DIR/bin/macdeployqt" dist/JeffPub79.app
+          # Not yet signed with a developer certificate: an ad-hoc signature
+          # lets it run on Apple silicon.
+          codesign --force --deep --sign - dist/JeffPub79.app
+          lipo -archs dist/JeffPub79.app/Contents/MacOS/JeffPub79
+          # The packaged program must start on its own bundled Qt.
+          QT_QPA_PLATFORM=offscreen dist/JeffPub79.app/Contents/MacOS/JeffPub79 --template flyer-announce --export-pdf dist/check.pdf
+          test -s dist/check.pdf && rm dist/check.pdf
+          mkdir dmg-root && cp -R dist/JeffPub79.app LICENSE README.md dmg-root/ && ln -s /Applications dmg-root/Applications
+          hdiutil create -volname "JeffPub 79" -srcfolder dmg-root -ov -format UDZO macos-dmg/JeffPub79-$ver.dmg
+          ls -la macos-dmg
+
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'macOS'
+        with:
+          name: JeffPub79-macos-dmg
+          path: macos-dmg
 
       - uses: actions/upload-artifact@v4
         with:

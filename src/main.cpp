@@ -98,6 +98,7 @@ int main(int argc, char **argv)
     auto *w = new jp::MainWindow();
     w->setAttribute(Qt::WA_DeleteOnClose);
 
+    jp::installFileOpenHandler(&app);
     const QStringList files = cli.positionalArguments();
     if (!files.isEmpty()) {
         w->openFile(files.first());

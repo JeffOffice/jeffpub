@@ -125,4 +125,9 @@ private:
     QPointer<QWidget> m_measurement;
 };
 
+// Opens documents the system hands the running program: macOS sends a
+// FileOpen event for a file double-clicked in the Finder or dropped on the
+// Dock icon, not a command-line argument. Installed on the application.
+void installFileOpenHandler(QObject *app);
+
 } // namespace jp

@@ -31,6 +31,7 @@
 #include "app/settings.h"
 #include "canvas/canvas.h"
 #include <QTemporaryDir>
+#include <QFileOpenEvent>
 #include <QSettings>
 #include <QLineEdit>
 #include <QLabel>
@@ -1482,6 +1483,28 @@ private Q_SLOTS:
             decoded = copy.image();
         }
         QCOMPARE(decoded, first->images.first().cache);
+    }
+
+    // A file the system hands over (macOS: double-clicked in the Finder)
+    // opens in the empty window, and in a new one once that has a file.
+    void fileOpenEvent()
+    {
+        jp::MainWindow w;
+        w.show();
+        jp::installFileOpenHandler(qApp);
+        const QString first = QStringLiteral(JP_TEST_DATA "/pub/poi-SampleBrochure.pub");
+        QFileOpenEvent open1(first);
+        QCoreApplication::sendEvent(qApp, &open1);
+        QCOMPARE(QFileInfo(w.editor()->filePath()).fileName(), QFileInfo(first).fileName());
+        const QString second = QStringLiteral(JP_TEST_DATA "/pub/poi-SampleNewsletter.pub");
+        QFileOpenEvent open2(second);
+        QCoreApplication::sendEvent(qApp, &open2);
+        QCOMPARE(QFileInfo(w.editor()->filePath()).fileName(), QFileInfo(first).fileName());
+        jp::MainWindow *other = nullptr;
+        for (QWidget *top : QApplication::topLevelWidgets())
+            if (auto *mw = qobject_cast<jp::MainWindow *>(top); mw && mw != &w && mw->editor()->filePath().endsWith(QLatin1String("poi-SampleNewsletter.pub"))) other = mw;
+        QVERIFY(other);
+        other->close();
     }
 
     // About: the third-party table fits its card at a modest window size

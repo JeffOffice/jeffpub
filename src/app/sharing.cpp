@@ -1,6 +1,7 @@
 // Share and export helpers: email files, Pack and Go, photo printer pictures,
 // templates, and procedural textures for Fill Effects.
 
+#include "core/fonts.h"
 #include "app/appfuncs.h"
 #include "app/editor.h"
 #include "app/mainwindow.h"
@@ -127,10 +128,7 @@ void packAndGo(QWidget *parent, MainWindow *win, bool forPrinter)
                 for (const QString &fam : f.fragment().charFormat().fontFamilies().toStringList()) families.insert(fam);
     families.insert(ed->doc()->fonts.heading);
     families.insert(ed->doc()->fonts.body);
-    QStringList fontDirs{QCoreApplication::applicationDirPath() + "/fonts"};
-#ifdef JP_SOURCE_DIR
-    fontDirs << QStringLiteral(JP_SOURCE_DIR) + "/resources/fonts";
-#endif
+    const QStringList fontDirs = bundledFontDirs();
     int fonts = 0;
     for (const QString &d : fontDirs) {
         for (const QFileInfo &fi : QDir(d).entryInfoList({"*.ttf", "*.otf"}, QDir::Files)) {

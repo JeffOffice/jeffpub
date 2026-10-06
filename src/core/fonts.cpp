@@ -20,10 +20,12 @@ double fontPointFactor()
 
 static QStringList g_families;
 
-static QStringList fontDirs()
+QStringList bundledFontDirs()
 {
     const QString app = QCoreApplication::applicationDirPath();
-    QStringList dirs{app + "/fonts", app + "/../share/jeffpub79/fonts", app + "/../fonts"};
+    // Beside the program (Windows), the Linux packages' share folder, and a
+    // macOS app's Resources folder.
+    QStringList dirs{app + "/fonts", app + "/../share/jeffpub79/fonts", app + "/../fonts", app + "/../Resources/fonts"};
 #ifdef JP_SOURCE_DIR
     dirs << QStringLiteral(JP_SOURCE_DIR) + "/resources/fonts";
 #endif
@@ -33,7 +35,7 @@ static QStringList fontDirs()
 int loadBundledFonts()
 {
     int n = 0;
-    for (const QString &d : fontDirs()) {
+    for (const QString &d : bundledFontDirs()) {
         QDir dir(d);
         if (!dir.exists()) continue;
         for (const QString &f : dir.entryList({"*.ttf", "*.otf"}, QDir::Files)) {

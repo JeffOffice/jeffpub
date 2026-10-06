@@ -27,6 +27,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QFileOpenEvent>
 #include <QUrl>
 #include <QGuiApplication>
 #include <QDesktopServices>
@@ -916,5 +917,34 @@ void MainWindow::screenshotTo(const QString &path)
     refreshUi();
     grab().save(path);
 }
+
+namespace {
+class FileOpener : public QObject {
+public:
+    using QObject::QObject;
+    bool eventFilter(QObject *o, QEvent *e) override
+    {
+        if (e->type() != QEvent::FileOpen) return QObject::eventFilter(o, e);
+        const QString path = static_cast<QFileOpenEvent *>(e)->file();
+        if (path.isEmpty()) return false;
+        // Into a window that is still empty, else a new one.
+        MainWindow *target = nullptr;
+        for (QWidget *top : QApplication::topLevelWidgets())
+            if (auto *mw = qobject_cast<MainWindow *>(top))
+                if (mw->isVisible() && mw->editor()->filePath().isEmpty() && !mw->editor()->isModified()) target = mw;
+        if (!target) {
+            target = new MainWindow();
+            target->setAttribute(Qt::WA_DeleteOnClose);
+            target->show();
+        }
+        target->openFile(path);
+        target->raise();
+        target->activateWindow();
+        return true;
+    }
+};
+} // namespace
+
+void installFileOpenHandler(QObject *app) { app->installEventFilter(new FileOpener(app)); }
 
 } // namespace jp
