@@ -390,6 +390,74 @@ private Q_SLOTS:
         QCOMPARE(nb.textList()->format().start(), 3);
     }
 
+    // Widow and orphan control, keep lines together and keep with next, on a
+    // story running from one text box into the next.
+    void paragraphBreakRules()
+    {
+        // paras: (line count, flags) ; returns each paragraph's lines in box 1 and box 2.
+        enum { Widow = 1, Together = 2, WithNext = 4 };
+        auto run = [](const QVector<QPair<int, int>> &paras) {
+            auto doc = jp::Document::blank(QSizeF(612, 792));
+            auto a = std::make_shared<jp::TextItem>(), b = std::make_shared<jp::TextItem>();
+            a->rect = QRectF(72, 72, 300, 150);
+            b->rect = QRectF(72, 400, 300, 300);
+            a->storyId = doc->createStory();
+            b->storyId = a->storyId;
+            a->nextId = b->id;
+            doc->pages[0]->items.push_back(a);
+            doc->pages[0]->items.push_back(b);
+            QTextCursor c(doc->storyDoc(a->storyId));
+            for (int i = 0; i < paras.size(); ++i) {
+                if (i) c.insertBlock();
+                QTextBlockFormat bf;
+                bf.setProperty(jp::tp::WidowControl, bool(paras[i].second & Widow));
+                bf.setProperty(jp::tp::KeepTogether, bool(paras[i].second & Together));
+                bf.setProperty(jp::tp::KeepWithNext, bool(paras[i].second & WithNext));
+                c.setBlockFormat(bf);
+                QStringList lines;
+                for (int k = 0; k < paras[i].first; ++k) lines << QStringLiteral("P%1 line %2").arg(i).arg(k);
+                c.insertText(lines.join(QChar(QChar::LineSeparator)));
+            }
+            jp::LayoutCache cache;
+            jp::RenderOptions opt;
+            const auto fl = cache.textFrame(*doc, *a, 1, opt);
+            QVector<QPair<int, int>> out(paras.size());
+            for (int f = 0; f < 2; ++f)
+                for (const auto &li : fl.layout->lineInfo(f)) {
+                    const int pi = li.text.mid(1, li.text.indexOf(' ') - 1).toInt();
+                    if (f == 0) ++out[pi].first; else ++out[pi].second;
+                }
+            return out;
+        };
+        // How many one-line paragraphs fit in the first box.
+        QVector<QPair<int, int>> ones(30, qMakePair(1, 0));
+        int fit = 0;
+        for (const auto &r : run(ones)) fit += r.first;
+        QVERIFY(fit > 6);
+        auto fill = [&](int n) { return QVector<QPair<int, int>>(n, qMakePair(1, 0)); };
+        // Orphan: one line left at the bottom moves on.
+        auto paras = fill(fit - 1) << qMakePair(6, 0);
+        QCOMPARE(run(paras).last(), qMakePair(1, 5));
+        paras.last().second = Widow;
+        QCOMPARE(run(paras).last(), qMakePair(0, 6));
+        // Widow: one line carried over takes another with it.
+        paras = fill(fit - 5) << qMakePair(6, 0);
+        QCOMPARE(run(paras).last(), qMakePair(5, 1));
+        paras.last().second = Widow;
+        QCOMPARE(run(paras).last(), qMakePair(4, 2));
+        // Keep lines together.
+        paras = fill(fit - 3) << qMakePair(6, Together);
+        QCOMPARE(run(paras).last(), qMakePair(0, 6));
+        // Keep with next: a heading on the last line goes with its paragraph.
+        paras = fill(fit - 1) << qMakePair(1, 0) << qMakePair(3, 0);
+        auto got = run(paras);
+        QCOMPARE(got[fit - 1], qMakePair(1, 0));
+        paras[fit - 1].second = WithNext;
+        got = run(paras);
+        QCOMPARE(got[fit - 1], qMakePair(0, 1));
+        QCOMPARE(got.last(), qMakePair(0, 3));
+    }
+
     // "Always create backup copy" keeps the file as it was before saving.
     void saveBackupCopy()
     {

@@ -571,107 +571,147 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
             B->dropWidth = QFontMetricsF(df).horizontalAdvance(B->dropText) + 3 * scale;
         }
 
-        // Start in next text box.
-        if (bf.boolProperty(tp::StartInNextBox) && f < nF && (y > 0 || c > 0)) {
-            rowActive = false;
-            y = 0; c = 0; ++f;
-        }
-        if (f < nF && y > 0) y += before;
-        else if (f < nF) y += before;  // space before also applies at the top of a frame
-
-        // Estimate with the same rule the placed line will use, so wrap checks
-        // see the obstacles the real line will meet.
-        const double estH = std::max(1.0, lineHeightFor(bf, scale, singleSpacing({}, 0, 0, base)));
-        B->tl->beginLayout();
-        int lineNo = 0;
-        while (true) {
-            QTextLine line = B->tl->createLine();
-            if (!line.isValid()) break;
-            double indL = leftM, indR = rightM;
-            if (lineNo == 0) {
-                if (!B->marker.isEmpty()) indL = textIndent < 0 ? leftM : leftM + textIndent + markerW;
-                else indL = leftM + textIndent;
+        // Placing the paragraph's lines can be redone from the same spot:
+        // starting in the next column, or breaking a line early.
+        struct Spot { int f, c; double y, overflowY, rowH; QVector<Iv> row; int rowIdx; bool rowActive, columnEmpty, overflow; QVector<double> used; };
+        const Spot startSpot{f, c, y, overflowY, rowH, row, rowIdx, rowActive, columnEmpty, m_overflow, m_used};
+        auto placeLines = [&](bool startNext, int breakAfter) {
+            // Start in next text box.
+            if (bf.boolProperty(tp::StartInNextBox) && f < nF && (y > 0 || c > 0)) {
+                rowActive = false;
+                y = 0; c = 0; ++f;
             }
-            if (B->dropLines > 0 && lineNo < B->dropLines) indL += B->dropWidth;
+            if (startNext && f < nF) advance();
+            if (f < nF && y > 0) y += before;
+            else if (f < nF) y += before;  // space before also applies at the top of a frame
 
-            bool placed = false;
-            for (int guard = 0; guard < 2000 && !placed; ++guard) {
-                if (f >= nF) {
-                    line.setLineWidth(nF ? std::max(10.0, colRect(nF - 1, 0).width() - indL - indR) : 300);
-                    line.setPosition(QPointF(indL, nF * kStride + overflowY));
-                    overflowY += line.height();
-                    B->lines << Line{-1, 0, QRectF(indL, overflowY, line.naturalTextWidth(), line.height())};
-                    // Blank paragraphs past the end don't count as overflow
-                    // (as in .pub layouts): a box doesn't shrink or warn for them.
-                    if (!B->disp.trimmed().isEmpty()) m_overflow = true;
+            // Estimate with the same rule the placed line will use, so wrap checks
+            // see the obstacles the real line will meet.
+            const double estH = std::max(1.0, lineHeightFor(bf, scale, singleSpacing({}, 0, 0, base)));
+            B->tl->beginLayout();
+            int lineNo = 0;
+            while (true) {
+                QTextLine line = B->tl->createLine();
+                if (!line.isValid()) break;
+                double indL = leftM, indR = rightM;
+                if (lineNo == 0) {
+                    if (!B->marker.isEmpty()) indL = textIndent < 0 ? leftM : leftM + textIndent + markerW;
+                    else indL = leftM + textIndent;
+                }
+                if (B->dropLines > 0 && lineNo < B->dropLines) indL += B->dropWidth;
+                if (lineNo == breakAfter && f < nF && !columnEmpty) advance();   // widow control: carry this line over
+
+                bool placed = false;
+                for (int guard = 0; guard < 2000 && !placed; ++guard) {
+                    if (f >= nF) {
+                        line.setLineWidth(nF ? std::max(10.0, colRect(nF - 1, 0).width() - indL - indR) : 300);
+                        line.setPosition(QPointF(indL, nF * kStride + overflowY));
+                        overflowY += line.height();
+                        B->lines << Line{-1, 0, QRectF(indL, overflowY, line.naturalTextWidth(), line.height())};
+                        // Blank paragraphs past the end don't count as overflow
+                        // (as in .pub layouts): a box doesn't shrink or warn for them.
+                        if (!B->disp.trimmed().isEmpty()) m_overflow = true;
+                        placed = true;
+                        break;
+                    }
+                    const QRectF col = colRect(f, c);
+                    if (!rowActive) {
+                        const double x0 = col.left() + indL, x1 = col.right() - indR;
+                        QVector<Iv> ivs = freeIntervals(frames[f].obstacles, x0, x1, col.top() + y, col.top() + y + estH);
+                        QVector<Iv> ok;
+                        const double minW = std::max(18.0, base.pointSizeF() / fontPointFactor() * 2.5);
+                        for (const Iv &iv : ivs)
+                            if (iv.x1 - iv.x0 >= std::min(minW, x1 - x0)) ok << iv;
+                        if (ok.isEmpty()) {
+                            y += 2;
+                            if (y + estH > col.height() + 0.01) advance();
+                            continue;
+                        }
+                        row = ok; rowIdx = 0; rowH = 0; rowActive = true;
+                    }
+                    const Iv iv = row[rowIdx];
+                    line.setLineWidth(std::max(1.0, iv.x1 - iv.x0));
+                    // Hyphenation zone: a word is broken only if moving it whole to
+                    // the next line would leave more than the zone empty here.
+                    if (hyphenate && zone > 0) {
+                        const int s0 = line.textStart(), n = line.textLength();
+                        if (n > 1 && B->disp[s0 + n - 1] == QChar(0x00AD)) {
+                            int k = s0 + n - 1;
+                            while (k > s0 && !B->disp[k - 1].isSpace()) --k;
+                            if (k > s0 && (iv.x1 - iv.x0) - (line.cursorToX(k) - line.cursorToX(s0)) < zone) line.setNumColumns(k - s0);
+                        }
+                    }
+                    const double single = singleSpacing(ranges, line.textStart(), std::max(1, line.textLength()), base);
+                    double h = lineHeightFor(bf, scale, single);
+                    // .pub layouts add extra spacing between lines, never above the
+                    // first line of a column: its baseline sits one ascent below the top.
+                    if (columnEmpty && h > single && bf.lineHeightType() == QTextBlockFormat::ProportionalHeight) h = single;
+                    const bool firstInColumn = (y <= 0.001) && rowIdx == 0;
+                    if (col.top() + y + h > col.bottom() + 0.01 && !firstInColumn) {
+                        advance();
+                        continue;
+                    }
+                    // Re-check wrap for a line taller than estimated.
+                    if (h > estH * 1.05 && !frames[f].obstacles.isEmpty() && rowIdx == 0) {
+                        const QVector<Iv> recheck = freeIntervals(frames[f].obstacles, iv.x0, iv.x1, col.top() + y, col.top() + y + h);
+                        if (recheck.size() != 1 || recheck[0].x0 > iv.x0 + 0.5 || recheck[0].x1 < iv.x1 - 0.5) {
+                            y += 2;
+                            rowActive = false;
+                            if (y + h > col.height() + 0.01) advance();
+                            continue;
+                        }
+                    }
+                    // Baseline one descent above the line's bottom; for a substituted
+                    // proprietary font, the original font's descent.
+                    const double kd = knownDescent(ranges, line.textStart(), std::max(1, line.textLength()));
+                    const double lead = kd > 0 ? h - kd - line.ascent() : h - line.height();
+                    line.setPosition(QPointF(iv.x0, f * kStride + col.top() + y + lead));
+                    B->lines << Line{f, c, QRectF(iv.x0, col.top() + y, iv.x1 - iv.x0, h)};
+                    m_used[f] = std::max(m_used[f], col.top() + y + h);
+                    columnEmpty = false;
+                    rowH = std::max(rowH, h);
+                    if (++rowIdx >= row.size()) { y += rowH; rowActive = false; }
                     placed = true;
-                    break;
                 }
-                const QRectF col = colRect(f, c);
-                if (!rowActive) {
-                    const double x0 = col.left() + indL, x1 = col.right() - indR;
-                    QVector<Iv> ivs = freeIntervals(frames[f].obstacles, x0, x1, col.top() + y, col.top() + y + estH);
-                    QVector<Iv> ok;
-                    const double minW = std::max(18.0, base.pointSizeF() / fontPointFactor() * 2.5);
-                    for (const Iv &iv : ivs)
-                        if (iv.x1 - iv.x0 >= std::min(minW, x1 - x0)) ok << iv;
-                    if (ok.isEmpty()) {
-                        y += 2;
-                        if (y + estH > col.height() + 0.01) advance();
-                        continue;
-                    }
-                    row = ok; rowIdx = 0; rowH = 0; rowActive = true;
-                }
-                const Iv iv = row[rowIdx];
-                line.setLineWidth(std::max(1.0, iv.x1 - iv.x0));
-                // Hyphenation zone: a word is broken only if moving it whole to
-                // the next line would leave more than the zone empty here.
-                if (hyphenate && zone > 0) {
-                    const int s0 = line.textStart(), n = line.textLength();
-                    if (n > 1 && B->disp[s0 + n - 1] == QChar(0x00AD)) {
-                        int k = s0 + n - 1;
-                        while (k > s0 && !B->disp[k - 1].isSpace()) --k;
-                        if (k > s0 && (iv.x1 - iv.x0) - (line.cursorToX(k) - line.cursorToX(s0)) < zone) line.setNumColumns(k - s0);
-                    }
-                }
-                const double single = singleSpacing(ranges, line.textStart(), std::max(1, line.textLength()), base);
-                double h = lineHeightFor(bf, scale, single);
-                // .pub layouts add extra spacing between lines, never above the
-                // first line of a column: its baseline sits one ascent below the top.
-                if (columnEmpty && h > single && bf.lineHeightType() == QTextBlockFormat::ProportionalHeight) h = single;
-                const bool firstInColumn = (y <= 0.001) && rowIdx == 0;
-                if (col.top() + y + h > col.bottom() + 0.01 && !firstInColumn) {
-                    advance();
-                    continue;
-                }
-                // Re-check wrap for a line taller than estimated.
-                if (h > estH * 1.05 && !frames[f].obstacles.isEmpty() && rowIdx == 0) {
-                    const QVector<Iv> recheck = freeIntervals(frames[f].obstacles, iv.x0, iv.x1, col.top() + y, col.top() + y + h);
-                    if (recheck.size() != 1 || recheck[0].x0 > iv.x0 + 0.5 || recheck[0].x1 < iv.x1 - 0.5) {
-                        y += 2;
-                        rowActive = false;
-                        if (y + h > col.height() + 0.01) advance();
-                        continue;
-                    }
-                }
-                // Baseline one descent above the line's bottom; for a substituted
-                // proprietary font, the original font's descent.
-                const double kd = knownDescent(ranges, line.textStart(), std::max(1, line.textLength()));
-                const double lead = kd > 0 ? h - kd - line.ascent() : h - line.height();
-                line.setPosition(QPointF(iv.x0, f * kStride + col.top() + y + lead));
-                B->lines << Line{f, c, QRectF(iv.x0, col.top() + y, iv.x1 - iv.x0, h)};
-                m_used[f] = std::max(m_used[f], col.top() + y + h);
-                columnEmpty = false;
-                rowH = std::max(rowH, h);
-                if (++rowIdx >= row.size()) { y += rowH; rowActive = false; }
-                placed = true;
+                ++lineNo;
             }
-            ++lineNo;
+            B->tl->endLayout();
+            if (rowActive) { y += rowH; rowActive = false; }
+            if (f < nF) {
+                y += after;
+            }
+        };
+        placeLines(false, -1);
+        // Where each line landed: the first line in another column or box.
+        auto splitAt = [&] {
+            for (int i = 1; i < B->lines.size(); ++i)
+                if (B->lines[i].frame != B->lines[0].frame || B->lines[i].column != B->lines[0].column) return i;
+            return -1;
+        };
+        auto redo = [&](bool startNext, int breakAfter) {
+            f = startSpot.f; c = startSpot.c; y = startSpot.y; overflowY = startSpot.overflowY; rowH = startSpot.rowH; row = startSpot.row;
+            rowIdx = startSpot.rowIdx; rowActive = startSpot.rowActive; columnEmpty = startSpot.columnEmpty; m_overflow = startSpot.overflow; m_used = startSpot.used;
+            B->lines.clear();
+            placeLines(startNext, breakAfter);
+        };
+        // Only when there is somewhere to go: a later column or text box.
+        const bool roomAhead = startSpot.f < nF && (startSpot.c + 1 < std::max(1, frames[startSpot.f].columns) || startSpot.f + 1 < nF);
+        if (roomAhead && !startSpot.columnEmpty && B->lines.size() > 1 && B->lines.first().frame >= 0) {
+            const int at = splitAt();
+            const bool split = at > 0 && B->lines[at].frame >= 0;
+            if (split && bf.boolProperty(tp::KeepTogether)) redo(true, -1);                 // keep lines together
+            else if (split && at == 1 && bf.boolProperty(tp::WidowControl)) redo(true, -1);  // an orphan: one line left behind
+            else if (split && int(B->lines.size()) - at == 1 && at >= 2 && bf.boolProperty(tp::WidowControl))
+                redo(false, at - 1);                                                          // a widow: one line carried over
         }
-        B->tl->endLayout();
-        if (rowActive) { y += rowH; rowActive = false; }
-        if (f < nF) {
-            y += after;
+        // Keep with next: when the next paragraph's first line won't fit
+        // after this one, this one moves on with it.
+        if (roomAhead && bf.boolProperty(tp::KeepWithNext) && !startSpot.columnEmpty && b.next().isValid() && f < nF && !B->lines.isEmpty() && B->lines.first().frame >= 0) {
+            const QTextBlock nb = b.next();
+            const QTextBlockFormat nbf = nb.blockFormat();
+            const double nextH = (nbf.topMargin() * scale) + std::max(1.0, lineHeightFor(nbf, scale, singleSpacing({}, 0, 0, baseFontFor(nb, env))));
+            const QRectF col = colRect(f, c);
+            if (y + nextH > col.height() + 0.01 && B->lines.first().frame == f && B->lines.first().column == c) redo(true, -1);
         }
         m_blocks.push_back(std::move(B));
     }
