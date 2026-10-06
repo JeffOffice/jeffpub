@@ -21,7 +21,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 ### Open / Save / Save As / Close
 - [x] Open JeffPub publications (`.jpub`) and recent publications, with pinning
 - [~] Open `.pub` files (versions from 1998 to 2021), including linked text boxes, pictures, shapes, and tables *(partial: text, pictures, shapes and tables open; some picture crops, recolors and line spacing still differ from the original)*
-- [ ] Save as `.pub`. The format has no public specification and no open-source writer exists, so saved files must be checked in other programs before this box is checked
+- [~] Save as `.pub` *(partial; each part checked by opening the saved file in another .pub program. Saved: pages, text boxes and linked text boxes, bold, italic, size, font and color of text, paragraph alignment and spacing above and below, rectangles, ovals and every other shape, lines with dashes and arrowheads, text inside shapes, rotation and flips, pictures with cropping, tables with merged cells, fills and borders, Text Art. Not saved yet: underline and other character effects, line spacing, indents, tabs, bullets and numbering, styles other than Normal, objects on master pages, gradient, pattern and picture fills, transparency, shadows, picture adjustments. Saving reports objects it leaves out)*
 - [x] Save, Save As, AutoRecover, and backup on save
 - [x] Close and prompt to save changes
 
