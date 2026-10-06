@@ -71,6 +71,8 @@ struct ShapeInfo
   std::vector<libmspub::Vertex> m_clipPath;
   boost::optional<int> m_pictureBrightness;
   boost::optional<int> m_pictureContrast;
+  boost::optional<unsigned> m_pictureFlags;            // JeffPub patch: 0x013F (gray, black and white)
+  boost::optional<ColorReference> m_pictureTransparent; // JeffPub patch: 0x0107
   ShapeInfo() : m_type(), m_cropType(), m_imgIndex(), m_borderImgIndex(),
     m_coordinates(), m_lines(), m_pageSeqNum(),
     m_textId(), m_adjustValuesByIndex(), m_adjustValues(),

@@ -1,12 +1,21 @@
 #include "core/color.h"
 
 #include <QHash>
+#include <algorithm>
+#include <cmath>
 #include <QStringList>
 
 namespace jp {
 
 QColor mix(const QColor &a, const QColor &b, double t)
 {
+    // Tints and shades of ink colors stay ink colors: toward no ink, or
+    // toward black ink.
+    if (a.spec() == QColor::Cmyk && (b == QColor(Qt::white) || b == QColor(Qt::black))) {
+        const bool black = b == QColor(Qt::black);
+        auto to = [t](float v, float target) { return float(v + (target - v) * t); };
+        return QColor::fromCmykF(to(a.cyanF(), 0), to(a.magentaF(), 0), to(a.yellowF(), 0), to(a.blackF(), black ? 1 : 0), a.alphaF());
+    }
     return QColor::fromRgbF(float(a.redF() + (b.redF() - a.redF()) * t), float(a.greenF() + (b.greenF() - a.greenF()) * t),
                             float(a.blueF() + (b.blueF() - a.blueF()) * t), float(a.alphaF() + (b.alphaF() - a.alphaF()) * t));
 }
@@ -32,11 +41,35 @@ QColor ColorRef::resolve(const ColorScheme &s) const
     return QColor();
 }
 
+QString colorToString(const QColor &c)
+{
+    if (c.spec() == QColor::Cmyk) {
+        auto pct = [](float v) { return QString::number(std::round(v * 10000.0) / 100.0, 'g', 8); };
+        QString s = QStringLiteral("cmyk(%1,%2,%3,%4").arg(pct(c.cyanF()), pct(c.magentaF()), pct(c.yellowF()), pct(c.blackF()));
+        if (c.alpha() != 255) s += QStringLiteral(",%1").arg(c.alpha());
+        return s + QLatin1Char(')');
+    }
+    return c.alpha() == 255 ? c.name(QColor::HexRgb).toUpper() : c.name(QColor::HexArgb).toUpper();
+}
+
+QColor colorFromString(const QString &s)
+{
+    if (s.startsWith(QLatin1String("cmyk(")) && s.endsWith(QLatin1Char(')'))) {
+        const QStringList v = s.mid(5, s.size() - 6).split(QLatin1Char(','));
+        if (v.size() < 4) return QColor();
+        auto f = [&](int i) { return float(std::clamp(v[i].trimmed().toDouble() / 100.0, 0.0, 1.0)); };
+        QColor c = QColor::fromCmykF(f(0), f(1), f(2), f(3));
+        if (v.size() > 4) c.setAlpha(std::clamp(v[4].trimmed().toInt(), 0, 255));
+        return c;
+    }
+    return QColor(s);
+}
+
 QString ColorRef::toString() const
 {
     switch (m_kind) {
     case None: return QStringLiteral("none");
-    case Rgb: return m_rgb.alpha() == 255 ? m_rgb.name(QColor::HexRgb).toUpper() : m_rgb.name(QColor::HexArgb).toUpper();
+    case Rgb: return colorToString(m_rgb);
     case Scheme: {
         QString s = QStringLiteral("@%1").arg(m_slot);
         if (m_lighten) s += QStringLiteral("+%1").arg(m_lighten);
@@ -50,7 +83,7 @@ QString ColorRef::toString() const
 ColorRef ColorRef::fromString(const QString &s)
 {
     if (s.isEmpty() || s == QLatin1String("none")) return none();
-    if (s.startsWith('#')) return rgb(QColor(s));
+    if (s.startsWith('#') || s.startsWith(QLatin1String("cmyk("))) return rgb(colorFromString(s));
     if (s.startsWith('@')) {
         int i = 1, slot = 0, lighten = 0, darken = 0;
         while (i < s.size() && s[i].isDigit()) slot = slot * 10 + s[i++].digitValue();
@@ -74,6 +107,9 @@ QString slotName(int slot)
 QString ColorRef::displayName() const
 {
     if (m_kind == None) return QStringLiteral("No Color");
+    if (m_kind == Rgb && m_rgb.spec() == QColor::Cmyk)
+        return QStringLiteral("C %1 M %2 Y %3 K %4").arg(std::round(m_rgb.cyanF() * 1000) / 10).arg(std::round(m_rgb.magentaF() * 1000) / 10)
+            .arg(std::round(m_rgb.yellowF() * 1000) / 10).arg(std::round(m_rgb.blackF() * 1000) / 10);
     if (m_kind == Rgb) return m_rgb.name().toUpper();
     QString n = slotName(m_slot);
     if (m_lighten) n += QStringLiteral(" (Tint %1%)").arg(100 - m_lighten);

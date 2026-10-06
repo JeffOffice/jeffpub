@@ -138,6 +138,19 @@ picture of the pattern in its colors. Line opacity is 0x01C1. A shadow is
 0x0200 = 0 (offset), 0x0201 color, 0x0204 opacity, 0x0205/0x0206 offsets
 (EMU) and 0x023F = 0x00020002.
 
+### Picture settings and picture shapes
+
+A picture's OPT can add 0x0109 brightness (signed; 0x8000 is all the way
+to white), 0x0108 contrast (a 16.16 multiplier, 0x10000 unchanged),
+0x013F = 0x00040004 for grayscale or 0x00020002 for black and white, and
+0x0107 = the color shown clear. Washout is brightness 0x599A with contrast
+0x4CCD. A recolor is 0x011A in the tertiary OPT (0xF122); there is no
+sepia setting, so a sepia picture is recolored to brown 0x704214 and read
+back as sepia. A picture cut to a shape is saved as that shape filled with
+the picture (0x0180 = 3); the fill always covers the shape's box, so a
+cropped or adjusted picture is saved as the part that shows, with the
+settings applied.
+
 ## Text (Quill/QuillSub/CONTENTS)
 
 Starts with a `CHNKINK` index of sections, each with a 4-letter name, an id,

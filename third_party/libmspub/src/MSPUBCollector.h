@@ -117,6 +117,8 @@ public:
   void setShapeBeginArrow(unsigned seqNum, const Arrow &arrow);
   void setShapeEndArrow(unsigned seqNum, const Arrow &arrow);
   void setShapeLineOpacity(unsigned seqNum, double opacity);
+  void setShapePictureFlags(unsigned seqNum, unsigned flags);
+  void setShapePictureTransparent(unsigned seqNum, ColorReference color);
 
   void addTextColor(ColorReference c);
   void addFont(std::vector<unsigned char> name);

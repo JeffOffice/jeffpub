@@ -8,7 +8,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 
 ### Info
 - [x] Business Information: create, edit, and switch between named sets (name, tagline, contact person, title, address, phone/fax/email, logo)
-- [~] Commercial Print Information: color model (RGB, process CMYK, spot colors, process + spot) and embedded-font management *(partial: the color model is saved, but print and PDF output stay RGB)*
+- [~] Commercial Print Information: color model (RGB, process CMYK, spot colors, process + spot) and embedded-font management *(partial: a process-color publication makes a CMYK PDF, with colors entered as CMYK kept exactly; spot colors are printed as process colors)*
 - [x] Run Design Checker from Info
 - [x] Publication properties (title, author, subject, keywords, comments)
 
@@ -20,8 +20,8 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 
 ### Open / Save / Save As / Close
 - [x] Open JeffPub publications (`.jpub`) and recent publications, with pinning
-- [~] Open `.pub` files (versions from 1998 to 2021), including linked text boxes, pictures, shapes, and tables *(partial: text, pictures, shapes and tables open; some picture crops, recolors and line spacing still differ from the original)*
-- [~] Save as `.pub` *(partial; each part checked by opening the saved file in another .pub program. Saved: pages and the first master page, text boxes and linked text boxes, character formatting (font, size, bold, italic, underline, strikethrough, small and all caps, superscript and subscript, color, letter spacing and tracking), paragraphs (alignment, indents, spacing, line spacing, tab stops, bullets and numbering, direction is not), every shape (as Publisher's own where it matches, otherwise an exact outline), lines with dashes and arrowheads, text in shapes, rotation and flips, pictures with cropping, tables with merged cells, fills (solid, gradient, picture, texture and pattern) with transparency, borders with transparency, shadows, Text Art. Not saved yet: picture adjustments and picture shapes, tab leaders, styles other than Normal, master pages after the first. Saving reports objects it leaves out)*
+- [~] Open `.pub` files (versions from 1998 to 2021), including linked text boxes, pictures, shapes, and tables *(partial: text, pictures, shapes and tables open; Publisher's shapes come back as JeffPub's own where they match, and picture brightness, contrast and recoloring are kept; some picture crops and line spacing still differ from the original)*
+- [~] Save as `.pub` *(partial; each part checked by opening the saved file in another .pub program. Saved: pages and the first master page, text boxes and linked text boxes, character formatting (font, size, bold, italic, underline, strikethrough, small and all caps, superscript and subscript, color, letter spacing and tracking), paragraphs (alignment, indents, spacing, line spacing, tab stops, bullets and numbering, direction is not), every shape (as Publisher's own where it matches, otherwise an exact outline), lines with dashes and arrowheads, text in shapes, rotation and flips, pictures with cropping, brightness, contrast, recoloring and a clear color, pictures cut to a shape, tables with merged cells, fills (solid, gradient, picture, texture and pattern) with transparency, borders with transparency, shadows, Text Art. Not saved yet: picture transparency, tab leaders, styles other than Normal, master pages after the first. Saving reports objects it leaves out)*
 - [x] Save, Save As, AutoRecover, and backup on save
 - [x] Close and prompt to save changes
 

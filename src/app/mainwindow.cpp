@@ -451,6 +451,10 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &s)
     // output intent, and leaves out transparency.
     if (s.archival) pdf.setPdfVersion(QPagedPaintDevice::PdfVersion_A1b);
     else if (s.properties) pdf.setDocumentXmpMetadata(pdfXmp(d->props, title));
+    // A publication set up for process-color printing (Commercial Print
+    // Information) makes a CMYK PDF: colors given as ink amounts keep them.
+    if (!s.archival && (d->print.model == PrintInfo::ProcessCMYK || d->print.model == PrintInfo::ProcessPlusSpot))
+        pdf.setColorModel(QPdfWriter::ColorModel::CMYK);
     const QSizeF ps = d->pageSize();
     pdf.setPageSize(QPageSize(ps + QSizeF(2 * margin, 2 * margin), QPageSize::Point, QString(), QPageSize::ExactMatch));
     pdf.setPageMargins(QMarginsF(0, 0, 0, 0));

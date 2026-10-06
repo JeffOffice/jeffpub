@@ -67,6 +67,12 @@ const QVector<FontScheme> &builtinFontSchemes();
 const FontScheme *findFontScheme(const QString &name);
 
 QColor mix(const QColor &a, const QColor &b, double t);  // t = share of b
+
+// A color as text: "#RRGGBB" (or "#AARRGGBB"), or "cmyk(c,m,y,k)" in percent
+// (with ",a" for alpha 0-255) for a color given as ink amounts, so those
+// survive saving and reach a CMYK PDF unchanged.
+QString colorToString(const QColor &c);
+QColor colorFromString(const QString &s);
 QColor contrastText(const QColor &bg);
 
 } // namespace jp

@@ -11,6 +11,7 @@
 #include "core/fonts.h"
 #include "io/cfb.h"
 #include "io/pubshapes.h"
+#include "render/renderer.h"
 #include "render/shapes.h"
 #include "text/textprops.h"
 
@@ -620,6 +621,8 @@ private:
     void addStory(int textId, const QVector<const QTextDocument *> &docs, QVector<quint32> *cellEnds = nullptr);
     int blipIndex(const QString &imageId);
     int patternBlip(const Fill &f);
+    QString extraImage(const QByteArray &bytes, quint16 kind);
+    QString shapedPictureImage(const PictureItem &pic);
 
     // Tables: each table story's cell ends (by story index), the table
     // stories' text ids, and the cell fill and border records, which live in
@@ -636,7 +639,7 @@ private:
     // bytes kept in the delay stream.
     struct Blip { QString imageId, fileName; QByteArray uid, record; quint16 kind = 6; quint32 refs = 0; };
     QVector<Blip> m_blips;
-    QHash<QString, QByteArray> m_patternImages;   // pattern tiles by key (PNG)
+    QHash<QString, QPair<QByteArray, quint16>> m_extraImages;   // made while saving (pattern tiles, cut-out pictures): bytes, kind
 
     const Document &m_doc;
     QString m_path;
@@ -832,15 +835,50 @@ int PubWriter::patternBlip(const Fill &f)
     QBuffer buf(&png);
     buf.open(QIODevice::WriteOnly);
     tile.save(&buf, "PNG");
-    const QString key = QStringLiteral("pattern:") + QString::fromLatin1(png.toHex());
-    if (!m_doc.images.contains(key)) {
-        m_patternImages.insert(key, png);
+    return blipIndex(extraImage(png, 6));
+}
+
+// A picture made while saving, kept by its contents (kind 5 JPEG, 6 PNG).
+QString PubWriter::extraImage(const QByteArray &bytes, quint16 kind)
+{
+    const QString key = QStringLiteral("made:") + QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Md5).toHex());
+    m_extraImages.insert(key, {bytes, kind});
+    return key;
+}
+
+// A picture cut to a shape is saved as the shape filled with the picture,
+// which always fills the shape's box: so the part showing in the frame is
+// cut out, with its adjustments applied, unless it is the whole picture as is.
+QString PubWriter::shapedPictureImage(const PictureItem &pic)
+{
+    const QSizeF fs = pic.rect.size();
+    const QRectF ir = pic.imgRect.isEmpty() ? QRectF(QPointF(), fs) : pic.imgRect;
+    const bool whole = std::abs(ir.left()) < 1e-3 && std::abs(ir.top()) < 1e-3 && std::abs(ir.width() - fs.width()) < 1e-3
+                       && std::abs(ir.height() - fs.height()) < 1e-3;
+    const bool adjusted = pic.brightness || pic.contrast || pic.recolor != PictureItem::NoRecolor || pic.hasTransparentColor;
+    if (whole && !adjusted) return pic.imageId;
+    QImage img = adjusted ? Renderer::processedImage(m_doc, pic, QSizeF()) : m_doc.image(pic.imageId);
+    if (img.isNull()) return pic.imageId;
+    const QRectF shown = QRectF(QPointF(), fs).intersected(ir);
+    if (!whole && !shown.isEmpty()) {
+        const double sx = img.width() / ir.width(), sy = img.height() / ir.height();
+        const QRect px = QRectF((shown.left() - ir.left()) * sx, (shown.top() - ir.top()) * sy, shown.width() * sx, shown.height() * sy).toAlignedRect()
+                             .intersected(img.rect());
+        if (!px.isEmpty()) img = img.copy(px);
     }
-    return blipIndex(key);
+    const auto src = m_doc.images.constFind(pic.imageId);
+    const bool jpeg = src != m_doc.images.cend() && (src->format.toLower() == QLatin1String("jpg") || src->format.toLower() == QLatin1String("jpeg"))
+                      && !img.hasAlphaChannel();
+    QByteArray bytes;
+    QBuffer buf(&bytes);
+    buf.open(QIODevice::WriteOnly);
+    img.save(&buf, jpeg ? "JPEG" : "PNG", jpeg ? 92 : -1);
+    return extraImage(bytes, jpeg ? 5 : 6);
 }
 
 int PubWriter::blipIndex(const QString &imageId)
 {
+    if (imageId.isEmpty()) return -1;
     for (int i = 0; i < m_blips.size(); ++i) {
         if (m_blips[i].imageId == imageId) {
             ++m_blips[i].refs;
@@ -850,15 +888,17 @@ int PubWriter::blipIndex(const QString &imageId)
     Blip b;
     b.imageId = imageId;
     QByteArray data;
-    if (m_patternImages.contains(imageId)) {
-        data = m_patternImages.value(imageId);
+    if (m_extraImages.contains(imageId)) {
+        data = m_extraImages.value(imageId).first;
+        b.kind = m_extraImages.value(imageId).second;
         b.refs = 1;
         b.uid = QCryptographicHash::hash(data, QCryptographicHash::Md4);
-        b.fileName = QStringLiteral("pattern%1.png").arg(m_blips.size() + 1);
+        b.fileName = QStringLiteral("picture%1.%2").arg(m_blips.size() + 1).arg(b.kind == 5 ? QStringLiteral("jpg") : QStringLiteral("png"));
         QByteArray body = b.uid;
         body.append(char(0xff));
         body += data;
-        b.record = escherRecord(0x0, 0x6e0, 0xf01e, body);
+        if (b.kind == 6) b.record = escherRecord(0x0, 0x6e0, 0xf01e, body);
+        else b.record = escherRecord(0x0, jpegIsCmyk(data) ? 0x6e2 : 0x46a, 0xf01d, body);
         m_blips << b;
         return int(m_blips.size());
     }
@@ -1463,6 +1503,15 @@ QByteArray PubWriter::write(QStringList *skipped)
             }
             if (it->type() == ItemType::Picture) {
                 auto *pic = static_cast<const PictureItem *>(it.get());
+                if (!pic->maskShape.isEmpty() && pic->maskShape != QLatin1String("rect") && shapeDef(pic->maskShape) && !pic->imageId.isEmpty()) {
+                    auto shaped = std::make_shared<ShapeItem>();
+                    static_cast<Item &>(*shaped) = static_cast<const Item &>(*pic);
+                    shaped->shape = pic->maskShape;
+                    shaped->fill.type = Fill::Picture;
+                    shaped->fill.imageId = shapedPictureImage(*pic);
+                    visit(shaped);
+                    return;
+                }
                 const int blip = blipIndex(pic->imageId);
                 if (blip < 0) {
                     ++skippedCount;
@@ -1497,9 +1546,27 @@ QByteArray PubWriter::write(QStringList *skipped)
                     if (std::abs(lf) > 1e-4) opt << Prop{0x0102, frac(lf)};
                     if (std::abs(rt) > 1e-4) opt << Prop{0x0103, frac(rt)};
                 }
+                // Adjustments: brightness (0x8000 = all the way), contrast
+                // (16.16 multiplier, JeffPub's is the square of 1 + c/100),
+                // grayscale and black and white (0x013F), washout as the
+                // usual brightness and contrast pair, a recolor in the
+                // tertiary props (sepia as a brown one), the clear color.
+                double bright = pic->brightness, contrast = std::pow((100.0 + pic->contrast) / 100.0, 2);
+                if (pic->recolor == PictureItem::Washout) {
+                    bright = 22938 / 327.68;
+                    contrast = 19661 / 65536.0;
+                }
+                if (std::abs(bright) > 1e-3) opt << Prop{0x0109, quint32(qint32(std::llround(std::clamp(bright, -100.0, 100.0) * 327.68)))};
+                if (std::abs(contrast - 1) > 1e-6) opt << Prop{0x0108, quint32(std::min<double>(0x7fffffff, std::llround(contrast * 65536)))};
+                if (pic->recolor == PictureItem::Grayscale) opt << Prop{0x013f, 0x00040004};
+                if (pic->recolor == PictureItem::BlackWhite) opt << Prop{0x013f, 0x00020002};
+                if (pic->hasTransparentColor) opt << Prop{0x0107, bgr(pic->transparentColor)};
+                shadowProps(opt, pic->fx.shadow);
                 rotationProp(opt, pic);
                 QVector<Prop> topt = {{0x01ff, 0x00400000}, {0x06ff, 0x00020002}};
                 topt << kShadowFlags << kSideLines;
+                if (pic->recolor == PictureItem::ColorTint) topt << Prop{0x011a, bgr(pic->recolorColor.resolve(m_doc.colors))};
+                if (pic->recolor == PictureItem::Sepia) topt << Prop{0x011a, bgr(QColor::fromRgb(kPubSepia))};
                 QByteArray sp = spRecord(1, 0x0a00, pic) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(r);
                 sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
                 finish(seq, sp);

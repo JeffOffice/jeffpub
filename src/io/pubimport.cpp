@@ -2,10 +2,12 @@
 
 #include "render/renderer.h"
 #include "io/pubshapes.h"
+#include "render/shapes.h"
 #include "text/textprops.h"
 
 #include <QFile>
 #include <QHash>
+#include <QPainter>
 #include <QFont>
 #include <QStringDecoder>
 #include <QTextBlock>
@@ -261,14 +263,39 @@ public:
     }
     // A .pub picture's recolor arrives as greyscale plus draw:red/green/blue: the
     // picture's dark parts take that color and white stays white.
+    // A picture's settings: brightness (0x8000 = all the way), contrast
+    // (a 16.16 multiplier; JeffPub's is the square of 1 + c/100), gray or
+    // black and white, the color shown clear, and a recolor. Washout is the
+    // usual brightness and contrast pair; a recolor to the sepia brown is sepia.
     static void applyRecolor(PictureItem *pic, const RVNGPropertyList &p)
     {
+        const int bright = p["jp:brightness"] ? p["jp:brightness"]->getInt() : 0;
+        const qint64 contrast = p["jp:contrast"] ? qint64(unsigned(p["jp:contrast"]->getInt())) : 0x10000;
+        if (bright == 22938 && contrast == 19661) {
+            pic->recolor = PictureItem::Washout;
+        } else {
+            pic->brightness = std::clamp(bright / 327.68, -100.0, 100.0);
+            if (contrast != 0x10000) pic->contrast = std::clamp((std::sqrt(contrast / 65536.0) - 1) * 100, -100.0, 100.0);
+        }
+        if (p["jp:picture-gray"]) pic->recolor = PictureItem::Grayscale;
+        if (p["jp:picture-bilevel"]) pic->recolor = PictureItem::BlackWhite;
+        if (p["jp:transparent-color"]) {
+            const QColor c(str(p["jp:transparent-color"]));
+            if (c.isValid()) {
+                pic->hasTransparentColor = true;
+                pic->transparentColor = c;
+            }
+        }
         if (str(p["draw:color-mode"]) != "greyscale") return;
         if (p["draw:red"] && p["draw:green"] && p["draw:blue"]) {
             const QColor c = QColor::fromRgbF(float(std::clamp(p["draw:red"]->getDouble(), 0.0, 1.0)), float(std::clamp(p["draw:green"]->getDouble(), 0.0, 1.0)),
                                               float(std::clamp(p["draw:blue"]->getDouble(), 0.0, 1.0)));
-            pic->recolor = PictureItem::ColorTint;
-            pic->recolorColor = ColorRef::rgb(c);
+            if (c.rgb() == QColor::fromRgb(kPubSepia).rgb()) {
+                pic->recolor = PictureItem::Sepia;
+            } else {
+                pic->recolor = PictureItem::ColorTint;
+                pic->recolorColor = ColorRef::rgb(c);
+            }
         } else {
             pic->recolor = PictureItem::Grayscale;
         }
@@ -847,13 +874,21 @@ private:
         // The reader draws a shape's fill and then its outline as a second
         // path (a rectangle's pushed out by up to half the line). Give the
         // outline back to the filled shape rather than making two objects.
-        if (!open && fill.type == Fill::NoFill && m_fillOnly && pathIn.elementCount() == m_fillOnlyCount && !currentList().empty()
-            && currentList().back().get() == m_fillOnly) {
+        // The outline is the same shape's when it names the same shape
+        // number and frame; it can be an open path, and can add inner lines
+        // (a flowchart shape's), so only the bounds are compared.
+        if (fill.type == Fill::NoFill && !stroke.isNone() && m_fillOnly && !currentList().empty() && currentList().back().get() == m_fillOnly
+            && m_style["jp:shape-type"] && shapeKey() == m_fillOnlyKey) {
             const double slack = stroke.width / 2 + 0.3;
             const QRectF &f = m_fillOnlyBounds;
             if (std::abs(b.left() - f.left()) <= slack && std::abs(b.top() - f.top()) <= slack && std::abs(b.right() - f.right()) <= slack
                 && std::abs(b.bottom() - f.bottom()) <= slack) {
                 m_fillOnly->stroke = stroke;
+                // An outline with inner lines a freeform lacks gives it them.
+                if (m_fillOnly->type() == ItemType::Shape && pathIn.elementCount() != m_fillOnlyCount) {
+                    auto *fs = static_cast<ShapeItem *>(m_fillOnly);
+                    if (!fs->customPath.isEmpty()) fs->customPath = pathIn.translated(-fs->rect.topLeft());
+                }
                 m_fillOnly = nullptr;
                 return;
             }
@@ -898,13 +933,22 @@ private:
             fill.imageId = bitmap.isEmpty() ? QString() : m_doc.addImage(bitmap, formatForMime(mime));
             if (fill.imageId.isEmpty() || m_doc.image(fill.imageId).isNull()) fill = Fill::solid(ColorRef::rgb(QColor(220, 220, 220)));
         }
+        const std::shared_ptr<ShapeItem> preset = isRect || open ? nullptr : matchPreset(pathIn);
+        if (fill.type == Fill::Picture && !isRect && !preset) {
+            // A picture in an outline JeffPub has no shape for: the outline
+            // filled with the picture.
+            fill.imageId = bitmap.isEmpty() ? QString() : m_doc.addImage(bitmap, formatForMime(mime));
+            if (fill.imageId.isEmpty()) fill = Fill::solid(ColorRef::rgb(QColor(220, 220, 220)));
+        }
         if (fill.type == Fill::Picture) {
-            const QRectF r = isRect ? QRectF(center.x() - rw / 2, center.y() - rh / 2, rw, rh) : b;
-            auto pic = makePicture(r, isRect ? rot : 0, bitmap, mime);
+            // A picture in a rectangle or in one of the preset shapes.
+            const QRectF r = isRect ? QRectF(center.x() - rw / 2, center.y() - rh / 2, rw, rh) : preset->rect;
+            auto pic = makePicture(r, isRect ? rot : preset->rotation, bitmap, mime);
             pic->stroke = stroke;
-            if (!isRect) {
-                // Non-rectangular picture frames: approximate with an oval mask when it fits.
-                pic->maskShape = QStringLiteral("ellipse");
+            if (preset) {
+                pic->maskShape = preset->shape;
+                pic->flipH = preset->flipH;
+                pic->flipV = preset->flipV;
             }
             applyRecolor(pic.get(), m_style);
             applyShadow(*pic);
@@ -921,6 +965,12 @@ private:
             s->shape = QStringLiteral("rect");
             s->rect = QRectF(center.x() - rw / 2, center.y() - rh / 2, rw, rh);
             s->rotation = rot;
+        } else if (preset) {
+            s->shape = preset->shape;
+            s->rect = preset->rect;
+            s->rotation = preset->rotation;
+            s->flipH = preset->flipH;
+            s->flipV = preset->flipV;
         } else {
             s->shape = QStringLiteral("rect");
             s->rect = b.width() < 0.5 || b.height() < 0.5 ? b.adjusted(-0.25, -0.25, 0.25, 0.25) : b;
@@ -933,16 +983,73 @@ private:
         if (stroke.isNone() && !open && s->fill.type != Fill::NoFill) rememberFillOnly(s.get(), b, pathIn.elementCount());
     }
 
+    // One of Publisher's shapes that JeffPub has as a preset comes back as
+    // that preset (with its handles) when the preset's outline, in the frame
+    // as stored, covers the drawn outline; otherwise it stays a freeform.
+    std::shared_ptr<ShapeItem> matchPreset(const QPainterPath &drawn) const
+    {
+        if (!m_style["jp:shape-type"] || !m_style["jp:frame-width"]) return nullptr;
+        const QString preset = presetForPubShapeType(m_style["jp:shape-type"]->getInt());
+        const ShapeDef *def = preset.isEmpty() || preset == QLatin1String("rect") ? nullptr : shapeDef(preset);
+        if (!def || def->open) return nullptr;
+        auto s = std::make_shared<ShapeItem>();
+        s->shape = preset;
+        s->rect = QRectF(toPt(m_style["jp:frame-x"]), toPt(m_style["jp:frame-y"]), toPt(m_style["jp:frame-width"]), toPt(m_style["jp:frame-height"]));
+        if (s->rect.width() < 0.5 || s->rect.height() < 0.5) return nullptr;
+        s->flipH = m_style["jp:frame-flip-h"] && m_style["jp:frame-flip-h"]->getInt();
+        s->flipV = m_style["jp:frame-flip-v"] && m_style["jp:frame-flip-v"]->getInt();
+        double rot = m_style["jp:frame-rotation"] ? m_style["jp:frame-rotation"]->getDouble() : 0;
+        if (s->flipH != s->flipV) rot = -rot;
+        s->rotation = std::fmod(std::fmod(rot, 360.0) + 360.0, 360.0);
+        const QPainterPath mine = s->transform().map(shapePath(preset, s->rect.size()));
+        // Compare the two filled areas on a small grid over both.
+        const QRectF box = mine.boundingRect().united(drawn.boundingRect());
+        if (box.isEmpty()) return nullptr;
+        const int n = 96;
+        QImage a(n, n, QImage::Format_Grayscale8), c(n, n, QImage::Format_Grayscale8);
+        for (QImage *img : {&a, &c}) {
+            img->fill(0);
+            QPainter g(img);
+            g.setRenderHint(QPainter::Antialiasing, false);
+            g.scale(n / box.width(), n / box.height());
+            g.translate(-box.topLeft());
+            g.fillPath(img == &a ? mine : drawn, Qt::white);
+        }
+        qint64 both = 0, any = 0;
+        for (int y = 0; y < n; ++y)
+            for (int x = 0; x < n; ++x) {
+                const bool pa = a.constScanLine(y)[x], pc = c.constScanLine(y)[x];
+                both += pa && pc;
+                any += pa || pc;
+            }
+        if (qEnvironmentVariableIsSet("JP_PUB_TRACE"))
+            fprintf(stderr, "PRESET %s frame %.1f,%.1f %.1fx%.1f rot %.1f match %.3f drawn %.1f,%.1f %.1fx%.1f\n", qPrintable(preset), s->rect.x(), s->rect.y(),
+                    s->rect.width(), s->rect.height(), s->rotation, any ? double(both) / any : 0.0, drawn.boundingRect().x(), drawn.boundingRect().y(),
+                    drawn.boundingRect().width(), drawn.boundingRect().height());
+        return any && both >= 0.97 * any ? s : nullptr;
+    }
+
+    // Which shape a path was drawn for: its number and frame.
+    QString shapeKey() const
+    {
+        QString k;
+        for (const char *n : {"jp:shape-type", "jp:frame-x", "jp:frame-y", "jp:frame-width", "jp:frame-height", "jp:frame-rotation"})
+            k += str(m_style[n]) + QLatin1Char('|');
+        return k;
+    }
+
     void rememberFillOnly(Item *it, const QRectF &bounds, int count)
     {
         m_fillOnly = it;
-        m_fillOnlyBounds = bounds;
         m_fillOnlyCount = count;
+        m_fillOnlyKey = shapeKey();
+        m_fillOnlyBounds = bounds;
     }
 
     Document &m_doc;
     Item *m_fillOnly = nullptr;           // the last shape added with a fill and no outline
     QRectF m_fillOnlyBounds;
+    QString m_fillOnlyKey;
     int m_fillOnlyCount = 0;
     PubImportReport &m_rep;
     Page *m_page = nullptr;

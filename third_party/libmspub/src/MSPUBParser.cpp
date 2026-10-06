@@ -1976,6 +1976,11 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
             {
               MSPUB_DEBUG_MSG(("Couldn't find corresponding escherDelay index\n"));
             }
+            // JeffPub patch: gray / black and white, and the color shown clear.
+            if (unsigned *ptr_blipFlags = getIfExists(foptValues.m_scalarValues, FIELDID_BLIP_BOOL_PROPS))
+              m_collector->setShapePictureFlags(*shapeSeqNum, *ptr_blipFlags);
+            if (unsigned *ptr_clear = getIfExists(foptValues.m_scalarValues, FIELDID_PICTURE_TRANSPARENT))
+              m_collector->setShapePictureTransparent(*shapeSeqNum, ColorReference(*ptr_clear));
             unsigned *ptr_pictureBrightness = getIfExists(foptValues.m_scalarValues, FIELDID_PICTURE_BRIGHTNESS);
             if (ptr_pictureBrightness)
             {

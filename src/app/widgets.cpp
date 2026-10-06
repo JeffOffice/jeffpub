@@ -7,7 +7,13 @@
 
 #include <QAction>
 #include <QApplication>
-#include <QColorDialog>
+#include <QComboBox>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
+#include <QSpinBox>
+#include <QStackedWidget>
+#include <QTabWidget>
 #include <QFontDatabase>
 #include <QGridLayout>
 #include <QLabel>
@@ -133,7 +139,7 @@ ColorPopup::ColorPopup(const ColorScheme &s, bool allowNone, const QString &none
     auto *more = new QPushButton(icon("palette"), QStringLiteral("More Colors…"), this);
     more->setFlat(true);
     connect(more, &QPushButton::clicked, this, [this] {
-        const QColor c = QColorDialog::getColor(Qt::black, parentWidget(), QStringLiteral("Colors"), QColorDialog::ShowAlphaChannel);
+        const QColor c = colorsDialog(parentWidget(), Qt::black);
         if (c.isValid()) {
             addRecent(c);
             Q_EMIT picked(ColorRef::rgb(c));
@@ -897,6 +903,188 @@ void TableGrid::mousePressEvent(QMouseEvent *)
 {
     if (m_rows && m_cols) Q_EMIT picked(m_rows, m_cols);
     if (QWidget *w = window(); w && (w->windowFlags() & Qt::Popup)) w->close();
+}
+
+QColor colorsDialog(QWidget *parent, const QColor &current, const QString &title)
+{
+    QDialog dlg(parent);
+    dlg.setWindowTitle(title);
+    auto *v = new QVBoxLayout(&dlg);
+    auto *tabs = new QTabWidget(&dlg);
+    v->addWidget(tabs);
+    QColor chosen = current.isValid() ? current : QColor(Qt::black);
+    bool syncing = false;
+
+    // Standard: grays, then twelve hues from light to dark.
+    auto *stdPage = new QWidget();
+    auto *grid = new QGridLayout(stdPage);
+    grid->setSpacing(2);
+    QVector<QToolButton *> stdButtons;
+    auto addSwatch = [&](const QColor &c, int row, int col) {
+        auto *b = new QToolButton(stdPage);
+        b->setFixedSize(22, 22);
+        b->setAutoRaise(true);
+        b->setCheckable(true);
+        b->setToolTip(c.name().toUpper());
+        b->setStyleSheet(QStringLiteral("QToolButton{background:%1;border:1px solid #888;} QToolButton:checked{border:2px solid palette(highlight);}").arg(c.name()));
+        b->setProperty("jpColor", c);
+        grid->addWidget(b, row, col);
+        stdButtons << b;
+    };
+    for (int i = 0; i < 12; ++i) addSwatch(QColor::fromHsvF(0, 0, 1.0 - i / 11.0), 0, i);
+    for (int h = 0; h < 12; ++h)
+        for (int l = 0; l < 7; ++l) addSwatch(QColor::fromHslF(h / 12.0f, 0.85f, 0.88f - l * 0.11f), l + 1, h);
+    grid->setRowStretch(8, 1);
+    tabs->addTab(stdPage, QStringLiteral("Standard"));
+
+    // Custom.
+    auto *custom = new QWidget();
+    auto *cf = new QFormLayout(custom);
+    auto *model = new QComboBox(custom);
+    model->addItems({QStringLiteral("RGB"), QStringLiteral("HSL"), QStringLiteral("CMYK")});
+    cf->addRow(QStringLiteral("Color model:"), model);
+    auto *stack = new QStackedWidget(custom);
+    auto spinRow = [](QFormLayout *f, const QString &label, int max) {
+        auto *s = new QSpinBox();
+        s->setRange(0, max);
+        f->addRow(label, s);
+        return s;
+    };
+    auto *rgbPage = new QWidget();
+    auto *rf = new QFormLayout(rgbPage);
+    rf->setContentsMargins(0, 0, 0, 0);
+    QSpinBox *red = spinRow(rf, QStringLiteral("Red:"), 255), *green = spinRow(rf, QStringLiteral("Green:"), 255), *blue = spinRow(rf, QStringLiteral("Blue:"), 255);
+    auto *hslPage = new QWidget();
+    auto *hf = new QFormLayout(hslPage);
+    hf->setContentsMargins(0, 0, 0, 0);
+    QSpinBox *hue = spinRow(hf, QStringLiteral("Hue:"), 359), *sat = spinRow(hf, QStringLiteral("Saturation:"), 255), *lum = spinRow(hf, QStringLiteral("Luminance:"), 255);
+    auto *cmykPage = new QWidget();
+    auto *kf = new QFormLayout(cmykPage);
+    kf->setContentsMargins(0, 0, 0, 0);
+    auto inkRow = [&](const QString &label) {
+        auto *s = new DecimalSpin();
+        s->setRange(0, 100);
+        s->setDecimals(1);
+        s->setSuffix(QStringLiteral("%"));
+        kf->addRow(label, s);
+        return s;
+    };
+    DecimalSpin *cyan = inkRow(QStringLiteral("Cyan:")), *magenta = inkRow(QStringLiteral("Magenta:")), *yellow = inkRow(QStringLiteral("Yellow:")),
+                *black = inkRow(QStringLiteral("Black:"));
+    stack->addWidget(rgbPage);
+    stack->addWidget(hslPage);
+    stack->addWidget(cmykPage);
+    cf->addRow(stack);
+    auto *hex = new QLineEdit(custom);
+    hex->setMaxLength(7);
+    cf->addRow(QStringLiteral("Hex:"), hex);
+    tabs->addTab(custom, QStringLiteral("Custom"));
+
+    // Transparency, and the new color beside the current one.
+    auto *bottom = new QHBoxLayout();
+    bottom->addWidget(new QLabel(QStringLiteral("Transparency:")));
+    auto *clear = new QSpinBox(&dlg);
+    clear->setRange(0, 100);
+    clear->setSuffix(QStringLiteral("%"));
+    bottom->addWidget(clear);
+    bottom->addStretch(1);
+    auto *preview = new QLabel(&dlg);
+    preview->setFixedSize(96, 48);
+    bottom->addWidget(preview);
+    v->addLayout(bottom);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    v->addWidget(buttons);
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    const QColor was = chosen;
+    auto refresh = [&](QObject *from) {
+        syncing = true;
+        const QColor rgb = chosen.toRgb();
+        if (from != red && from != green && from != blue) {
+            red->setValue(rgb.red());
+            green->setValue(rgb.green());
+            blue->setValue(rgb.blue());
+        }
+        if (from != hue && from != sat && from != lum) {
+            const QColor h = chosen.toHsl();
+            hue->setValue(std::max(0, h.hslHue()));
+            sat->setValue(h.hslSaturation());
+            lum->setValue(h.lightness());
+        }
+        if (from != cyan && from != magenta && from != yellow && from != black) {
+            const QColor k = chosen.toCmyk();
+            cyan->setValue(k.cyanF() * 100);
+            magenta->setValue(k.magentaF() * 100);
+            yellow->setValue(k.yellowF() * 100);
+            black->setValue(k.blackF() * 100);
+        }
+        if (from != hex) hex->setText(rgb.name().toUpper());
+        if (from != clear) clear->setValue(int(std::lround((255 - chosen.alpha()) * 100 / 255.0)));
+        for (QToolButton *b : stdButtons) b->setChecked(b->property("jpColor").value<QColor>().rgb() == rgb.rgb() && chosen.spec() != QColor::Cmyk);
+        QPixmap pm(preview->size());
+        pm.fill(Qt::white);
+        {
+            QPainter p(&pm);
+            for (int y = 0; y < pm.height(); y += 8)
+                for (int x = (y / 8) % 2 * 8; x < pm.width(); x += 16) p.fillRect(x, y, 8, 8, QColor(220, 220, 220));
+            p.fillRect(QRect(0, 0, pm.width(), pm.height() / 2), chosen);
+            p.fillRect(QRect(0, pm.height() / 2, pm.width(), pm.height() - pm.height() / 2), was);
+            p.setPen(Qt::gray);
+            p.drawRect(pm.rect().adjusted(0, 0, -1, -1));
+        }
+        preview->setPixmap(pm);
+        preview->setToolTip(QStringLiteral("New (top) and current (bottom)"));
+        syncing = false;
+    };
+    auto alpha = [&] { return 255 - int(std::lround(clear->value() * 255 / 100.0)); };
+    for (QSpinBox *s : {red, green, blue})
+        QObject::connect(s, &QSpinBox::valueChanged, &dlg, [&, s] {
+            if (syncing) return;
+            chosen = QColor(red->value(), green->value(), blue->value(), alpha());
+            refresh(s);
+        });
+    for (QSpinBox *s : {hue, sat, lum})
+        QObject::connect(s, &QSpinBox::valueChanged, &dlg, [&, s] {
+            if (syncing) return;
+            chosen = QColor::fromHsl(hue->value(), sat->value(), lum->value(), alpha());
+            refresh(s);
+        });
+    for (DecimalSpin *s : {cyan, magenta, yellow, black})
+        QObject::connect(s, &QDoubleSpinBox::valueChanged, &dlg, [&, s] {
+            if (syncing) return;
+            chosen = QColor::fromCmykF(float(cyan->value() / 100), float(magenta->value() / 100), float(yellow->value() / 100),
+                                       float(black->value() / 100), alpha() / 255.0f);
+            refresh(s);
+        });
+    QObject::connect(hex, &QLineEdit::textEdited, &dlg, [&] {
+        QString t = hex->text().trimmed();
+        if (!t.startsWith(QLatin1Char('#'))) t.prepend(QLatin1Char('#'));
+        const QColor c(t);
+        if (t.size() != 7 || !c.isValid()) return;
+        chosen = c;
+        chosen.setAlpha(alpha());
+        refresh(hex);
+    });
+    QObject::connect(clear, &QSpinBox::valueChanged, &dlg, [&] {
+        if (syncing) return;
+        chosen.setAlpha(alpha());
+        refresh(clear);
+    });
+    for (QToolButton *b : stdButtons)
+        QObject::connect(b, &QToolButton::clicked, &dlg, [&, b] {
+            chosen = b->property("jpColor").value<QColor>();
+            chosen.setAlpha(alpha());
+            refresh(b);
+        });
+    QObject::connect(model, &QComboBox::currentIndexChanged, stack, &QStackedWidget::setCurrentIndex);
+    if (chosen.spec() == QColor::Cmyk) {
+        model->setCurrentIndex(2);
+        tabs->setCurrentIndex(1);
+    }
+    refresh(nullptr);
+    if (dlg.exec() != QDialog::Accepted) return QColor();
+    return chosen;
 }
 
 } // namespace jp

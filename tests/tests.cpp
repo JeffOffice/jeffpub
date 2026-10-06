@@ -2,6 +2,7 @@
 #include "io/cfb.h"
 #include "io/jpubfile.h"
 #include "io/pubimport.h"
+#include "io/pubshapes.h"
 #include "core/fonts.h"
 #include "render/metafile.h"
 #include "text/storyio.h"
@@ -572,7 +573,9 @@ private Q_SLOTS:
             QVERIFY2(match, qPrintable(sh->shape));
             const bool open = jp::shapeDef(sh->shape)->open;
             QPainterPath gp = match->customPath;
-            if (gp.isEmpty()) gp.addRect(QRectF(QPointF(), match->rect.size()));
+            if (gp.isEmpty()) gp = jp::shapePath(match->shape, match->rect.size(), match->adj);
+            // Publisher's own shapes come back as the same presets.
+            if (!jp::presetForPubShapeType(jp::pubShapeType(sh->shape)).isEmpty()) QCOMPARE(match->shape, sh->shape);
             const QImage a = area(sh->transform().map(jp::shapePath(sh->shape, sh->rect.size())), open);
             const QImage b = area(match->transform().map(gp), open);
             qint64 both = 0, any = 0;
@@ -726,6 +729,102 @@ private Q_SLOTS:
                 QVERIFY(angleDiff(sh->fx.shadow.angle, 45) < 0.5);
                 QVERIFY(std::abs(sh->fx.shadow.transparency - 0.5) < 0.01);
             }
+        }
+    }
+
+    // Picture settings and pictures cut to a shape survive .pub.
+    void pubWriterPictures()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto label = [&](const QRectF &r, const QString &s) {
+            auto t = std::make_shared<jp::TextItem>();
+            t->rect = r;
+            t->storyId = doc->createStory(s);
+            doc->pages[0]->items.push_back(t);
+        };
+        label(QRectF(54, 30, 500, 30), QStringLiteral("test27 pictures"));
+        QImage photo(120, 90, QImage::Format_RGB32);
+        for (int y = 0; y < photo.height(); ++y)
+            for (int x = 0; x < photo.width(); ++x) photo.setPixel(x, y, qRgb(x * 2, y * 2, 255 - x));
+        QByteArray png;
+        QBuffer buf(&png);
+        buf.open(QIODevice::WriteOnly);
+        photo.save(&buf, "PNG");
+        const QString id = doc->addImage(png, QStringLiteral("png"));
+        struct Case { QString label; std::function<void(jp::PictureItem &)> set; };
+        const QVector<Case> cases = {
+            {QStringLiteral("as is"), [](jp::PictureItem &) {}},
+            {QStringLiteral("brighter, less contrast"), [](jp::PictureItem &p) { p.brightness = 30; p.contrast = -20; }},
+            {QStringLiteral("darker, more contrast"), [](jp::PictureItem &p) { p.brightness = -25; p.contrast = 40; }},
+            {QStringLiteral("grayscale"), [](jp::PictureItem &p) { p.recolor = jp::PictureItem::Grayscale; }},
+            {QStringLiteral("black and white"), [](jp::PictureItem &p) { p.recolor = jp::PictureItem::BlackWhite; }},
+            {QStringLiteral("washout"), [](jp::PictureItem &p) { p.recolor = jp::PictureItem::Washout; }},
+            {QStringLiteral("sepia"), [](jp::PictureItem &p) { p.recolor = jp::PictureItem::Sepia; }},
+            {QStringLiteral("recolored red"), [](jp::PictureItem &p) { p.recolor = jp::PictureItem::ColorTint; p.recolorColor = jp::ColorRef::rgb(QColor(200, 0, 0)); }},
+            {QStringLiteral("clear color"), [](jp::PictureItem &p) { p.hasTransparentColor = true; p.transparentColor = QColor(0, 0, 255); }},
+            {QStringLiteral("oval"), [](jp::PictureItem &p) { p.maskShape = QStringLiteral("ellipse"); }},
+            {QStringLiteral("triangle, cropped"), [](jp::PictureItem &p) { p.maskShape = QStringLiteral("triangle"); p.imgRect = QRectF(-30, -20, 160, 120); }},
+            {QStringLiteral("hexagon, gray, turned"), [](jp::PictureItem &p) { p.maskShape = QStringLiteral("hexagon"); p.recolor = jp::PictureItem::Grayscale; p.rotation = 20; }},
+        };
+        QVector<std::shared_ptr<jp::PictureItem>> made;
+        for (int i = 0; i < cases.size(); ++i) {
+            auto pic = std::make_shared<jp::PictureItem>();
+            pic->imageId = id;
+            pic->rect = QRectF(60 + (i % 4) * 130, 80 + (i / 4) * 150, 100, 75);
+            pic->imgRect = QRectF(0, 0, 100, 75);
+            cases[i].set(*pic);
+            doc->pages[0]->items.push_back(pic);
+            made << pic;
+            label(QRectF(pic->rect.left(), pic->rect.bottom() + 10, 125, 24), cases[i].label);
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("test27-pictures.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        QVERIFY2(err.isEmpty(), qPrintable(err));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test27-pictures";
+            QFile::remove(out + ".pub");
+            QFile::copy(path, out + ".pub");
+            QString e2;
+            jp::savePublication(*doc, out + ".jpub", QImage(), &e2);
+        }
+        QString e1;
+        auto back = jp::importPublisherFile(path, &e1);
+        QVERIFY2(back, qPrintable(e1));
+        QVector<const jp::PictureItem *> got;
+        jp::walkItems(back->pages[0]->items, [&](const jp::ItemPtr &it) {
+            if (it->type() == jp::ItemType::Picture) got << static_cast<const jp::PictureItem *>(it.get());
+        });
+        QCOMPARE(got.size(), made.size());
+        for (int i = 0; i < made.size(); ++i) {
+            const jp::PictureItem *want = made[i].get();
+            const jp::PictureItem *g = nullptr;
+            for (const jp::PictureItem *c : got)
+                if (QLineF(c->rect.center(), want->rect.center()).length() < 1.5) g = c;
+            QVERIFY2(g, qPrintable(cases[i].label));
+            QVERIFY2(std::abs(g->rect.width() - want->rect.width()) < 1 && std::abs(g->rect.height() - want->rect.height()) < 1, qPrintable(cases[i].label));
+            QVERIFY2(std::abs(std::remainder(g->rotation - want->rotation, 360.0)) < 0.5, qPrintable(cases[i].label));
+            QCOMPARE(g->maskShape, want->maskShape);
+            if (want->maskShape != QLatin1String("rect")) {
+                // Cut out with its settings applied: the picture shows as it did.
+                const QImage a = jp::Renderer::processedImage(*doc, *want, QSizeF());
+                const QImage shown = back->image(g->imageId);
+                QVERIFY(!shown.isNull());
+                const QRectF ir = want->imgRect;
+                const QPointF probe(want->rect.width() * 0.5, want->rect.height() * 0.6);
+                const QColor wa = a.pixelColor(int((probe.x() - ir.left()) / ir.width() * a.width()), int((probe.y() - ir.top()) / ir.height() * a.height()));
+                const QColor gb = shown.pixelColor(int(probe.x() / want->rect.width() * shown.width()), int(probe.y() / want->rect.height() * shown.height()));
+                QVERIFY2(std::abs(wa.red() - gb.red()) < 12 && std::abs(wa.green() - gb.green()) < 12 && std::abs(wa.blue() - gb.blue()) < 12,
+                         qPrintable(QStringLiteral("%1: %2 vs %3").arg(cases[i].label, wa.name(), gb.name())));
+                continue;
+            }
+            QVERIFY2(std::abs(g->brightness - want->brightness) < 0.05, qPrintable(cases[i].label));
+            QVERIFY2(std::abs(g->contrast - want->contrast) < 0.05, qPrintable(QStringLiteral("%1 %2").arg(cases[i].label).arg(g->contrast)));
+            QCOMPARE(int(g->recolor), int(want->recolor));
+            if (want->recolor == jp::PictureItem::ColorTint) QCOMPARE(g->recolorColor.resolve(back->colors), want->recolorColor.resolve(doc->colors));
+            QCOMPARE(g->hasTransparentColor, want->hasTransparentColor);
+            if (want->hasTransparentColor) QCOMPARE(g->transparentColor, want->transparentColor);
         }
     }
 
@@ -1366,18 +1465,18 @@ private Q_SLOTS:
         QVERIFY(bl->stroke.endArrow != jp::Arrow::None);
         QCOMPARE(bl->stroke.startArrow, jp::Arrow::None);
         QCOMPARE(shapes.size(), 2);
-        // The rectangle comes back turned; the importer draws other shapes
-        // as outlines, so the oval is checked by where it lands.
+        // The rectangle and the oval come back turned, as themselves.
         for (const jp::ShapeItem *s : shapes) {
             const QString got = QStringLiteral("rot %1 %2,%3 %4x%5").arg(s->rotation).arg(s->rect.x()).arg(s->rect.y()).arg(s->rect.width()).arg(s->rect.height());
-            if (s->customPath.isEmpty()) {
+            QVERIFY2(s->customPath.isEmpty(), qPrintable(got));
+            if (s->shape == QLatin1String("rect")) {
                 QVERIFY2(std::abs(s->rotation - 30) < 0.5, qPrintable(got));
                 QVERIFY2(QLineF(s->rect.center(), rect->rect.center()).length() < 1 && std::abs(s->rect.width() - 200) < 1 &&
                              std::abs(s->rect.height() - 80) < 1, qPrintable(got));
             } else {
-                const QRectF want = oval->bounds(), b = s->bounds();
-                QVERIFY2(std::abs(b.left() - want.left()) < 1 && std::abs(b.top() - want.top()) < 1 && std::abs(b.width() - want.width()) < 1 &&
-                             std::abs(b.height() - want.height()) < 1, qPrintable(got));
+                QCOMPARE(s->shape, QStringLiteral("ellipse"));
+                QVERIFY2(std::abs(s->rotation - 90) < 0.5 && QLineF(s->rect.center(), oval->rect.center()).length() < 1
+                             && std::abs(s->rect.width() - 160) < 1 && std::abs(s->rect.height() - 60) < 1, qPrintable(got));
             }
         }
         QVERIFY(bp);
@@ -1386,6 +1485,92 @@ private Q_SLOTS:
         QCOMPARE(got.size(), QSize(40, 20));
         QCOMPARE(got.pixelColor(5, 5), QColor(220, 30, 30));
         QCOMPARE(got.pixelColor(35, 5), QColor(30, 30, 220));
+    }
+
+    // A color given as ink amounts keeps them: in the file, in tints and
+    // shades, from the Colors dialog, and in the PDF of a process-color
+    // publication.
+    void cmykColors()
+    {
+        const QColor ink = QColor::fromCmykF(0.2f, 0.0f, 0.55f, 0.1f);
+        const jp::ColorRef ref = jp::ColorRef::rgb(ink);
+        QCOMPARE(ref.toString(), QStringLiteral("cmyk(20,0,55,10)"));
+        const jp::ColorRef back = jp::ColorRef::fromString(ref.toString());
+        QCOMPARE(back.rgbValue().spec(), QColor::Cmyk);
+        QCOMPARE(back, ref);
+        QCOMPARE(jp::ColorRef::fromString(QStringLiteral("#12AB34")).rgbValue(), QColor(0x12, 0xab, 0x34));
+        QCOMPARE(jp::colorFromString(QStringLiteral("cmyk(0,100,0,0,128)")).alpha(), 128);
+        const QColor tint = jp::mix(ink, Qt::white, 0.5);
+        QCOMPARE(tint.spec(), QColor::Cmyk);
+        QVERIFY(std::abs(tint.cyanF() - 0.1) < 0.002 && std::abs(tint.yellowF() - 0.275) < 0.002 && std::abs(tint.blackF() - 0.05) < 0.002);
+        const QColor shade = jp::mix(ink, Qt::black, 0.5);
+        QVERIFY(std::abs(shade.blackF() - 0.55) < 0.002 && std::abs(shade.cyanF() - 0.1) < 0.002);
+
+        // The Colors dialog's CMYK entry.
+        QColor picked;
+        QTimer::singleShot(0, [] {
+            auto *dlg = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            QVERIFY(dlg);
+            auto *model = dlg->findChild<QComboBox *>();
+            model->setCurrentIndex(2);
+            const auto spins = dlg->findChildren<jp::DecimalSpin *>();
+            QCOMPARE(spins.size(), 4);
+            const double inks[] = {35, 5, 0, 20};
+            for (int i = 0; i < 4; ++i) spins[i]->setValue(inks[i]);
+            if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+                auto *tabs = dlg->findChild<QTabWidget *>();
+                tabs->setCurrentIndex(1);
+                dlg->grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/colors-custom.png");
+                tabs->setCurrentIndex(0);
+                dlg->grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/colors-standard.png");
+            }
+            dlg->accept();
+        });
+        picked = jp::colorsDialog(nullptr, Qt::red);
+        QCOMPARE(picked.spec(), QColor::Cmyk);
+        QVERIFY(std::abs(picked.cyanF() - 0.35) < 0.002 && std::abs(picked.magentaF() - 0.05) < 0.002 && std::abs(picked.blackF() - 0.2) < 0.002);
+
+        // A process-color publication's PDF paints in CMYK.
+        jp::MainWindow w;
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        doc->print.model = jp::PrintInfo::ProcessCMYK;
+        auto box = std::make_shared<jp::ShapeItem>();
+        box->rect = QRectF(72, 72, 200, 100);
+        box->fill = jp::Fill::solid(ref);
+        box->stroke = jp::Stroke::none();
+        doc->pages[0]->items.push_back(box);
+        w.editor()->setDocument(std::move(doc));
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("cmyk.pdf"));
+        QVERIFY(w.exportPdfTo(path, jp::MainWindow::PdfSettings()));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QByteArray pdf = f.readAll();
+        // Page contents are deflated: inflate every stream and look for the
+        // fill color as ink amounts ("c m y k k").
+        QByteArray text;
+        for (qsizetype at = 0; (at = pdf.indexOf("stream", at)) >= 0; at += 6) {
+            qsizetype start = at + 6;
+            if (pdf.mid(start, 2) == "\r\n") start += 2;
+            else if (pdf.mid(start, 1) == "\n") ++start;
+            const qsizetype end = pdf.indexOf("endstream", start);
+            if (end < 0) break;
+            QByteArray z = pdf.mid(start, end - start);
+            QByteArray sized(4, 0);
+            qToBigEndian<quint32>(quint32(16 * 1024 * 1024), sized.data());
+            const QByteArray plain = qUncompress(sized + z);
+            text += plain.isEmpty() ? z : plain;
+        }
+        // Qt sets a CMYK color space and gives the inks with "scn".
+        QVERIFY(text.contains("cmyk cs"));
+        bool found = false;
+        for (const QByteArray &l : text.split('\n')) {
+            const QList<QByteArray> v = l.split(' ');
+            if (v.size() == 5 && v[4] == "scn")
+                found = found || (std::abs(v[0].toDouble() - 0.2) < 1e-3 && v[1].toDouble() < 1e-3 && std::abs(v[2].toDouble() - 0.55) < 1e-3
+                                  && std::abs(v[3].toDouble() - 0.1) < 1e-3);
+        }
+        QVERIFY(found);
     }
 
     // Create PDF presets shrink pictures, Commercial press adds room for marks,

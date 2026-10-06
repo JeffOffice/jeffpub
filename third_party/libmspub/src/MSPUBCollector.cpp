@@ -383,6 +383,16 @@ void MSPUBCollector::setShapePictureContrast(unsigned seqNum,
   m_shapeInfosBySeqNum[seqNum].m_pictureContrast = contrast;
 }
 
+void MSPUBCollector::setShapePictureFlags(unsigned seqNum, unsigned flags)
+{
+  m_shapeInfosBySeqNum[seqNum].m_pictureFlags = flags;
+}
+
+void MSPUBCollector::setShapePictureTransparent(unsigned seqNum, ColorReference color)
+{
+  m_shapeInfosBySeqNum[seqNum].m_pictureTransparent = color;
+}
+
 void MSPUBCollector::setShapeLineOpacity(unsigned seqNum, double opacity)
 {
   m_shapeInfosBySeqNum[seqNum].m_lineOpacity = opacity;
@@ -721,6 +731,20 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
   {
     info.m_fill->getProperties(&graphicsProps);
   }
+  // JeffPub patch: the shape's number with its unturned frame, rotation and
+  // flips, so a preset shape can come back as that preset.
+  {
+    const Coordinate c = info.m_coordinates.get_value_or(Coordinate());
+    graphicsProps.insert("jp:shape-type", int(info.m_type.get_value_or(RECTANGLE)));
+    graphicsProps.insert("jp:frame-x", c.getXIn(m_width));
+    graphicsProps.insert("jp:frame-y", c.getYIn(m_height));
+    graphicsProps.insert("jp:frame-width", c.getWidthIn());
+    graphicsProps.insert("jp:frame-height", c.getHeightIn());
+    graphicsProps.insert("jp:frame-rotation", info.m_rotation.get_value_or(0));
+    const std::pair<bool, bool> flips = info.m_flips.get_value_or(std::pair<bool, bool>(false, false));
+    graphicsProps.insert("jp:frame-flip-v", flips.first);
+    graphicsProps.insert("jp:frame-flip-h", flips.second);
+  }
   // JeffPub 79: Text Art goes to the application as its words and settings
   // with the unturned frame, instead of as the warp's guide curves.
   if (bool(info.m_textArt))
@@ -842,6 +866,22 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
     }
     if (bool(info.m_pictureBrightness))
       graphicsProps.insert("draw:luminance", static_cast<double>(info.m_pictureBrightness.get() + 32768.0) / 65536.0, librevenge::RVNG_PERCENT);
+    // JeffPub patch: the picture's settings as stored (brightness, contrast,
+    // gray / black and white flags, the color shown clear).
+    if (bool(info.m_pictureBrightness))
+      graphicsProps.insert("jp:brightness", info.m_pictureBrightness.get());
+    if (bool(info.m_pictureContrast))
+      graphicsProps.insert("jp:contrast", info.m_pictureContrast.get());
+    if (bool(info.m_pictureFlags))
+    {
+      const unsigned f = info.m_pictureFlags.get();
+      if ((f & 0x40000) && (f & 0x4))
+        graphicsProps.insert("jp:picture-gray", true);
+      if ((f & 0x20000) && (f & 0x2))
+        graphicsProps.insert("jp:picture-bilevel", true);
+    }
+    if (bool(info.m_pictureTransparent))
+      graphicsProps.insert("jp:transparent-color", getColorString(info.m_pictureTransparent.get().getFinalColor(m_paletteColors)));
     bool shadowPropsInserted = false;
     if (bool(info.m_shadow))
     {
@@ -872,6 +912,8 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
     }
     if (bool(info.m_pictureBrightness))
       graphicsProps.remove("draw:luminance");
+    for (const char *k : {"jp:brightness", "jp:contrast", "jp:picture-gray", "jp:picture-bilevel", "jp:transparent-color"})
+      graphicsProps.remove(k);
     if (shadowPropsInserted)
     {
       graphicsProps.remove("draw:shadow");

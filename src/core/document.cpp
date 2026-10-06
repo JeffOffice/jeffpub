@@ -613,7 +613,7 @@ QJsonObject Document::toJson() const
     o["businessCurrent"] = bizCurrent;
     o["images"] = imgs;
     QJsonArray cs;
-    for (int i = 0; i < SlotCount; ++i) cs.append(colors.c[i].name());
+    for (int i = 0; i < SlotCount; ++i) cs.append(colorToString(colors.c[i]));
     o["colorScheme"] = QJsonObject{{"name", colors.name}, {"colors", cs}};
     o["fontScheme"] = QJsonObject{{"name", fonts.name}, {"heading", fonts.heading}, {"body", fonts.body}};
     o["merge"] = merge.toJson();
@@ -655,7 +655,7 @@ void Document::fromJson(const QJsonObject &o)
     const auto cso = o["colorScheme"].toObject();
     colors.name = cso["name"].toString();
     const auto cs = cso["colors"].toArray();
-    for (int i = 0; i < SlotCount && i < cs.size(); ++i) colors.c[i] = QColor(cs[i].toString());
+    for (int i = 0; i < SlotCount && i < cs.size(); ++i) colors.c[i] = colorFromString(cs[i].toString());
     const auto fso = o["fontScheme"].toObject();
     fonts = {fso["name"].toString(), fso["heading"].toString(), fso["body"].toString()};
     for (const auto &v : o["stories"].toArray()) {

@@ -15,7 +15,7 @@
 #include <QButtonGroup>
 #include <QCalendarWidget>
 #include <QCheckBox>
-#include <QColorDialog>
+
 #include <QComboBox>
 #include <QDateTimeEdit>
 #include <QDialog>
@@ -1427,7 +1427,7 @@ void colorSchemeDialog(QWidget *p, Editor *ed)
         auto paint = [b, &s, i] { b->setStyleSheet(QStringLiteral("background:%1; border:1px solid #888;").arg(s.c[i].name())); };
         paint();
         QObject::connect(b, &QPushButton::clicked, &dlg.d, [b, &s, i, paint] {
-            const QColor c = QColorDialog::getColor(s.c[i], b, slotName(i));
+            const QColor c = colorsDialog(b, s.c[i], slotName(i));
             if (c.isValid()) { s.c[i] = c; paint(); }
         });
         form->addRow(slotName(i) + ':', b);

@@ -206,4 +206,9 @@ QWidget *popupFor(QWidget *content, QWidget *anchor);
 // it (from a snapshot of the window) or Escape cancels.
 void pickColorFromWindow(QWidget *window, std::function<void(const QColor &)> done);
 
+// The Colors dialog: a Standard tab of swatches and a Custom tab that takes
+// RGB, HSL or CMYK values (a CMYK color keeps its ink amounts) and a hex
+// code, with transparency. Returns an invalid color when canceled.
+QColor colorsDialog(QWidget *parent, const QColor &current, const QString &title = QStringLiteral("Colors"));
+
 } // namespace jp

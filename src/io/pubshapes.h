@@ -18,4 +18,8 @@ QString presetForPubShapeType(int type);
 int pubTextArtType(const QString &transform);
 QString textArtTransformForPubType(int type);
 
+// .pub files have no sepia setting: a sepia picture is saved recolored to
+// this brown, and a picture recolored to it reads back as sepia.
+constexpr unsigned kPubSepia = 0x704214;   // RGB
+
 } // namespace jp
