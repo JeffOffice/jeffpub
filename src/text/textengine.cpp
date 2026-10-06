@@ -125,6 +125,8 @@ void drawPlainText(QPainter *p, const QPointF &baseline, const QFont &font, cons
 }
 
 // ---------- formats ----------
+namespace { static double trackingSpace(const QTextCharFormat &f, const QFont &resolved); }
+
 QTextCharFormat resolveCharFormat(const QTextCharFormat &f, const LayoutEnv &env)
 {
     QTextCharFormat r = f;
@@ -156,8 +158,14 @@ QTextCharFormat resolveCharFormat(const QTextCharFormat &f, const LayoutEnv &env
     // Unhinted design widths: hinting differs between Windows and Linux and
     // would move line breaks; publications must lay out the same everywhere.
     r.setFontHintingPreference(QFont::PreferNoHinting);
-    if (f.hasProperty(QTextFormat::FontLetterSpacing) && f.fontLetterSpacingType() == QFont::AbsoluteSpacing)
-        r.setFontLetterSpacing(f.fontLetterSpacing() * env.fontScale);
+    // Kerning and tracking both become space after each letter.
+    {
+        const double kern = tp::kerningOf(f) * env.fontScale, track = trackingSpace(f, r.font());
+        if (kern != 0 || track != 0 || f.hasProperty(QTextFormat::FontLetterSpacing)) {
+            r.setFontLetterSpacingType(QFont::AbsoluteSpacing);
+            r.setFontLetterSpacing(kern + track);
+        }
+    }
     const QString cref = f.stringProperty(tp::ColorRefP);
     if (!cref.isEmpty()) r.setForeground(ColorRef::fromString(cref).resolve(env.colors));
     else if (!f.hasProperty(QTextFormat::ForegroundBrush)) r.setForeground(env.colors.slot(Main));
@@ -318,6 +326,46 @@ static KnownMetrics knownMetrics(const QString &family)
 }
 static bool isSubstituted(const QString &family) { return !substituteFor(family).isEmpty() || substituteStretch(family) != 100; }
 static QString requestedFamily(const QFont &f) { return f.families().isEmpty() ? f.family() : f.families().first(); }
+
+// A font's average character width in ems (OS/2 xAvgCharWidth), the unit of
+// .pub tracking. Substituted fonts use the original's, read from fonts
+// embedded in reference PDFs.
+static double averageCharEm(const QFont &f, const QString &requested)
+{
+    if (isSubstituted(requested)) {
+        const QString fam = requested.toLower();
+        const bool bold = f.weight() >= QFont::DemiBold, italic = f.italic();
+        if (fam == "arial") return (bold ? 980.0 : 904.0) / 2048;
+        if (fam == "times new roman") return (bold ? (italic ? 844.0 : 874.0) : (italic ? 823.0 : 821.0)) / 2048;
+        if (fam == "century schoolbook") return (bold ? (italic ? 1054.0 : 1073.0) : 951.0) / 2048;
+        if (fam == "gill sans mt") return (bold ? 956.0 : italic ? 769.0 : 834.0) / 2048;
+    }
+    static QHash<QString, double> cache;
+    const QString key = f.key();
+    auto it = cache.constFind(key);
+    if (it != cache.constEnd()) return *it;
+    double em = 0.5;
+    const QRawFont raw = QRawFont::fromFont(f);
+    const QByteArray head = raw.fontTable("head"), os2 = raw.fontTable("OS/2");
+    if (head.size() >= 20 && os2.size() >= 4) {
+        const int upm = (uchar(head[18]) << 8) | uchar(head[19]);
+        const int avg = qint16((uchar(os2[2]) << 8) | uchar(os2[3]));
+        if (upm > 0 && avg > 0) em = double(avg) / upm;
+    }
+    if (!(em > 0.1 && em < 2.0)) em = 0.5;
+    cache.insert(key, em);
+    return em;
+}
+
+// The space (layout points) tracking adds after each letter: the font's
+// average character width times the tracking beyond 100%. Measured against
+// reference PDFs of .pub files at 87.5%, 112.5% and 115%.
+static double trackingSpace(const QTextCharFormat &f, const QFont &resolved)
+{
+    const double t = tp::trackingOf(f);
+    if (std::abs(t - 100) < 0.01) return 0;
+    return (t - 100) / 100 * averageCharEm(resolved, requestedFamily(resolved)) * resolved.pointSizeF() / fontPointFactor();
+}
 
 double naturalLineEm(const QFont &f, const QString &requestedFamily)
 {
@@ -507,6 +555,8 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                     big.setFontCapitalization(QFont::MixedCase);
                     small.setFontCapitalization(QFont::MixedCase);
                     small.setFontPointSize(rf.fontPointSize() * 0.8);
+                    // Tracking follows the smaller size.
+                    if (const double tr = trackingSpace(cf, rf.font())) small.setFontLetterSpacing(rf.fontLetterSpacing() - 0.2 * tr);
                     int runStart = 0;
                     auto isSmall = [&](int i) { return shown[i].isLower(); };
                     for (int i = 1; i <= shown.size(); ++i)

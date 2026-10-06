@@ -250,13 +250,13 @@ void MainWindow::createActions()
         ed->changeCase(next);
         next = (next + 1) % 3;
     });
-    const QPair<const char *, double> spacing[] = {{"Very Tight", -3}, {"Tight", -1.5}, {"Normal", 0}, {"Loose", 1.5}, {"Very Loose", 3}};
+    // Tracking presets, as percentages of normal letter spacing.
+    const QPair<const char *, double> spacing[] = {{"Very Tight", 75}, {"Tight", 87.5}, {"Normal", 100}, {"Loose", 112.5}, {"Very Loose", 125}};
     for (const auto &s : spacing) {
         const double v = s.second;
         mk(QStringLiteral("spacing.%1").arg(QString::fromLatin1(s.first)), QString::fromLatin1(s.first), "", QKeySequence(), [ed, v] {
             QTextCharFormat f;
-            f.setFontLetterSpacingType(QFont::AbsoluteSpacing);
-            f.setFontLetterSpacing(v);
+            f.setProperty(tp::Tracking, v);
             ed->mergeCharFormat(f, QStringLiteral("Character Spacing"));
         });
     }

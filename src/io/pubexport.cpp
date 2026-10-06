@@ -680,14 +680,10 @@ QByteArray PubWriter::charProps(const QTextCharFormat &f)
     if (f.fontItalic()) p << flag(0x38, 0x0a);
     if (f.fontUnderline()) p << u16(0x1e, 1, 0x12);   // single underline
     if (f.fontStrikeOut()) p << flag(0x10, 0x0a);
-    // Letter spacing: added space in EMU (0x1B; Publisher's "kerning"), or a
-    // percentage as tracking in tenths of a percent (0x1F).
-    if (f.hasProperty(QTextFormat::FontLetterSpacing)) {
-        if (f.fontLetterSpacingType() == QFont::AbsoluteSpacing && std::abs(f.fontLetterSpacing()) > 0.001)
-            p << u32(0x1b, quint32(qint32(emu(f.fontLetterSpacing()))), 0x22);
-        else if (f.fontLetterSpacingType() == QFont::PercentageSpacing && std::abs(f.fontLetterSpacing() - 100) > 0.01)
-            p << u16(0x1f, quint32(std::llround(f.fontLetterSpacing() * 10)), 0x1a);
-    }
+    // Letter spacing: kerning as added space in EMU (0x1B), tracking in
+    // tenths of a percent (0x1F).
+    if (const double kern = tp::kerningOf(f); std::abs(kern) > 0.001) p << u32(0x1b, quint32(qint32(emu(kern))), 0x22);
+    if (const double track = tp::trackingOf(f); std::abs(track - 100) > 0.01) p << u16(0x1f, quint32(std::llround(track * 10)), 0x1a);
     if (f.fontCapitalization() == QFont::SmallCaps) p << flag(0x13, 0x0a);
     else if (f.fontCapitalization() == QFont::AllUppercase) p << flag(0x14, 0x0a);
     if (f.verticalAlignment() == QTextCharFormat::AlignSuperScript) p << u16(0x0f, 1, 0x12);

@@ -530,14 +530,13 @@ public:
         if (relief == "embossed") cf.setProperty(tp::Emboss, true);
         if (relief == "engraved") cf.setProperty(tp::Engrave, true);
         if (p["fo:text-scale"]) cf.setFontStretch(std::clamp(int(std::round(percent(p["fo:text-scale"]) * 100)), 1, 4000));
+        // Publisher's kerning (points after each letter) and tracking (a
+        // percentage of normal spacing) can both be set.
         if (p["fo:letter-spacing"]) {
             cf.setFontLetterSpacingType(QFont::AbsoluteSpacing);
             cf.setFontLetterSpacing(toPt(p["fo:letter-spacing"]));
-        } else if (p["jp:tracking"]) {
-            // Publisher's tracking, as a percentage of normal spacing.
-            cf.setFontLetterSpacingType(QFont::PercentageSpacing);
-            cf.setFontLetterSpacing(p["jp:tracking"]->getDouble());
         }
+        if (p["jp:tracking"]) cf.setProperty(tp::Tracking, p["jp:tracking"]->getDouble());
         const QString lang = str(p["fo:language"]), country = str(p["fo:country"]);
         if (!lang.isEmpty()) cf.setProperty(tp::Language, country.isEmpty() ? lang : lang + '-' + country);
         m_span = cf;

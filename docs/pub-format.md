@@ -309,7 +309,13 @@ every paragraph so Normal's own values (6 pt after, 1.19 lines) don't apply.
 Character runs (FDPC): `1e:12 = 1` underline, `10:0a` strikethrough,
 `13:0a` small caps, `14:0a` all caps, `0f:12` 1 superscript, 2 subscript,
 `1b:22` space added between letters in EMU (Publisher's "kerning"), `1f:1a`
-tracking in tenths of a percent (1000 normal, 1250 very loose).
+tracking in tenths of a percent (1000 normal, 1250 very loose). A run can
+have both. Tracking adds the font's average character width (OS/2
+`xAvgCharWidth`) times the percentage beyond 100 after each letter: in a
+reference PDF, bold Century Schoolbook at 112.5% got 0.063–0.067 em (0.0655
+predicted), bold Times New Roman at 87.5% got -0.055 em (-0.053), and
+CloisterBlack at 115% got 0.045 em (0.049). Small capitals get tracking at
+their own (0.8×) size.
 
 Tab stops (FDPP `32:82`): `27:1a` count, then `28:8a` with a record per
 stop: `00:20` position (EMU), `01:10` alignment in the low byte (left left

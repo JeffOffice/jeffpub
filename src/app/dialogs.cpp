@@ -824,7 +824,39 @@ void characterSpacingDialog(QWidget *p, Editor *ed)
     scale->setRange(1, 600);
     scale->setSuffix(QStringLiteral("%"));
     scale->setValue(cf.hasProperty(QTextFormat::FontStretch) ? cf.fontStretch() : 100);
-    auto *track = points(cf.fontLetterSpacingType() == QFont::AbsoluteSpacing ? cf.fontLetterSpacing() : 0, &dlg.d, -50, 200);
+    // Tracking: a preset or a percentage of normal spacing, as Publisher has it.
+    static const QPair<const char *, double> presets[] = {{"Very tight", 75}, {"Tight", 87.5}, {"Normal", 100}, {"Loose", 112.5}, {"Very loose", 125}};
+    auto *trackKind = new QComboBox(&dlg.d);
+    for (const auto &pr : presets) trackKind->addItem(QString::fromLatin1(pr.first), pr.second);
+    trackKind->addItem(QStringLiteral("Custom"), -1.0);
+    auto *track = new DecimalSpin(&dlg.d);
+    track->setRange(0, 600);
+    track->setSuffix(QStringLiteral("%"));
+    track->setValue(tp::trackingOf(cf));
+    auto syncTrackKind = [=] {
+        const QSignalBlocker b(trackKind);
+        trackKind->setCurrentIndex(trackKind->count() - 1);
+        for (int i = 0; i + 1 < trackKind->count(); ++i)
+            if (std::abs(trackKind->itemData(i).toDouble() - track->value()) < 0.01) trackKind->setCurrentIndex(i);
+    };
+    syncTrackKind();
+    QObject::connect(trackKind, &QComboBox::currentIndexChanged, &dlg.d, [=](int i) {
+        const double v = trackKind->itemData(i).toDouble();
+        if (v > 0) { const QSignalBlocker b(track); track->setValue(v); }
+    });
+    QObject::connect(track, &QDoubleSpinBox::valueChanged, &dlg.d, syncTrackKind);
+    // Kerning: space added (or taken) after each selected letter.
+    auto *kernKind = new QComboBox(&dlg.d);
+    kernKind->addItems({QStringLiteral("Normal"), QStringLiteral("Expand"), QStringLiteral("Condense")});
+    const double kernNow = tp::kerningOf(cf);
+    auto *kernBy = points(std::abs(kernNow), &dlg.d, 0, 600);
+    kernKind->setCurrentIndex(kernNow > 0.0005 ? 1 : kernNow < -0.0005 ? 2 : 0);
+    kernBy->setEnabled(kernKind->currentIndex() != 0);
+    QObject::connect(kernKind, &QComboBox::currentIndexChanged, &dlg.d, [=](int i) {
+        kernBy->setEnabled(i != 0);
+        if (i == 0) kernBy->setValue(0);
+        else if (kernBy->value() < 0.0005) kernBy->setValue(1);
+    });
     auto *kern = new QCheckBox(QStringLiteral("Automatic pair kerning for fonts"), &dlg.d);
     kern->setChecked(!cf.hasProperty(QTextFormat::FontKerning) || cf.fontKerning());
     auto *kernFrom = points(cf.hasProperty(tp::KernAbove) ? cf.doubleProperty(tp::KernAbove) : 14.0, &dlg.d, 0, 1638);
@@ -832,7 +864,16 @@ void characterSpacingDialog(QWidget *p, Editor *ed)
     QObject::connect(kern, &QCheckBox::toggled, kernFrom, &QWidget::setEnabled);
     auto *word = points(cf.fontWordSpacing(), &dlg.d, -50, 200);
     form->addRow(QStringLiteral("Scaling (shrink or stretch):"), scale);
-    form->addRow(QStringLiteral("Tracking (character spacing):"), track);
+    auto *trackRow = new QHBoxLayout();
+    trackRow->addWidget(trackKind);
+    trackRow->addWidget(new QLabel(QStringLiteral("By this amount:"), &dlg.d));
+    trackRow->addWidget(track);
+    form->addRow(QStringLiteral("Tracking (selected text):"), trackRow);
+    auto *kernByRow = new QHBoxLayout();
+    kernByRow->addWidget(kernKind);
+    kernByRow->addWidget(new QLabel(QStringLiteral("By this amount:"), &dlg.d));
+    kernByRow->addWidget(kernBy);
+    form->addRow(QStringLiteral("Kerning (selected letters):"), kernByRow);
     form->addRow(QStringLiteral("Word spacing:"), word);
     auto *kernRow = new QHBoxLayout();
     kernRow->addWidget(kern);
@@ -844,8 +885,9 @@ void characterSpacingDialog(QWidget *p, Editor *ed)
     if (!dlg.exec()) return;
     QTextCharFormat f;
     f.setFontStretch(scale->value());
+    f.setProperty(tp::Tracking, track->value());
     f.setFontLetterSpacingType(QFont::AbsoluteSpacing);
-    f.setFontLetterSpacing(track->value());
+    f.setFontLetterSpacing(kernKind->currentIndex() == 2 ? -kernBy->value() : kernKind->currentIndex() == 1 ? kernBy->value() : 0.0);
     f.setFontKerning(kern->isChecked());
     f.setProperty(tp::KernAbove, kernFrom->value());
     f.setFontWordSpacing(word->value());
@@ -2218,8 +2260,11 @@ void measurementWindow(QWidget *p, Editor *ed)
     rot->setRange(-360, 360);
     rot->setSuffix(QStringLiteral("°"));
     auto *track = new DecimalSpin(win);
-    track->setRange(-50, 200);
-    track->setSuffix(QStringLiteral(" pt"));
+    track->setRange(0, 600);
+    track->setSuffix(QStringLiteral("%"));
+    auto *kern = new DecimalSpin(win);
+    kern->setRange(-600, 600);
+    kern->setSuffix(QStringLiteral(" pt"));
     auto *scale = new QSpinBox(win);
     scale->setRange(1, 600);
     scale->setSuffix(QStringLiteral("%"));
@@ -2233,6 +2278,7 @@ void measurementWindow(QWidget *p, Editor *ed)
     form->addRow(QStringLiteral("Rotation:"), rot);
     form->addRow(QStringLiteral("Tracking:"), track);
     form->addRow(QStringLiteral("Text scaling:"), scale);
+    form->addRow(QStringLiteral("Kerning:"), kern);
     form->addRow(QStringLiteral("Line spacing:"), line);
     auto refresh = [=] {
         Item *it = ed->single();
@@ -2243,7 +2289,8 @@ void measurementWindow(QWidget *p, Editor *ed)
             if (!rot->hasFocus()) { const QSignalBlocker b(rot); rot->setValue(it->rotation); }
         }
         const QTextCharFormat cf = ed->currentCharFormat();
-        if (!track->hasFocus()) { const QSignalBlocker b(track); track->setValue(cf.fontLetterSpacingType() == QFont::AbsoluteSpacing ? cf.fontLetterSpacing() : 0); }
+        if (!track->hasFocus()) { const QSignalBlocker b(track); track->setValue(tp::trackingOf(cf)); }
+        if (!kern->hasFocus()) { const QSignalBlocker b(kern); kern->setValue(tp::kerningOf(cf)); }
         if (!scale->hasFocus()) { const QSignalBlocker b(scale); scale->setValue(cf.hasProperty(QTextFormat::FontStretch) ? cf.fontStretch() : 100); }
         const QTextBlockFormat bf = ed->currentBlockFormat();
         if (!line->hasFocus()) { const QSignalBlocker b(line); line->setValue(bf.lineHeightType() == QTextBlockFormat::ProportionalHeight ? bf.lineHeight() / 100 : 1.0); }
@@ -2266,9 +2313,14 @@ void measurementWindow(QWidget *p, Editor *ed)
         QObject::connect(s, &QDoubleSpinBox::editingFinished, win, applyGeom);
     QObject::connect(track, &QDoubleSpinBox::editingFinished, win, [=] {
         QTextCharFormat f;
-        f.setFontLetterSpacingType(QFont::AbsoluteSpacing);
-        f.setFontLetterSpacing(track->value());
+        f.setProperty(tp::Tracking, track->value());
         ed->mergeCharFormat(f, QStringLiteral("Tracking"));
+    });
+    QObject::connect(kern, &QDoubleSpinBox::editingFinished, win, [=] {
+        QTextCharFormat f;
+        f.setFontLetterSpacingType(QFont::AbsoluteSpacing);
+        f.setFontLetterSpacing(kern->value());
+        ed->mergeCharFormat(f, QStringLiteral("Kerning"));
     });
     QObject::connect(scale, &QSpinBox::editingFinished, win, [=] {
         QTextCharFormat f;

@@ -351,6 +351,35 @@ private Q_SLOTS:
         QCOMPARE(jp::autoflowText(ed, box->id), 0);   // nothing more to do
     }
 
+    // Tracking adds the font's average character width times the percentage
+    // beyond 100 after each letter (as .pub layouts do); kerning adds points.
+    void trackingAndKerning()
+    {
+        jp::LayoutEnv env;
+        QTextCharFormat f;
+        f.setFontFamilies(QStringList{QStringLiteral("Arial")});
+        f.setFontPointSize(10);
+        auto spacing = [&](const QTextCharFormat &g) {
+            const QTextCharFormat r = jp::resolveCharFormat(g, env);
+            return r.fontLetterSpacingType() == QFont::AbsoluteSpacing ? r.fontLetterSpacing() : 0.0;
+        };
+        QVERIFY(std::abs(spacing(f)) < 0.001);
+        QTextCharFormat loose = f;
+        loose.setProperty(jp::tp::Tracking, 125);
+        QVERIFY2(std::abs(spacing(loose) - 0.25 * 904 / 2048 * 10) < 0.02, qPrintable(QString::number(spacing(loose))));
+        QTextCharFormat both = f;
+        both.setProperty(jp::tp::Tracking, 87.5);
+        both.setFontLetterSpacingType(QFont::AbsoluteSpacing);
+        both.setFontLetterSpacing(1);
+        QVERIFY(std::abs(spacing(both) - (1 - 0.125 * 904 / 2048 * 10)) < 0.02);
+        // Files saved before tracking had its own property kept it as Qt
+        // percentage spacing; it is read as tracking, not Qt's own stretching.
+        QTextCharFormat old = f;
+        old.setFontLetterSpacingType(QFont::PercentageSpacing);
+        old.setFontLetterSpacing(125);
+        QVERIFY(std::abs(spacing(old) - spacing(loose)) < 0.001);
+    }
+
     // AutoFormat as you type: dashes, fractions, ordinals and lists.
     void typingAutoFormat()
     {
@@ -1557,6 +1586,12 @@ private Q_SLOTS:
             kn.setFontLetterSpacingType(QFont::AbsoluteSpacing);
             kn.setFontLetterSpacing(2);
             c.insertText(QStringLiteral("kerned"), kn);
+            c.insertText(QStringLiteral(" "), plain);
+            QTextCharFormat both = plain;
+            both.setProperty(jp::tp::Tracking, 87.5);
+            both.setFontLetterSpacingType(QFont::AbsoluteSpacing);
+            both.setFontLetterSpacing(-1);
+            c.insertText(QStringLiteral("both"), both);
             QTextBlockFormat tabs;
             QList<QTextOption::Tab> tl;
             tl << QTextOption::Tab(72, QTextOption::LeftTab) << QTextOption::Tab(216, QTextOption::CenterTab) << QTextOption::Tab(360, QTextOption::RightTab);
@@ -1611,10 +1646,14 @@ private Q_SLOTS:
         QHash<QString, QTextCharFormat> fmt;
         for (auto it = d->begin().begin(); !it.atEnd(); ++it) fmt[it.fragment().text().trimmed()] = it.fragment().charFormat();
         QVERIFY(fmt.value(QStringLiteral("strike")).fontStrikeOut());
-        QCOMPARE(fmt.value(QStringLiteral("tracked")).fontLetterSpacingType(), QFont::PercentageSpacing);
-        QVERIFY(std::abs(fmt.value(QStringLiteral("tracked")).fontLetterSpacing() - 125) < 0.5);
-        QCOMPARE(fmt.value(QStringLiteral("kerned")).fontLetterSpacingType(), QFont::AbsoluteSpacing);
-        QVERIFY(std::abs(fmt.value(QStringLiteral("kerned")).fontLetterSpacing() - 2) < 0.05);
+        // Tracking (a percentage) and kerning (points) come back apart, and
+        // a run can have both.
+        QVERIFY(std::abs(jp::tp::trackingOf(fmt.value(QStringLiteral("tracked"))) - 125) < 0.5);
+        QVERIFY(std::abs(jp::tp::kerningOf(fmt.value(QStringLiteral("tracked")))) < 0.001);
+        QVERIFY(std::abs(jp::tp::kerningOf(fmt.value(QStringLiteral("kerned"))) - 2) < 0.05);
+        QVERIFY(std::abs(jp::tp::trackingOf(fmt.value(QStringLiteral("kerned"))) - 100) < 0.01);
+        QVERIFY(std::abs(jp::tp::trackingOf(fmt.value(QStringLiteral("both"))) - 87.5) < 0.5);
+        QVERIFY(std::abs(jp::tp::kerningOf(fmt.value(QStringLiteral("both"))) + 1) < 0.05);
         const QList<QTextOption::Tab> got = d->begin().next().blockFormat().tabPositions();
         QCOMPARE(got.size(), 3);
         QVERIFY(std::abs(got[1].position - 216) < 0.5 && got[1].type == QTextOption::CenterTab);

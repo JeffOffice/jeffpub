@@ -38,6 +38,7 @@ enum : int {
     GlowRef,                                     // QString ColorRef, glow on text
     NoProof,                                     // bool, skip spelling
     KernAbove,                                   // double: automatic pair kerning from this size up (points; 14 when unset)
+    Tracking,                                    // double: percent of normal letter spacing (100 when unset)
 
     // block
     StyleName = QTextFormat::UserProperty + 100, // QString paragraph style
@@ -61,5 +62,19 @@ enum : int {
     ListId,                                      // QString: blocks with the same id share numbering
     TabLeaders,                                  // QString per-tab leader characters
 };
+
+// Publisher's two kinds of letter spacing. Tracking is a percentage (100
+// normal); older files kept it as Qt percentage spacing. Kerning is space in
+// points added after each letter, kept as Qt absolute spacing.
+inline double trackingOf(const QTextCharFormat &f)
+{
+    if (f.hasProperty(Tracking)) return f.property(Tracking).toDouble();
+    if (f.hasProperty(QTextFormat::FontLetterSpacing) && f.fontLetterSpacingType() == QFont::PercentageSpacing) return f.fontLetterSpacing();
+    return 100;
+}
+inline double kerningOf(const QTextCharFormat &f)
+{
+    return f.hasProperty(QTextFormat::FontLetterSpacing) && f.fontLetterSpacingType() == QFont::AbsoluteSpacing ? f.fontLetterSpacing() : 0;
+}
 
 } // namespace jp::tp
