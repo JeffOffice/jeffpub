@@ -578,6 +578,11 @@ void MainWindow::exportHtml()
                                                       QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/" + m_ed->displayName() + ".html",
                                                       QStringLiteral("Web Page (*.html)"));
     if (path.isEmpty()) return;
+    exportHtmlTo(path);
+}
+
+bool MainWindow::exportHtmlTo(const QString &path)
+{
     // Single-file page: each publication page as an embedded image with its text in alt text.
     PaintContext ctx;
     ctx.doc = m_ed->doc();
@@ -592,17 +597,46 @@ void MainWindow::exportHtml()
         QBuffer b(&png);
         b.open(QIODevice::WriteOnly);
         img.save(&b, "PNG");
+        // The page's words (and pictures' alt text) for the description, and
+        // its links as clickable areas: objects with a link, and linked text.
         QStringList text;
+        QString areas;
+        const double px = 2.0;   // image pixels per point
+        auto area = [&](const QRectF &r, const QString &href) {
+            if (href.isEmpty() || r.isEmpty()) return;
+            areas += QStringLiteral("<area shape=\"rect\" coords=\"%1,%2,%3,%4\" href=\"%5\" alt=\"%5\">")
+                         .arg(int(r.left() * px)).arg(int(r.top() * px)).arg(int(std::ceil(r.right() * px))).arg(int(std::ceil(r.bottom() * px)))
+                         .arg(href.toHtmlEscaped());
+        };
         walkItems(m_ed->doc()->pages[i]->items, [&](const ItemPtr &it) {
-            if (it->type() == ItemType::Text)
-                if (QTextDocument *td = m_ed->doc()->storyDoc(static_cast<TextItem *>(it.get())->storyId)) text << td->toPlainText();
+            area(it->bounds(), it->hyperlink);
+            if (it->type() == ItemType::Picture && !it->altText.isEmpty()) text << it->altText;
+            if (it->type() != ItemType::Text) return;
+            auto *t = static_cast<TextItem *>(it.get());
+            QTextDocument *td = m_ed->doc()->storyDoc(t->storyId);
+            if (!td) return;
+            if (!m_ed->doc()->prevFrame(t->id)) text << td->toPlainText();
+            const auto fl = m_ed->cache().textFrame(*m_ed->doc(), *t, i + 1, ctx.opt);
+            if (!fl.layout) return;
+            for (QTextBlock b = td->begin(); b.isValid(); b = b.next())
+                for (auto f = b.begin(); !f.atEnd(); ++f) {
+                    const QTextCharFormat cf = f.fragment().charFormat();
+                    if (!cf.isAnchor() || cf.anchorHref().isEmpty()) continue;
+                    for (const QRectF &r : fl.layout->rangeRects(fl.frame, f.fragment().position(), f.fragment().position() + f.fragment().length()))
+                        area(t->transform().mapRect(r), cf.anchorHref());
+                }
         });
-        html += QStringLiteral("<img alt=\"%1\" src=\"data:image/png;base64,%2\">").arg(text.join(' ').left(2000).toHtmlEscaped(), QString::fromLatin1(png.toBase64()));
+        const QString map = areas.isEmpty() ? QString() : QStringLiteral("p%1").arg(i + 1);
+        html += QStringLiteral("<img alt=\"%1\" src=\"data:image/png;base64,%2\"%3>").arg(text.join(' ').left(2000).toHtmlEscaped(), QString::fromLatin1(png.toBase64()),
+                                                                                         map.isEmpty() ? QString() : QStringLiteral(" usemap=\"#%1\"").arg(map));
+        if (!map.isEmpty()) html += QStringLiteral("<map name=\"%1\">%2</map>").arg(map, areas);
     }
     html += "</body></html>";
     QFile f(path);
-    if (f.open(QIODevice::WriteOnly)) f.write(html.toUtf8());
+    if (!f.open(QIODevice::WriteOnly)) return false;
+    f.write(html.toUtf8());
     statusBar()->showMessage(QStringLiteral("Saved %1").arg(QFileInfo(path).fileName()), 5000);
+    return true;
 }
 
 void MainWindow::printPublication()

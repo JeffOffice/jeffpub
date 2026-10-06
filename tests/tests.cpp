@@ -560,6 +560,40 @@ private Q_SLOTS:
                  qPrintable(QStringLiteral("%1/%2 %3/%4").arg(leftInk.first).arg(leftInk.second).arg(rightInk.first).arg(rightInk.second)));
     }
 
+    // Web page export: links are clickable areas over the page picture.
+    void webPageLinks()
+    {
+        jp::MainWindow w;
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto shape = std::make_shared<jp::ShapeItem>();
+        shape->rect = QRectF(100, 100, 50, 40);
+        shape->fill = jp::Fill::solid(jp::ColorRef::rgb(Qt::red));
+        shape->hyperlink = QStringLiteral("https://example.org/shape");
+        doc->pages[0]->items.push_back(shape);
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 300, 300, 60);
+        t->storyId = doc->createStory(QStringLiteral("Visit "));
+        {
+            QTextCursor c(doc->storyDoc(t->storyId));
+            c.movePosition(QTextCursor::End);
+            QTextCharFormat f;
+            f.setAnchor(true);
+            f.setAnchorHref(QStringLiteral("https://example.org/text"));
+            c.insertText(QStringLiteral("our site"), f);
+        }
+        doc->pages[0]->items.push_back(t);
+        w.editor()->setDocument(std::move(doc));
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("page.html"));
+        QVERIFY(w.exportHtmlTo(path));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QString html = QString::fromUtf8(f.readAll());
+        QVERIFY(html.contains(QStringLiteral("usemap=\"#p1\"")));
+        QVERIFY(html.contains(QStringLiteral("coords=\"200,200,300,280\" href=\"https://example.org/shape\"")));
+        QVERIFY(html.contains(QStringLiteral("href=\"https://example.org/text\"")));
+    }
+
     // "Always create backup copy" keeps the file as it was before saving.
     void saveBackupCopy()
     {

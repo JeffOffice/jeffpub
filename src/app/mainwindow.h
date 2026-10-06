@@ -64,6 +64,7 @@ public:
     bool exportPdfTo(const QString &path, const PdfSettings &s);
     void exportImages();
     void exportHtml();
+    bool exportHtmlTo(const QString &path);
     void printPublication();
     void showBackstage(const QString &page = QString());
     void hideBackstage();
