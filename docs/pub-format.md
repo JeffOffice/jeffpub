@@ -398,8 +398,9 @@ every paragraph so Normal's own values (6 pt after, 1.19 lines) don't apply.
 
 Character runs (FDPC): `12:22` and `3e:22` the language as a Windows LCID
 (1033 for US English in every run of the 56 reference files with
-character pages; JeffPub writes the run's language in both, 1034-style
-codes from the table libmspub reads; Publisher check pending, test35),
+character pages; JeffPub writes the run's language in both, such as 2058
+for Spanish (Mexico), from the table libmspub reads; Publisher check
+pending, test35),
 `1e:12 = 1` underline, `10:0a` strikethrough,
 `13:0a` small caps, `14:0a` all caps, `0f:12` 1 superscript, 2 subscript,
 `1b:22` space added between letters in EMU (Publisher's "kerning"), `1f:1a`
