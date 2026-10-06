@@ -28,6 +28,7 @@ enum : int {
     TextFill,                                    // QString Fill JSON (gradient text)
     GlowRef,                                     // QString ColorRef, glow on text
     NoProof,                                     // bool, skip spelling
+    KernAbove,                                   // double: automatic pair kerning from this size up (points; 14 when unset)
 
     // block
     StyleName = QTextFormat::UserProperty + 100, // QString paragraph style

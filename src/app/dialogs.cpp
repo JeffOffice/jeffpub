@@ -793,13 +793,21 @@ void characterSpacingDialog(QWidget *p, Editor *ed)
     scale->setSuffix(QStringLiteral("%"));
     scale->setValue(cf.hasProperty(QTextFormat::FontStretch) ? cf.fontStretch() : 100);
     auto *track = points(cf.fontLetterSpacingType() == QFont::AbsoluteSpacing ? cf.fontLetterSpacing() : 0, &dlg.d, -50, 200);
-    auto *kern = new QCheckBox(QStringLiteral("Automatic pair kerning"), &dlg.d);
+    auto *kern = new QCheckBox(QStringLiteral("Automatic pair kerning for fonts"), &dlg.d);
     kern->setChecked(!cf.hasProperty(QTextFormat::FontKerning) || cf.fontKerning());
+    auto *kernFrom = points(cf.hasProperty(tp::KernAbove) ? cf.doubleProperty(tp::KernAbove) : 14.0, &dlg.d, 0, 1638);
+    kernFrom->setEnabled(kern->isChecked());
+    QObject::connect(kern, &QCheckBox::toggled, kernFrom, &QWidget::setEnabled);
     auto *word = points(cf.fontWordSpacing(), &dlg.d, -50, 200);
     form->addRow(QStringLiteral("Scaling (shrink or stretch):"), scale);
     form->addRow(QStringLiteral("Tracking (character spacing):"), track);
     form->addRow(QStringLiteral("Word spacing:"), word);
-    form->addRow(kern);
+    auto *kernRow = new QHBoxLayout();
+    kernRow->addWidget(kern);
+    kernRow->addWidget(kernFrom);
+    kernRow->addWidget(new QLabel(QStringLiteral("and above"), &dlg.d));
+    kernRow->addStretch(1);
+    form->addRow(kernRow);
     dlg.v->addLayout(form);
     if (!dlg.exec()) return;
     QTextCharFormat f;
@@ -807,6 +815,7 @@ void characterSpacingDialog(QWidget *p, Editor *ed)
     f.setFontLetterSpacingType(QFont::AbsoluteSpacing);
     f.setFontLetterSpacing(track->value());
     f.setFontKerning(kern->isChecked());
+    f.setProperty(tp::KernAbove, kernFrom->value());
     f.setFontWordSpacing(word->value());
     ed->mergeCharFormat(f, QStringLiteral("Character Spacing"));
 }

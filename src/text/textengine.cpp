@@ -142,6 +142,13 @@ QTextCharFormat resolveCharFormat(const QTextCharFormat &f, const LayoutEnv &env
     }
     const double sz = f.hasProperty(QTextFormat::FontPointSize) ? f.fontPointSize() : 11.0;
     r.setFontPointSize(std::max(1.0, sz * env.fontScale) * fontPointFactor());
+    // Automatic pair kerning applies from a size up, 14 pt unless the text
+    // says otherwise (smaller text keeps the font's plain widths, as .pub
+    // files are laid out); text can also turn kerning off.
+    {
+        const double kernFrom = f.hasProperty(tp::KernAbove) ? f.doubleProperty(tp::KernAbove) : 14.0;
+        r.setFontKerning((!f.hasProperty(QTextFormat::FontKerning) || f.fontKerning()) && sz >= kernFrom);
+    }
     // Unhinted design widths: hinting differs between Windows and Linux and
     // would move line breaks; publications must lay out the same everywhere.
     r.setFontHintingPreference(QFont::PreferNoHinting);

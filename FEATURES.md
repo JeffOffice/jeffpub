@@ -43,7 +43,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 - [x] **(alt)** Email: send the current page as a picture, or the publication as an attachment. JeffPub 79 creates a ready-to-send `.eml`, PDF, or HTML file instead of sending through a mail program.
 
 ### Options
-- [~] General (user name and initials, UI theme), Proofing (AutoCorrect options, spelling options), Save (AutoRecover interval and location), Language, and Advanced (auto-select entire word, drag-and-drop text, automatic hyphenation zone, automatic kerning, measurement units, recent file count, nudge amount, print and display options) *(partial: automatic kerning is not applied yet)*
+- [x] General (user name and initials, UI theme), Proofing (AutoCorrect options, spelling options), Save (AutoRecover interval and location), Language, and Advanced (auto-select entire word, drag-and-drop text, automatic hyphenation zone, measurement units, recent file count, nudge amount, print and display options)
 
 ## Home tab
 - [x] Clipboard: Paste (Keep Source Formatting, Keep Text Only, Paste Special), Cut, Copy, Format Painter (single use and locked)
@@ -160,7 +160,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 - [x] Two-page spreads and facing pages
 
 ## Text engine
-- [x] Rich text: fonts, sizes, color (scheme-aware), highlight, underline styles, strike, sub and superscript, all caps, small caps, character spacing (tracking), kerning, and scaling
+- [x] Rich text: fonts, sizes, color (scheme-aware), highlight, underline styles, strike, sub and superscript, all caps, small caps, character spacing (tracking), automatic pair kerning (for fonts 14 pt and above unless set otherwise), and scaling
 - [x] Paragraphs: alignment, indents (left, right, first line, hanging), spacing before and after, line spacing (single, multiple, exact, at least), keep with next, keep lines together, widow and orphan control, start in next text box
 - [x] Tabs with leaders (left, center, right, decimal)
 - [x] Bullets and numbering, multilevel
