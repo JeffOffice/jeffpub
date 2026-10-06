@@ -638,6 +638,43 @@ private Q_SLOTS:
     // first line sits one ascent below the top, a paragraph after a more
     // widely spaced one starts lower by that paragraph's extra, and a box
     // holds as many lines as before.
+    // A line of small capitals only (lowercase letters drawn at 0.8 x) is
+    // spaced from the next as a line at the full size, as in Publisher's PDF
+    // of the Age of Reason cover (100 pt small caps at 0.75 lines: baselines
+    // 71.6 and 86.7 pt apart); a soft hyphen in it doesn't make it deeper.
+    void smallCapsLineSpacing()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 400, 600);
+        t->insets = QMarginsF(0, 0, 0, 0);
+        t->storyId = doc->createStory(QString());
+        doc->pages[0]->items.push_back(t);
+        QTextCursor c(doc->storyDoc(t->storyId));
+        QTextCharFormat cf;
+        cf.setFontFamilies(QStringList{QStringLiteral("Times New Roman")});
+        cf.setFontPointSize(100);
+        cf.setFontCapitalization(QFont::SmallCaps);
+        QTextBlockFormat bf;
+        bf.setLineHeight(75, QTextBlockFormat::ProportionalHeight);
+        c.setBlockFormat(bf);
+        c.insertText(QStringLiteral("age"), cf);
+        c.insertBlock(bf, cf);
+        c.insertText(QString::fromUtf8("rea\u00ADson"), cf);
+        c.insertBlock(bf, cf);
+        c.insertText(QStringLiteral("AGE"), cf);
+        jp::LayoutCache cache;
+        jp::RenderOptions opt;
+        const auto lines = cache.textFrame(*doc, *t, 1, opt).layout->lineInfo(0);
+        QCOMPARE(lines.size(), 3);
+        const double gap1 = lines[1].baseline - lines[0].baseline, gap2 = lines[2].baseline - lines[1].baseline;
+        const double line = 0.75 * 100 * (1420.0 + 442 + 307) / 2048;   // a full-size line (Times New Roman)
+        QVERIFY2(std::abs(gap1 - line) < 0.5, qPrintable(QString::number(gap1)));
+        // The full-size capitals' line is spaced the same; its deeper letters
+        // put its baseline higher by the difference in descent.
+        QVERIFY2(std::abs(gap2 - (line - 0.2 * 100 * 442.0 / 2048)) < 0.5, qPrintable(QString::number(gap2)));
+    }
+
     void lineSpacingBelowLines()
     {
         auto doc = jp::Document::blank(QSizeF(612, 792));
@@ -3055,6 +3092,83 @@ private Q_SLOTS:
         jp::Settings::get().setValue(QStringLiteral("ui/windowGeometry"), QVariant());
         jp::MainWindow fresh;
         QCOMPARE(fresh.size(), QSize(1400, 900));
+    }
+
+    // Character scaling (0x20, tenths of a percent, like tracking): a flyer's
+    // motto at 100.1% came out 40 times as wide (read as 10010%). The test
+    // file turns a saved tracking value into a scaling one in place.
+    void pubTextScaleRead()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 400, 100);
+        t->storyId = doc->createStory(QStringLiteral("Ever Vigilant Ever Ready"));
+        doc->pages[0]->items.push_back(t);
+        QTextCursor all(doc->storyDoc(t->storyId));
+        all.select(QTextCursor::Document);
+        QTextCharFormat tf;
+        tf.setProperty(jp::tp::Tracking, 123.4);
+        all.mergeCharFormat(tf);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("scale.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        jp::cfb::File c;
+        {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::ReadOnly));
+            QVERIFY2(jp::cfb::read(f.readAll(), &c, &err), qPrintable(err));
+        }
+        const QString quill = QStringLiteral("Quill/QuillSub/CONTENTS");
+        QByteArray q = c.stream(quill);
+        const QByteArray tracking("\x1f\x1a\xd2\x04", 4), scaling("\x20\x1a\xdc\x05", 4);   // 1234 -> 1500 (150%)
+        QVERIFY(q.contains(tracking));
+        q.replace(tracking, scaling);
+        QVERIFY(c.setStream(quill, q));
+        {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(jp::cfb::write(c));
+        }
+        auto back = jp::importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QTextDocument *story = nullptr;
+        for (const auto &it : back->pages[0]->items)
+            if (auto tx = std::dynamic_pointer_cast<jp::TextItem>(it)) story = back->storyDoc(tx->storyId);
+        QVERIFY(story);
+        QTextCursor at(story);
+        at.setPosition(3);
+        QCOMPARE(at.charFormat().fontStretch(), 150);
+    }
+
+    // Every dash style comes back from .pub as it was saved (square dots
+    // came back as dashes, and dash-dot patterns as plain dashes).
+    void pubDashStylesRoundTrip()
+    {
+        using S = jp::Stroke;
+        const S::Dash dashes[] = {S::RoundDot, S::SquareDot, S::DashLine, S::DashDot, S::LongDash, S::LongDashDot, S::LongDashDotDot};
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        for (int i = 0; i < 7; ++i) {
+            auto line = std::make_shared<jp::LineItem>();
+            line->p1 = QPointF(72, 72 + i * 60);
+            line->p2 = QPointF(400, 72 + i * 60);
+            line->rect = QRectF(line->p1, line->p2).normalized();
+            line->stroke = S::line(jp::ColorRef::rgb(Qt::black), 4);
+            line->stroke.dash = dashes[i];
+            doc->pages[0]->items.push_back(line);
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("dashes.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        auto back = jp::importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QList<int> got;
+        for (const auto &it : back->pages[0]->items)
+            if (auto l = std::dynamic_pointer_cast<jp::LineItem>(it)) got << int(l->stroke.dash);
+        QList<int> want;
+        for (S::Dash d : dashes) want << int(d);
+        QCOMPARE(got, want);
     }
 
     // A spot color names its ink in the fill's extra drawing properties

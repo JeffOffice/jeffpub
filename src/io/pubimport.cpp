@@ -881,8 +881,20 @@ private:
         st.width = m_style["svg:stroke-width"] ? toPt(m_style["svg:stroke-width"]) : 0.75;
         if (st.width <= 0) st.width = 0.25;
         if (m_style["svg:stroke-opacity"]) st.transparency = 1 - percent(m_style["svg:stroke-opacity"]);
-        if (s == "dash") st.dash = m_style["draw:dots1-length"] && toPt(m_style["draw:dots1-length"]) < st.width * 1.5 ? Stroke::RoundDot : Stroke::DashLine;
-        if (str(m_style["svg:stroke-linecap"]) == "round") st.cap = Qt::RoundCap;
+        const bool roundEnds = str(m_style["svg:stroke-linecap"]) == "round";
+        if (s == "dash") {
+            // Publisher's dashing as the reader describes it: a dot has no
+            // length (square, or round with round ends), a dash is 3-4 widths
+            // long and a long dash 8; a second entry adds one or two dots.
+            const double len = m_style["draw:dots1-length"] ? toPt(m_style["draw:dots1-length"]) : 0;
+            const int dots2 = m_style["draw:dots2"] ? m_style["draw:dots2"]->getInt() : 0;
+            const bool longDash = len >= 6 * st.width;
+            if (len < st.width * 1.5) st.dash = roundEnds ? Stroke::RoundDot : Stroke::SquareDot;
+            else if (dots2 >= 2) st.dash = Stroke::LongDashDotDot;
+            else if (dots2 == 1) st.dash = longDash ? Stroke::LongDashDot : Stroke::DashDot;
+            else st.dash = longDash ? Stroke::LongDash : Stroke::DashLine;
+        }
+        if (roundEnds) st.cap = Qt::RoundCap;
         if (!str(m_style["draw:marker-start-path"]).isEmpty()) st.startArrow = Arrow::Triangle;
         if (!str(m_style["draw:marker-end-path"]).isEmpty()) st.endArrow = Arrow::Triangle;
         // Arrowheads as .pub files store them: 1 triangle, 2 stealth,

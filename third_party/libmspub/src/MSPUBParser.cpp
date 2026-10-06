@@ -1802,7 +1802,7 @@ CharacterStyle MSPUBParser::getCharacterStyle(librevenge::RVNGInputStream *input
       style.engrave = true;
       break;
     case SCALING_ID:
-      style.textScale = double(info.data) / 10;
+      style.textScale = double(info.data) / 10;   // tenths of a percent, kept as a percent
       break;
     case LOCALE_ID:
       style.lcid = info.data;

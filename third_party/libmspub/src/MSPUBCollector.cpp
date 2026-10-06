@@ -1885,10 +1885,12 @@ librevenge::RVNGPropertyList MSPUBCollector::getCharStyleProps(const CharacterSt
     ret.insert("jp:text-outline-color", getColorString(m_textColors[ol.outlineColorIndex].getFinalColor(m_paletteColors)));
     ret.insert("jp:text-outline-width", double(ol.outlineWidthEmu) / EMUS_IN_INCH);
   }
+  // JeffPub patch: RVNG_PERCENT takes a fraction (1 = 100%); the scale is
+  // kept as a percent, so 100.1% became 10010% (text 100 times as wide).
   if (style.textScale)
-    ret.insert("fo:text-scale", get(style.textScale), librevenge::RVNG_PERCENT);
+    ret.insert("fo:text-scale", get(style.textScale) / 100, librevenge::RVNG_PERCENT);
   else if (defaultCharStyle.textScale)
-    ret.insert("fo:text-scale", get(defaultCharStyle.textScale), librevenge::RVNG_PERCENT);
+    ret.insert("fo:text-scale", get(defaultCharStyle.textScale) / 100, librevenge::RVNG_PERCENT);
   if (bool(style.textSizeInPt))
   {
     ret.insert("fo:font-size", style.textSizeInPt.get() / POINTS_IN_INCH);
