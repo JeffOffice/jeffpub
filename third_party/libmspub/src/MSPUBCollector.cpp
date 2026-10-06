@@ -1693,6 +1693,26 @@ librevenge::RVNGPropertyList MSPUBCollector::getParaStyleProps(const ParagraphSt
   {
     ret.insert("fo:margin-right", (double)rightIndentEmu / EMUS_IN_INCH);
   }
+  // JeffPub 79: tab stops with their alignment, and the paragraph's list.
+  if (!style.m_tabStopsInEmu.empty())
+  {
+    librevenge::RVNGPropertyListVector tabs;
+    for (size_t i = 0; i < style.m_tabStopsInEmu.size(); ++i)
+    {
+      librevenge::RVNGPropertyList tab;
+      tab.insert("style:position", double(style.m_tabStopsInEmu[i]) / EMUS_IN_INCH);
+      const int a = i < style.m_tabAligns.size() ? style.m_tabAligns[i] : 0;
+      tab.insert("style:type", a == 1 ? "right" : a == 2 ? "center" : a == 3 ? "char" : "left");
+      tabs.append(tab);
+    }
+    ret.insert("style:tab-stops", tabs);
+  }
+  if (style.m_listKind >= 0)
+  {
+    ret.insert("jp:list-kind", style.m_listKind);
+    ret.insert("jp:list-char", style.m_listChar);
+    ret.insert("jp:list-delim", style.m_listDelim);
+  }
   unsigned dropCapLines = style.m_dropCapLines.get_value_or(
                             defaultStyle.m_dropCapLines.get_value_or(0));
   if (dropCapLines != 0)
@@ -1796,6 +1816,13 @@ librevenge::RVNGPropertyList MSPUBCollector::getCharStyleProps(const CharacterSt
                      getCalculatedEncoding());
     ret.insert("style:font-name", str);
   }
+  // JeffPub 79: strikethrough and letter spacing.
+  if (style.strike)
+    ret.insert("style:text-line-through-type", "single");
+  if (style.letterSpacingEmu)
+    ret.insert("fo:letter-spacing", double(style.letterSpacingEmu) / EMUS_IN_INCH);
+  if (style.trackingPerMille && style.trackingPerMille != 1000)
+    ret.insert("jp:tracking", style.trackingPerMille / 10.0);
   switch (style.superSubType)
   {
   case SUPERSCRIPT:

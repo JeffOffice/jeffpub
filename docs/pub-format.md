@@ -261,6 +261,20 @@ what would be EMU at 96 pt (a multiple of 4) plus 2 (1 line = 1219202;
 Normal's 1.19 lines = 1450850). JeffPub writes spacing and line spacing on
 every paragraph so Normal's own values (6 pt after, 1.19 lines) don't apply.
 
-Character runs (FDPC): `1e:12 = 1` underline, `13:0a` small caps, `14:0a`
-all caps, `0f:12` 1 superscript, 2 subscript.
+Character runs (FDPC): `1e:12 = 1` underline, `10:0a` strikethrough,
+`13:0a` small caps, `14:0a` all caps, `0f:12` 1 superscript, 2 subscript,
+`1b:22` space added between letters in EMU (Publisher's "kerning"), `1f:1a`
+tracking in tenths of a percent (1000 normal, 1250 very loose).
+
+Tab stops (FDPP `32:82`): `27:1a` count, then `28:8a` with a record per
+stop: `00:20` position (EMU), `01:10` alignment in the low byte (left left
+out, 1 right, 2 center, 3 decimal), `02:18 = 46`. Where the leader is kept
+is not known yet.
+
+Lists (FDPP): `57:8a {00:22 kind, 01:22 bullet character, 02:22 0}` where
+kind 23 is a bulleted list (0xB7 = the Symbol font's round bullet) and
+otherwise the numbering style (0 1 2 3, 1 I II, 2 i ii, 3 A B, 4 a b);
+numbered lists add `58:22` with the punctuation in the high half (2 "1.",
+0 "1)", 1 "(1)"). Publisher also writes `02:22` (the text size), `03:1a =
+31`, and a ¼" hanging indent (`0c` -228600, `0d` 228600).
 

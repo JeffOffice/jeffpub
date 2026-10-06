@@ -141,6 +141,12 @@ struct CharacterStyle
   // JeffPub 79: text outline (character "line" container 0x59): color index and width in EMUs.
   int outlineColorIndex = -1;
   unsigned outlineWidthEmu = 0;
+  // JeffPub 79: strikethrough (0x10), spacing added between letters in EMUs
+  // (0x1B, "kerning" in Publisher's dialog) and tracking in tenths of a
+  // percent (0x1F, 1000 = normal).
+  bool strike = false;
+  int letterSpacingEmu = 0;
+  int trackingPerMille = 0;
   boost::optional<unsigned> lcid;
 };
 
@@ -176,6 +182,13 @@ struct ParagraphStyle
   boost::optional<unsigned> m_rightIndentEmu;
   boost::optional<ListInfo> m_listInfo;
   std::vector<unsigned> m_tabStopsInEmu;
+  // JeffPub 79: each tab's alignment (0 left, 1 right, 2 center, 3 decimal),
+  // and the list as Publisher stores it: kind (23 bullet, else a numbering
+  // style), bullet character, and number punctuation (high half of 0x58).
+  std::vector<int> m_tabAligns;
+  int m_listKind = -1;
+  int m_listChar = 0;
+  int m_listDelim = -1;
   boost::optional<unsigned> m_dropCapLines;
   boost::optional<unsigned> m_dropCapLetters;
   ParagraphStyle() :

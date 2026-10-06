@@ -11,6 +11,7 @@
 #include <QTextBlock>
 #include <QTextCursor>
 #include <QTextDocument>
+#include <QTextList>
 #include <QtMath>
 #include <cmath>
 #include <functional>
@@ -345,6 +346,7 @@ public:
         m_text = t;
         m_cursor = QTextCursor(m_doc.storyDoc(t->storyId));
         m_firstPara = !m_skipText;
+        m_list = nullptr;
         add(t);
         ++m_rep.textBoxes;
     }
@@ -408,6 +410,49 @@ public:
         } else {
             m_cursor.insertBlock(bf);
         }
+        applyList(p);
+    }
+
+    // A .pub list paragraph (kind 23 bulleted, else a numbering style) joins
+    // the list of the paragraph before it when the settings match.
+    void applyList(const RVNGPropertyList &p)
+    {
+        if (!p["jp:list-kind"]) {
+            m_list = nullptr;
+            return;
+        }
+        const int kind = p["jp:list-kind"]->getInt();
+        const int ch = p["jp:list-char"] ? p["jp:list-char"]->getInt() : 0;
+        const int delim = p["jp:list-delim"] ? p["jp:list-delim"]->getInt() : -1;
+        const QString key = QStringLiteral("%1/%2/%3").arg(kind).arg(ch).arg(delim);
+        const QTextBlock prev = m_cursor.block().previous();
+        if (m_list && key == m_listKey && prev.isValid() && prev.textList() == m_list) {
+            m_list->add(m_cursor.block());
+            return;
+        }
+        QTextListFormat lf;
+        lf.setIndent(0);
+        if (kind == 23) {
+            lf.setStyle(QTextListFormat::ListDisc);
+            // 0xB7 is the round bullet in the Symbol font; others keep their Symbol character.
+            if (ch && ch != 0xB7) {
+                lf.setProperty(tp::BulletChar, QString(QChar(ch)));
+                lf.setProperty(tp::BulletFont, QStringLiteral("Symbol"));
+            }
+        } else {
+            // Publisher's numbering: 0 1 2 3, 1 I II, 2 i ii, 3 A B, 4 a b; punctuation
+            // 2 "1.", 0 "1)", 1 "(1)".
+            static const QTextListFormat::Style styles[] = {QTextListFormat::ListDecimal, QTextListFormat::ListUpperRoman, QTextListFormat::ListLowerRoman,
+                                                           QTextListFormat::ListUpperAlpha, QTextListFormat::ListLowerAlpha};
+            lf.setStyle(kind >= 0 && kind <= 4 ? styles[kind] : QTextListFormat::ListDecimal);
+            lf.setNumberSuffix(delim == 0 || delim == 1 ? QStringLiteral(")") : QStringLiteral("."));
+            if (delim == 1) lf.setNumberPrefix(QStringLiteral("("));
+            static const int formats[] = {1, 5, 4, 3, 2};
+            const int format = kind == 0 && delim == 0 ? 6 : kind == 0 && delim == 1 ? 7 : kind >= 0 && kind <= 4 ? formats[kind] : 1;
+            lf.setProperty(tp::NumberFormat, format);
+        }
+        m_list = m_cursor.createList(lf);
+        m_listKey = key;
     }
     void closeParagraph() override {}
 
@@ -459,6 +504,10 @@ public:
         if (p["fo:letter-spacing"]) {
             cf.setFontLetterSpacingType(QFont::AbsoluteSpacing);
             cf.setFontLetterSpacing(toPt(p["fo:letter-spacing"]));
+        } else if (p["jp:tracking"]) {
+            // Publisher's tracking, as a percentage of normal spacing.
+            cf.setFontLetterSpacingType(QFont::PercentageSpacing);
+            cf.setFontLetterSpacing(p["jp:tracking"]->getDouble());
         }
         const QString lang = str(p["fo:language"]), country = str(p["fo:country"]);
         if (!lang.isEmpty()) cf.setProperty(tp::Language, country.isEmpty() ? lang : lang + '-' + country);
@@ -560,6 +609,7 @@ public:
         m_cells.back().push_back(c);
         m_cursor = QTextCursor(m_doc.storyDoc(c.storyId));
         m_firstPara = true;
+        m_list = nullptr;
         m_skipText = false;
     }
     void closeTableCell() override { m_cursor = QTextCursor(); }
@@ -870,6 +920,8 @@ private:
     QTextCharFormat m_span;
     QString m_link;
     bool m_firstPara = true;
+    QTextList *m_list = nullptr;   // the list the last paragraph joined
+    QString m_listKey;
     bool m_skipText = false;
     std::map<int, TextItem *> m_chains;
     std::map<int, int> m_linkCount;

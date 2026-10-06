@@ -35,6 +35,7 @@
 
 #include <QTextCursor>
 #include <QTextDocument>
+#include <QTextList>
 #include <QDirIterator>
 #include <QtTest>
 
@@ -746,6 +747,103 @@ private Q_SLOTS:
         const QTextBlockFormat bf = d->lastBlock().blockFormat();
         QCOMPARE(bf.lineHeightType(), int(QTextBlockFormat::FixedHeight));
         QVERIFY2(std::abs(bf.lineHeight() - 24) < 0.1, qPrintable(QString::number(bf.lineHeight())));
+    }
+
+    // Strikethrough, letter spacing, tab stops and lists written to .pub read back.
+    void pubWriterTabsLists()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 468, 400);
+        t->storyId = doc->createStory();
+        {
+            QTextCursor c(doc->storyDoc(t->storyId));
+            QTextCharFormat plain;
+            plain.setFontFamilies(QStringList{QStringLiteral("Arimo")});
+            plain.setFontPointSize(12);
+            c.insertText(QStringLiteral("test25 "), plain);
+            QTextCharFormat st = plain;
+            st.setFontStrikeOut(true);
+            c.insertText(QStringLiteral("strike"), st);
+            c.insertText(QStringLiteral(" "), plain);
+            QTextCharFormat tr = plain;
+            tr.setFontLetterSpacingType(QFont::PercentageSpacing);
+            tr.setFontLetterSpacing(125);
+            c.insertText(QStringLiteral("tracked"), tr);
+            c.insertText(QStringLiteral(" "), plain);
+            QTextCharFormat kn = plain;
+            kn.setFontLetterSpacingType(QFont::AbsoluteSpacing);
+            kn.setFontLetterSpacing(2);
+            c.insertText(QStringLiteral("kerned"), kn);
+            QTextBlockFormat tabs;
+            QList<QTextOption::Tab> tl;
+            tl << QTextOption::Tab(72, QTextOption::LeftTab) << QTextOption::Tab(216, QTextOption::CenterTab) << QTextOption::Tab(360, QTextOption::RightTab);
+            tabs.setTabPositions(tl);
+            c.insertBlock(tabs, plain);
+            c.insertText(QStringLiteral("\tleft\tcenter\tright"));
+            QTextBlockFormat item;
+            item.setLeftMargin(18);
+            item.setTextIndent(-18);
+            QTextListFormat bl;
+            bl.setStyle(QTextListFormat::ListDisc);
+            bl.setIndent(0);
+            c.insertBlock(item, plain);
+            c.insertText(QStringLiteral("bullet one"));
+            QTextList *bullets = c.createList(bl);
+            c.insertBlock(item, plain);
+            c.insertText(QStringLiteral("bullet two"));
+            bullets->add(c.block());
+            QTextListFormat nl;
+            nl.setStyle(QTextListFormat::ListUpperRoman);
+            nl.setNumberSuffix(QStringLiteral("."));
+            nl.setIndent(0);
+            c.insertBlock(item, plain);
+            c.insertText(QStringLiteral("number one"));
+            QTextList *numbers = c.createList(nl);
+            c.insertBlock(item, plain);
+            c.insertText(QStringLiteral("number two"));
+            numbers->add(c.block());
+        }
+        doc->pages[0]->items.push_back(t);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("test25-tabs-lists.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test25-tabs-lists";
+            QFile::remove(out + ".pub");
+            QFile::copy(path, out + ".pub");
+            QString e2;
+            jp::savePublication(*doc, out + ".jpub", QImage(), &e2);
+        }
+        QString e1;
+        auto back = jp::importPublisherFile(path, &e1);
+        QVERIFY2(back, qPrintable(e1));
+        const jp::TextItem *bt = nullptr;
+        jp::walkItems(back->pages[0]->items, [&](const jp::ItemPtr &it) {
+            if (it->type() == jp::ItemType::Text) bt = static_cast<const jp::TextItem *>(it.get());
+        });
+        QVERIFY(bt);
+        QTextDocument *d = back->storyDoc(bt->storyId);
+        QCOMPARE(d->blockCount(), 6);
+        QHash<QString, QTextCharFormat> fmt;
+        for (auto it = d->begin().begin(); !it.atEnd(); ++it) fmt[it.fragment().text().trimmed()] = it.fragment().charFormat();
+        QVERIFY(fmt.value(QStringLiteral("strike")).fontStrikeOut());
+        QCOMPARE(fmt.value(QStringLiteral("tracked")).fontLetterSpacingType(), QFont::PercentageSpacing);
+        QVERIFY(std::abs(fmt.value(QStringLiteral("tracked")).fontLetterSpacing() - 125) < 0.5);
+        QCOMPARE(fmt.value(QStringLiteral("kerned")).fontLetterSpacingType(), QFont::AbsoluteSpacing);
+        QVERIFY(std::abs(fmt.value(QStringLiteral("kerned")).fontLetterSpacing() - 2) < 0.05);
+        const QList<QTextOption::Tab> got = d->begin().next().blockFormat().tabPositions();
+        QCOMPARE(got.size(), 3);
+        QVERIFY(std::abs(got[1].position - 216) < 0.5 && got[1].type == QTextOption::CenterTab);
+        QVERIFY(std::abs(got[2].position - 360) < 0.5 && got[2].type == QTextOption::RightTab);
+        const QTextBlock b1 = d->begin().next().next(), b2 = b1.next(), n1 = b2.next(), n2 = n1.next();
+        QVERIFY(b1.textList() && b1.textList() == b2.textList());
+        QCOMPARE(b1.textList()->format().style(), QTextListFormat::ListDisc);
+        QVERIFY(n1.textList() && n1.textList() == n2.textList() && n1.textList() != b1.textList());
+        QCOMPARE(n1.textList()->format().style(), QTextListFormat::ListUpperRoman);
+        QCOMPARE(n1.textList()->format().numberSuffix(), QStringLiteral("."));
+        QVERIFY(std::abs(n2.blockFormat().leftMargin() - 18) < 0.5 && std::abs(n2.blockFormat().textIndent() + 18) < 0.5);
     }
 
     // Objects on the master page are saved there and come back there, once.

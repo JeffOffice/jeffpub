@@ -28,6 +28,7 @@
 #include <QTextBlock>
 #include <QTextDocument>
 #include <QTextFragment>
+#include <QTextList>
 #include <QtEndian>
 
 #include <cmath>
@@ -604,7 +605,7 @@ private:
         return i + 2;   // entries 0 and 1 are the scheme's main color and black
     }
     QByteArray charProps(const QTextCharFormat &f);
-    QByteArray paraProps(const QTextBlockFormat &f);
+    QByteArray paraProps(const QTextBlock &b);
     void addStory(int textId, const QTextDocument *doc) { addStory(textId, QVector<const QTextDocument *>{doc}); }
     // A story from several documents in turn (a table's cells); cellEnds gets
     // where each one's text ends.
@@ -664,6 +665,15 @@ QByteArray PubWriter::charProps(const QTextCharFormat &f)
     if (f.fontWeight() >= QFont::DemiBold) p << flag(0x37, 0x0a);
     if (f.fontItalic()) p << flag(0x38, 0x0a);
     if (f.fontUnderline()) p << u16(0x1e, 1, 0x12);   // single underline
+    if (f.fontStrikeOut()) p << flag(0x10, 0x0a);
+    // Letter spacing: added space in EMU (0x1B; Publisher's "kerning"), or a
+    // percentage as tracking in tenths of a percent (0x1F).
+    if (f.hasProperty(QTextFormat::FontLetterSpacing)) {
+        if (f.fontLetterSpacingType() == QFont::AbsoluteSpacing && std::abs(f.fontLetterSpacing()) > 0.001)
+            p << u32(0x1b, quint32(qint32(emu(f.fontLetterSpacing()))), 0x22);
+        else if (f.fontLetterSpacingType() == QFont::PercentageSpacing && std::abs(f.fontLetterSpacing() - 100) > 0.01)
+            p << u16(0x1f, quint32(std::llround(f.fontLetterSpacing() * 10)), 0x1a);
+    }
     if (f.fontCapitalization() == QFont::SmallCaps) p << flag(0x13, 0x0a);
     else if (f.fontCapitalization() == QFont::AllUppercase) p << flag(0x14, 0x0a);
     if (f.verticalAlignment() == QTextCharFormat::AlignSuperScript) p << u16(0x0f, 1, 0x12);
@@ -686,8 +696,9 @@ QByteArray PubWriter::charProps(const QTextCharFormat &f)
     return lengthPrefixed(p);
 }
 
-QByteArray PubWriter::paraProps(const QTextBlockFormat &f)
+QByteArray PubWriter::paraProps(const QTextBlock &block)
 {
+    const QTextBlockFormat f = block.blockFormat();
     QVector<B> p;
     const Qt::Alignment a = f.alignment() & Qt::AlignHorizontal_Mask;
     if (a & Qt::AlignRight) p << u16(0x04, 1, 0x12);
@@ -711,6 +722,53 @@ QByteArray PubWriter::paraProps(const QTextBlockFormat &f)
         spacing = quint32(4 * std::llround(lines * 914400.0 * 96 / 72 / 4)) + 2;
     }
     p << u32(0x34, spacing, 0x22);
+    // Tab stops: a count, then each one's position and alignment (left left
+    // out, 1 right, 2 center, 3 decimal) with Publisher's 46 alongside.
+    const QList<QTextOption::Tab> tabs = f.tabPositions();
+    if (!tabs.isEmpty()) {
+        QVector<B> stops;
+        for (int i = 0; i < tabs.size(); ++i) {
+            QVector<B> t{u32(0x00, quint32(emu(tabs[i].position)), 0x20)};
+            const int align = tabs[i].type == QTextOption::RightTab ? 1 : tabs[i].type == QTextOption::CenterTab ? 2 : tabs[i].type == QTextOption::DelimiterTab ? 3 : 0;
+            if (align) t << u16(0x01, quint32(align), 0x10);
+            t << u16(0x02, 46);
+            stops << rec(quint8(i), t);
+        }
+        p << rec(0x32, {u16(0x27, quint32(tabs.size()), 0x1a), rec(0x28, stops, 0x8a)}, 0x82);
+    }
+    // Lists: kind 23 bulleted (with the bullet's Symbol character) or a
+    // numbering style (0 1 2 3, 1 I, 2 i, 3 A, 4 a) with its punctuation in
+    // the high half of 0x58 (2 "1.", 0 "1)", 1 "(1)"); 02 and 03 as Publisher
+    // writes them (the text size, and 31).
+    if (const QTextList *list = block.textList()) {
+        const QTextListFormat lf = list->format();
+        const QString custom = !f.stringProperty(tp::BulletChar).isEmpty() ? f.stringProperty(tp::BulletChar) : lf.stringProperty(tp::BulletChar);
+        const bool bullet = lf.style() == QTextListFormat::ListDisc || lf.style() == QTextListFormat::ListCircle ||
+                            lf.style() == QTextListFormat::ListSquare || !custom.isEmpty();
+        quint32 kind = 23, ch = 0xB7, delim = 2;
+        if (bullet) {
+            if (custom.size() == 1 && custom[0].unicode() < 0x100) ch = custom[0].unicode();   // a Symbol character
+        } else {
+            switch (lf.style()) {
+            case QTextListFormat::ListUpperRoman: kind = 1; break;
+            case QTextListFormat::ListLowerRoman: kind = 2; break;
+            case QTextListFormat::ListUpperAlpha: kind = 3; break;
+            case QTextListFormat::ListLowerAlpha: kind = 4; break;
+            default: kind = 0; break;
+            }
+            ch = 0;
+            if (lf.numberSuffix() == QLatin1String(")")) delim = lf.numberPrefix() == QLatin1String("(") ? 1 : 0;
+        }
+        double size = 10;
+        for (auto it = block.begin(); !it.atEnd(); ++it)
+            if (it.fragment().charFormat().hasProperty(QTextFormat::FontPointSize)) {
+                size = it.fragment().charFormat().fontPointSize();
+                break;
+            }
+        p << u32(0x02, quint32(emu(size)), 0x22) << u16(0x03, 31, 0x1a)
+          << rec(0x57, {u32(0x00, kind, 0x22), u32(0x01, ch, 0x22), u32(0x02, 0, 0x22)}, 0x8a);
+        if (!bullet) p << u32(0x58, delim << 16, 0x22);
+    }
     std::sort(p.begin(), p.end(), [](const B &a, const B &b) { return a.id < b.id; });
     return lengthPrefixed(p);
 }
@@ -733,7 +791,7 @@ void PubWriter::addStory(int textId, const QVector<const QTextDocument *> &docs,
         }
         putU16(m_text, '\r');
         m_charRuns << Run{quint32(512 + m_text.size()), charProps(last)};
-        m_paraRuns << Run{quint32(512 + m_text.size()), paraProps(b.blockFormat())};
+        m_paraRuns << Run{quint32(512 + m_text.size()), paraProps(b)};
     }
         // A cell ends at its last paragraph mark (the last cell at the story's end).
         if (cellEnds) *cellEnds << quint32((512 + m_text.size() - start) / 2 - 1);

@@ -1510,12 +1510,28 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
             MSPUBBlockInfo tabEntryInfo = parseBlock(input, true);
             if (tabEntryInfo.type == GENERAL_CONTAINER)
             {
+              // JeffPub 79: 00 position, 01 alignment (low byte); read them all.
               input->seek(tabEntryInfo.dataOffset + 4, librevenge::RVNG_SEEK_SET);
-              MSPUBBlockInfo tabInfo = parseBlock(input, true);
-              if (tabInfo.id == TAB_AMOUNT)
+              unsigned position = 0;
+              int align = 0;
+              bool hasPosition = false;
+              while (stillReading(input, tabEntryInfo.dataOffset + tabEntryInfo.dataLength))
               {
-                ret.m_tabStopsInEmu.push_back(tabInfo.data);
+                MSPUBBlockInfo tabInfo = parseBlock(input, true);
+                if (tabInfo.id == TAB_AMOUNT)
+                {
+                  position = tabInfo.data;
+                  hasPosition = true;
+                }
+                else if (tabInfo.id == 0x01)
+                  align = int(tabInfo.data & 0xff);
               }
+              if (hasPosition)
+              {
+                ret.m_tabStopsInEmu.push_back(position);
+                ret.m_tabAligns.push_back(align);
+              }
+              input->seek(tabEntryInfo.dataOffset + tabEntryInfo.dataLength, librevenge::RVNG_SEEK_SET);
             }
           }
         }
@@ -1530,11 +1546,14 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
         MSPUBBlockInfo listSubInfo = parseBlock(input, true);
         switch (listSubInfo.id)
         {
+        // JeffPub 79: the values are the sub-blocks' (upstream read the container's).
         case PARAGRAPH_LIST_NUMBERING_TYPE:
-          numberingType = readNumberingType(info.data);
+          numberingType = readNumberingType(listSubInfo.data);
+          ret.m_listKind = int(listSubInfo.data);
           break;
         case PARAGRAPH_LIST_BULLET_CHAR:
-          bulletChar = info.data;
+          bulletChar = listSubInfo.data;
+          ret.m_listChar = int(listSubInfo.data);
           break;
         default:
       break;
@@ -1544,6 +1563,9 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
     }
     case PARAGRAPH_LIST_NUMBER_RESTART:
       numberIfRestarted = info.data;
+      break;
+    case PARAGRAPH_LIST_NUMBERING_DELIMITER:
+      ret.m_listDelim = int(info.data >> 16);
       break;
     case PARAGRAPH_DROP_CAP_LINES:
       ret.m_dropCapLines = info.data;
@@ -1604,6 +1626,16 @@ CharacterStyle MSPUBParser::getCharacterStyle(librevenge::RVNGInputStream *input
       break;
     case UNDERLINE_ID:
       style.underline = readUnderline(info.data);
+      break;
+    // JeffPub 79: strikethrough, letter spacing and tracking.
+    case 0x10:
+      style.strike = true;
+      break;
+    case 0x1B:
+      style.letterSpacingEmu = int(info.data);
+      break;
+    case 0x1F:
+      style.trackingPerMille = int(info.data);
       break;
     case TEXT_SIZE_1_ID:
       textSize1 = info.data;
