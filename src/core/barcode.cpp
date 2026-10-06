@@ -1,6 +1,8 @@
 #include "core/barcode.h"
 
+#include <QHash>
 #include <QRegularExpression>
+#include <QXmlStreamReader>
 #include <cmath>
 #include <cstring>
 
@@ -340,24 +342,100 @@ QString isbn13(const QString &input, QString *error)
     return {};
 }
 
+namespace {
+
+// ISBN ranges: how long the registration group is after each prefix, and how
+// long the registrant (publisher) element is in each group. A range is over
+// the next seven digits; length 0 means not yet assigned.
+struct IsbnRanges {
+    struct Rule { int from, to, length; };
+    QHash<QString, QVector<Rule>> prefixes;   // "978" -> group lengths
+    QHash<QString, QVector<Rule>> groups;     // "978-1" -> registrant lengths
+};
+
+// Built in, for when the agency's table hasn't been downloaded: the
+// English-language groups (978-1 checked against the ISBNs printed on
+// Michigan Legal Publishing's books: 978-1-64002-..., 978-1-942842-...).
+const IsbnRanges &builtInRanges()
+{
+    static const IsbnRanges r = [] {
+        IsbnRanges b;
+        b.prefixes.insert(QStringLiteral("978"), {{0, 1999999, 1}});
+        b.groups.insert(QStringLiteral("978-0"), {{0, 1999999, 2}, {2000000, 6999999, 3}, {7000000, 8499999, 4}, {8500000, 8999999, 5},
+                                                  {9000000, 9499999, 6}, {9500000, 9999999, 7}});
+        b.groups.insert(QStringLiteral("978-1"), {{0, 999999, 2}, {1000000, 3999999, 3}, {4000000, 5499999, 4}, {5500000, 8697999, 5},
+                                                  {8698000, 9989999, 6}, {9990000, 9999999, 7}});
+        return b;
+    }();
+    return r;
+}
+
+IsbnRanges &loadedRanges()
+{
+    static IsbnRanges r;
+    return r;
+}
+
+int ruleLength(const QVector<IsbnRanges::Rule> &rules, const QString &digits)
+{
+    const int seven = digits.leftJustified(7, QLatin1Char('0'), true).toInt();
+    for (const IsbnRanges::Rule &r : rules)
+        if (seven >= r.from && seven <= r.to) return r.length;
+    return 0;
+}
+
+// A prefix's or group's rules: the agency's table when loaded, else built in.
+QVector<IsbnRanges::Rule> rulesFor(bool group, const QString &key)
+{
+    const IsbnRanges &l = loadedRanges();
+    const auto &table = group ? l.groups : l.prefixes;
+    if (table.contains(key)) return table.value(key);
+    return (group ? builtInRanges().groups : builtInRanges().prefixes).value(key);
+}
+
+} // namespace
+
+bool loadIsbnRanges(const QByteArray &xml)
+{
+    IsbnRanges r;
+    QXmlStreamReader x(xml);
+    QString prefix, range;
+    bool inGroup = false;
+    QVector<IsbnRanges::Rule> rules;
+    while (!x.atEnd()) {
+        x.readNext();
+        if (x.isStartElement()) {
+            const auto n = x.name();
+            if (n == QLatin1String("EAN.UCC") || n == QLatin1String("Group")) {
+                inGroup = n == QLatin1String("Group");
+                rules.clear();
+            } else if (n == QLatin1String("Prefix")) prefix = x.readElementText();
+            else if (n == QLatin1String("Range")) range = x.readElementText();
+            else if (n == QLatin1String("Length"))
+                rules << IsbnRanges::Rule{range.section('-', 0, 0).toInt(), range.section('-', 1, 1).toInt(), x.readElementText().toInt()};
+        } else if (x.isEndElement() && (x.name() == QLatin1String("EAN.UCC") || x.name() == QLatin1String("Group"))) {
+            (inGroup ? r.groups : r.prefixes).insert(prefix, rules);
+        }
+    }
+    if (x.hasError() || r.prefixes.isEmpty() || r.groups.isEmpty()) {
+        if (xml.isEmpty()) loadedRanges() = IsbnRanges();
+        return false;
+    }
+    loadedRanges() = r;
+    return true;
+}
+
 QString hyphenateIsbn(const QString &isbn13)
 {
     if (isbn13.size() != 13 || !allDigits(isbn13)) return {};
-    // Publisher-prefix lengths by range, from the ISBN agency's tables for
-    // the English-language groups (978-1 checked against the ISBNs printed
-    // on Michigan Legal Publishing's books: 978-1-64002-..., 978-1-942842-...).
-    struct Range { int from, to, length; };   // over the first 7 digits after the group
-    static const Range kGroup0[] = {{0, 1999999, 2}, {2000000, 6999999, 3}, {7000000, 8499999, 4}, {8500000, 8999999, 5},
-                                    {9000000, 9499999, 6}, {9500000, 9999999, 7}};
-    static const Range kGroup1[] = {{0, 999999, 2}, {1000000, 3999999, 3}, {4000000, 5499999, 4}, {5500000, 8697999, 5},
-                                    {8698000, 9989999, 6}, {9990000, 9999999, 7}};
-    if (!isbn13.startsWith(QLatin1String("978")) || (isbn13[3] != '0' && isbn13[3] != '1')) return {};
-    const int seven = isbn13.mid(4, 7).toInt();
-    int length = 0;
-    for (const Range &r : isbn13[3] == '0' ? kGroup0 : kGroup1)
-        if (seven >= r.from && seven <= r.to) length = r.length;
-    if (length == 0) return {};
-    return QStringLiteral("%1-%2-%3-%4-%5").arg(isbn13.left(3), isbn13.mid(3, 1), isbn13.mid(4, length), isbn13.mid(4 + length, 8 - length), isbn13.right(1));
+    const QString prefix = isbn13.left(3);
+    const QString body = isbn13.mid(3, 9);   // group, registrant and publication
+    const int group = ruleLength(rulesFor(false, prefix), body);
+    if (group == 0) return {};
+    const QString rest = body.mid(group);
+    const int registrant = ruleLength(rulesFor(true, prefix + '-' + body.left(group)), rest);
+    if (registrant == 0 || registrant >= rest.size()) return {};
+    return QStringLiteral("%1-%2-%3-%4-%5").arg(prefix, body.left(group), rest.left(registrant), rest.mid(registrant), isbn13.right(1));
 }
 
 QString isbnCaption(const QString &input)

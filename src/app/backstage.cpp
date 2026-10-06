@@ -1571,6 +1571,8 @@ QWidget *Backstage::buildAbout()
         {"ICU", "https://icu.unicode.org/", "Unicode text support (in the packages)", "Unicode License", "https://www.unicode.org/license.txt"},
 #endif
         {"LibreTranslate", "https://libretranslate.com/", "Translate (opens in your browser)", "AGPL-3.0", "https://www.gnu.org/licenses/agpl-3.0.html"},
+        {"ISBN range table", "https://www.isbn-international.org/", "ISBN hyphens (downloaded from the International ISBN Agency)", "The agency's terms",
+         "https://www.isbn-international.org/range_file_generation"},
     };
     QString rows;
     for (const Part &pt : parts)

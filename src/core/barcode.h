@@ -42,13 +42,18 @@ Layout make(const Options &o);
 // allowed, X as an ISBN-10's check), or empty with the reason in *error.
 QString isbn13(const QString &input, QString *error);
 // "ISBN " and the ISBN-13 with its standard hyphens (978-1-64002-163-1);
-// for registration groups whose ranges aren't known here, as typed when it
-// has hyphens, else as 13 digits.
+// for a range not known here, as typed when it has hyphens, else as 13
+// digits.
 QString isbnCaption(const QString &input);
 // The 13 digits with the standard hyphens (prefix, group, publisher, title,
-// check), or empty when the group's publisher ranges aren't known here
-// (978-0 and 978-1, the English-language groups, are).
+// check), or empty for a range not known or not assigned. Every country and
+// language once the ISBN agency's table is loaded; before, the
+// English-language groups 978-0 and 978-1 (built in).
 QString hyphenateIsbn(const QString &isbn13);
+// Loads the International ISBN Agency's range table (its RangeMessage.xml,
+// downloaded from the agency, whose terms don't allow bundling it). False if
+// `xml` isn't one; empty goes back to the built-in ranges.
+bool loadIsbnRanges(const QByteArray &xml);
 
 // The 5-digit price add-on of a book: the currency's digit and the price in
 // cents (US$19.95 -> 51995), 90000 for no suggested price.

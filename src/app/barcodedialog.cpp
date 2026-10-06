@@ -9,7 +9,19 @@
 #include "core/document.h"
 #include "core/items.h"
 
+#include <functional>
+
 #include <QButtonGroup>
+#include <QDateTime>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QGuiApplication>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QPointer>
+#include <QSaveFile>
+#include <QStandardPaths>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
@@ -42,6 +54,51 @@ QString digitFamily()
         return QStringLiteral("Arimo");
     }();
     return f;
+}
+
+// The International ISBN Agency's range table, which places the hyphens in
+// ISBNs from every country. Its terms don't allow bundling it, so JeffPub
+// downloads it from the agency and keeps a copy, renewed monthly.
+const char kIsbnRangesUrl[] = "https://www.isbn-international.org/export_rangemessage.xml";
+
+QString isbnRangesPath()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/isbn-ranges.xml");
+}
+
+// Loads the saved copy (once a session) and, when it's missing or a month
+// old, asks the agency for a new one; `arrived` runs if one comes while
+// `receiver` is still open.
+void useIsbnRanges(QObject *receiver, const std::function<void()> &arrived)
+{
+    static bool loaded = false, asked = false;
+    const QFileInfo saved(isbnRangesPath());
+    if (!loaded && saved.exists()) {
+        QFile f(saved.filePath());
+        loaded = f.open(QIODevice::ReadOnly) && barcode::loadIsbnRanges(f.readAll());
+    }
+    if (asked || (loaded && saved.lastModified().daysTo(QDateTime::currentDateTime()) < 30)) return;
+    if (QGuiApplication::platformName() == QLatin1String("offscreen")) return;
+    asked = true;
+    static auto *net = new QNetworkAccessManager(qApp);
+    QNetworkRequest req{QUrl(QString::fromLatin1(kIsbnRangesUrl))};
+    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("JeffPub79/%1").arg(QStringLiteral(JP_VERSION)));
+    QNetworkReply *r = net->get(req);
+    QPointer<QObject> open(receiver);
+    QObject::connect(r, &QNetworkReply::finished, net, [r, open, arrived] {
+        r->deleteLater();
+        if (r->error() != QNetworkReply::NoError) return;
+        const QByteArray xml = r->readAll();
+        if (!barcode::loadIsbnRanges(xml)) return;
+        loaded = true;
+        QDir().mkpath(QFileInfo(isbnRangesPath()).path());
+        QSaveFile f(isbnRangesPath());
+        if (f.open(QIODevice::WriteOnly)) {
+            f.write(xml);
+            f.commit();
+        }
+        if (open) arrived();
+    });
 }
 } // namespace
 
@@ -262,6 +319,14 @@ void barcodeDialog(QWidget *p, Editor *ed)
         QString err;
         const QString h = hyphenateIsbn(isbn13(t, &err));
         if (!h.isEmpty()) data->setText(h);
+    });
+    // ISBNs from every country, once the agency's table is here.
+    useIsbnRanges(&dlg, [&] {
+        const QString t = data->text().trimmed();
+        QString err;
+        const QString h = type->currentIndex() == int(Type::Isbn) && t.size() == 13 ? hyphenateIsbn(isbn13(t, &err)) : QString();
+        if (!h.isEmpty()) data->setText(h);
+        else update();
     });
     for (QComboBox *c : {type, currency}) QObject::connect(c, &QComboBox::currentIndexChanged, &dlg, update);
     for (QSpinBox *s : {mag, height}) QObject::connect(s, &QSpinBox::valueChanged, &dlg, update);

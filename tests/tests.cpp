@@ -3590,7 +3590,30 @@ private Q_SLOTS:
         QCOMPARE(hyphenateIsbn(QStringLiteral("9780306406157")), QStringLiteral("978-0-306-40615-7"));
         QCOMPARE(hyphenateIsbn(QStringLiteral("9780199535569")), QStringLiteral("978-0-19-953556-9"));
         QCOMPARE(isbnCaption(QStringLiteral("9781640021631")), QStringLiteral("ISBN 978-1-64002-163-1"));
-        QVERIFY(hyphenateIsbn(QStringLiteral("9783161484100")).isEmpty());   // group 3: ranges not known here
+        // Other groups wait for the ISBN agency's table (downloaded by the
+        // dialog). A few of its rules, in its format:
+        QVERIFY(hyphenateIsbn(QStringLiteral("9783161484100")).isEmpty());
+        auto rules = [](const char *tag, const char *prefix, const char *list) {
+            QByteArray r;
+            for (const QByteArray &rule : QByteArray(list).split(' '))
+                r += "<Rule><Range>" + rule.split(':')[0] + "</Range><Length>" + rule.split(':')[1] + "</Length></Rule>";
+            return "<" + QByteArray(tag) + "><Prefix>" + prefix + "</Prefix><Agency>x</Agency><Rules>" + r + "</Rules></" + tag + ">";
+        };
+        const QByteArray xml = "<?xml version='1.0' encoding='utf-8'?><ISBNRangeMessage><MessageDate>x</MessageDate><EAN.UCCPrefixes>"
+            + rules("EAN.UCC", "978", "0000000-5999999:1 6000000-6499999:3 9990000-9999999:5")
+            + rules("EAN.UCC", "979", "0000000-0999999:0 1000000-1599999:2 8000000-8999999:1") + "</EAN.UCCPrefixes><RegistrationGroups>"
+            + rules("Group", "978-3", "0400000-1999999:2") + rules("Group", "979-8", "8850000-8999999:5")
+            + rules("Group", "978-99937", "0000000-1999999:1") + rules("Group", "978-1", "5500000-6499999:5") + "</RegistrationGroups></ISBNRangeMessage>";
+        QVERIFY(!loadIsbnRanges("<html>Not found</html>"));
+        QVERIFY(loadIsbnRanges(xml));
+        QCOMPARE(hyphenateIsbn(QStringLiteral("9783161484100")), QStringLiteral("978-3-16-148410-0"));    // Germany
+        QCOMPARE(hyphenateIsbn(QStringLiteral("9798886450002")), QStringLiteral("979-8-88645-000-2"));    // the newer US prefix
+        QCOMPARE(hyphenateIsbn(QStringLiteral("9789993701231")), QStringLiteral("978-99937-0-123-1"));   // a five-digit group
+        QCOMPARE(hyphenateIsbn(QStringLiteral("9781640021631")), QStringLiteral("978-1-64002-163-1"));
+        QVERIFY(hyphenateIsbn(QStringLiteral("9790000000001")).isEmpty());   // 979-0 isn't an ISBN range (music)
+        QCOMPARE(isbnCaption(QStringLiteral("979-0-000000-00-1")), QStringLiteral("ISBN 979-0-000000-00-1"));
+        QVERIFY(!loadIsbnRanges(QByteArray()));   // back to the built-in ranges
+        QVERIFY(hyphenateIsbn(QStringLiteral("9783161484100")).isEmpty());
         QCOMPARE(isbnCaption(QStringLiteral("978-3-16-148410-0")), QStringLiteral("ISBN 978-3-16-148410-0"));
         QCOMPARE(priceAddOn(Currency::UsDollar, 19.95, &err), QStringLiteral("51995"));
         QCOMPARE(priceAddOn(Currency::CanadianDollar, 24.99, &err), QStringLiteral("62499"));

@@ -77,5 +77,6 @@ JeffPub 79 includes or downloads these components, each under its own license:
 | [NSIS](https://nsis.sourceforge.io/) (Windows) | Installer | zlib/libpng license |
 | [ICU](https://icu.unicode.org/) (Linux packages, with Qt) | Unicode text support | Unicode License |
 | [LibreTranslate](https://libretranslate.com/) | Translate opens it in the browser; not bundled | AGPL-3.0 |
+| [International ISBN Agency](https://www.isbn-international.org/range_file_generation) range table | Placing the hyphens in ISBNs from every country; downloaded from the agency when you make an ISBN barcode, monthly at most; not bundled | The agency's terms (it doesn't allow republishing the table) |
 
 The dictionaries come unchanged from the [LibreOffice dictionaries project](https://github.com/LibreOffice/dictionaries); each language's authors, license and license text are in [resources/dict](resources/dict/README.md). Changes made to libmspub and librevenge are listed in [third_party/README.md](third_party/README.md).
