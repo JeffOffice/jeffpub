@@ -578,29 +578,63 @@ QWidget *Backstage::buildNew()
     auto *w = new QWidget();
     auto *v = new QVBoxLayout(w);
     v->setContentsMargins(40, 30, 40, 30);
-    v->addWidget(heading(QStringLiteral("New publication"), w));
+    v->addWidget(heading(QStringLiteral("New Publication"), w));
     auto *search = new QLineEdit(w);
     search->setPlaceholderText(QStringLiteral("Search templates"));
     search->setClearButtonEnabled(true);
     search->addAction(icon("search"), QLineEdit::LeadingPosition);
     search->setMinimumHeight(34);
-    auto *cats = new QComboBox(w);
-    cats->addItem(QStringLiteral("Featured"));
-    cats->addItems(templateCategories());
-    cats->addItem(QStringLiteral("Blank Sizes"));
-    cats->addItem(QStringLiteral("My Templates"));
-    cats->setMinimumHeight(34);
-    cats->setMinimumWidth(220);
-    cats->setMaxVisibleItems(20);
-    auto *top = new QHBoxLayout();
-    top->setSpacing(10);
-    top->addWidget(search, 1);
-    top->addWidget(cats);
-    v->addLayout(top);
+    v->addWidget(search);
     v->addSpacing(8);
+
+    // The template categories, always in view down the left side, each
+    // with how many templates it has.
+    auto *cats = new QListWidget(w);
+    {
+        const QColor a = uiAccent();
+        cats->setStyleSheet(QStringLiteral("QListWidget{background:%1; border:1px solid %2; border-radius:12px; padding:8px; outline:0;}"
+                                           "QListWidget::item{padding:5px 10px; border-radius:8px; color:%4;}"
+                                           "QListWidget::item:hover{background:%3;}"
+                                           "QListWidget::item:selected{background:rgba(%5,%6,%7,48); color:%4; font-weight:bold;}")
+                                .arg(dark() ? "#22262d" : "#ffffff", dark() ? "#2f343d" : "#e3e5ea", dark() ? "#2c313a" : "#f3f4f6", uiText().name())
+                                .arg(a.red())
+                                .arg(a.green())
+                                .arg(a.blue()));
+        auto add = [cats](const QString &key, const QString &text) {
+            auto *it = new QListWidgetItem(text, cats);
+            it->setData(Qt::UserRole, key);
+        };
+        add(QStringLiteral("Featured"), QStringLiteral("Featured"));
+        for (const QString &c : templateCategories()) {
+            int n = 0;
+            for (const auto &t : templates()) n += t.category == c;
+            add(c, QStringLiteral("%1  (%2)").arg(c).arg(n));
+        }
+        add(QStringLiteral("Blank Sizes"), QStringLiteral("Blank Sizes"));
+        add(QStringLiteral("My Templates"), QStringLiteral("My Templates"));
+        QFont cf = cats->font();
+        cf.setPointSizeF(cf.pointSizeF() * 1.05);
+        cats->setFont(cf);
+        cats->setFixedWidth(240);
+        cats->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        cats->setTextElideMode(Qt::ElideRight);
+        cats->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+        cats->setCurrentRow(0);
+    }
 
     auto *body = new QHBoxLayout();
     body->setSpacing(20);
+    {
+        auto *catCol = new QVBoxLayout();
+        catCol->setSpacing(6);
+        auto *catTitle = new QLabel(QStringLiteral("Categories"), w);
+        QFont ct = catTitle->font();
+        ct.setBold(true);
+        catTitle->setFont(ct);
+        catCol->addWidget(catTitle);
+        catCol->addWidget(cats, 1);
+        body->addLayout(catCol);
+    }
     auto *left = new QVBoxLayout();
     auto *list = new QListWidget(w);
     list->setViewMode(QListView::IconMode);
@@ -719,7 +753,7 @@ QWidget *Backstage::buildNew()
     };
     auto populate = [=]() {
         list->clear();
-        const QString cat = cats->currentText();
+        const QString cat = cats->currentItem() ? cats->currentItem()->data(Qt::UserRole).toString() : QStringLiteral("Featured");
         const QString q = search->text().trimmed();
         if (cat == "Blank Sizes" && q.isEmpty()) {
             for (const auto &bs : blankSizes()) {
@@ -776,7 +810,7 @@ QWidget *Backstage::buildNew()
             list->addItem(it);
         }
     };
-    connect(cats, &QComboBox::currentIndexChanged, this, [populate] { populate(); });
+    connect(cats, &QListWidget::currentRowChanged, this, [populate] { populate(); });
     connect(search, &QLineEdit::textChanged, this, [populate] { populate(); });
     connect(scheme, &QComboBox::currentIndexChanged, this, [populate] { populate(); });
     connect(fonts, &QComboBox::currentIndexChanged, this, [populate] { populate(); });

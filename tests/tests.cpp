@@ -2627,6 +2627,38 @@ private Q_SLOTS:
     // A color given as ink amounts keeps them: in the file, in tints and
     // shades, from the Colors dialog, and in the PDF of a process-color
     // publication.
+    // The New Publication page lists its template categories in view, and
+    // picking one shows that category's templates.
+    void newPageCategories()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        w.showBackstage(QStringLiteral("new"));
+        QApplication::processEvents();
+        QListWidget *cats = nullptr;
+        for (QListWidget *l : w.findChildren<QListWidget *>())
+            if (l->count() > 3 && l->item(0)->data(Qt::UserRole).toString() == QLatin1String("Featured")) cats = l;
+        QVERIFY(cats);
+        QVERIFY(cats->isVisible());
+        QCOMPARE(cats->item(cats->count() - 1)->data(Qt::UserRole).toString(), QStringLiteral("My Templates"));
+        QListWidget *grid = nullptr;
+        for (QListWidget *l : cats->parentWidget()->findChildren<QListWidget *>())
+            if (l != cats && l->viewMode() == QListView::IconMode) grid = l;
+        QVERIFY(grid);
+        cats->setCurrentRow(1);
+        QApplication::processEvents();
+        const QString label = cats->item(1)->text();
+        const int want = label.mid(label.lastIndexOf('(') + 1).chopped(1).toInt();
+        QVERIFY(want > 0);
+        QCOMPARE(grid->count(), want);
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            cats->setCurrentRow(0);
+            QApplication::processEvents();
+            w.screenshotTo(qEnvironmentVariable("JP_SHOT_DIR") + "/new-page.png");
+        }
+    }
+
     // Process inks survive saving as .pub: the file keeps the color as shown
     // and the inks (checked against values reference files hold).
     void pubWriterProcessInks()
