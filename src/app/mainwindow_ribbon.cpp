@@ -1493,6 +1493,9 @@ void MainWindow::refreshUi()
     act("tb.shadow")->setChecked(cf.boolProperty(tp::Shadow));
     act("tb.outline")->setChecked(!cf.stringProperty(tp::OutlineRef).isEmpty());
     act("tb.emboss")->setChecked(cf.boolProperty(tp::Emboss));
+    act("tb.swash")->setChecked(cf.boolProperty(tp::Swash));
+    act("tb.alternates")->setChecked(cf.boolProperty(tp::Alternates));
+    act("tb.trueSmallCaps")->setChecked(cf.boolProperty(tp::TrueSmallCaps));
     act("tb.engrave")->setChecked(cf.boolProperty(tp::Engrave));
     act("fmt.smallCaps")->setChecked(cf.fontCapitalization() == QFont::SmallCaps);
     act("fmt.allCaps")->setChecked(cf.fontCapitalization() == QFont::AllUppercase);

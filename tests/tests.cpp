@@ -30,6 +30,7 @@
 #include <QSettings>
 #include <QLineEdit>
 #include <QLabel>
+#include <QListWidget>
 #include <QDialogButtonBox>
 #include <QPushButton>
 #include <QComboBox>
@@ -1968,6 +1969,21 @@ private Q_SLOTS:
         };
         QVERIFY(inkIn(jp::renderPlate(*doc, 0, 4, 72), QRect(72, 300, 400, 80)) > 300);
         QVERIFY(inkIn(jp::renderPlate(*doc, 0, 0, 72), QRect(72, 300, 400, 80)) < 5);
+
+        // The Commercial Print tab lists the spot colors.
+        jp::MainWindow w;
+        w.editor()->setDocument(std::move(doc));
+        QTimer::singleShot(0, [] {
+            auto *dlg = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            QVERIFY(dlg);
+            auto *list = dlg->findChild<QListWidget *>();
+            QVERIFY(list);
+            QCOMPARE(list->count(), 1);
+            QCOMPARE(list->item(0)->text(), QStringLiteral("Harbor Blue"));
+            if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) dlg->grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/commercial-print.png");
+            dlg->reject();
+        });
+        jp::documentPropertiesDialog(&w, w.editor(), 1);
     }
 
     // A color given as ink amounts keeps them: in the file, in tints and
