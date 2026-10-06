@@ -274,6 +274,16 @@ struct KnownMetrics { double line = 0, descent = 0; };
 static KnownMetrics knownMetrics(const QString &family)
 {
     const QString f = family.toLower();
+    // OS/2 typographic metrics of the core fonts, which their stand-ins
+    // (Arimo, Tinos...) don't share: theirs give 1.15 em lines.
+    if (f == "arial") return {(1491.0 + 431 + 307) / 2048, 431.0 / 2048};
+    if (f == "arial narrow") return {(1491.0 + 431 + 269) / 2048, 431.0 / 2048};
+    if (f == "times new roman") return {(1420.0 + 442 + 307) / 2048, 442.0 / 2048};
+    if (f == "tahoma") return {(1566.0 + 423 + 59) / 2048, 423.0 / 2048};
+    if (f == "garamond") return {(1339.0 + 539 + 313) / 2048, 539.0 / 2048};
+    if (f == "book antiqua") return {(1489.0 + 578 + 124) / 2048, 578.0 / 2048};
+    if (f == "bookman old style") return {(1467.0 + 461 + 263) / 2048, 461.0 / 2048};
+    if (f == "century gothic") return {(1536.0 + 426 + 229) / 2048, 426.0 / 2048};
     if (f.startsWith("franklin gothic")) return {(1877.0 + 445) / 2048, 445.0 / 2048};   // hhea
     if (f == "georgia") return {(1549.0 + 444 + 198) / 2048, 444.0 / 2048};              // OS/2 typo
     if (f == "arial black") return {(1466.0 + 434 + 291) / 2048, 434.0 / 2048};
@@ -589,7 +599,9 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                     line.setPosition(QPointF(indL, nF * kStride + overflowY));
                     overflowY += line.height();
                     B->lines << Line{-1, 0, QRectF(indL, overflowY, line.naturalTextWidth(), line.height())};
-                    m_overflow = true;
+                    // Blank paragraphs past the end don't count as overflow
+                    // (as in .pub layouts): a box doesn't shrink or warn for them.
+                    if (!B->disp.trimmed().isEmpty()) m_overflow = true;
                     placed = true;
                     break;
                 }
