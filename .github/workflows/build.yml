@@ -60,7 +60,17 @@ jobs:
         shell: bash
         run: |
           # Windows runners drop this program's console output, so results also go to a file.
-          if [ "$RUNNER_OS" = "Windows" ]; then T=build/jptests.exe; else T=build/jptests; fi
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            T=build/jptests.exe
+            # Programs in the build folder find the GCC runtime through PATH,
+            # which can hold another GCC's copy first (the 20261004 runner
+            # image crashed in the first test). Use the compiler's own copy,
+            # beside the programs, as the packaged program does.
+            echo "GCC runtimes on PATH:"; which -a libstdc++-6.dll || true
+            cp "$(cygpath -u "$IQTA_TOOLS")/mingw1310_64/bin/"{libgcc_s_seh-1,libstdc++-6,libwinpthread-1}.dll build/
+          else
+            T=build/jptests
+          fi
           set +e
           "$T" -v1 -o test-results.txt,txt -o -,txt
           code=$?
