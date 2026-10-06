@@ -355,6 +355,7 @@ void MainWindow::buildRibbon()
         g->addLarge(act("ins.onlinePicture"));
         g->addWidget(shapesButton(true));
         g->addLarge(act("ins.placeholder"));
+        g->addLarge(act("ins.barcode"));
 
         g = t->addGroup(QStringLiteral("Building Blocks"));
         auto blockButton = [this](const QString &category, const QString &label, const QString &iconName) {

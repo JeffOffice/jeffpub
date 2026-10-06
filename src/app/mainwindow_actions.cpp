@@ -368,6 +368,7 @@ void MainWindow::createActions()
     mk("ins.bizInfo", QStringLiteral("Edit Business Information…"), "contact", QKeySequence(), [this] { businessInfoDialog(this, m_ed); });
     mk("ins.file", QStringLiteral("Insert File"), "file-input", QKeySequence(), [this] { insertFileDialog(this, m_ed); });
     mk("ins.symbol", QStringLiteral("Symbol"), "omega", QKeySequence(), [this] { symbolDialog(this, m_ed); });
+    mk("ins.barcode", QStringLiteral("Barcode"), "barcode", QKeySequence(), [this] { barcodeDialog(this, m_ed); });
     mk("ins.datetime", QStringLiteral("Date & Time"), "calendar-clock", QKeySequence(), [this] { dateTimeDialog(this, m_ed); });
     mk("ins.object", QStringLiteral("Object"), "paperclip", QKeySequence(), [this] {
         // Embedded objects become pictures of their content where JeffPub can render it.

@@ -1,4 +1,5 @@
 #include "core/document.h"
+#include "core/barcode.h"
 #include "io/cfb.h"
 #include "io/jpubfile.h"
 #include "io/pubimport.h"
@@ -51,6 +52,8 @@
 #include <QTextBrowser>
 #include <QDirIterator>
 #include <QtTest>
+#include <QDoubleSpinBox>
+#include <QRadioButton>
 #include <QGroupBox>
 #include <QtEndian>
 #include <clocale>
@@ -3383,6 +3386,89 @@ private Q_SLOTS:
         QCOMPARE(opened, QStringList{b});
         jp::MainWindow::setOpenPdfAfterSaving(was);
         jp::MainWindow::openFileHook = hook;
+    }
+
+    // Barcodes: ISBN-10 and -13 with their check digits, price add-ons, and
+    // every symbology's bars (the patterns pinned here decoded correctly with
+    // an independent reader, zbar: ISBN with price as 978030640615751995).
+    void barcodeEncodings()
+    {
+        using namespace jp::barcode;
+        QString err;
+        QCOMPARE(isbn13(QStringLiteral("0-306-40615-2"), &err), QStringLiteral("9780306406157"));
+        QCOMPARE(isbn13(QStringLiteral("978-0-306-40615-7"), &err), QStringLiteral("9780306406157"));
+        QVERIFY(isbn13(QStringLiteral("978-0-306-40615-0"), &err).isEmpty());
+        QVERIFY(err.contains(QLatin1String("should be 7")));
+        QCOMPARE(isbn13(QStringLiteral("080442957X"), &err), QStringLiteral("9780804429573"));
+        QCOMPARE(isbnCaption(QStringLiteral("978-0-306-40615-7")), QStringLiteral("ISBN 978-0-306-40615-7"));
+        QCOMPARE(priceAddOn(Currency::UsDollar, 19.95, &err), QStringLiteral("51995"));
+        QCOMPARE(priceAddOn(Currency::CanadianDollar, 24.99, &err), QStringLiteral("62499"));
+        QCOMPARE(priceAddOn(Currency::Pound, 7.5, &err), QStringLiteral("00750"));
+        QCOMPARE(priceAddOn(Currency::None, 0, &err), QStringLiteral("90000"));
+        QCOMPARE(eanCheckDigit(QStringLiteral("400638133393")), 1);
+
+        auto modules = [](const Layout &l) {
+            const double unit = 0.33 * 72 / 25.4;
+            double x0 = 1e9, x1 = 0;
+            for (const QRectF &r : l.bars) { x0 = std::min(x0, r.left()); x1 = std::max(x1, r.right()); }
+            QString m(int(std::lround((x1 - x0) / unit)), QLatin1Char('0'));
+            for (const QRectF &r : l.bars)
+                for (int k = int(std::lround((r.left() - x0) / unit)); k < int(std::lround((r.right() - x0) / unit)); ++k) m[k] = QLatin1Char('1');
+            return m;
+        };
+        auto bars = [&](Type t, const QString &data, const QString &addOn = QString()) {
+            Options o;
+            o.type = t;
+            o.data = data;
+            o.addOn = addOn;
+            const Layout l = make(o);
+            return l.error.isEmpty() ? modules(l) : l.error;
+        };
+        QCOMPARE(bars(Type::Ean13, QStringLiteral("4006381333931")),
+                 QStringLiteral("10100011010100111010111101111010001001011001101010100001010000101000010111010010000101100110101"));
+        QCOMPARE(bars(Type::Ean8, QStringLiteral("96385074")), QStringLiteral("1010001011010111101111010110111010101001110111001010001001011100101"));
+        QCOMPARE(bars(Type::UpcA, QStringLiteral("036000291452")),
+                 QStringLiteral("10100011010111101010111100011010001101000110101010110110011101001100110101110010011101101100101"));
+        QCOMPARE(bars(Type::Isbn, QStringLiteral("0-306-40615-2"), QStringLiteral("51995")),
+                 QStringLiteral("1010111011000100101001110111101010011101011110101010111001110010101000011001101001110100010010100000000010110110001010110011010001011010010111010110001"));
+        QCOMPARE(bars(Type::Code128, QStringLiteral("AB12345CD7")),
+                 QStringLiteral("1101001000010100011000100010110001001110011010111011110111011011101011101100010111101110100010001101011000100011101101110101110111101100011101011"));
+        QCOMPARE(bars(Type::Code39, QStringLiteral("MLP")), QStringLiteral("1000101110111010111011101010001010111010100011101011101110100010100010111011101"));
+        // What can't be drawn says why.
+        QVERIFY(bars(Type::Ean13, QStringLiteral("4006381333932")).contains(QLatin1String("should be 1")));
+        QVERIFY(bars(Type::Code39, QStringLiteral("a~b")).contains(QLatin1String("Code 39")));
+    }
+
+    // Insert > Barcode places one group: the white quiet zone and the bars
+    // with their digits as a single vector outline.
+    void barcodeInsert()
+    {
+        jp::MainWindow w;
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        jp::Settings::get().setValue(QStringLiteral("barcode/type"), 0);
+        QTimer::singleShot(0, &w, [&] {
+            auto *d = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            QVERIFY(d);
+            d->findChild<QLineEdit *>()->setText(QStringLiteral("978-0-306-40615-7"));
+            for (auto *r : d->findChildren<QRadioButton *>())
+                if (r->text() == QLatin1String("Price:")) r->click();
+            d->findChild<QDoubleSpinBox *>()->setValue(19.95);
+            if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) d->grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/barcode-dialog.png");
+            for (auto *b : d->findChildren<QPushButton *>())
+                if (b->text() == QLatin1String("Insert")) b->click();
+        });
+        jp::barcodeDialog(&w, w.editor());
+        const auto &items = w.editor()->doc()->pages[0]->items;
+        QCOMPARE(int(items.size()), 1);
+        auto g = std::dynamic_pointer_cast<jp::GroupItem>(items[0]);
+        QVERIFY(g);
+        QCOMPARE(g->altText, QStringLiteral("Barcode: ISBN 978-0-306-40615-7"));
+        QCOMPARE(int(g->children.size()), 2);
+        auto bars = std::dynamic_pointer_cast<jp::ShapeItem>(g->children[1]);
+        QVERIFY(bars && !bars->customPath.isEmpty());
+        // Main symbol plus add-on: 167 modules (2.17 in) by about 1.2 in at 100%.
+        QVERIFY2(std::abs(g->rect.width() - 167 * 0.33 * 72 / 25.4) < 0.01 && g->rect.height() > 80 && g->rect.height() < 100,
+                 qPrintable(QStringLiteral("%1 x %2").arg(g->rect.width()).arg(g->rect.height())));
     }
 
     // A spot color names its ink in the fill's extra drawing properties

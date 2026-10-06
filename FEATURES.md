@@ -57,7 +57,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 ## Insert tab
 - [x] Pages: Insert Blank Page, Insert Duplicate Page, Insert Page dialog (count, before/after, blank, duplicate, or one text box per page), Catalog Pages (a catalog area repeated for each item of a product list, in rows and columns, with preview and merging to a new publication, PDF or printer)
 - [x] Tables: grid picker and Insert Table dialog
-- [x] Illustrations: Pictures (from file), Online Pictures **(alt: Openverse and Wikimedia Commons search with license info)**, Shapes (full gallery), Picture Placeholder
+- [x] Illustrations: Pictures (from file), Online Pictures **(alt: Openverse and Wikimedia Commons search with license info)**, Shapes (full gallery), Picture Placeholder, Barcode (book ISBN from ISBN-10 or -13, with a price add-on in US, Canadian, Australian or New Zealand dollars or pounds, or no suggested price; EAN-13, UPC-A and EAN-8 with 2- or 5-digit add-ons; Code 128; Code 39; magnification and bar height; vector bars and digits on a white quiet zone)
 - [x] Building Blocks: Page Parts (headings, pull quotes, sidebars, stories, tables of contents), Calendars (by month and year, with options), Borders & Accents, Advertisements, and saving your own building blocks to the library
 - [x] Text: Draw Text Box, Business Information fields, Text Art, Insert File (text, RTF, HTML, and `.docx` documents into a text box), Symbol (recently used symbols, kept between sessions, in the Symbol drop-down and the dialog, and the full character map), Date & Time (formats, update automatically), Object (embed a file)
 - [x] Links: Hyperlink (web, email, place in this document, new document), Bookmark
