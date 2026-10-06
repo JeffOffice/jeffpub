@@ -532,12 +532,23 @@ void MainWindow::createActions()
     mk("pd.changeTemplate", QStringLiteral("Change Template"), "layout-template", QKeySequence(), [this] { showBackstage("new"); });
     mk("pd.pageSetup", QStringLiteral("Page Setup…"), "file-cog", QKeySequence(), [this] { pageSetupDialog(this, m_ed); });
     mk("pd.guidesDialog", QStringLiteral("Grid and Baseline Guides…"), "grid-3x3", QKeySequence(), [this] { gridGuidesDialog(this, m_ed); });
+    // A new guide goes to the middle of the page, or half an inch on from
+    // the last free place, so adding several doesn't stack them.
     mk("pd.addH", QStringLiteral("Add Horizontal Ruler Guide"), "", QKeySequence(), [ed] {
-        ed->change(QStringLiteral("Add Guide"), [ed] { ed->surface()->guides.h << ed->doc()->pageSize().height() / 2; });
+        ed->change(QStringLiteral("Add Guide"), [ed] {
+            const double h = ed->doc()->pageSize().height();
+            auto &g = ed->surface()->guides.h;
+            g << RulerGuides::freeSpot(g, h / 2, 36, h);
+        });
     });
     mk("pd.addV", QStringLiteral("Add Vertical Ruler Guide"), "", QKeySequence(), [ed] {
-        ed->change(QStringLiteral("Add Guide"), [ed] { ed->surface()->guides.v << ed->doc()->pageSize().width() / 2; });
+        ed->change(QStringLiteral("Add Guide"), [ed] {
+            const double w = ed->doc()->pageSize().width();
+            auto &g = ed->surface()->guides.v;
+            g << RulerGuides::freeSpot(g, w / 2, 36, w);
+        });
     });
+    mk("pd.rulerGuides", QStringLiteral("Ruler Guides…"), "", QKeySequence(), [this] { rulerGuidesDialog(this, m_ed); });
     mk("pd.clearGuides", QStringLiteral("Clear All Ruler Guides"), "", QKeySequence(), [ed] {
         ed->change(QStringLiteral("Clear Guides"), [ed] { ed->surface()->guides = RulerGuides(); });
     });

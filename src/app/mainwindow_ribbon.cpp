@@ -581,6 +581,7 @@ void MainWindow::buildRibbon()
             }
             gm->addSeparator();
             gm->addAction(act("pd.guidesDialog"));
+            gm->addAction(act("pd.rulerGuides"));
             gm->addAction(act("pd.addH"));
             gm->addAction(act("pd.addV"));
             gm->addAction(act("pd.clearGuides"));

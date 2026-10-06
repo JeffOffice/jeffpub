@@ -42,6 +42,13 @@ struct Story {
 
 struct RulerGuides {
     QVector<double> h, v;       // page coordinates
+    // Where a new guide goes: at `at`, or, when a guide is already there,
+    // `step` further on (back to the start past `limit`), so guides added
+    // one after another don't sit on top of each other.
+    static double freeSpot(const QVector<double> &list, double at, double step, double limit);
+    // Adds `count` guides from `start`, `spacing` apart, within 0..limit and
+    // skipping places that already have one; returns how many were added.
+    static int addSeries(QVector<double> *list, double start, double spacing, int count, double limit);
 };
 
 struct GridGuides {

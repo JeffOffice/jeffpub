@@ -51,6 +51,7 @@
 #include <QTextBrowser>
 #include <QDirIterator>
 #include <QtTest>
+#include <QGroupBox>
 #include <QtEndian>
 #include <clocale>
 
@@ -3297,6 +3298,68 @@ private Q_SLOTS:
         QList<int> want;
         for (S::Dash d : dashes) want << int(d);
         QCOMPARE(got, want);
+    }
+
+    // Several ruler guides at once: quick adds no longer stack at the page's
+    // middle, and the Ruler Guides dialog adds, moves, removes and adds a
+    // series of evenly spaced guides in one step.
+    void rulerGuidesSeveral()
+    {
+        QVector<double> g{396};
+        QCOMPARE(jp::RulerGuides::freeSpot(g, 396, 36, 792), 432.0);
+        g << 432;
+        QCOMPARE(jp::RulerGuides::freeSpot(g, 396, 36, 792), 468.0);
+        QCOMPARE(jp::RulerGuides::freeSpot(g, 100, 36, 792), 100.0);
+        QVector<double> s;
+        QCOMPARE(jp::RulerGuides::addSeries(&s, 72, 72, 20, 612), 8);   // 72..576, stops at the page edge
+        QCOMPARE(s.last(), 576.0);
+        QCOMPARE(jp::RulerGuides::addSeries(&s, 72, 144, 3, 612), 0);   // all already there
+
+        jp::MainWindow w;
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        w.act(QStringLiteral("pd.addH"))->trigger();
+        w.act(QStringLiteral("pd.addH"))->trigger();
+        w.act(QStringLiteral("pd.addV"))->trigger();
+        const jp::RulerGuides &rg = w.editor()->surface()->guides;
+        QCOMPARE(rg.h, (QVector<double>{396, 432}));
+        QCOMPARE(rg.v, (QVector<double>{306}));
+
+        // The dialog, as a user would: a guide at 2 in on the horizontal side,
+        // a series of three vertical guides from 1 in every 1 in, then remove
+        // the 432 pt horizontal one.
+        QTimer::singleShot(0, &w, [&] {
+            auto *d = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            QVERIFY(d);
+            const auto boxes = d->findChildren<QGroupBox *>(QString(), Qt::FindDirectChildrenOnly);
+            QCOMPARE(boxes.size(), 2);
+            auto button = [](QWidget *in, const QString &text) {
+                for (auto *b : in->findChildren<QPushButton *>())
+                    if (b->text() == text) return b;
+                return static_cast<QPushButton *>(nullptr);
+            };
+            auto spins = [](QWidget *in) { return in->findChildren<jp::MeasureSpin *>(); };
+            QWidget *hBox = boxes[0], *vBox = boxes[1];
+            spins(hBox).first()->setValue(144);
+            button(hBox, QStringLiteral("Add"))->click();
+            auto *series = vBox->findChild<QGroupBox *>();
+            series->findChild<QSpinBox *>()->setValue(3);
+            const auto ss = spins(series);
+            ss[0]->setValue(72);
+            ss[1]->setValue(72);
+            button(vBox, QStringLiteral("Add Series"))->click();
+            auto *hList = hBox->findChild<QListWidget *>();
+            QCOMPARE(hList->count(), 3);
+            hList->setCurrentRow(2);   // 432 pt, sorted after 144 and 396
+            button(hBox, QStringLiteral("Remove"))->click();
+            if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) d->grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/ruler-guides.png");
+            d->accept();
+        });
+        jp::rulerGuidesDialog(&w, w.editor());
+        QCOMPARE(rg.h, (QVector<double>{144, 396}));
+        QCOMPARE(rg.v, (QVector<double>{72, 144, 216, 306}));
+        // One undo step takes the dialog's changes back.
+        w.editor()->undoStack()->undo();
+        QCOMPARE(w.editor()->surface()->guides.h, (QVector<double>{396, 432}));
     }
 
     // A spot color names its ink in the fill's extra drawing properties

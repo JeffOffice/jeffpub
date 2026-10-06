@@ -456,6 +456,104 @@ void gridGuidesDialog(QWidget *p, Editor *ed, int startTab)
     });
 }
 
+// ---------------- Ruler Guides ----------------
+void rulerGuidesDialog(QWidget *p, Editor *ed)
+{
+    RulerGuides guides = ed->surface()->guides;
+    const QSizeF page = ed->doc()->pageSize();
+    Dlg dlg(p, QStringLiteral("Ruler Guides"));
+    auto *row = new QHBoxLayout();
+    row->setSpacing(18);
+    // One side: its guides listed by position, with a field to add one, move
+    // the chosen one or add a run of them at even spacing.
+    auto side = [&](const QString &title, const QString &from, QVector<double> *list, double limit) {
+        auto *box = new QGroupBox(title, &dlg.d);
+        auto *v = new QVBoxLayout(box);
+        auto *hint = new QLabel(from, box);
+        hint->setEnabled(false);
+        v->addWidget(hint);
+        auto *items = new QListWidget(box);
+        items->setMinimumHeight(150);
+        items->setObjectName(QStringLiteral("guideList"));
+        v->addWidget(items);
+        auto refill = [=](int select) {
+            std::sort(list->begin(), list->end());
+            items->clear();
+            for (double g : *list) items->addItem(Settings::get().format(g));
+            if (select >= 0 && select < items->count()) items->setCurrentRow(select);
+        };
+        auto *pos = measure(limit / 2, box, 0, limit);
+        auto *add = new QPushButton(QStringLiteral("Add"), box), *move = new QPushButton(QStringLiteral("Move"), box);
+        auto *posRow = new QHBoxLayout();
+        posRow->addWidget(new QLabel(QStringLiteral("Position:"), box));
+        posRow->addWidget(pos);
+        posRow->addWidget(add);
+        posRow->addWidget(move);
+        posRow->addStretch(1);
+        v->addLayout(posRow);
+        auto *remove = new QPushButton(QStringLiteral("Remove"), box), *removeAll = new QPushButton(QStringLiteral("Remove All"), box);
+        auto *rmRow = new QHBoxLayout();
+        rmRow->addWidget(remove);
+        rmRow->addWidget(removeAll);
+        rmRow->addStretch(1);
+        v->addLayout(rmRow);
+        auto *series = new QGroupBox(QStringLiteral("Add a series"), box);
+        auto *sf = new QFormLayout(series);
+        auto *count = new QSpinBox(series);
+        count->setRange(1, 200);
+        count->setValue(4);
+        count->setFixedWidth(110);
+        auto *start = measure(0, series, 0, limit), *every = measure(72, series, 1, limit);
+        auto *addSeries = new QPushButton(QStringLiteral("Add Series"), series);
+        sf->addRow(QStringLiteral("Guides:"), count);
+        sf->addRow(QStringLiteral("First at:"), start);
+        sf->addRow(QStringLiteral("Spacing:"), every);
+        sf->addRow(addSeries);
+        v->addWidget(series);
+        refill(-1);
+        QObject::connect(items, &QListWidget::currentRowChanged, box, [=](int r) {
+            if (r >= 0 && r < list->size()) pos->setValue(list->at(r));
+            move->setEnabled(r >= 0);
+            remove->setEnabled(r >= 0);
+        });
+        move->setEnabled(false);
+        remove->setEnabled(false);
+        QObject::connect(add, &QPushButton::clicked, box, [=] {
+            const double x = pos->value();
+            if (RulerGuides::addSeries(list, x, 0, 1, limit) == 0) return;   // one is already there
+            std::sort(list->begin(), list->end());
+            refill(int(std::lower_bound(list->begin(), list->end(), x - 0.01) - list->begin()));
+        });
+        QObject::connect(move, &QPushButton::clicked, box, [=] {
+            const int r = items->currentRow();
+            if (r < 0 || r >= list->size()) return;
+            (*list)[r] = pos->value();
+            std::sort(list->begin(), list->end());
+            refill(int(std::lower_bound(list->begin(), list->end(), pos->value() - 0.01) - list->begin()));
+        });
+        QObject::connect(remove, &QPushButton::clicked, box, [=] {
+            const int r = items->currentRow();
+            if (r < 0 || r >= list->size()) return;
+            list->remove(r);
+            refill(std::min(r, int(list->size()) - 1));
+        });
+        QObject::connect(removeAll, &QPushButton::clicked, box, [=] {
+            list->clear();
+            refill(-1);
+        });
+        QObject::connect(addSeries, &QPushButton::clicked, box, [=] {
+            RulerGuides::addSeries(list, start->value(), every->value(), count->value(), limit);
+            refill(-1);
+        });
+        row->addWidget(box);
+    };
+    side(QStringLiteral("Horizontal Guides"), QStringLiteral("Measured from the top of the page"), &guides.h, page.height());
+    side(QStringLiteral("Vertical Guides"), QStringLiteral("Measured from the left of the page"), &guides.v, page.width());
+    dlg.v->addLayout(row);
+    if (!dlg.exec()) return;
+    ed->change(QStringLiteral("Ruler Guides"), [&] { ed->surface()->guides = guides; });
+}
+
 // ---------------- Font ----------------
 void fontDialog(QWidget *p, Editor *ed)
 {

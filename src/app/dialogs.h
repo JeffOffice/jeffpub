@@ -22,6 +22,9 @@ bool insertSymbol(QWidget *p, Editor *ed, const QString &ch, const QString &font
 QStringList recentSymbols();
 // Layout Guides: Margin Guides (tab 0), Grid Guides (1), Baseline Guides (2).
 void gridGuidesDialog(QWidget *p, Editor *ed, int startTab = 1);
+// Ruler Guides: the page's horizontal and vertical guides by position;
+// add one or a series, move, remove.
+void rulerGuidesDialog(QWidget *p, Editor *ed);
 // Page sizes the user created (name and whole setup), and their dialogs.
 QVector<QPair<QString, PageSetup>> customPageSizes();
 // With apply false the new size is only saved (for a new publication).

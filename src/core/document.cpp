@@ -19,6 +19,39 @@
 
 namespace jp {
 
+namespace {
+bool hasGuideAt(const QVector<double> &list, double at)
+{
+    for (double g : list)
+        if (std::abs(g - at) < 0.5) return true;
+    return false;
+}
+} // namespace
+
+double RulerGuides::freeSpot(const QVector<double> &list, double at, double step, double limit)
+{
+    if (step <= 0 || limit <= 0) return at;
+    double x = at;
+    for (int i = 0; i < int(limit / step) + 2 && hasGuideAt(list, x); ++i) {
+        x += step;
+        if (x > limit) x = std::fmod(x, step);
+    }
+    return x;
+}
+
+int RulerGuides::addSeries(QVector<double> *list, double start, double spacing, int count, double limit)
+{
+    int added = 0;
+    for (int i = 0; i < count; ++i) {
+        const double x = start + i * spacing;
+        if (x < -0.01 || x > limit + 0.01) break;
+        if (hasGuideAt(*list, x)) continue;
+        *list << x;
+        ++added;
+    }
+    return added;
+}
+
 // ---------- small JSON helpers ----------
 static QJsonArray sizeJ(const QSizeF &s) { return {s.width(), s.height()}; }
 static QSizeF sizeF(const QJsonValue &v, QSizeF d)
