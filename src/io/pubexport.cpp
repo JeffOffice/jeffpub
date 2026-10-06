@@ -191,6 +191,13 @@ const TypeEntry kTypeTable[] = {
 class ContentsWriter {
 public:
     void put(quint32 seq, Chunk c) { m_chunks[seq] = std::move(c); }
+    // Adds fields to a chunk already put, keeping its fields in id order.
+    void extend(quint32 seq, const QVector<B> &fields)
+    {
+        QVector<B> &body = m_chunks[seq].body;
+        body << fields;
+        std::stable_sort(body.begin(), body.end(), [](const B &a, const B &b) { return a.id < b.id; });
+    }
     QByteArray build(const QString &path) const;
 
 private:
@@ -1115,6 +1122,28 @@ QByteArray PubWriter::write(QStringList *skipped)
             ++skippedCount;
         };
         for (const ItemPtr &it : m_doc.pages[pi]->items) visit(it);
+    }
+    // Linked boxes point at their neighbors: 28 = place in the chain,
+    // 36 = the box before, 37 = the box after; 2d marks the last box.
+    {
+        QHash<int, QVector<quint32>> chains;
+        for (const TextShape &ts : m_textShapes) {
+            QVector<quint32> &c = chains[ts.tid];
+            if (c.size() <= ts.index) c.resize(ts.index + 1);
+            c[ts.index] = ts.seq;
+        }
+        for (auto it = chains.cbegin(); it != chains.cend(); ++it) {
+            const QVector<quint32> &c = it.value();
+            if (c.size() < 2) continue;
+            for (int k = 0; k < c.size(); ++k) {
+                if (!c[k]) continue;
+                QVector<B> f;
+                if (k) f << u32(0x28, quint32(k)) << ref(0x36, c[k - 1], 0x68);
+                if (k + 1 < c.size()) f << ref(0x37, c[k + 1], 0x68);
+                else f << flag(0x2d);
+                cw.extend(c[k], f);
+            }
+        }
     }
     if (skipped && skippedCount) *skipped << QStringLiteral("%1 object(s) (text art and some shapes) aren't saved to .pub yet").arg(skippedCount);
     const quint32 fontSeq = m_fonts.isEmpty() && m_textIds.isEmpty() ? 0 : next++;

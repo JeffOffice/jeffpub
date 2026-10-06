@@ -210,5 +210,8 @@ and drawing shape, all naming the same text id (`27`, OPT 0x0080 and the
 ClientTextbox). The `0x61` map has a record per box in chain order, with
 `02` = its place in the chain (left out for the first); the story's `0x65`
 record has `02:18` = the number of boxes; its MCLD entry lists a frame per
-box in chain order. The boxes can be on different pages.
+box in chain order. The boxes can be on different pages. Each box's shape
+chunk also links its neighbors: `28` = its place in the chain, `36:68` =
+the box before, `37:68` = the box after, and `2d:08` on the last box.
+Without these links Publisher hangs while laying out the text.
 

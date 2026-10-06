@@ -395,6 +395,22 @@ private Q_SLOTS:
             doc->pages[i < 2 ? 0 : 1]->items.push_back(t);
         }
         QTemporaryDir dir;
+        // Also two linked boxes on one page, the simplest chain.
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            auto two = jp::Document::blank(QSizeF(612, 792));
+            const QString st = two->createStory(QStringLiteral("test15 two linked boxes.") + text.mid(20));
+            auto a = std::make_shared<jp::TextItem>(), b = std::make_shared<jp::TextItem>();
+            a->rect = rects[0];
+            b->rect = rects[1];
+            a->storyId = b->storyId = st;
+            a->nextId = b->id;
+            two->pages[0]->items.push_back(a);
+            two->pages[0]->items.push_back(b);
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test15-linked-one-page.pub";
+            QFile::remove(out);
+            QString e;
+            QVERIFY(jp::exportPublisher(*two, out, &e));
+        }
         const QString path = dir.filePath(QStringLiteral("test14-linked.pub"));
         QString err;
         QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
