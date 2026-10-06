@@ -371,9 +371,11 @@ Right to left: a sample made in Publisher (Oct 6) holds two paragraph
 properties on its right-to-left paragraph only, `06:22` = 0 and `3a:12` =
 0xF3FF; `3a` appears in none of 247 left-to-right reference files (`06` = 0
 appears in 53 of them, so it isn't the direction). JeffPub reads `3a` =
-0xF3FF as right to left and writes both, as Publisher did. Alignment codes
-are the paragraph's start and end, so a right-to-left paragraph with the
-default alignment starts at the right.
+0xF3FF as right to left and writes both, as Publisher did; Publisher showed
+a paragraph saved by JeffPub this way as Right-to-left in its Paragraph
+dialog (test34, Oct 6). Alignment codes are the paragraph's start and end:
+the same paragraph, with the default alignment, starts at the right, and
+Publisher's dialog calls that alignment "Right".
 
 Seen in Publisher's files and written by JeffPub (paragraph runs, FDPP):
 `0c:22` first-line indent (EMU, negative for a hanging indent), `0d:22`
