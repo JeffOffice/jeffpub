@@ -586,6 +586,149 @@ private Q_SLOTS:
         }
     }
 
+    // Gradients, picture fills, transparency and shadows survive .pub.
+    void pubWriterFills()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto text = [&](const QRectF &r, const QString &s) {
+            auto t = std::make_shared<jp::TextItem>();
+            t->rect = r;
+            t->storyId = doc->createStory(s);
+            doc->pages[0]->items.push_back(t);
+            return t;
+        };
+        text(QRectF(54, 30, 500, 30), QStringLiteral("test26 fills"));
+        const QColor red(220, 30, 30), blue(30, 60, 200), yellow(250, 220, 40), green(30, 160, 60);
+        struct Case { QString label; jp::Fill fill; jp::Stroke stroke = jp::Stroke::line(jp::ColorRef::rgb(Qt::black), 1); bool shadow = false; };
+        QVector<Case> cases;
+        for (double a : {90.0, 0.0, 45.0, 135.0, 270.0})
+            cases << Case{QStringLiteral("linear %1").arg(a), jp::Fill::gradient(jp::ColorRef::rgb(red), jp::ColorRef::rgb(blue), a)};
+        jp::Fill three = jp::Fill::gradient(jp::ColorRef::rgb(red), jp::ColorRef::rgb(green), 0);
+        three.stops = {{0, jp::ColorRef::rgb(red), 0}, {0.5, jp::ColorRef::rgb(yellow), 0}, {1, jp::ColorRef::rgb(green), 0}};
+        cases << Case{QStringLiteral("three colors"), three};
+        jp::Fill radial = jp::Fill::gradient(jp::ColorRef::rgb(Qt::white), jp::ColorRef::rgb(blue));
+        radial.gradType = jp::Fill::Radial;
+        cases << Case{QStringLiteral("radial"), radial};
+        jp::Fill fade = jp::Fill::gradient(jp::ColorRef::rgb(blue), jp::ColorRef::rgb(blue), 0);
+        fade.stops = {{0, jp::ColorRef::rgb(blue), 0}, {1, jp::ColorRef::rgb(blue), 1}};
+        cases << Case{QStringLiteral("fade out"), fade};
+        cases << Case{QStringLiteral("50% clear"), jp::Fill::solid(jp::ColorRef::rgb(blue), 0.5)};
+        jp::Stroke thick = jp::Stroke::line(jp::ColorRef::rgb(red), 8);
+        thick.transparency = 0.5;
+        cases << Case{QStringLiteral("clear line"), jp::Fill::solid(jp::ColorRef::rgb(yellow)), thick};
+        cases << Case{QStringLiteral("shadow"), jp::Fill::solid(jp::ColorRef::rgb(yellow)), jp::Stroke::line(jp::ColorRef::rgb(Qt::black), 1), true};
+        QImage checks(32, 32, QImage::Format_RGB32);
+        for (int y = 0; y < 32; ++y)
+            for (int x = 0; x < 32; ++x) checks.setPixel(x, y, ((x / 8 + y / 8) % 2) ? qRgb(30, 60, 200) : qRgb(250, 220, 40));
+        QByteArray png;
+        QBuffer buf(&png);
+        buf.open(QIODevice::WriteOnly);
+        checks.save(&buf, "PNG");
+        jp::Fill pic;
+        pic.type = jp::Fill::Picture;
+        pic.imageId = doc->addImage(png, QStringLiteral("png"));
+        cases << Case{QStringLiteral("picture"), pic};
+        jp::Fill tiled = pic;
+        tiled.type = jp::Fill::Texture;
+        cases << Case{QStringLiteral("texture"), tiled};
+        jp::Fill pattern;
+        pattern.type = jp::Fill::Pattern;
+        pattern.color = jp::ColorRef::rgb(blue);
+        pattern.color2 = jp::ColorRef::rgb(yellow);
+        pattern.pattern = 9;
+        cases << Case{QStringLiteral("pattern"), pattern};
+        QVector<std::shared_ptr<jp::ShapeItem>> made;
+        for (int i = 0; i < cases.size(); ++i) {
+            auto sh = std::make_shared<jp::ShapeItem>();
+            sh->shape = QStringLiteral("rect");
+            sh->rect = QRectF(60 + (i % 4) * 130, 80 + (i / 4) * 150, 100, 90);
+            sh->fill = cases[i].fill;
+            sh->stroke = cases[i].stroke;
+            if (cases[i].shadow) {
+                sh->fx.shadow.on = true;
+                sh->fx.shadow.distance = 6;
+                sh->fx.shadow.color = jp::ColorRef::rgb(Qt::black);
+                sh->fx.shadow.transparency = 0.5;
+            }
+            doc->pages[0]->items.push_back(sh);
+            made << sh;
+            text(QRectF(sh->rect.left(), sh->rect.bottom() + 8, 120, 24), cases[i].label);
+        }
+        // A text box with a gradient, a border and a shadow.
+        auto box = text(QRectF(60, 700, 300, 50), QStringLiteral("A text box with a gradient and a shadow"));
+        box->fill = jp::Fill::gradient(jp::ColorRef::rgb(yellow), jp::ColorRef::rgb(Qt::white), 90);
+        box->stroke = jp::Stroke::line(jp::ColorRef::rgb(blue), 2);
+        box->fx.shadow.on = true;
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("test26-fills.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        QVERIFY2(err.isEmpty(), qPrintable(err));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test26-fills";
+            QFile::remove(out + ".pub");
+            QFile::copy(path, out + ".pub");
+            QString e2;
+            jp::savePublication(*doc, out + ".jpub", QImage(), &e2);
+        }
+        QString e1;
+        auto back = jp::importPublisherFile(path, &e1);
+        QVERIFY2(back, qPrintable(e1));
+        QVector<const jp::Item *> got;
+        jp::walkItems(back->pages[0]->items, [&](const jp::ItemPtr &it) {
+            if (it->type() == jp::ItemType::Shape || it->type() == jp::ItemType::Picture) got << it.get();
+        });
+        auto near = [&](const QRectF &r) -> const jp::Item * {
+            for (const jp::Item *g : got)
+                if (QLineF(g->rect.center(), r.center()).length() < 3 && std::abs(g->rect.width() - r.width()) < 3) return g;
+            return nullptr;
+        };
+        auto angleDiff = [](double a, double b) { return std::abs(std::remainder(a - b, 360.0)); };
+        for (int i = 0; i < cases.size(); ++i) {
+            const jp::Item *g = near(made[i]->rect);
+            QVERIFY2(g, qPrintable(cases[i].label));
+            const jp::Fill &want = cases[i].fill;
+            if (want.type == jp::Fill::Picture) {
+                QCOMPARE(g->type(), jp::ItemType::Picture);
+                continue;
+            }
+            if (want.type == jp::Fill::Texture || want.type == jp::Fill::Pattern) {
+                // Textures and patterns come back as tiled pictures, pixel for pixel.
+                QCOMPARE(g->type(), jp::ItemType::Shape);
+                const auto *sh = static_cast<const jp::ShapeItem *>(g);
+                QCOMPARE(int(sh->fill.type), int(jp::Fill::Texture));
+                const QImage want = cases[i].fill.type == jp::Fill::Pattern ? cases[i].fill.patternTile(doc->colors) : checks;
+                QCOMPARE(back->image(sh->fill.imageId).convertToFormat(QImage::Format_ARGB32), want.convertToFormat(QImage::Format_ARGB32));
+                continue;
+            }
+            QCOMPARE(g->type(), jp::ItemType::Shape);
+            const auto *sh = static_cast<const jp::ShapeItem *>(g);
+            QCOMPARE(int(sh->fill.type), int(want.type));
+            if (want.type == jp::Fill::Gradient) {
+                QCOMPARE(int(sh->fill.gradType == jp::Fill::Linear), int(want.gradType == jp::Fill::Linear));
+                if (want.gradType == jp::Fill::Linear)
+                    QVERIFY2(angleDiff(sh->fill.angle, want.angle) < 0.5, qPrintable(QStringLiteral("%1 -> %2").arg(want.angle).arg(sh->fill.angle)));
+                const QVector<jp::GradientStop> ws = want.stops.isEmpty()
+                    ? QVector<jp::GradientStop>{{0, want.color, 0}, {1, want.color2, 0}} : want.stops;
+                QCOMPARE(sh->fill.stops.size(), ws.size());
+                for (int k = 0; k < ws.size(); ++k) {
+                    QVERIFY(std::abs(sh->fill.stops[k].pos - ws[k].pos) < 0.011);
+                    QCOMPARE(sh->fill.stops[k].color.resolve(back->colors).rgb(), ws[k].color.resolve(doc->colors).rgb());
+                    QVERIFY2(std::abs(sh->fill.stops[k].transparency - ws[k].transparency) < 0.011, qPrintable(cases[i].label));
+                }
+            } else {
+                QVERIFY(std::abs(sh->fill.transparency - want.transparency) < 0.01);
+            }
+            QVERIFY2(std::abs(sh->stroke.transparency - cases[i].stroke.transparency) < 0.01, qPrintable(cases[i].label));
+            QCOMPARE(sh->fx.shadow.on, cases[i].shadow);
+            if (cases[i].shadow) {
+                QVERIFY(std::abs(sh->fx.shadow.distance - 6) < 0.1);
+                QVERIFY(angleDiff(sh->fx.shadow.angle, 45) < 0.5);
+                QVERIFY(std::abs(sh->fx.shadow.transparency - 0.5) < 0.01);
+            }
+        }
+    }
+
     // A chain of linked text boxes (across two pages) is one story in .pub.
     void pubWriterLinked()
     {

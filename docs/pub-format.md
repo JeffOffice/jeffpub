@@ -122,6 +122,22 @@ version 0x0102, 0b = 1) is `02:08, 03:08, 0c, 0d, 34 = 0, 3a → name chunk,
 aa, ab`; the name chunk (type 0x66, parent the picture) holds `03` = the
 file name.
 
+### Fills, transparency and shadows
+
+These are OPT props on any shape, text box or Text Art. A solid fill is
+0x0181 (color) with 0x01BF = 0x00100010; 0x0182 is its opacity
+(0x10000 = opaque). A gradient adds 0x0180 = 7 (linear), 5 (from the
+center, with 0x018D-0x0190 = 0x8000) or 6 (along the outline); 0x0181 and
+0x0183 are the end colors, 0x0182 and 0x0184 their opacities, and 0x018B
+is the angle (16.16 degrees). Readers turn a stored angle *a* into a
+direction of 90 + *a* degrees, so a top-to-bottom gradient stores 0. More
+than two colors go in 0xC197 (complex): count, count, 8, then each color
+and its position (16.16). A picture fill is 0x0180 = 3 (stretched) or 2
+(tiled) with 0x4186 = the store entry. Patterns are saved as a tiled 8 x 8
+picture of the pattern in its colors. Line opacity is 0x01C1. A shadow is
+0x0200 = 0 (offset), 0x0201 color, 0x0204 opacity, 0x0205/0x0206 offsets
+(EMU) and 0x023F = 0x00020002.
+
 ## Text (Quill/QuillSub/CONTENTS)
 
 Starts with a `CHNKINK` index of sections, each with a 4-letter name, an id,

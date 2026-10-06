@@ -665,7 +665,11 @@ private:
         return m_doc.scratch;
     }
 
-    void add(const ItemPtr &it) { currentList().push_back(it); }
+    void add(const ItemPtr &it)
+    {
+        currentList().push_back(it);
+        m_fillOnly = nullptr;
+    }
 
     // Publisher's Text Art: the warp from its shape number, the words and
     // settings, the unturned frame. A shape flipped one way turns the other
@@ -698,7 +702,7 @@ private:
         QByteArray bitmap;
         QString mime;
         ta->fill = fillFromStyle(&bitmap, &mime);
-        if (ta->fill.type == Fill::Picture) ta->fill = Fill::solid(ColorRef::rgb(Qt::black));
+        if (ta->fill.type == Fill::Picture || ta->fill.type == Fill::Texture) ta->fill = Fill::solid(ColorRef::rgb(Qt::black));
         ta->stroke = strokeFromStyle();
         ta->wrap.mode = Wrap::None;
         add(ta);
@@ -761,8 +765,9 @@ private:
         if (f == "bitmap") {
             if (bitmap) *bitmap = QByteArray::fromBase64(QByteArray(m_style["draw:fill-image"] ? m_style["draw:fill-image"]->getStr().cstr() : ""));
             if (mime) *mime = str(m_style["librevenge:mime-type"]);
+            // A texture repeats the picture; anything else stretches it.
             Fill pf;
-            pf.type = Fill::Picture;
+            pf.type = str(m_style["style:repeat"]) == "stretch" ? Fill::Picture : Fill::Texture;
             return pf;
         }
         return Fill::none();
@@ -839,6 +844,20 @@ private:
         if (fill.type == Fill::NoFill && stroke.isNone() && !open) return;
         // A line explicitly drawn without a stroke (a box's absent border side) shows nothing.
         if (open && stroke.isNone() && str(m_style["draw:stroke"]) == "none") return;
+        // The reader draws a shape's fill and then its outline as a second
+        // path (a rectangle's pushed out by up to half the line). Give the
+        // outline back to the filled shape rather than making two objects.
+        if (!open && fill.type == Fill::NoFill && m_fillOnly && pathIn.elementCount() == m_fillOnlyCount && !currentList().empty()
+            && currentList().back().get() == m_fillOnly) {
+            const double slack = stroke.width / 2 + 0.3;
+            const QRectF &f = m_fillOnlyBounds;
+            if (std::abs(b.left() - f.left()) <= slack && std::abs(b.top() - f.top()) <= slack && std::abs(b.right() - f.right()) <= slack
+                && std::abs(b.bottom() - f.bottom()) <= slack) {
+                m_fillOnly->stroke = stroke;
+                m_fillOnly = nullptr;
+                return;
+            }
+        }
 
         // Straight lines become line objects.
         if (pathIn.elementCount() == 2 && open) {
@@ -875,6 +894,10 @@ private:
         }
         const QPointF center = isRect ? (poly[0] + poly[2]) / 2 : b.center();
 
+        if (fill.type == Fill::Texture) {
+            fill.imageId = bitmap.isEmpty() ? QString() : m_doc.addImage(bitmap, formatForMime(mime));
+            if (fill.imageId.isEmpty() || m_doc.image(fill.imageId).isNull()) fill = Fill::solid(ColorRef::rgb(QColor(220, 220, 220)));
+        }
         if (fill.type == Fill::Picture) {
             const QRectF r = isRect ? QRectF(center.x() - rw / 2, center.y() - rh / 2, rw, rh) : b;
             auto pic = makePicture(r, isRect ? rot : 0, bitmap, mime);
@@ -886,6 +909,7 @@ private:
             applyRecolor(pic.get(), m_style);
             applyShadow(*pic);
             add(pic);
+            if (stroke.isNone()) rememberFillOnly(pic.get(), b, pathIn.elementCount());
             return;
         }
 
@@ -906,9 +930,20 @@ private:
         applyShadow(*s);
         add(s);
         ++m_rep.shapes;
+        if (stroke.isNone() && !open && s->fill.type != Fill::NoFill) rememberFillOnly(s.get(), b, pathIn.elementCount());
+    }
+
+    void rememberFillOnly(Item *it, const QRectF &bounds, int count)
+    {
+        m_fillOnly = it;
+        m_fillOnlyBounds = bounds;
+        m_fillOnlyCount = count;
     }
 
     Document &m_doc;
+    Item *m_fillOnly = nullptr;           // the last shape added with a fill and no outline
+    QRectF m_fillOnlyBounds;
+    int m_fillOnlyCount = 0;
     PubImportReport &m_rep;
     Page *m_page = nullptr;
     MasterPage *m_master = nullptr;       // set while a master page's objects arrive

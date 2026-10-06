@@ -3,6 +3,7 @@
 #include <QImage>
 #include <QJsonArray>
 #include <QLinearGradient>
+#include <QPainter>
 #include <QRadialGradient>
 #include <QtMath>
 
@@ -24,6 +25,15 @@ QString dashName(Stroke::Dash d)
 {
     static const char *n[] = {"Solid", "Round Dot", "Square Dot", "Dash", "Dash Dot", "Long Dash", "Long Dash Dot", "Long Dash Dot Dot"};
     return QString::fromLatin1(n[int(d)]);
+}
+
+QImage Fill::patternTile(const ColorScheme &s) const
+{
+    QImage tile(8, 8, QImage::Format_ARGB32_Premultiplied);
+    tile.fill(color2.isNone() ? QColor(Qt::transparent) : withTransparency(color2.resolve(s), transparency));
+    QPainter p(&tile);
+    p.fillRect(tile.rect(), QBrush(withTransparency(color.resolve(s), transparency), patternBrushes().value(pattern, Qt::Dense4Pattern)));
+    return tile;
 }
 
 QBrush Fill::brush(const QRectF &r, const ColorScheme &s, const ImageLookup &img) const
@@ -73,8 +83,13 @@ QBrush Fill::brush(const QRectF &r, const ColorScheme &s, const ImageLookup &img
         return b;
     }
     case Pattern: {
-        const auto pats = patternBrushes();
-        QBrush b(withTransparency(color.resolve(s), transparency), pats.value(pattern, Qt::Dense4Pattern));
+        // An 8-pixel tile at 96 per inch, so the pattern keeps its size
+        // when zoomed and printed.
+        QBrush b(patternTile(s));
+        QTransform t;
+        t.translate(r.left(), r.top());
+        t.scale(72.0 / 96.0, 72.0 / 96.0);
+        b.setTransform(t);
         return b;
     }
     }

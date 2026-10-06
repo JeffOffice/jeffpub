@@ -304,6 +304,14 @@ QByteArray escherRecord(quint16 ver, quint16 inst, quint16 type, const QByteArra
 QByteArray escherContainer(quint16 type, const QByteArray &body) { return escherRecord(0xf, 0, type, body); }
 QByteArray escherProps(quint16 type, QVector<Prop> props)
 {
+    // A property given twice keeps its last value (a shadow overriding the default).
+    QVector<Prop> unique;
+    for (int i = props.size() - 1; i >= 0; --i) {
+        bool seen = false;
+        for (const Prop &u : unique) seen = seen || (u.id & 0x3fff) == (props[i].id & 0x3fff);
+        if (!seen) unique << props[i];
+    }
+    props = unique;
     std::sort(props.begin(), props.end(), [](const Prop &a, const Prop &b) { return (a.id & 0x3fff) < (b.id & 0x3fff); });
     QByteArray body, extra;
     for (const Prop &p : props) {
@@ -611,6 +619,7 @@ private:
     // where each one's text ends.
     void addStory(int textId, const QVector<const QTextDocument *> &docs, QVector<quint32> *cellEnds = nullptr);
     int blipIndex(const QString &imageId);
+    int patternBlip(const Fill &f);
 
     // Tables: each table story's cell ends (by story index), the table
     // stories' text ids, and the cell fill and border records, which live in
@@ -627,6 +636,7 @@ private:
     // bytes kept in the delay stream.
     struct Blip { QString imageId, fileName; QByteArray uid, record; quint16 kind = 6; quint32 refs = 0; };
     QVector<Blip> m_blips;
+    QHash<QString, QByteArray> m_patternImages;   // pattern tiles by key (PNG)
 
     const Document &m_doc;
     QString m_path;
@@ -813,6 +823,22 @@ static bool jpegIsCmyk(const QByteArray &d)
     return false;
 }
 
+// A pattern fill as an 8 x 8 tile in its colors (the background clear
+// when it has none), kept with the pictures.
+int PubWriter::patternBlip(const Fill &f)
+{
+    const QImage tile = f.patternTile(m_doc.colors);
+    QByteArray png;
+    QBuffer buf(&png);
+    buf.open(QIODevice::WriteOnly);
+    tile.save(&buf, "PNG");
+    const QString key = QStringLiteral("pattern:") + QString::fromLatin1(png.toHex());
+    if (!m_doc.images.contains(key)) {
+        m_patternImages.insert(key, png);
+    }
+    return blipIndex(key);
+}
+
 int PubWriter::blipIndex(const QString &imageId)
 {
     for (int i = 0; i < m_blips.size(); ++i) {
@@ -821,13 +847,25 @@ int PubWriter::blipIndex(const QString &imageId)
             return i + 1;
         }
     }
+    Blip b;
+    b.imageId = imageId;
+    QByteArray data;
+    if (m_patternImages.contains(imageId)) {
+        data = m_patternImages.value(imageId);
+        b.refs = 1;
+        b.uid = QCryptographicHash::hash(data, QCryptographicHash::Md4);
+        b.fileName = QStringLiteral("pattern%1.png").arg(m_blips.size() + 1);
+        QByteArray body = b.uid;
+        body.append(char(0xff));
+        body += data;
+        b.record = escherRecord(0x0, 0x6e0, 0xf01e, body);
+        m_blips << b;
+        return int(m_blips.size());
+    }
     const auto it = m_doc.images.constFind(imageId);
     if (imageId.isEmpty() || it == m_doc.images.cend()) return -1;
     // PNG and JPEG go in as they are; anything else is saved as PNG.
     const QString fmt = it->format.toLower();
-    Blip b;
-    b.imageId = imageId;
-    QByteArray data;
     bool converted = false;
     if (fmt == QLatin1String("png")) data = it->bytes;
     else if (fmt == QLatin1String("jpg") || fmt == QLatin1String("jpeg")) {
@@ -845,6 +883,12 @@ int PubWriter::blipIndex(const QString &imageId)
     }
     b.refs = 1;
     b.uid = QCryptographicHash::hash(data, QCryptographicHash::Md4);
+    for (int i = 0; i < m_blips.size(); ++i) {
+        if (m_blips[i].uid == b.uid) {   // the same picture under another id
+            ++m_blips[i].refs;
+            return i + 1;
+        }
+    }
     QString name = QFileInfo(it->sourcePath).fileName();
     if (name.isEmpty()) name = QStringLiteral("picture%1.%2").arg(m_blips.size() + 1).arg(b.kind == 5 ? QStringLiteral("jpg") : QStringLiteral("png"));
     else if (converted) name = QFileInfo(name).completeBaseName() + QStringLiteral(".png");
@@ -954,11 +998,13 @@ QByteArray PubWriter::write(QStringList *skipped)
         return escherRecord(0x2, kind, 0xf00a, d);
     };
     // Outline: color, width, dashes and arrowheads.
+    auto opacity = [](double transparency) { return quint32(std::llround(std::clamp(1.0 - transparency, 0.0, 1.0) * 65536)); };
     auto strokeProps = [&](QVector<Prop> &opt, const Stroke &st) {
         const bool lined = !st.isNone();
         opt << Prop{0x01c0, lined ? bgr(st.color.resolve(m_doc.colors)) : 0x08000000} << Prop{0x01c2, 0x08000007}
             << Prop{0x01cb, quint32(emu(lined ? st.width : 2))} << Prop{0x01ff, lined ? 0x00080008u : 0x00080000u};
         if (!lined) return;
+        if (st.transparency > 0.001) opt << Prop{0x01c1, opacity(st.transparency)};
         static const quint32 kDash[] = {0, 2, 2, 6, 8, 7, 9, 10};
         if (st.dash != Stroke::SolidLine) opt << Prop{0x01ce, kDash[st.dash]};
         if (st.dash == Stroke::RoundDot) opt << Prop{0x01d7, 0};
@@ -976,6 +1022,61 @@ QByteArray PubWriter::write(QStringList *skipped)
             opt << Prop{0x01d0, arrow(st.startArrow)} << Prop{0x01d2, quint32(st.startSize)} << Prop{0x01d3, quint32(st.startSize)};
         if (st.endArrow != Arrow::None)
             opt << Prop{0x01d1, arrow(st.endArrow)} << Prop{0x01d4, quint32(st.endSize)} << Prop{0x01d5, quint32(st.endSize)};
+    };
+    // Fill: none; solid (with transparency); a gradient (linear as type 7
+    // with the angle, radial as 5 from the center, along the outline as 6)
+    // with its colors, stops and transparency; or a picture (3 stretched,
+    // 2 tiled). The reader turns a stored angle a into 90 + a, and treats
+    // -45 and -135 specially, so angles are stored minus 90 within 0-360.
+    auto fillProps = [&](QVector<Prop> &opt, const Fill &f) {
+        auto rgb = [&](const ColorRef &c) { return bgr(c.resolve(m_doc.colors)); };
+        if (f.type == Fill::Gradient) {
+            QVector<GradientStop> stops = f.stops;
+            if (stops.size() < 2) stops = {GradientStop{0, f.color, f.transparency}, GradientStop{1, f.color2, f.transparency}};
+            std::stable_sort(stops.begin(), stops.end(), [](const GradientStop &a, const GradientStop &b) { return a.pos < b.pos; });
+            const quint32 type = f.gradType == Fill::Linear ? 7 : f.gradType == Fill::PathGrad ? 6 : 5;
+            opt << Prop{0x0180, type} << Prop{0x0181, rgb(stops.first().color)} << Prop{0x0183, rgb(stops.last().color)} << Prop{0x01bf, 0x00100010};
+            if (stops.first().transparency > 0.001) opt << Prop{0x0182, opacity(stops.first().transparency)};
+            if (stops.last().transparency > 0.001) opt << Prop{0x0184, opacity(stops.last().transparency)};
+            if (type == 7) {
+                const double a = std::fmod(std::fmod(f.angle - 90, 360.0) + 360.0, 360.0);
+                opt << Prop{0x018b, quint32(std::llround(a)) << 16};
+            } else if (type == 5) {
+                opt << Prop{0x018d, 32768} << Prop{0x018e, 32768} << Prop{0x018f, 32768} << Prop{0x0190, 32768};
+            }
+            // Two end stops need only the two colors (each with its own
+            // transparency); more stops add the list: count, count, 8, then
+            // each color and position (16.16).
+            if (stops.size() == 2 && stops.first().pos < 0.001 && stops.last().pos > 0.999) return;
+            QByteArray shade;
+            putU16(shade, quint32(stops.size()));
+            putU16(shade, quint32(stops.size()));
+            putU16(shade, 8);
+            for (const GradientStop &st : stops) {
+                putU32(shade, rgb(st.color));
+                putU32(shade, quint32(std::llround(std::clamp(st.pos, 0.0, 1.0) * 65536)));
+            }
+            opt << Prop{0xc197, 0, shade};
+            return;
+        }
+        if (f.type == Fill::Picture || f.type == Fill::Texture || f.type == Fill::Pattern) {
+            const int b = f.type == Fill::Pattern ? patternBlip(f) : blipIndex(f.imageId);
+            if (b > 0) {
+                opt << Prop{0x0180, f.type != Fill::Picture || f.tile ? 2u : 3u} << Prop{0x4186, quint32(b)} << Prop{0x0181, 0x08000001}
+                    << Prop{0x0183, 0x08000007} << Prop{0x01bf, 0x00100010};
+                return;
+            }
+        }
+        const bool filled = !f.isNone() && (f.type == Fill::Solid || f.type == Fill::Pattern);
+        opt << Prop{0x0181, filled ? rgb(f.color) : 0x08000001} << Prop{0x0183, 0x08000007} << Prop{0x01bf, filled ? 0x00100010u : 0x00100000u};
+        if (filled && f.transparency > 0.001) opt << Prop{0x0182, opacity(f.transparency)};
+    };
+    // Shadow: offset type, color, opacity and offset (EMU), switched on.
+    auto shadowProps = [&](QVector<Prop> &opt, const ShadowFx &sh) {
+        if (!sh.on || sh.inner) return;
+        const QPointF o = sh.offset();
+        opt << Prop{0x0200, 0} << Prop{0x0201, bgr(sh.color.resolve(m_doc.colors))} << Prop{0x0204, opacity(sh.transparency)}
+            << Prop{0x0205, quint32(qint32(emu(o.x())))} << Prop{0x0206, quint32(qint32(emu(o.y())))} << Prop{0x023f, 0x00020002};
     };
     const QVector<Prop> kInsets = {{0x0081, 36576}, {0x0082, 36576}, {0x0083, 36576}, {0x0084, 36576}};
     const QVector<Prop> kTail = {{0x0201, 0x08000000}, {0x0285, 0}, {0x02cb, 0}, {0x02cc, 0}, {0x02ce, 0}, {0x02cf, 0},
@@ -1053,10 +1154,9 @@ QByteArray PubWriter::write(QStringList *skipped)
                                      {0x0181, 0x08000001}, {0x0183, 0x08000007}, {0x01bf, 0x00100000}, {0x01c0, 0x08000000}, {0x01c2, 0x08000007},
                                      {0x01cb, 25400}, {0x01ff, 0x00080000}, {0x0201, 0x08000000}, {0x0285, 0}, {0x02cb, 0}, {0x02cc, 0}, {0x02ce, 0},
                                      {0x02cf, 0}, {0x0384, 36576}, {0x0385, 36576}, {0x0386, 36576}, {0x0387, 36576}};
-                if (t->fill.type == Fill::Solid) {
-                    opt[5].value = bgr(t->fill.color.resolve(m_doc.colors));
-                    opt[7].value = 0x00100010;
-                }
+                fillProps(opt, t->fill);
+                strokeProps(opt, t->stroke);
+                shadowProps(opt, t->fx.shadow);
                 rotationProp(opt, t);
                 QVector<Prop> topt = {{0x008d, 73152}, {0x017f, 0x00400040}, {0x01ff, 0x00400000}, {0x057f, 0x00080000},
                                       {0x05bf, 0x00080000}, {0x05ff, 0x00080000}, {0x063f, 0x00080000}, {0x06ff, 0x00020002}};
@@ -1127,12 +1227,11 @@ QByteArray PubWriter::write(QStringList *skipped)
                 if (hasText && s->valign != VAlign::Top) body << u32(0x35, s->valign == VAlign::Middle ? 1 : 2);
                 body << u32(0xaa, quint32(emu(box.width()))) << u32(0xab, quint32(emu(box.height()))) << u32(0xb7, 0);
                 cw.put(seq, {0x01, surfaceSeq[pi], body});
-                const bool filled = !open && s->fill.type == Fill::Solid;
                 QVector<Prop> opt = kInsets;
-                opt << Prop{0x0181, filled ? bgr(s->fill.color.resolve(m_doc.colors)) : 0x08000001} << Prop{0x0183, 0x08000007}
-                    << Prop{0x01bf, filled ? 0x00100010u : 0x00100000u};
+                fillProps(opt, open ? Fill::none() : s->fill);
                 strokeProps(opt, s->stroke);
                 opt << kTail;
+                shadowProps(opt, s->fx.shadow);
                 rotationProp(opt, s);
                 if (st == 0) freeformProps(opt, outline, frame.size());
                 if (hasText) {
@@ -1346,9 +1445,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 if (ta->evenHeight) flags |= 0x80;
                 if (ta->vertical) flags |= 0x2000;
                 opt << Prop{0x00ff, 0xffff0000u | flags} << Prop{0x017f, 0x00100010};
-                const bool filled = ta->fill.type == Fill::Solid;
-                opt << Prop{0x0181, filled ? bgr(ta->fill.color.resolve(m_doc.colors)) : 0x08000001}
-                    << Prop{0x01bf, filled ? 0x00100010u : 0x00100000u};
+                fillProps(opt, ta->fill);
                 strokeProps(opt, ta->stroke);
                 // Shadow and 3D settings as Publisher writes them for Text Art.
                 opt << Prop{0x0201, 0x00d8d8d8} << Prop{0x0204, 0} << Prop{0x0205, 0} << Prop{0x0206, 0} << Prop{0x0209, 0} << Prop{0x020c, 0}

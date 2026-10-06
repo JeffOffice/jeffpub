@@ -383,6 +383,11 @@ void MSPUBCollector::setShapePictureContrast(unsigned seqNum,
   m_shapeInfosBySeqNum[seqNum].m_pictureContrast = contrast;
 }
 
+void MSPUBCollector::setShapeLineOpacity(unsigned seqNum, double opacity)
+{
+  m_shapeInfosBySeqNum[seqNum].m_lineOpacity = opacity;
+}
+
 void MSPUBCollector::setShapeBeginArrow(unsigned seqNum,
                                         const Arrow &arrow)
 {
@@ -1130,6 +1135,9 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
       {
         graphicsProps.insert("draw:stroke", "solid");
       }
+      // JeffPub patch: the line's transparency.
+      if (bool(info.m_lineOpacity) && info.m_lineOpacity.get() < 1)
+        graphicsProps.insert("svg:stroke-opacity", info.m_lineOpacity.get(), librevenge::RVNG_PERCENT);
       // JeffPub patch: pass arrowheads on (style 1-5 as stored, size 0-2).
       if (bool(info.m_beginArrow) && info.m_beginArrow.get().m_style != NO_ARROW)
       {

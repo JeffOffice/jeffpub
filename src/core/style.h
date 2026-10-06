@@ -50,6 +50,7 @@ struct Fill {
     bool isNone() const { return type == NoFill || (type == Solid && color.isNone()); }
 
     QBrush brush(const QRectF &r, const ColorScheme &s, const ImageLookup &img = {}) const;
+    QImage patternTile(const ColorScheme &s) const;   // 8 x 8, the background clear when it has none
     QJsonObject toJson() const;
     static Fill fromJson(const QJsonObject &o);
     bool operator==(const Fill &o) const { return toJson() == o.toJson(); }

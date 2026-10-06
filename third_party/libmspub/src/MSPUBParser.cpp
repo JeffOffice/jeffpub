@@ -2196,6 +2196,9 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
               m_collector->setShapeColumnSpacing(*shapeSeqNum, *ptr_columnSpacing);
             }
           }
+          // JeffPub patch: the line's opacity (16.16).
+          if (unsigned *ptr_lineOpacity = getIfExists(foptValues.m_scalarValues, FIELDID_LINE_OPACITY))
+            m_collector->setShapeLineOpacity(*shapeSeqNum, std::min(1.0, double(*ptr_lineOpacity) / 0x10000));
           unsigned *ptr_beginArrowStyle = getIfExists(foptValues.m_scalarValues,
                                                       FIELDID_BEGIN_ARROW_STYLE);
           unsigned *ptr_beginArrowWidth = getIfExists(foptValues.m_scalarValues,
