@@ -60,9 +60,16 @@ JeffPub 79 includes or downloads these components, each under its own license:
 | [libmspub](https://wiki.documentfoundation.org/DLP/Libraries/libmspub) (modified) | Reading `.pub` files | MPL-2.0 |
 | [librevenge](https://sourceforge.net/p/libwpd/librevenge/) (modified) | Document interfaces and OLE2 streams | MPL-2.0 or LGPL-2.1+ |
 | [Hunspell](https://hunspell.github.io/) | Spelling checker | MPL-1.1, GPL-2.0+ or LGPL-2.1+ |
-| en_US dictionary ([SCOWL](http://wordlist.sourceforge.net)) | Spelling | See `resources/dict/README_en_US.txt` |
-| hyph_en_US patterns | Hyphenation | BSD-style, see `resources/dict/README_hyph_en_US.txt` |
-| [WordNet](https://wordnet.princeton.edu/) thesaurus | Synonyms | WordNet license, see `resources/dict/WordNet_license.txt` |
+| English dictionaries: US, Canada and Australia ([SCOWL](http://wordlist.aspell.net/)), United Kingdom | Spelling | SCOWL license; LGPL (United Kingdom) |
+| English hyphenation patterns (American and British) | Hyphenation | BSD-style |
+| [WordNet](https://wordnet.princeton.edu/) thesaurus | Synonyms | WordNet license |
+| Spanish dictionaries (Spain, Mexico) and hyphenation patterns | Spelling, hyphenation | GPL-3.0+, LGPL-3.0+ or MPL-1.1+ |
+| French dictionary ([Grammalecte](https://grammalecte.net/)) and hyphenation patterns | Spelling, hyphenation | MPL-2.0; patterns LGPL |
+| German dictionary ([igerman98](https://www.j3e.de/ispell/igerman98/)) and hyphenation patterns | Spelling, hyphenation | GPL-2.0 or GPL-3.0; patterns LGPL-2.0+ |
+| Italian dictionary and hyphenation patterns | Spelling, hyphenation | GPL-3.0; patterns LGPL |
+| Dutch dictionary and hyphenation patterns ([OpenTaal](https://www.opentaal.org/)) | Spelling, hyphenation | BSD (revised) or CC BY 3.0 |
+| Brazilian Portuguese dictionary and hyphenation patterns ([VERO](http://pt-br.libreoffice.org/projetos/projeto-vero-verificador-ortografico/)) | Spelling, hyphenation | LGPL-3.0 or MPL |
+| European Portuguese dictionary and hyphenation patterns | Spelling, hyphenation | GPL-2.0+ |
 | [Lucide](https://lucide.dev/) icons | Interface icons | ISC |
 | Open fonts | Fonts and substitutes | SIL Open Font License, GUST Font License, Bitstream Vera; see `resources/fonts/README.md` |
 | [zlib](https://zlib.net/) | Compression (when the system has none) | zlib license |
@@ -71,4 +78,4 @@ JeffPub 79 includes or downloads these components, each under its own license:
 | [ICU](https://icu.unicode.org/) (Linux packages, with Qt) | Unicode text support | Unicode License |
 | [LibreTranslate](https://libretranslate.com/) | Translate opens it in the browser; not bundled | AGPL-3.0 |
 
-Changes made to libmspub and librevenge are listed in [third_party/README.md](third_party/README.md).
+The dictionaries come unchanged from the [LibreOffice dictionaries project](https://github.com/LibreOffice/dictionaries); each language's authors, license and license text are in [resources/dict](resources/dict/README.md). Changes made to libmspub and librevenge are listed in [third_party/README.md](third_party/README.md).

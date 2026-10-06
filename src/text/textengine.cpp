@@ -682,14 +682,15 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                     // Automatic hyphenation: soft hyphens (shown only where a line
                     // breaks) at the allowed points of words of five letters or more.
                     static const QRegularExpression wordRe(QStringLiteral("\\p{L}{5,}"));
+                    const QString language = cf.stringProperty(tp::Language);   // empty: US English
                     int piece = 0;
                     auto it = wordRe.globalMatch(raw);
                     while (it.hasNext()) {
                         const auto m = it.next();
                         const QString w = m.captured();
                         if (w == w.toUpper()) continue;   // leave all-caps words whole
-                        if (!hyphenationKnows(w)) continue;   // names and coined words stay whole
-                        for (int pt : hyphenationPoints(w)) {
+                        if (!hyphenationKnows(w, language)) continue;   // names and coined words stay whole
+                        for (int pt : hyphenationPoints(w, language)) {
                             const int cut = int(m.capturedStart()) + pt;
                             const int n = cut - piece;
                             B->map << Seg{rel + start + piece, n, int(B->disp.size() + shown.size()), n};

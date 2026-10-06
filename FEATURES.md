@@ -88,7 +88,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 - [x] Thesaurus
 - [x] Research **(alt: dictionary lookup)**
 - [x] Translate **(alt: opens the selected text in LibreTranslate, an open-source translation service)**
-- [~] Language: set proofing language for selected text *(partial: US English dictionaries only)*
+- [x] Language: set the proofing language for selected text; spelling and automatic hyphenation follow it (English for the US, UK, Canada and Australia; Spanish for Spain and Mexico; French; German; Italian; Dutch; Portuguese for Brazil and Portugal)
 
 ## View tab
 - [x] Views: Normal, Master Page

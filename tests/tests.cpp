@@ -9,6 +9,8 @@
 #include "text/storyio.h"
 #include "text/textengine.h"
 #include "text/textprops.h"
+#include "text/hyphenation.h"
+#include "text/dictionaries.h"
 #include "render/renderer.h"
 #include "render/shapes.h"
 #include "render/textart.h"
@@ -1447,6 +1449,136 @@ private Q_SLOTS:
         qInstallMessageHandler(prev);
         qInfo("ran %d of %d commands", int(ran.size()), int(w.actionIds().size()));
         QVERIFY2(warnings.isEmpty(), qPrintable(warnings.mid(0, 40).join('\n')));
+    }
+
+    // Hyphenation in each bundled language matches LibreOffice's (libhyphen
+    // 2.8 with the same pattern files, at least two letters each side),
+    // including German compounds split in two stages and words with
+    // apostrophes and hyphens. Checked on 26,700 dictionary words; these are
+    // a sample.
+    void hyphenationByLanguage()
+    {
+        const struct { const char *lang, *word, *points; } cases[] = {
+            {"", "hyphenation", "2,6"},
+            {"en-US", "kettledrum", "3,6"},
+            {"en-GB", "kettledrum", "3,6"},
+            {"es-MX", "constitucional", "4,6,8,11"},
+            {"fr-FR", "démystificateur", "2,5,7,9,11"},
+            {"de-DE", "Senkungsbewegung", "3,8,10,12"},
+            {"de-DE", "reservierungsnummer", "2,5,8,13,16"},
+            {"de-DE", "premierentermin", "3,5,6,9,12"},
+            {"de-AT", "Biographieforschung", "3,6,10,13"},
+            {"it-IT", "scalpare", "4"},
+            {"nl-NL", "zeeëgelsoorten", "3,4,7,11"},
+            {"pt-BR", "latinolátrico", "2,4,6,11"},
+            {"pt-PT", "exemplarismo", "5,7,10"},
+            {"en-US", "children's", "4"},
+            {"fr-FR", "aujourd'hui", "2,6"},
+            {"ja-JP", "hyphenation", ""},
+        };
+        for (const auto &c : cases) {
+            QStringList got;
+            for (int p : jp::hyphenationPoints(QString::fromUtf8(c.word), QString::fromLatin1(c.lang))) got << QString::number(p);
+            QCOMPARE(got.join(','), QString::fromLatin1(c.points));
+        }
+        // Layout breaks a word with its own language's patterns.
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 130, 200);
+        t->storyId = doc->createStory(QStringLiteral("Wir planen die Reservierungsnummer."));
+        doc->pages[0]->items.push_back(t);
+        auto firstLine = [&](const QString &lang) {
+            QTextCursor c(doc->storyDoc(t->storyId));
+            c.select(QTextCursor::Document);
+            QTextCharFormat f;
+            f.setProperty(jp::tp::Language, lang);
+            c.mergeCharFormat(f);
+            jp::LayoutCache cache;
+            jp::RenderOptions opt;
+            const auto fl = cache.textFrame(*doc, *t, 1, opt);
+            return fl.layout ? fl.layout->lineInfo(0).value(0).text.remove(QChar(0x00AD)) : QString();
+        };
+        // German breaks it (Reser-vie-rungs-num-mer); as English it's an
+        // unknown word, and Japanese has no patterns, so it stays whole.
+        const QString de = firstLine(QStringLiteral("de-DE"));
+        QVERIFY2(QRegularExpression(QStringLiteral("Reser(vie(rungs(num)?)?)?$")).match(de).hasMatch(), qPrintable(de));
+        for (const char *other : {"en-US", "ja-JP"}) {
+            const QString line = firstLine(QString::fromLatin1(other));
+            QVERIFY2(!line.contains(QStringLiteral("Reser")), qPrintable(line));
+        }
+    }
+
+    // Which bundled dictionary text in a language uses.
+    void dictionaryMatch()
+    {
+        QCOMPARE(jp::dict::match(QString()), QStringLiteral("en-US"));
+        QCOMPARE(jp::dict::match(QStringLiteral("en-US")), QStringLiteral("en-US"));
+        QCOMPARE(jp::dict::match(QStringLiteral("en_gb")), QStringLiteral("en-GB"));
+        QCOMPARE(jp::dict::match(QStringLiteral("en-NZ")), QStringLiteral("en-GB"));
+        QCOMPARE(jp::dict::match(QStringLiteral("en")), QStringLiteral("en-US"));
+        QCOMPARE(jp::dict::match(QStringLiteral("es-AR")), QStringLiteral("es-MX"));
+        QCOMPARE(jp::dict::match(QStringLiteral("es-ES")), QStringLiteral("es-ES"));
+        QCOMPARE(jp::dict::match(QStringLiteral("fr-CA")), QStringLiteral("fr-FR"));
+        QCOMPARE(jp::dict::match(QStringLiteral("de-CH")), QStringLiteral("de-DE"));
+        QCOMPARE(jp::dict::match(QStringLiteral("pt-AO")), QStringLiteral("pt-PT"));
+        QCOMPARE(jp::dict::match(QStringLiteral("pt")), QStringLiteral("pt-BR"));
+        QCOMPARE(jp::dict::match(QStringLiteral("nl-BE")), QStringLiteral("nl-NL"));
+        QCOMPARE(jp::dict::match(QStringLiteral("ja-JP")), QString());
+        // Every listed language has its spelling and hyphenation files.
+        for (const jp::dict::Language &l : jp::dict::languages()) {
+            QVERIFY2(jp::dict::hasSpelling(l.code), qPrintable(l.code));
+            QVERIFY2(!jp::dict::hyphenationFile(l.code).isEmpty(), qPrintable(l.code));
+        }
+        QCOMPARE(jp::dict::languageName(QStringLiteral("pt-BR")), QStringLiteral("Portuguese (Brazil)"));
+    }
+
+    // Spelling checks each word in its own language: accented words, both
+    // apostrophes, the German dictionary's older encoding, and no checking
+    // for a language without a dictionary.
+    void spellingByLanguage()
+    {
+        const struct { const char *lang, *word; bool ok; } words[] = {
+            {"es-MX", "acción", true}, {"es-ES", "niño", true}, {"es-MX", "accion", false},
+            {"fr-FR", "l’homme", true}, {"fr-FR", "l'homme", true}, {"fr-FR", "aujourd’hui", true}, {"fr-FR", "naïve", true}, {"fr-FR", "hommme", false},
+            {"de-DE", "Straße", true}, {"de-DE", "größer", true}, {"de-DE", "Reservierungsnummer", true}, {"de-DE", "grösser", false},
+            {"it-IT", "città", true}, {"it-IT", "dell’anno", true}, {"it-IT", "cittá", false},
+            {"nl-NL", "één", true}, {"nl-NL", "fietsen", true}, {"nl-NL", "fietssen", false},
+            {"pt-BR", "coração", true}, {"pt-PT", "acção", false}, {"pt-BR", "coracao", false},
+            {"en-GB", "colour", true}, {"en-US", "colour", false}, {"en-CA", "colour", true}, {"en-AU", "organise", true},
+            {"en-US", "don’t", true}, {"en-US", "don't", true},
+        };
+        for (const auto &w : words) {
+            const QString code = jp::dict::match(QString::fromLatin1(w.lang));
+            QVERIFY2(jp::dict::spell(code, QString::fromUtf8(w.word)) == w.ok, qPrintable(QStringLiteral("%1 %2").arg(code, QString::fromUtf8(w.word))));
+        }
+        QVERIFY(jp::spellingSuggestions(QStringLiteral("grösser"), QStringLiteral("de-DE")).contains(QStringLiteral("größer")));
+        QVERIFY(jp::spellingSuggestions(QStringLiteral("accion"), QStringLiteral("es-MX")).contains(QStringLiteral("acción")));
+
+        // In a story: each word by its own language.
+        jp::MainWindow w;
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 300, 100);
+        t->storyId = doc->createStory(QStringLiteral("Teh colour. Die Straße ist größer. Esto es una pruebba. こんにちは xyzzyq."));
+        doc->pages[0]->items.push_back(t);
+        QTextDocument *sd = doc->storyDoc(t->storyId);
+        auto mark = [&](const QString &from, const QString &to, const QString &lang) {
+            const QString text = sd->toPlainText();
+            QTextCursor c(sd);
+            c.setPosition(int(text.indexOf(from)));
+            c.setPosition(int(text.indexOf(to) + to.size()), QTextCursor::KeepAnchor);
+            QTextCharFormat f;
+            f.setProperty(jp::tp::Language, lang);
+            c.mergeCharFormat(f);
+        };
+        mark(QStringLiteral("Die"), QStringLiteral("größer."), QStringLiteral("de-DE"));
+        mark(QStringLiteral("Esto"), QStringLiteral("pruebba."), QStringLiteral("es-ES"));
+        mark(QStringLiteral("こんにちは"), QStringLiteral("xyzzyq."), QStringLiteral("ja-JP"));
+        w.editor()->setDocument(std::move(doc));
+        QStringList flagged;
+        const QString text = sd->toPlainText();
+        for (const auto &r : w.editor()->misspelledIn(t->storyId)) flagged << text.mid(r.first, r.second - r.first);
+        QCOMPARE(flagged, (QStringList{QStringLiteral("Teh"), QStringLiteral("colour"), QStringLiteral("pruebba")}));
     }
 
     // Check spelling as you type: a misspelled word gets a range, a correct

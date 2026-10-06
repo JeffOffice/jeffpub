@@ -18,6 +18,7 @@
 #include "render/shapes.h"
 #include "render/textart.h"
 #include "templates/templates.h"
+#include "text/dictionaries.h"
 #include "text/textprops.h"
 
 #include <QAction>
@@ -774,12 +775,27 @@ void MainWindow::createActions()
         QDesktopServices::openUrl(url);
     });
     mk("rev.language", QStringLiteral("Set Proofing Language…"), "globe", QKeySequence(), [this] {
+        // The languages with dictionaries, by name, starting at the text's own.
+        const QVector<dict::Language> &langs = dict::languages();
+        QStringList names;
+        for (const dict::Language &l : langs) names << l.name;
+        names << QStringLiteral("Do not check spelling");
+        const QTextCharFormat now = m_ed->currentCharFormat();
+        int current = 0;
+        for (int i = 0; i < langs.size(); ++i)
+            if (langs[i].code == dict::match(now.stringProperty(tp::Language))) current = i;
+        if (now.boolProperty(tp::NoProof)) current = int(names.size()) - 1;
         bool ok = false;
-        const QString lang = QInputDialog::getItem(this, QStringLiteral("Language"), QStringLiteral("Mark selected text as:"),
-                                                   {"en-US", "en-GB", "es-ES", "fr-FR", "de-DE", "it-IT", "pt-BR", "nl-NL", "(no proofing)"}, 0, false, &ok);
+        const QString pick = QInputDialog::getItem(this, QStringLiteral("Language"), QStringLiteral("Mark selected text as:"), names, current, false, &ok);
         if (!ok) return;
-        if (lang.startsWith('(')) m_ed->setCharProperty(tp::NoProof, true, QStringLiteral("Language"));
-        else m_ed->setCharProperty(tp::Language, lang, QStringLiteral("Language"));
+        const int i = int(names.indexOf(pick));
+        QTextCharFormat f;
+        if (i >= langs.size()) f.setProperty(tp::NoProof, true);
+        else {
+            f.setProperty(tp::Language, langs[i].code);
+            f.setProperty(tp::NoProof, false);
+        }
+        m_ed->mergeCharFormat(f, QStringLiteral("Language"));
     });
     mk("rev.designChecker", QStringLiteral("Run Design Checker"), "shield-check", QKeySequence(), [this] { showTaskPane("designchecker"); });
     mk("rev.wordCount", QStringLiteral("Word Count"), "whole-word", QKeySequence(), [this] { wordCountDialog(this, m_ed); });

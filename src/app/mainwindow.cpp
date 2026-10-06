@@ -23,6 +23,7 @@
 #include "io/pubimport.h"
 #include "render/metafile.h"
 #include "text/storyio.h"
+#include "text/textprops.h"
 
 #include <QAction>
 #include <QApplication>
@@ -820,7 +821,9 @@ void MainWindow::contextMenu(const QPoint &global)
             wc.setPosition(m.first);
             wc.setPosition(m.second, QTextCursor::KeepAnchor);
             const QString word = wc.selectedText();
-            const QStringList sugg = spellingSuggestions(word).mid(0, 6);
+            QTextCursor lc = cur;
+            lc.setPosition(m.first + 1);
+            const QStringList sugg = spellingSuggestions(word, lc.charFormat().stringProperty(tp::Language)).mid(0, 6);
             QFont bold = menu.font();
             bold.setBold(true);
             for (const QString &sgg : sugg) {

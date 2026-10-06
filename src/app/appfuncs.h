@@ -32,7 +32,7 @@ Stroke currentBorderStroke();
 QImage proceduralTexture(const QString &name, int size);   // built-in texture fills
 int hyphenateStory(QTextDocument *doc);                   // returns hyphens inserted
 QVector<QPair<int, int>> misspellings(QTextDocument *doc); // [start, end) document ranges
-QStringList spellingSuggestions(const QString &word);
+QStringList spellingSuggestions(const QString &word, const QString &language = QString());   // language: BCP-47, "" US English
 void spellingAdd(const QString &word);                    // add to the user dictionary
 void spellingIgnore(const QString &word);                 // ignore for this session
 // The save dialog every Save As and Export command uses (see filedialogs.cpp).
