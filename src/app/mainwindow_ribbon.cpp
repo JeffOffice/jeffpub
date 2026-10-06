@@ -983,6 +983,7 @@ void MainWindow::buildRibbon()
         RibbonGroup *g = t->addGroup(QStringLiteral("Insert"));
         g->addLarge(act("pic.change"), menuOf(this, {act("pic.change"), act("pic.remove")}), true);
         g->addLarge(act("pic.swap"));
+        g->addLarge(act("pic.arrangeThumbs"));
         g = t->addGroup(QStringLiteral("Adjust"));
         QMenu *corr = new QMenu(this);
         corr->addSection(QStringLiteral("Brightness / Contrast"));

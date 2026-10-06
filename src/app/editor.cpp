@@ -776,6 +776,32 @@ void Editor::flipSelection(bool horizontal)
     endChange();
 }
 
+// The picture tray: pictures on the scratch area become thumbnails (no
+// side over 1.5 inches) in columns to the right of the page, in order.
+void Editor::arrangeThumbnails()
+{
+    const QSizeF ps = m_doc->pageSize();
+    const double thumb = 108, gap = 12;
+    double x = ps.width() + 36, y = 0, colW = 0;
+    beginChange(QStringLiteral("Arrange Thumbnails"));
+    for (const ItemPtr &it : m_doc->scratch) {
+        auto *pic = dynamic_cast<PictureItem *>(it.get());
+        if (!pic) continue;
+        QSizeF sz = pic->rect.size();
+        if (sz.width() > thumb || sz.height() > thumb) sz.scale(thumb, thumb, Qt::KeepAspectRatio);
+        if (y > 0 && y + sz.height() > ps.height()) {
+            x += colW + gap;
+            y = 0;
+            colW = 0;
+        }
+        pic->scaleInto(pic->rect, QRectF(QPointF(x, y), sz));
+        pic->rotation = 0;
+        y += sz.height() + gap;
+        colW = std::max(colW, sz.width());
+    }
+    endChange();
+}
+
 void Editor::settleScratch(const QStringList &ids)
 {
     if (!m_master.isEmpty()) return;

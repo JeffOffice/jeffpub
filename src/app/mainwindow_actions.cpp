@@ -1036,6 +1036,7 @@ void MainWindow::createActions()
     mk("pic.remove", QStringLiteral("Remove Picture"), "image-off", QKeySequence(), [ed] {
         if (auto *p = dynamic_cast<PictureItem *>(ed->single())) ed->change(QStringLiteral("Remove Picture"), [p] { p->imageId.clear(); });
     });
+    mk("pic.arrangeThumbs", QStringLiteral("Arrange Thumbnails"), "layout-grid", QKeySequence(), [ed] { ed->arrangeThumbnails(); });
     mk("pic.swap", QStringLiteral("Swap"), "arrow-left-right", QKeySequence(), [ed] {
         const auto sel = ed->selectedItems();
         if (sel.size() != 2) { Q_EMIT ed->status(QStringLiteral("Select two pictures to swap.")); return; }

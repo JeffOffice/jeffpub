@@ -649,6 +649,13 @@ void MainWindow::insertFiles(const QStringList &paths, const QPointF &atIn)
     QPointF at = atIn;
     m_ed->beginChange(QStringLiteral("Insert Picture"));
     QStringList made;
+    // Several pictures at once go to the picture tray on the scratch area.
+    int pictures = 0;
+    for (const QString &path : paths) {
+        const QString suffix = QFileInfo(path).suffix().toLower();
+        pictures += !(suffix == "txt" || suffix == "html" || suffix == "htm" || suffix == "rtf" || suffix == "md" || suffix == "docx");
+    }
+    const bool toTray = pictures > 1 && atIn.x() < 0 && m_ed->view.scratch && m_ed->masterView().isEmpty();
     for (const QString &path : paths) {
         const QString suffix = QFileInfo(path).suffix().toLower();
         if (suffix == "txt" || suffix == "html" || suffix == "htm" || suffix == "rtf" || suffix == "md" || suffix == "docx") {
@@ -679,11 +686,16 @@ void MainWindow::insertFiles(const QStringList &paths, const QPointF &atIn)
         QPointF tl = at.x() < 0 ? QPointF((ps.width() - sz.width()) / 2, (ps.height() - sz.height()) / 2) : at;
         pic->rect = QRectF(tl, sz);
         pic->imgRect = QRectF(QPointF(0, 0), sz);
-        m_ed->surfaceItems().push_back(pic);
+        if (toTray) d->scratch.push_back(pic);
+        else m_ed->surfaceItems().push_back(pic);
         made << pic->id;
         if (at.x() >= 0) at += QPointF(18, 18);
     }
     m_ed->endChange();
+    if (toTray) {
+        m_ed->arrangeThumbnails();
+        Q_EMIT m_ed->status(QStringLiteral("%1 pictures are on the scratch area beside the page. Drag them onto the page, or onto a picture to swap.").arg(pictures));
+    }
     m_ed->select(made);
 }
 

@@ -144,6 +144,7 @@ public:
     void rotateSelection(double deg);
     void flipSelection(bool horizontal);
     void settleScratch(const QStringList &ids);   // move items between page and scratch area
+    void arrangeThumbnails();                       // tidy the pictures on the scratch area into a tray
     void linkFrames(const QString &from, const QString &to);
     void breakLink(const QString &from);
     void applyTableFormat(TableItem *t, const QString &format);

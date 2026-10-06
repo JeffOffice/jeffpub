@@ -126,7 +126,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 - [x] Crop (handles, drag picture inside frame), Crop to Shape, Fit, Fill, Clear Crop, Pan picture
 - [x] Arrange and Size
 - [x] Picture placeholders with click-to-insert
-- [~] Scratch-area picture tray behavior (pictures parked on the scratch area) *(partial: pictures can sit on the scratch area; there is no automatic tray)*
+- [x] Scratch-area picture tray behavior (pictures parked on the scratch area): inserting several pictures at once puts them beside the page as thumbnails, Arrange Thumbnails tidies them, and Swap trades two pictures
 - [x] Graphics Manager pane (list, status of linked or embedded pictures, relink, save a copy)
 
 ## Table Tools Design and Layout tabs
@@ -175,7 +175,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 
 ## Color and graphics
 - [x] Color schemes with 8 slots (Main, Accents 1–5, Hyperlink, Followed Hyperlink) and tints and shades of every scheme color
-- [~] Custom colors (RGB, HSL, CMYK, PANTONE-style spot color entry), recent colors, eyedropper, and transparency on fills, lines, and text *(partial: spot colors are entered by name and value)*
+- [x] Custom colors (RGB, HSL, CMYK, PANTONE-style spot color entry), recent colors, eyedropper, and transparency on fills, lines, and text *(spot colors are entered by name and value, since the PANTONE library itself is proprietary; colors entered as CMYK keep their exact ink amounts)*
 - [x] Fill effects: gradient (linear, radial, rectangular, path, with presets), texture, pattern, picture (stretch or tile), and tint
 - [x] Picture formats: PNG, JPEG, GIF, BMP, TIFF, WebP, SVG, and EMF/WMF **(EMF/WMF import is limited on Linux)**
 

@@ -187,6 +187,37 @@ private Q_SLOTS:
         QCOMPARE(mergeBlocks(*pc->build(jp::TemplateOptions())), 1);
     }
 
+    // Inserting several pictures at once puts them in the picture tray: the
+    // scratch area beside the page, as thumbnails in a column.
+    void pictureTray()
+    {
+        jp::MainWindow w;
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        QTemporaryDir dir;
+        QStringList paths;
+        for (int i = 0; i < 3; ++i) {
+            QImage img(600, 400 + i * 100, QImage::Format_RGB32);
+            img.fill(QColor::fromHsv(i * 100, 200, 220));
+            const QString f = dir.filePath(QStringLiteral("p%1.png").arg(i));
+            QVERIFY(img.save(f));
+            paths << f;
+        }
+        w.insertFiles(paths, QPointF(-1, -1));
+        const jp::Document *d = w.editor()->doc();
+        QCOMPARE(int(d->pages[0]->items.size()), 0);
+        QCOMPARE(int(d->scratch.size()), 3);
+        double y = -1;
+        for (const auto &it : d->scratch) {
+            QVERIFY(it->rect.left() >= 612 + 30);
+            QVERIFY(std::max(it->rect.width(), it->rect.height()) <= 108.01);
+            QVERIFY(it->rect.top() > y);
+            y = it->rect.top();
+        }
+        // One picture still goes on the page.
+        w.insertFiles({paths.first()}, QPointF(-1, -1));
+        QCOMPARE(int(d->pages[0]->items.size()), 1);
+    }
+
     void templatesFitTheirText()
     {
         QStringList problems;
