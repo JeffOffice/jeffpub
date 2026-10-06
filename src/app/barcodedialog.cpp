@@ -295,8 +295,18 @@ void barcodeDialog(QWidget *p, Editor *ed)
             }
         return;
     }
+    // In the middle of the page, or a quarter inch on from a barcode
+    // already there, so a second one doesn't land on the first.
     const QSizeF page = ed->doc()->pageSize();
-    const QPointF at((page.width() - current.size.width()) / 2, (page.height() - current.size.height()) / 2);
+    QPointF at((page.width() - current.size.width()) / 2, (page.height() - current.size.height()) / 2);
+    for (bool moved = true; moved;) {
+        moved = false;
+        for (const ItemPtr &it : ed->surfaceItems())
+            if (auto *g = dynamic_cast<const GroupItem *>(it.get()); g && !g->barcode.isEmpty() && (g->rect.topLeft() - at).manhattanLength() < 2) {
+                at += QPointF(18, 18);
+                moved = true;
+            }
+    }
     ed->addItem(barcodeItem(current, at, white->isChecked(), description, settings));
 }
 

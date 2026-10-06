@@ -118,6 +118,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     connect(m_canvas, &Canvas::contextMenuWanted, this, &MainWindow::contextMenu);
     connect(m_canvas, &Canvas::insertPictureWanted, this, [this](const QString &id) { insertPictureFromFile(id); });
     connect(m_canvas, &Canvas::editTextArtWanted, this, &MainWindow::editTextArt);
+    connect(m_canvas, &Canvas::editBarcodeWanted, this, [this] { barcodeDialog(this, m_ed); });
     connect(m_canvas, &Canvas::tabsDialogWanted, this, [this] { paragraphDialog(this, m_ed, 2); });
     connect(m_canvas, &Canvas::openFileWanted, this, [this](const QString &f) { if (maybeSave()) openFile(f); });
     connect(m_canvas, &Canvas::insertFilesWanted, this, &MainWindow::insertFiles);

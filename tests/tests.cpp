@@ -3273,6 +3273,56 @@ private Q_SLOTS:
         QCOMPARE(at.charFormat().fontStretch(), 150);
     }
 
+    // A right-to-left paragraph through .pub: written as in a sample made in
+    // Publisher (0x06 = 0 and 0x3A = 0xF3FF on that paragraph only; 0x3A
+    // appears in none of 247 left-to-right reference files), read back.
+    void pubRightToLeft()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 400, 100);
+        t->storyId = doc->createStory(QStringLiteral("Left to Right\nRight to Left"));
+        doc->pages[0]->items.push_back(t);
+        QTextBlock second = doc->storyDoc(t->storyId)->begin().next();
+        QVERIFY(second.isValid());
+        QTextCursor c(second);
+        QTextBlockFormat bf = second.blockFormat();
+        bf.setLayoutDirection(Qt::RightToLeft);
+        c.setBlockFormat(bf);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("rtl.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        const QByteArray quill = jp::cfb::readStream(path, QStringLiteral("Quill/QuillSub/CONTENTS"));
+        // Both in the right-to-left paragraph's property list (kept in id order).
+        QCOMPARE(quill.count(QByteArray::fromHex("3a12fff3")), 1);
+        const qsizetype at = quill.indexOf(QByteArray::fromHex("3a12fff3"));
+        QVERIFY(quill.mid(at - 40, 40).contains(QByteArray::fromHex("062200000000")));
+        auto back = jp::importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QTextDocument *story = nullptr;
+        for (const auto &it : back->pages[0]->items)
+            if (auto tx = std::dynamic_pointer_cast<jp::TextItem>(it)) story = back->storyDoc(tx->storyId);
+        QVERIFY(story);
+        QVERIFY(story->begin().blockFormat().layoutDirection() != Qt::RightToLeft);
+        QCOMPARE(story->begin().next().blockFormat().layoutDirection(), Qt::RightToLeft);
+        // Left-aligned (its start) is at the right edge for right-to-left text.
+        jp::FrameSpec fs;
+        fs.size = QSizeF(400, 100);
+        fs.insets = QMarginsF(0, 0, 0, 0);
+        jp::StoryLayout lay;
+        lay.build(story, {fs}, jp::LayoutEnv());
+        const QTextBlock b1 = story->begin(), b2 = b1.next();
+        const QRectF ltr = lay.rangeRects(0, b1.position(), b1.position() + b1.length() - 1).value(0);
+        const QRectF rtl = lay.rangeRects(0, b2.position(), b2.position() + b2.length() - 1).value(0);
+        QVERIFY2(ltr.left() < 5 && rtl.right() > 395, qPrintable(QStringLiteral("%1 %2").arg(ltr.left()).arg(rtl.right())));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test34-right-to-left.pub";
+            QFile::remove(out);
+            QFile::copy(path, out);
+        }
+    }
+
     // Every dash style comes back from .pub as it was saved (square dots
     // came back as dashes, and dash-dot patterns as plain dashes).
     void pubDashStylesRoundTrip()
@@ -3563,6 +3613,70 @@ private Q_SLOTS:
         QVERIFY(!th.isNull());
         QCOMPARE(th.width() * 3, th.height() * 4);
         QCOMPARE(th.pixelColor(th.width() / 2, th.height() / 2), QColor(200, 20, 30));
+    }
+
+    // A barcode is one object on the page: clicking it again and dragging
+    // moves the bars and the white quiet zone together (a click used to
+    // reach inside the group and move only the bars); a second barcode
+    // doesn't land on the first; double-clicking opens it for editing.
+    void barcodeMovesAsOne()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        QApplication::processEvents();
+        jp::barcode::Options o;
+        o.data = QStringLiteral("978-1-64002-163-1");
+        const jp::barcode::Layout l = jp::barcode::make(o);
+        const QJsonObject settings{{"type", 0}, {"data", o.data}, {"priceMode", 0}};
+        // Two inserted the way the dialog does: the second offset from the first.
+        auto insert = [&] {
+            QTimer::singleShot(0, &w, [&] {
+                auto *d = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+                QVERIFY(d);
+                d->findChild<QLineEdit *>()->setText(o.data);
+                for (auto *r : d->findChildren<QRadioButton *>())
+                    if (r->text() == QLatin1String("No add-on")) r->click();
+                for (auto *b : d->findChildren<QPushButton *>())
+                    if (b->text() == QLatin1String("Insert")) b->click();
+            });
+            w.editor()->select(QStringList());
+            jp::barcodeDialog(&w, w.editor());
+        };
+        insert();
+        insert();
+        auto &items = w.editor()->doc()->pages[0]->items;
+        QCOMPARE(int(items.size()), 2);
+        QCOMPARE(items[1]->rect.topLeft() - items[0]->rect.topLeft(), QPointF(18, 18));
+        // The second (selected) barcode: click its bars, drag an inch right.
+        auto g = std::dynamic_pointer_cast<jp::GroupItem>(items[1]);
+        const QRectF before = g->children[0]->rect, barsBefore = g->children[1]->rect;
+        jp::Canvas *c = w.canvas();
+        QWidget *vp = c->viewport();
+        auto view = [&](QPointF page) { return c->pageToView(page).toPoint(); };
+        QPointF onBar;
+        for (const QRectF &r : l.bars)
+            if (r.width() > 1.5) { onBar = g->rect.topLeft() + r.center(); break; }
+        QTest::mouseClick(vp, Qt::LeftButton, Qt::NoModifier, view(onBar));
+        QCOMPARE(w.editor()->selection(), QStringList{g->id});
+        QTest::mousePress(vp, Qt::LeftButton, Qt::NoModifier, view(onBar));
+        QTest::mouseMove(vp, view(onBar + QPointF(36, 0)));
+        QTest::mouseMove(vp, view(onBar + QPointF(72, 0)));
+        QTest::mouseRelease(vp, Qt::LeftButton, Qt::NoModifier, view(onBar + QPointF(72, 0)));
+        g = std::dynamic_pointer_cast<jp::GroupItem>(w.editor()->doc()->pages[0]->items[1]);
+        QVERIFY2(std::abs(g->children[0]->rect.left() - before.left() - 72) < 1.5, qPrintable(QString::number(g->children[0]->rect.left() - before.left())));
+        QCOMPARE(g->children[1]->rect.left() - barsBefore.left(), g->children[0]->rect.left() - before.left());
+        // Double-click: the Edit Barcode dialog.
+        QString title;
+        QTimer::singleShot(0, &w, [&] {
+            if (auto *d = qobject_cast<QDialog *>(QApplication::activeModalWidget())) {
+                title = d->windowTitle();
+                d->reject();
+            }
+        });
+        QTest::mouseDClick(vp, Qt::LeftButton, Qt::NoModifier, view(onBar + QPointF(72, 0)));
+        QCOMPARE(title, QStringLiteral("Edit Barcode"));
     }
 
     // A spot color names its ink in the fill's extra drawing properties

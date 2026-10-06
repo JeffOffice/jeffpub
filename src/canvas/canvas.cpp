@@ -995,6 +995,13 @@ static double distToSegment(const QPointF &p, const QPointF &a, const QPointF &b
     return std::hypot(p.x() - q.x(), p.y() - q.y());
 }
 
+// A barcode (Insert > Barcode) is a group whose parts never come apart:
+// clicks don't reach inside it, so it moves and edits as one.
+static bool isBarcode(const Item *it)
+{
+    return it && it->type() == ItemType::Group && !static_cast<const GroupItem *>(it)->barcode.isEmpty();
+}
+
 QString Canvas::itemAt(const QPointF &page, bool enterGroups, int *row, int *col, bool *textInterior) const
 {
     const double tol = 4.0 / ppp();
@@ -1036,7 +1043,7 @@ QString Canvas::itemAt(const QPointF &page, bool enterGroups, int *row, int *col
             const Item *it = i->get();
             if (!hits(it)) continue;
             const Item *target = it;
-            if (it->type() == ItemType::Group && enterGroups) {
+            if (it->type() == ItemType::Group && enterGroups && !isBarcode(it)) {
                 std::function<const Item *(const Item *)> deepest = [&](const Item *g) -> const Item * {
                     for (auto c = static_cast<const GroupItem *>(g)->children.rbegin(); c != static_cast<const GroupItem *>(g)->children.rend(); ++c)
                         if (hits(c->get())) return (*c)->type() == ItemType::Group ? deepest(c->get()) : c->get();
@@ -1170,7 +1177,7 @@ Canvas::Hit Canvas::hitTest(const QPointF &view) const
     }
     bool interior = false;
     int row = -1, col = -1;
-    const bool enter = sel.size() == 1 && sel.first()->type() == ItemType::Group;
+    const bool enter = sel.size() == 1 && sel.first()->type() == ItemType::Group && !isBarcode(sel.first());
     QString id = itemAt(page, false, &row, &col, &interior);
     if (!id.isEmpty() && enter && id == sel.first()->id) {
         const QString child = itemAt(page, true, &row, &col, &interior);
@@ -2180,6 +2187,11 @@ void Canvas::mouseDoubleClickEvent(QMouseEvent *e)
         break;
     case ItemType::TextArt: Q_EMIT editTextArtWanted(it->id); break;
     case ItemType::Group: {
+        if (isBarcode(it)) {
+            m_ed->select(it->id);
+            Q_EMIT editBarcodeWanted();
+            break;
+        }
         const QString child = itemAt(toPage(e->position()), true);
         if (!child.isEmpty()) m_ed->select(child);
         break;
