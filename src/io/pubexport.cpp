@@ -1114,6 +1114,20 @@ QByteArray PubWriter::write(QStringList *skipped)
     // with its colors, stops and transparency; or a picture (3 stretched,
     // 2 tiled). The reader turns a stored angle a into 90 + a, and treats
     // -45 and -135 specially, so angles are stored minus 90 within 0-360.
+    // A solid fill given as process inks: in the tertiary properties, the
+    // color as shown (0x019E) and the inks packed into 0x019F and 0x01A6
+    // (as one run of bits, 31 from each: which inks are used, then C, M, Y
+    // and K at 8 bits each from bit 9).
+    auto inkProps = [&](QVector<Prop> &topt, const Fill &f) {
+        if (f.type != Fill::Solid || f.color.kind() != ColorRef::Rgb || f.color.rgbValue().spec() != QColor::Cmyk) return;
+        const QColor k = f.color.rgbValue();
+        const quint64 c = quint64(std::lround(k.cyanF() * 255)), m = quint64(std::lround(k.magentaF() * 255)),
+                      y = quint64(std::lround(k.yellowF() * 255)), b = quint64(std::lround(k.blackF() * 255));
+        const quint64 used = 0x08 | (c ? 0x80 : 0) | (m ? 0x100 : 0) | (y ? 0x20 : 0) | (b ? 0x40 : 0);
+        const quint64 bits = used | c << 9 | m << 17 | y << 25 | b << 33;
+        topt << Prop{0x019e, bgr(f.color.resolve(m_doc.colors))} << Prop{0x019f, quint32(bits & 0x7fffffff)};
+        if (bits >> 31) topt << Prop{0x01a6, quint32((bits >> 31) & 0x7fffffff)};
+    };
     auto fillProps = [&](QVector<Prop> &opt, const Fill &f) {
         auto rgb = [&](const ColorRef &c) { return bgr(c.resolve(m_doc.colors)); };
         if (f.type == Fill::Gradient) {
@@ -1249,6 +1263,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 QVector<Prop> topt = {{0x008d, 73152}, {0x017f, 0x00400040}, {0x01ff, 0x00400000}, {0x057f, 0x00080000},
                                       {0x05bf, 0x00080000}, {0x05ff, 0x00080000}, {0x063f, 0x00080000}, {0x06ff, 0x00020002}};
                 topt << kSideLines << kShadowFlags;
+                inkProps(topt, t->fill);
                 QByteArray sp = spRecord(202, 0x0a00, t) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(r);
                 sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
                 sp += clientBlocks(0xf00d, {u32(0x01, quint32(tid))});
@@ -1338,6 +1353,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 }
                 QVector<Prop> topt = {{0x01ff, 0x00400000}, {0x06ff, 0x00020002}};
                 topt << kSideLines << kShadowFlags;
+                if (!open) inkProps(topt, s->fill);
                 QByteArray sp = spRecord(quint16(st), 0x0a00, s) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(box);
                 sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
                 if (hasText) sp += clientBlocks(0xf00d, {u32(0x01, quint32(stx->first))});
@@ -1543,6 +1559,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 QVector<Prop> topt = {{0x017f, 0x02000200}, {0x023f, 0x00040000}, {0x057f, 0x00080000}, {0x05bf, 0x00080000},
                                       {0x05ff, 0x00080000}, {0x063f, 0x00080000}, {0x06ff, 0x00020002}};
                 topt << kShadowFlags << kSideLines;
+                inkProps(topt, ta->fill);
                 QByteArray sp = spRecord(quint16(pubTextArtType(ta->transform_)), 0x0a00, ta) + escherProps(0xf00b, opt) +
                                 escherProps(0xf122, topt) + anchor(r);
                 sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});

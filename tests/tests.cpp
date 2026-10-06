@@ -2566,6 +2566,57 @@ private Q_SLOTS:
     // A color given as ink amounts keeps them: in the file, in tints and
     // shades, from the Colors dialog, and in the PDF of a process-color
     // publication.
+    // Process inks survive saving as .pub: the file keeps the color as shown
+    // and the inks (checked against values reference files hold).
+    void pubWriterProcessInks()
+    {
+        struct Ink { float c, m, y, k; QColor shown; const char *label; };
+        const Ink inks[] = {{0.98f, 0.761f, 0.133f, 0.302f, QColor(51, 61, 97), "navy C98 M76 Y13 K30"},
+                            {0.6f, 0.4f, 0.4f, 1.0f, QColor(29, 31, 25), "rich black C60 M40 Y40 K100"},
+                            {0.753f, 0.4f, 0, 0, QColor(91, 125, 179), "blue C75 M40"},
+                            {0, 0, 1.0f, 0, QColor(255, 242, 0), "yellow Y100"},
+                            {0, 0, 0, 1.0f, QColor(35, 31, 32), "black K100"}};
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        doc->print.model = jp::PrintInfo::ProcessCMYK;
+        for (int i = 0; i < 5; ++i) {
+            auto box = std::make_shared<jp::ShapeItem>();
+            box->rect = QRectF(72, 72 + i * 120, 200, 90);
+            box->fill = jp::Fill::solid(jp::ColorRef::inks(QColor::fromCmykF(inks[i].c, inks[i].m, inks[i].y, inks[i].k), inks[i].shown));
+            box->stroke = jp::Stroke::none();
+            doc->pages[0]->items.push_back(box);
+            auto t = std::make_shared<jp::TextItem>();
+            t->rect = QRectF(290, 100 + i * 120, 260, 40);
+            t->storyId = doc->createStory(QString::fromLatin1(inks[i].label));
+            doc->pages[0]->items.push_back(t);
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("inks.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test31-process-colors.pub";
+            QFile::remove(out);
+            QFile::copy(path, out);
+        }
+        auto back = jp::importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(back->print.model, jp::PrintInfo::ProcessCMYK);
+        int found = 0;
+        jp::walkItems(back->pages[0]->items, [&](const jp::ItemPtr &it) {
+            if (it->type() != jp::ItemType::Shape) return;
+            const jp::ColorRef c = static_cast<const jp::ShapeItem *>(it.get())->fill.color;
+            const QColor k = c.rgbValue();
+            for (const Ink &in : inks)
+                if (c.shownValue() == in.shown) {
+                    QCOMPARE(k.spec(), QColor::Cmyk);
+                    QVERIFY2(std::abs(k.cyanF() - in.c) < 0.003 && std::abs(k.magentaF() - in.m) < 0.003 && std::abs(k.yellowF() - in.y) < 0.003
+                                 && std::abs(k.blackF() - in.k) < 0.003, in.label);
+                    ++found;
+                }
+        });
+        QCOMPARE(found, 5);
+    }
+
     // A process color from a .pub file: the screen shows the color the file
     // shows, and a CMYK PDF and the plates get its exact inks.
     void processInksShownColor()
