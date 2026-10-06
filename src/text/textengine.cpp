@@ -104,7 +104,7 @@ QString FieldContext::key() const
 
 QString LayoutEnv::key() const
 {
-    QString k = fonts.heading + '|' + fonts.body + '|' + QString::number(fontScale, 'f', 4) + (showFieldShading ? "|s" : "");
+    QString k = fonts.heading + '|' + fonts.body + '|' + QString::number(fontScale, 'f', 4) + (showFieldShading ? "|s" : "") + (keepInks() ? "|k" : "");
     for (int i = 0; i < SlotCount; ++i) k += colors.c[i].name();
     return k;
 }

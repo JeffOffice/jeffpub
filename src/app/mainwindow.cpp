@@ -481,8 +481,11 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
     else if (s.properties) pdf.setDocumentXmpMetadata(pdfXmp(d->props, title));
     // A publication set up for process-color printing (Commercial Print
     // Information) makes a CMYK PDF: colors given as ink amounts keep them.
-    if (!s.archival && (d->print.model == PrintInfo::ProcessCMYK || d->print.usesSpots()))
+    std::optional<InkOutput> inks;   // process colors give their inks
+    if (!s.archival && (d->print.model == PrintInfo::ProcessCMYK || d->print.usesSpots())) {
         pdf.setColorModel(QPdfWriter::ColorModel::CMYK);
+        inks.emplace();
+    }
     const QSizeF ps = d->pageSize();
     pdf.setPageSize(QPageSize(ps + QSizeF(2 * margin, 2 * margin), QPageSize::Point, QString(), QPageSize::ExactMatch));
     pdf.setPageMargins(QMarginsF(0, 0, 0, 0));

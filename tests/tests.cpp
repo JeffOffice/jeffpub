@@ -2518,6 +2518,67 @@ private Q_SLOTS:
     // A color given as ink amounts keeps them: in the file, in tints and
     // shades, from the Colors dialog, and in the PDF of a process-color
     // publication.
+    // A process color from a .pub file: the screen shows the color the file
+    // shows, and a CMYK PDF and the plates get its exact inks.
+    void processInksShownColor()
+    {
+        const jp::ColorRef ref = jp::ColorRef::inks(QColor::fromCmykF(0.6f, 0.4f, 0.4f, 1.0f), QColor(29, 31, 25));
+        QCOMPARE(ref.toString(), QStringLiteral("cmyk(60,40,40,100)=#1D1F19"));
+        QCOMPARE(jp::ColorRef::fromString(ref.toString()), ref);
+        QVERIFY(ref != jp::ColorRef::rgb(QColor::fromCmykF(0.6f, 0.4f, 0.4f, 1.0f)));
+        jp::ColorScheme scheme;
+        QCOMPARE(ref.resolve(scheme).toRgb(), QColor(29, 31, 25));
+        {
+            jp::InkOutput inks;
+            const QColor c = ref.resolve(scheme);
+            QCOMPARE(c.spec(), QColor::Cmyk);
+            QVERIFY(std::abs(c.cyanF() - 0.6) < 0.002 && std::abs(c.blackF() - 1.0) < 0.002);
+        }
+        QCOMPARE(ref.resolve(scheme).toRgb(), QColor(29, 31, 25));
+        QColor seen;
+        jp::setColorFilter([&](const QColor &c) { seen = c; return c; });
+        ref.resolve(scheme);
+        jp::setColorFilter({});
+        QCOMPARE(seen.spec(), QColor::Cmyk);   // plates see the inks
+
+        // A process-color publication's PDF carries the inks.
+        jp::MainWindow w;
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        doc->print.model = jp::PrintInfo::ProcessCMYK;
+        auto box = std::make_shared<jp::ShapeItem>();
+        box->rect = QRectF(72, 72, 200, 100);
+        box->fill = jp::Fill::solid(ref);
+        box->stroke = jp::Stroke::none();
+        doc->pages[0]->items.push_back(box);
+        w.editor()->setDocument(std::move(doc));
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("inks.pdf"));
+        QVERIFY(w.exportPdfTo(path, jp::MainWindow::PdfSettings()));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QByteArray pdf = f.readAll();
+        QByteArray text;
+        for (qsizetype at = 0; (at = pdf.indexOf("stream", at)) >= 0; at += 6) {
+            qsizetype start = at + 6;
+            if (pdf.mid(start, 1) == "\n") ++start;
+            const qsizetype end = pdf.indexOf("endstream", start);
+            if (end < 0) break;
+            QByteArray sized(4, 0);
+            qToBigEndian<quint32>(quint32(16 * 1024 * 1024), sized.data());
+            const QByteArray plain = qUncompress(sized + pdf.mid(start, end - start));
+            text += plain;
+        }
+        bool found = false;
+        for (const QByteArray &l : text.split('\n')) {
+            const QList<QByteArray> v = l.split(' ');
+            if (v.size() == 5 && v[4] == "scn")
+                found = found || (std::abs(v[0].toDouble() - 0.6) < 1e-3 && std::abs(v[1].toDouble() - 0.4) < 1e-3 && std::abs(v[2].toDouble() - 0.4) < 1e-3
+                                  && std::abs(v[3].toDouble() - 1.0) < 1e-3);
+        }
+        QVERIFY(found);
+        QVERIFY(!jp::keepInks());
+    }
+
     void cmykColors()
     {
         const QColor ink = QColor::fromCmykF(0.2f, 0.0f, 0.55f, 0.1f);

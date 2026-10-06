@@ -753,6 +753,23 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
     if (bool(info.m_pictureFillOpacity))
       graphicsProps.insert("jp:picture-opacity", info.m_pictureFillOpacity.get());
   }
+  // JeffPub patch: a solid fill's process inks, when the fill is the color
+  // they belong to.
+  if (bool(info.m_fillInks) && graphicsProps["draw:fill-color"])
+  {
+    const unsigned c = info.m_fillInksColor;
+    char shown[8];
+    snprintf(shown, sizeof shown, "#%02x%02x%02x", c & 0xFF, (c >> 8) & 0xFF, (c >> 16) & 0xFF);
+    std::string given = graphicsProps["draw:fill-color"]->getStr().cstr();
+    std::transform(given.begin(), given.end(), given.begin(), [](unsigned char ch) { return char(std::tolower(ch)); });
+    if (given == shown)
+    {
+      const std::vector<double> &k = info.m_fillInks.get();
+      char inks[64];
+      snprintf(inks, sizeof inks, "%.4f %.4f %.4f %.4f", k[0], k[1], k[2], k[3]);
+      graphicsProps.insert("jp:fill-inks", inks);
+    }
+  }
   // JeffPub 79: Text Art goes to the application as its words and settings
   // with the unturned frame, instead of as the warp's guide curves.
   if (bool(info.m_textArt))
@@ -2021,6 +2038,8 @@ void MSPUBCollector::writePageBackground(unsigned pageSeqNum) const
       // JeffPub patch: a background picture keeps its crops and transparency.
       bg.m_crop = ptr_info->m_crop;
       bg.m_pictureFillOpacity = ptr_info->m_pictureFillOpacity;
+      bg.m_fillInks = ptr_info->m_fillInks;
+      bg.m_fillInksColor = ptr_info->m_fillInksColor;
       paintShape(bg, Coordinate(), VectorTransformation2D(), false, VectorTransformation2D());
     }
   }

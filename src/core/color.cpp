@@ -33,12 +33,17 @@ static std::function<QColor(const QColor &)> &colorFilter()
 }
 void setColorFilter(std::function<QColor(const QColor &)> filter) { colorFilter() = std::move(filter); }
 
+static int s_inkOutputs = 0;
+bool keepInks() { return s_inkOutputs > 0; }
+InkOutput::InkOutput() { ++s_inkOutputs; }
+InkOutput::~InkOutput() { --s_inkOutputs; }
+
 QColor ColorRef::resolve(const ColorScheme &s) const
 {
     QColor c;
     switch (m_kind) {
     case None: return QColor(Qt::transparent);
-    case Rgb: c = m_rgb; break;
+    case Rgb: c = m_shown.isValid() && !keepInks() && !colorFilter() ? m_shown : m_rgb; break;
     case Scheme:
         c = s.slot(m_slot);
         if (m_lighten > 0) c = mix(c, Qt::white, m_lighten / 100.0);
@@ -76,7 +81,7 @@ QString ColorRef::toString() const
 {
     switch (m_kind) {
     case None: return QStringLiteral("none");
-    case Rgb: return colorToString(m_rgb);
+    case Rgb: return m_shown.isValid() ? colorToString(m_rgb) + QLatin1Char('=') + colorToString(m_shown) : colorToString(m_rgb);
     case Scheme: {
         QString s = QStringLiteral("@%1").arg(m_slot);
         if (m_lighten) s += QStringLiteral("+%1").arg(m_lighten);
@@ -90,6 +95,8 @@ QString ColorRef::toString() const
 ColorRef ColorRef::fromString(const QString &s)
 {
     if (s.isEmpty() || s == QLatin1String("none")) return none();
+    if (const qsizetype eq = s.indexOf(QLatin1String(")=")); s.startsWith(QLatin1String("cmyk(")) && eq > 0)
+        return inks(colorFromString(s.left(eq + 1)), colorFromString(s.mid(eq + 2)));
     if (s.startsWith('#') || s.startsWith(QLatin1String("cmyk("))) return rgb(colorFromString(s));
     if (s.startsWith('@')) {
         int i = 1, slot = 0, lighten = 0, darken = 0;

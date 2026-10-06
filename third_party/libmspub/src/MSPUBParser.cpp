@@ -1972,6 +1972,21 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
             m_collector->setShapePictureRecolor(*shapeSeqNum,
                                                 ColorReference(*ptr_pictureRecolor));
           }
+          // JeffPub patch: a fill color given as process inks. 0x019E is the
+          // color as shown, and 0x019F with 0x01A6 carry its inks: read as one
+          // run of bits (31 from each), C, M, Y and K are 8 bits each from
+          // bit 9.
+          const unsigned *ptr_extColor = getIfExists_const(tertiaryFoptValues, 0x019E);
+          const unsigned *ptr_extCmy = getIfExists_const(tertiaryFoptValues, 0x019F);
+          if (ptr_extColor && ptr_extCmy)
+          {
+            const unsigned *ptr_extK = getIfExists_const(tertiaryFoptValues, 0x01A6);
+            const unsigned long long bits = (unsigned long long)(*ptr_extCmy & 0x7FFFFFFFu) |
+                                            ((unsigned long long)((ptr_extK ? *ptr_extK : 0u) & 0x7FFFFFFFu) << 31);
+            const double c = double((bits >> 9) & 0xFF) / 255, m = double((bits >> 17) & 0xFF) / 255,
+                         y = double((bits >> 25) & 0xFF) / 255, k = double((bits >> 33) & 0xFF) / 255;
+            m_collector->setShapeFillInks(*shapeSeqNum, *ptr_extColor, c, m, y, k);
+          }
         }
         input->seek(sp.contentsOffset, librevenge::RVNG_SEEK_SET);
         if (findEscherContainer(input, sp, cFopt, OFFICE_ART_FOPT))

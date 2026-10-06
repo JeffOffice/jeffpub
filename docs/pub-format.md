@@ -167,6 +167,17 @@ the picture (0x0180 = 3); the fill always covers the shape's box, so a
 cropped or adjusted picture is saved as the part that shows, with the
 settings applied.
 
+### Process colors
+
+A fill given as process inks keeps, in the tertiary OPT, the color as shown
+(0x019E, the same as 0x0181) and its inks in 0x019F and 0x01A6. Read the two
+as one run of bits, 31 from each (0x019F's bits 0-30, then 0x01A6's): C, M, Y
+and K are 8 bits each (÷255) from bit 9. Checked against three reference
+PDFs: C 98 M 76.1 Y 13.3 K 30.2 (0x019F 0x4585F5E8, 0x01A6 308), C 60 M 40
+Y 40 K 100 (0x4CCD33E8, 1021) and C 75.3 M 40 (0x00CD8188, no 0x01A6). The
+low 9 bits are 0x1E8 or 0x188; what they mean is not known. Publisher shows
+the 0x0181 color on screen and writes the inks to CMYK PDFs.
+
 ## Text (Quill/QuillSub/CONTENTS)
 
 Starts with a `CHNKINK` index of sections, each with a 4-letter name, an id,
