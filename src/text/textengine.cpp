@@ -395,6 +395,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
 
     bool columnEmpty = true;   // no line placed yet in the current column
     const bool hyphenate = !frames.isEmpty() && frames.first().hyphenate;
+    const double zone = (frames.isEmpty() ? 18.0 : frames.first().hyphenZone) * env.fontScale;
     auto advance = [&]() {
         rowActive = false;
         columnEmpty = true;
@@ -623,6 +624,16 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                 }
                 const Iv iv = row[rowIdx];
                 line.setLineWidth(std::max(1.0, iv.x1 - iv.x0));
+                // Hyphenation zone: a word is broken only if moving it whole to
+                // the next line would leave more than the zone empty here.
+                if (hyphenate && zone > 0) {
+                    const int s0 = line.textStart(), n = line.textLength();
+                    if (n > 1 && B->disp[s0 + n - 1] == QChar(0x00AD)) {
+                        int k = s0 + n - 1;
+                        while (k > s0 && !B->disp[k - 1].isSpace()) --k;
+                        if (k > s0 && (iv.x1 - iv.x0) - (line.cursorToX(k) - line.cursorToX(s0)) < zone) line.setNumColumns(k - s0);
+                    }
+                }
                 const double single = singleSpacing(ranges, line.textStart(), std::max(1, line.textLength()), base);
                 double h = lineHeightFor(bf, scale, single);
                 // .pub layouts add extra spacing between lines, never above the

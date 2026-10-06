@@ -163,6 +163,7 @@ FrameSpec Renderer::frameSpec(const Document &doc, const TextItem &t, int pageNu
     s.gap = t.columnGap;
     s.valign = t.valign;
     s.hyphenate = t.hyphenate;
+    s.hyphenZone = t.hyphenZone;
     if (!t.vertical) s.obstacles = wrapObstacles(doc, t);
     const auto loc = doc.find(t.id);
     s.ctx.doc = &doc;

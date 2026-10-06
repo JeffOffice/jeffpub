@@ -41,6 +41,7 @@ struct FrameSpec {
     double gap = 9;
     VAlign valign = VAlign::Top;
     bool hyphenate = true;          // insert soft hyphens at allowed break points
+    double hyphenZone = 18;         // points: hyphenate only if moving the word would leave more space
     QVector<QPolygonF> obstacles;   // frame-local, already expanded by wrap distances
     FieldContext ctx;
 };

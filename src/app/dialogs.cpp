@@ -2283,20 +2283,44 @@ void tintsDialog(QWidget *p, Editor *ed, const std::function<void(const ColorRef
 // ---------------- Hyphenation, paste special, misc ----------------
 void hyphenationDialog(QWidget *p, Editor *ed)
 {
+    // The story of the text box being typed in or selected: all its boxes.
+    Document *d = ed->doc();
+    const QString id = ed->isEditingText() ? ed->textTarget().itemId : (ed->single() ? ed->single()->id : QString());
+    auto *t = dynamic_cast<TextItem *>(d->item(id));
+    if (!t) {
+        QMessageBox::information(p, QStringLiteral("Hyphenation"), QStringLiteral("Click in a text box first."));
+        return;
+    }
+    const QVector<TextItem *> chain = d->chainOf(t->id);
     Dlg dlg(p, QStringLiteral("Hyphenation"));
     auto *autoH = new QCheckBox(QStringLiteral("Automatically hyphenate this story"), &dlg.d);
-    auto *zone = measure(18, &dlg.d);
+    autoH->setChecked(t->hyphenate);
+    auto *zone = measure(t->hyphenZone, &dlg.d, 0, 720);
+    zone->setToolTip(QStringLiteral("A word is broken only if moving it whole to the next line would leave more space than this."));
     auto *form = new QFormLayout();
     form->addRow(autoH);
     form->addRow(QStringLiteral("Hyphenation zone:"), zone);
     dlg.v->addLayout(form);
     auto *manual = dlg.bb->addButton(QStringLiteral("Insert Optional Hyphen"), QDialogButtonBox::ActionRole);
+    manual->setEnabled(ed->isEditingText());
     QObject::connect(manual, &QPushButton::clicked, &dlg.d, [&] { if (ed->isEditingText()) ed->insertTextBlock(QString(QChar(0x00AD)), QStringLiteral("Optional Hyphen")); });
-    if (!dlg.exec() || !autoH->isChecked()) return;
-    const auto targets = ed->formatTargets();
-    int n = 0;
-    ed->change(QStringLiteral("Hyphenate"), [&] { for (const QTextCursor &c : targets) n += hyphenateStory(c.document()); });
-    Q_EMIT ed->status(QStringLiteral("Added %1 optional hyphens.").arg(n));
+    auto *everywhere = dlg.bb->addButton(QStringLiteral("Add Optional Hyphens"), QDialogButtonBox::ActionRole);
+    everywhere->setToolTip(QStringLiteral("Put an optional hyphen at every place each long word can break; they show only where a line breaks."));
+    QObject::connect(everywhere, &QPushButton::clicked, &dlg.d, [&] {
+        int n = 0;
+        QTextDocument *sd = d->storyDoc(t->storyId);
+        if (sd) ed->change(QStringLiteral("Hyphenate"), [&] { n = hyphenateStory(sd); });
+        Q_EMIT ed->status(QStringLiteral("Added %1 optional hyphens.").arg(n));
+    });
+    zone->setEnabled(autoH->isChecked());
+    QObject::connect(autoH, &QCheckBox::toggled, zone, &QWidget::setEnabled);
+    if (!dlg.exec()) return;
+    ed->change(QStringLiteral("Hyphenation"), [&] {
+        for (TextItem *f : chain) {
+            f->hyphenate = autoH->isChecked();
+            f->hyphenZone = zone->value();
+        }
+    });
 }
 
 void pasteSpecialDialog(QWidget *p, Editor *ed)

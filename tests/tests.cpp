@@ -268,6 +268,32 @@ private Q_SLOTS:
         QVERIFY(ed->undoStack()->canUndo());
     }
 
+    // The hyphenation zone: a word is broken only if moving it whole would
+    // leave more than the zone empty at the end of the line.
+    void hyphenationZone()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 150, 200);
+        t->storyId = doc->createStory(QStringLiteral("We met at the international conference today."));
+        doc->pages[0]->items.push_back(t);
+        auto firstLine = [&](double zone) {
+            t->hyphenZone = zone;
+            jp::LayoutCache cache;
+            jp::RenderOptions opt;
+            const auto fl = cache.textFrame(*doc, *t, 1, opt);
+            return fl.layout ? fl.layout->lineInfo(0).value(0).text : QString();
+        };
+        const QString tight = firstLine(0), loose = firstLine(200);
+        QVERIFY2(tight.contains(QChar(0x00AD)) || tight.endsWith(QLatin1Char('-')) || tight.contains(QStringLiteral("inter")), qPrintable(tight));
+        QVERIFY2(!loose.contains(QStringLiteral("inter")), qPrintable(loose));
+        // Saved with the text box.
+        t->hyphenZone = 30;
+        QString err;
+        auto again = jp::publicationFromBytes(jp::publicationBytes(*doc, QImage()), &err);
+        QCOMPARE(static_cast<jp::TextItem *>(again->pages[0]->items[0].get())->hyphenZone, 30.0);
+    }
+
     // "Always create backup copy" keeps the file as it was before saving.
     void saveBackupCopy()
     {
