@@ -1240,6 +1240,12 @@ bool MSPUBParser::parseQuill(librevenge::RVNGInputStream *input)
     else if (i->name == "STSH")
     {
       if (getenv("JP_PUB_TRACE")) fprintf(stderr, "STSH #%d at %lu len %lu\n", whichStsh, (unsigned long)i->offset, (unsigned long)i->length);
+      if (whichStsh == 0)
+      {
+        // JeffPub 79: the first sheet names the styles.
+        input->seek(i->offset, librevenge::RVNG_SEEK_SET);
+        parseStyleNames(input, *i);
+      }
       if (whichStsh++ == 1)
       {
         input->seek(i->offset, librevenge::RVNG_SEEK_SET);
@@ -1340,6 +1346,35 @@ void MSPUBParser::parseFonts(librevenge::RVNGInputStream *input, const QuillChun
       m_collector->addFont(name);
     }
     readU32(input);
+  }
+}
+
+// JeffPub 79: style names. Each entry is a u16 length in characters, the
+// name in UTF-16, then an id: negative for Publisher's built-in styles (no
+// name; -1 is Normal), zero for a named one.
+void MSPUBParser::parseStyleNames(librevenge::RVNGInputStream *input, const QuillChunkReference &chunk)
+{
+  readU32(input);
+  unsigned numElements = std::min(readU32(input), m_length);
+  input->seek(input->tell() + 12, librevenge::RVNG_SEEK_SET);
+  std::vector<unsigned> offsets;
+  for (unsigned i = 0; i < numElements && stillReading(input, chunk.offset + chunk.length); ++i)
+    offsets.push_back(readU32(input));
+  for (unsigned i = 0; i < offsets.size(); ++i)
+  {
+    input->seek(chunk.offset + 20 + offsets[i], librevenge::RVNG_SEEK_SET);
+    const unsigned len = readU16(input);
+    librevenge::RVNGString name;
+    if (len > 0 && len < 256)
+    {
+      std::vector<unsigned char> bytes;
+      for (unsigned k = 0; k < len * 2; ++k) bytes.push_back(readU8(input));
+      appendCharacters(name, bytes, "UTF-16LE");
+    }
+    const int id = int(readU32(input));
+    if (name.empty() && id == -1) name = "Normal";
+    if (getenv("JP_PUB_TRACE")) fprintf(stderr, "STYLENAME %u id=%d %s\n", i, id, name.cstr());
+    m_collector->addStyleName(name);
   }
 }
 
@@ -1528,6 +1563,7 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
               while (stillReading(input, tabEntryInfo.dataOffset + tabEntryInfo.dataLength))
               {
                 MSPUBBlockInfo tabInfo = parseBlock(input, true);
+                if (getenv("JP_PUB_TRACE")) fprintf(stderr, "TABFIELD id=0x%x type=0x%x data=%u\n", tabInfo.id, tabInfo.type, tabInfo.data);
                 if (tabInfo.id == TAB_AMOUNT)
                 {
                   position = tabInfo.data;

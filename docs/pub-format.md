@@ -187,6 +187,21 @@ an offset and a length:
 
 A blank file has no TEXT, FDPC, FDPP, BTEC, BTEP, STRS or MCLD sections.
 
+### Style sheets
+
+Three STSH sections, each an offset table (u32 total, u32 count, three u32s,
+then a u32 offset per entry). The first names the styles: per style a u16
+length in characters, the name in UTF-16, then a u32 id. Publisher's
+built-in styles have no name and a negative id (-1 Normal, -3, -6...); a
+named style has id 0. The second has two entries per style, character then
+paragraph properties: a u16 word count, a u32 length, the property blocks
+(as in FDPC/FDPP), two zero bytes. Publisher's own styles carry a font for
+each of the 35 writing-system slots. The third has two 16-byte entries per
+style: u16 7, the style it is based on (-1 none), the style's index, u32 4,
+two bytes that vary. A paragraph's style is FDPP `19:1a` (the index; absent
+for Normal). Bold and italic in a run switch the style's on or off: a bold
+run in a bold style shows plain.
+
 ### Text color
 
 A run's color is two records that name the same entry in the PL list:

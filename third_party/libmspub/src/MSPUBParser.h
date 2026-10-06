@@ -116,6 +116,7 @@ protected:
   void parsePaletteEntry(librevenge::RVNGInputStream *input, MSPUBBlockInfo block);
   void parseColors(librevenge::RVNGInputStream *input, const QuillChunkReference &chunk);
   void parseFonts(librevenge::RVNGInputStream *input, const QuillChunkReference &chunk);
+  void parseStyleNames(librevenge::RVNGInputStream *input, const QuillChunkReference &chunk);
   void parseDefaultStyle(librevenge::RVNGInputStream *input, const QuillChunkReference &chunk);
   void parseShapeGroup(librevenge::RVNGInputStream *input, const EscherContainerInfo &spgr, Coordinate parentCoordinateSystem, Coordinate parentGroupAbsoluteCoord, unsigned depth = 0);
   void skipBlock(librevenge::RVNGInputStream *input, MSPUBBlockInfo block);

@@ -128,6 +128,7 @@ public:
 
   void addDefaultCharacterStyle(const CharacterStyle &style);
   void addDefaultParagraphStyle(const ParagraphStyle &style);
+  void addStyleName(const librevenge::RVNGString &name) { m_styleNames.push_back(name); }
   void addPaletteColor(Color);
   bool setCurrentGroupSeqNum(unsigned seqNum);
 
@@ -163,6 +164,7 @@ private:
   std::vector<std::vector<unsigned char> > m_fonts;
   std::vector<CharacterStyle> m_defaultCharStyles;
   std::vector<ParagraphStyle> m_defaultParaStyles;
+  std::vector<librevenge::RVNGString> m_styleNames;   // JeffPub 79: by style index
   std::map<unsigned, unsigned> m_shapeTypesBySeqNum;
   std::set<unsigned> m_notHyphenated; // JeffPub patch: text ids of stories without automatic hyphenation
   std::vector<Color> m_paletteColors;

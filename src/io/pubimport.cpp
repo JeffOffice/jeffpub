@@ -433,6 +433,26 @@ public:
             }
             bf.setTabPositions(tl);
         }
+        // A named style: the paragraph keeps its name, and the first
+        // paragraph of each gives the style its settings.
+        m_styleFromSpan.clear();
+        if (const QString sn = str(p["jp:style-name"]); !sn.isEmpty()) {
+            bf.setProperty(tp::StyleName, sn);
+            if (!m_stylesRead.contains(sn)) {
+                m_stylesRead.insert(sn);
+                TextStyle st;
+                st.name = sn;
+                st.basedOn = QStringLiteral("Normal");
+                st.next = sn;
+                st.blk = bf;
+                auto it = std::find_if(m_doc.styles.begin(), m_doc.styles.end(), [&](const TextStyle &x) { return x.name == sn; });
+                if (it != m_doc.styles.end()) *it = st;
+                else m_doc.styles << st;
+                m_styleFromSpan = sn;
+                m_styleBold = p["jp:style-bold"] && p["jp:style-bold"]->getInt();
+                m_styleItalic = p["jp:style-italic"] && p["jp:style-italic"]->getInt();
+            }
+        }
         if (m_firstPara) {
             m_cursor.setBlockFormat(bf);
             m_firstPara = false;
@@ -540,6 +560,15 @@ public:
         const QString lang = str(p["fo:language"]), country = str(p["fo:country"]);
         if (!lang.isEmpty()) cf.setProperty(tp::Language, country.isEmpty() ? lang : lang + '-' + country);
         m_span = cf;
+        if (!m_styleFromSpan.isEmpty()) {
+            for (TextStyle &st : m_doc.styles)
+                if (st.name == m_styleFromSpan) {
+                    st.chr = cf;
+                    st.chr.setFontWeight(m_styleBold ? QFont::Bold : QFont::Normal);
+                    st.chr.setFontItalic(m_styleItalic);
+                }
+            m_styleFromSpan.clear();
+        }
     }
     void closeSpan() override { m_span = QTextCharFormat(); }
     void openLink(const RVNGPropertyList &p) override { m_link = str(p["xlink:href"]); }
@@ -1073,6 +1102,9 @@ private:
     QTextCharFormat m_span;
     QString m_link;
     bool m_firstPara = true;
+    QSet<QString> m_stylesRead;   // named styles met so far
+    QString m_styleFromSpan;     // a style still waiting for its character settings
+    bool m_styleBold = false, m_styleItalic = false;
     QTextList *m_list = nullptr;   // the list the last paragraph joined
     QString m_listKey;
     bool m_skipText = false;

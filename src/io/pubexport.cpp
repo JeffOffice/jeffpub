@@ -613,8 +613,29 @@ private:
         }
         return i + 2;   // entries 0 and 1 are the scheme's main color and black
     }
-    QByteArray charProps(const QTextCharFormat &f);
-    QByteArray paraProps(const QTextBlock &b);
+    QByteArray charProps(const QTextCharFormat &f, const QTextCharFormat &style = QTextCharFormat()) { return lengthPrefixed(charBlocks(f, style)); }
+    QByteArray paraProps(const QTextBlock &b) { return lengthPrefixed(paraBlocks(b)); }
+    // `style` is the paragraph style's character settings: bold and italic
+    // in a run switch the style's own on or off, as Publisher reads them.
+    QVector<B> charBlocks(const QTextCharFormat &f, const QTextCharFormat &style = QTextCharFormat());
+    QVector<B> paraBlocks(const QTextBlock &b);
+    // Named paragraph styles after Normal that the publication's text uses,
+    // in the style sheet's order (from 1).
+    const QStringList &styleNames()
+    {
+        if (m_styleNamesDone) return m_styleNames;
+        m_styleNamesDone = true;
+        QSet<QString> used;
+        for (const auto &story : m_doc.stories)
+            if (const QTextDocument *d = story->doc.get())
+                for (QTextBlock b = d->begin(); b.isValid(); b = b.next()) used.insert(b.blockFormat().stringProperty(tp::StyleName));
+        for (const TextStyle &st : m_doc.styles)
+            if (!st.charOnly && used.contains(st.name) && !st.name.isEmpty() && st.name != QLatin1String("Normal") && !m_styleNames.contains(st.name))
+                m_styleNames << st.name;
+        return m_styleNames;
+    }
+    QStringList m_styleNames;
+    bool m_styleNamesDone = false;
     void addStory(int textId, const QTextDocument *doc) { addStory(textId, QVector<const QTextDocument *>{doc}); }
     // A story from several documents in turn (a table's cells); cellEnds gets
     // where each one's text ends.
@@ -657,11 +678,13 @@ private:
     QHash<int, int> m_chainLength;   // text id -> boxes in its chain
 };
 
-QByteArray PubWriter::charProps(const QTextCharFormat &f)
+QVector<B> PubWriter::charBlocks(const QTextCharFormat &f, const QTextCharFormat &style)
 {
     QVector<B> p;
-    if (f.fontWeight() >= QFont::DemiBold) p << flag(0x02, 0x0a);
-    if (f.fontItalic()) p << flag(0x03, 0x0a);
+    const bool bold = (f.fontWeight() >= QFont::DemiBold) != (style.hasProperty(QTextFormat::FontWeight) && style.fontWeight() >= QFont::DemiBold);
+    const bool italic = f.fontItalic() != style.fontItalic();
+    if (bold) p << flag(0x02, 0x0a);
+    if (italic) p << flag(0x03, 0x0a);
     double size = f.hasProperty(QTextFormat::FontPointSize) ? f.fontPointSize() : 0;
     if (size > 0) p << u32(0x0c, quint32(emu(size)), 0x22);
     p << u32(0x12, 1033, 0x22);
@@ -676,8 +699,8 @@ QByteArray PubWriter::charProps(const QTextCharFormat &f)
     QVector<B> slots;
     for (quint8 s = 0; s < 5; ++s) slots << rec(s, {u16(0x00, quint32(fi))});
     p << rec(0x24, slots, 0x8a);
-    if (f.fontWeight() >= QFont::DemiBold) p << flag(0x37, 0x0a);
-    if (f.fontItalic()) p << flag(0x38, 0x0a);
+    if (bold) p << flag(0x37, 0x0a);
+    if (italic) p << flag(0x38, 0x0a);
     if (f.fontUnderline()) p << u16(0x1e, 1, 0x12);   // single underline
     if (f.fontStrikeOut()) p << flag(0x10, 0x0a);
     // Letter spacing: kerning as added space in EMU (0x1B), tracking in
@@ -703,10 +726,10 @@ QByteArray PubWriter::charProps(const QTextCharFormat &f)
           << rec(0x58, {u16(0x00, 1, 0x12), u32(0x01, ci, 0x22), u32(0x02, 100000, 0x22)}, 0x8a);
     }
     std::sort(p.begin(), p.end(), [](const B &a, const B &b) { return a.id < b.id; });
-    return lengthPrefixed(p);
+    return p;
 }
 
-QByteArray PubWriter::paraProps(const QTextBlock &block)
+QVector<B> PubWriter::paraBlocks(const QTextBlock &block)
 {
     const QTextBlockFormat f = block.blockFormat();
     QVector<B> p;
@@ -779,8 +802,10 @@ QByteArray PubWriter::paraProps(const QTextBlock &block)
           << rec(0x57, {u32(0x00, kind, 0x22), u32(0x01, ch, 0x22), u32(0x02, 0, 0x22)}, 0x8a);
         if (!bullet) p << u32(0x58, delim << 16, 0x22);
     }
+    // The paragraph's style: its place in the style sheet (Normal, 0, is left out).
+    if (const int si = int(styleNames().indexOf(f.stringProperty(tp::StyleName))) + 1; si > 0) p << u16(0x19, quint32(si), 0x1a);
     std::sort(p.begin(), p.end(), [](const B &a, const B &b) { return a.id < b.id; });
-    return lengthPrefixed(p);
+    return p;
 }
 
 void PubWriter::addStory(int textId, const QVector<const QTextDocument *> &docs, QVector<quint32> *cellEnds)
@@ -789,6 +814,9 @@ void PubWriter::addStory(int textId, const QVector<const QTextDocument *> &docs,
     for (const QTextDocument *doc : docs) {
     for (QTextBlock b = doc->begin(); b.isValid(); b = b.next()) {
         QTextCharFormat last = b.charFormat();
+        const QString styleName = b.blockFormat().stringProperty(tp::StyleName);
+        const TextStyle *st = styleNames().contains(styleName) ? m_doc.style(styleName) : nullptr;
+        const QTextCharFormat styleChr = st ? st->chr : QTextCharFormat();
         for (auto it = b.begin(); !it.atEnd(); ++it) {
             const QTextFragment fr = it.fragment();
             if (!fr.isValid()) continue;
@@ -796,11 +824,11 @@ void PubWriter::addStory(int textId, const QVector<const QTextDocument *> &docs,
             t.replace(QChar::LineSeparator, QChar(0x0b));
             t.replace(QChar(0x2029), QChar('\r'));
             for (QChar c : t) putU16(m_text, c.unicode());
-            m_charRuns << Run{quint32(512 + m_text.size()), charProps(fr.charFormat())};
+            m_charRuns << Run{quint32(512 + m_text.size()), charProps(fr.charFormat(), styleChr)};
             last = fr.charFormat();
         }
         putU16(m_text, '\r');
-        m_charRuns << Run{quint32(512 + m_text.size()), charProps(last)};
+        m_charRuns << Run{quint32(512 + m_text.size()), charProps(last, styleChr)};
         m_paraRuns << Run{quint32(512 + m_text.size()), paraProps(b)};
     }
         // A cell ends at its last paragraph mark (the last cell at the story's end).
@@ -1772,7 +1800,10 @@ QByteArray PubWriter::write(QStringList *skipped)
     const quint32 magic = QRandomGenerator::global()->generate();
     QVector<Section> secs;
     if (!m_text.isEmpty()) secs << Section{"TEXT", "TEXT", 0, m_text, false};
-    // A one-style sheet: Normal (built-in id -1), 10 pt body font, 6 pt after.
+    // The style sheet: Normal (built-in id -1, 10 pt body font, 6 pt after),
+    // then the publication's named paragraph styles. Three sections: the
+    // names, each style's character and paragraph properties, and what each
+    // is based on.
     {
         // Normal's character properties as Publisher writes them: size (twice),
         // a font for each of 35 writing systems, text and highlight colors,
@@ -1781,22 +1812,72 @@ QByteArray PubWriter::write(QStringList *skipped)
                                               0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1e, 0x1f, 0x21, 0x22, 0x23, 0x24, 0x27, 0x28, 0x2a, 0x2c};
         QVector<B> slotsB;
         for (quint8 s : kScriptSlots) slotsB << rec(s, {u16(0x00, 0)});
-        const QByteArray normalChar = styleEntry({u32(0x0c, 127000, 0x22), rec(0x24, slotsB, 0x8a), u32(0x39, 127000, 0x22),
-                                                  rec(0x44, {u32(0x00, 0, 0x22)}, 0x8a), rec(0x48, {u32(0x00, 0, 0x22)}, 0x8a),
-                                                  rec(0x58, {u16(0x00, 1, 0x12), u32(0x01, 0, 0x22), u32(0x02, 100000, 0x22)}, 0x8a)});
-        const QByteArray normalPara = styleEntry({u32(0x13, 76200, 0x22), u16(0x30, 5, 0x12), u32(0x34, 1450850, 0x22)});
+        const QVector<B> normalCharB{u32(0x0c, 127000, 0x22), rec(0x24, slotsB, 0x8a), u32(0x39, 127000, 0x22),
+                                     rec(0x44, {u32(0x00, 0, 0x22)}, 0x8a), rec(0x48, {u32(0x00, 0, 0x22)}, 0x8a),
+                                     rec(0x58, {u16(0x00, 1, 0x12), u32(0x01, 0, 0x22), u32(0x02, 100000, 0x22)}, 0x8a)};
+        const QVector<B> normalParaB{u32(0x13, 76200, 0x22), u16(0x30, 5, 0x12), u32(0x34, 1450850, 0x22)};
+        // A named style keeps everything Normal has, with its own settings
+        // over it; its font fills the first writing systems' slots as a
+        // Publisher style's does.
+        auto overlay = [](QVector<B> base, const QVector<B> &own) {
+            for (const B &o : own) {
+                if (o.id == 0x24) {
+                    for (B &b : base)
+                        if (b.id == 0x24) {
+                            QVector<B> slotsOut;
+                            QVector<B> ownSlots = o.kids;
+                            for (const B &k : ownSlots) slotsOut << k;
+                            for (const B &k : b.kids)
+                                if (std::none_of(ownSlots.cbegin(), ownSlots.cend(), [&](const B &x) { return x.id == k.id; })) slotsOut << k;
+                            std::sort(slotsOut.begin(), slotsOut.end(), [](const B &x, const B &y) { return x.id < y.id; });
+                            b.kids = slotsOut;
+                        }
+                    continue;
+                }
+                bool replaced = false;
+                for (B &b : base)
+                    if (b.id == o.id) { b = o; replaced = true; }
+                if (!replaced) base << o;
+            }
+            std::sort(base.begin(), base.end(), [](const B &x, const B &y) { return x.id < y.id; });
+            return base;
+        };
+        QVector<QByteArray> names, props, links;
+        auto link = [](quint32 index) {
+            QByteArray l;
+            putU16(l, 7);
+            putU32(l, 0xffffffffu);   // based on no other style: each holds all its settings
+            putU32(l, index);
+            putU32(l, 4);
+            putU16(l, 0);
+            return l;
+        };
         QByteArray id0;
         putU16(id0, 0);
         putU32(id0, 0xffffffffu);
-        secs << Section{"STSH", "STSH", 0, offsetTable({id0}, magic, 4, 0), false};
-        secs << Section{"STSH", "STSH", 1, offsetTable({normalChar, normalPara}, magic, 0, 0), false};
-        QByteArray link;
-        putU16(link, 7);
-        putU32(link, 0xffffffffu);
-        putU32(link, 0);
-        putU32(link, 4);
-        putU16(link, 0);
-        secs << Section{"STSH", "STSH", 2, offsetTable({link, link}, magic, 0, 0), false};
+        names << id0;
+        props << styleEntry(normalCharB) << styleEntry(normalParaB);
+        links << link(0) << link(0);
+        const QStringList named = styleNames();
+        for (int i = 0; i < named.size(); ++i) {
+            const TextStyle *st = m_doc.style(named[i]);
+            // The name: its length in characters, the name in UTF-16, then a
+            // zero id (built-in styles have a negative id and no name).
+            QByteArray n;
+            putU16(n, quint32(named[i].size()));
+            for (QChar c : named[i]) putU16(n, c.unicode());
+            putU32(n, 0);
+            names << n;
+            QTextDocument tmp;
+            QTextCursor(&tmp).setBlockFormat(st->blk);
+            QVector<B> para = paraBlocks(tmp.begin());
+            para.erase(std::remove_if(para.begin(), para.end(), [](const B &b) { return b.id == 0x19; }), para.end());
+            props << styleEntry(overlay(normalCharB, charBlocks(st->chr))) << styleEntry(overlay(normalParaB, para));
+            links << link(quint32(i + 1)) << link(quint32(i + 1));
+        }
+        secs << Section{"STSH", "STSH", 0, offsetTable(names, magic, 4, 0), false};
+        secs << Section{"STSH", "STSH", 1, offsetTable(props, magic, 0, 0), false};
+        secs << Section{"STSH", "STSH", 2, offsetTable(links, magic, 0, 0), false};
     }
     QVector<quint32> paraEnds, charEnds;
     QVector<QByteArray> paraPages, charPages;

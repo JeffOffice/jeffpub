@@ -1684,6 +1684,17 @@ librevenge::RVNGPropertyList MSPUBCollector::getParaStyleProps(const ParagraphSt
     defaultParaStyleIndex = 0u;
   const ParagraphStyle &defaultStyle = bool(defaultParaStyleIndex) && defaultParaStyleIndex.get() < m_defaultParaStyles.size() ? m_defaultParaStyles[defaultParaStyleIndex.get()] : _nothing;
   librevenge::RVNGPropertyList ret;
+  // JeffPub 79: the paragraph's named style.
+  if (defaultParaStyleIndex.get() > 0 && defaultParaStyleIndex.get() < m_styleNames.size() && !m_styleNames[defaultParaStyleIndex.get()].empty())
+  {
+    ret.insert("jp:style-name", m_styleNames[defaultParaStyleIndex.get()]);
+    // Its own bold and italic (runs switch them on or off).
+    if (defaultParaStyleIndex.get() < m_defaultCharStyles.size())
+    {
+      ret.insert("jp:style-bold", m_defaultCharStyles[defaultParaStyleIndex.get()].bold ? 1 : 0);
+      ret.insert("jp:style-italic", m_defaultCharStyles[defaultParaStyleIndex.get()].italic ? 1 : 0);
+    }
+  }
   Alignment align = style.m_align.get_value_or(
                       defaultStyle.m_align.get_value_or(LEFT));
   switch (align)

@@ -1748,6 +1748,76 @@ private Q_SLOTS:
         QCOMPARE(checked, 2);
     }
 
+    // Named paragraph styles: the style sheet keeps them, and paragraphs keep
+    // which one they use.
+    void pubWriterStyles()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        jp::TextStyle pq;
+        pq.name = QStringLiteral("Pull Quote");
+        pq.basedOn = QStringLiteral("Normal");
+        pq.next = QStringLiteral("Normal");
+        pq.chr.setFontPointSize(16);
+        pq.chr.setFontWeight(QFont::Bold);
+        pq.chr.setFontItalic(true);
+        pq.chr.setFontFamilies(QStringList{QStringLiteral("Georgia")});
+        pq.blk.setAlignment(Qt::AlignHCenter);
+        pq.blk.setTopMargin(12);
+        pq.blk.setBottomMargin(6);
+        pq.blk.setProperty(jp::tp::StyleName, pq.name);
+        doc->styles << pq;
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 400, 300);
+        t->storyId = doc->createStory(QString());
+        doc->pages[0]->items.push_back(t);
+        QTextDocument *d = doc->storyDoc(t->storyId);
+        QTextCursor c(d);
+        auto para = [&](const QString &text, const QString &style, bool first) {
+            const jp::TextStyle *st = doc->style(style);
+            QTextBlockFormat bf = st->blk;
+            bf.setProperty(jp::tp::StyleName, style);
+            if (first) c.setBlockFormat(bf);
+            else c.insertBlock(bf);
+            c.insertText(text, st->chr);
+        };
+        para(QStringLiteral("test30 A title"), QStringLiteral("Title"), true);
+        para(QStringLiteral("Plain text in the Normal style."), QStringLiteral("Normal"), false);
+        para(QStringLiteral("A pull quote, in its own style"), QStringLiteral("Pull Quote"), false);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("styles.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test30-styles.pub";
+            QFile::remove(out);
+            QFile::copy(path, out);
+        }
+        auto back = jp::importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        const jp::TextItem *bt = nullptr;
+        jp::walkItems(back->pages[0]->items, [&](const jp::ItemPtr &it) {
+            if (it->type() == jp::ItemType::Text) bt = static_cast<const jp::TextItem *>(it.get());
+        });
+        QVERIFY(bt);
+        QTextBlock b = back->storyDoc(bt->storyId)->begin();
+        QCOMPARE(b.blockFormat().stringProperty(jp::tp::StyleName), QStringLiteral("Title"));
+        QVERIFY(b.next().blockFormat().stringProperty(jp::tp::StyleName).isEmpty());
+        QCOMPARE(b.next().next().blockFormat().stringProperty(jp::tp::StyleName), QStringLiteral("Pull Quote"));
+        // Bold and italic are saved relative to the style, so they come back
+        // as they were: the title and pull quote bold, the plain text not.
+        auto firstFormat = [](const QTextBlock &blk) { return blk.begin().fragment().charFormat(); };
+        QVERIFY(firstFormat(b).fontWeight() >= QFont::Bold);
+        QVERIFY(firstFormat(b.next()).fontWeight() < QFont::DemiBold && !firstFormat(b.next()).fontItalic());
+        QVERIFY(firstFormat(b.next().next()).fontWeight() >= QFont::Bold && firstFormat(b.next().next()).fontItalic());
+        const jp::TextStyle *got = back->style(QStringLiteral("Pull Quote"));
+        QVERIFY(got);
+        QVERIFY(std::abs(got->chr.fontPointSize() - 16) < 0.01);
+        QVERIFY(got->chr.fontWeight() >= QFont::Bold && got->chr.fontItalic());
+        QCOMPARE(got->chr.fontFamilies().toStringList().value(0), QStringLiteral("Georgia"));
+        QCOMPARE(got->blk.alignment() & Qt::AlignHorizontal_Mask, Qt::AlignHCenter);
+        QVERIFY(std::abs(got->blk.topMargin() - 12) < 0.01);
+    }
+
     // Two master pages: each page keeps its own master and its objects.
     void pubWriterTwoMasters()
     {
