@@ -993,7 +993,9 @@ QWidget *Backstage::buildOpen()
             if (!isPinned && pinned.contains(f)) continue;
             const QFileInfo fi(f);
             QIcon ic = icon(f.endsWith(".pub", Qt::CaseInsensitive) ? "file-type" : "file");
-            if (f.endsWith(".jpub", Qt::CaseInsensitive)) {
+            // The publication's own preview: a .jpub's thumbnail, or the
+            // picture a .pub file keeps in its summary.
+            if (f.endsWith(".jpub", Qt::CaseInsensitive) || f.endsWith(".pub", Qt::CaseInsensitive)) {
                 const QImage th = publicationThumbnail(f);
                 if (!th.isNull()) ic = QIcon(QPixmap::fromImage(th.scaled(48, 48, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
             }

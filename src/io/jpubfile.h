@@ -14,6 +14,8 @@ std::unique_ptr<Document> loadPublication(const QString &path, QString *error);
 QByteArray publicationBytes(const Document &doc, const QImage &thumbnail);
 std::unique_ptr<Document> publicationFromBytes(const QByteArray &bytes, QString *error);
 
+// A publication's preview for lists of files: a .jpub's thumbnail, or the
+// picture a .pub file keeps in its summary (null when there is none).
 QImage publicationThumbnail(const QString &path);
 
 } // namespace jp

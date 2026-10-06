@@ -30,6 +30,9 @@ struct File {
 };
 
 bool read(const QByteArray &bytes, File *out, QString *error = nullptr);
+// One stream ("Quill/QuillSub/CONTENTS") read straight from a file, touching
+// only its sectors and the tables that find them.
+QByteArray readStream(const QString &filePath, const QString &streamPath, QString *error = nullptr);
 QByteArray write(const File &f);   // version 3 (512-byte sectors)
 
 } // namespace jp::cfb

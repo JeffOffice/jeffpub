@@ -3471,6 +3471,53 @@ private Q_SLOTS:
                  qPrintable(QStringLiteral("%1 x %2").arg(g->rect.width()).arg(g->rect.height())));
     }
 
+    // The Open page shows a .pub file's own preview: the picture kept in its
+    // summary information (property 17; here a bitmap, in Publisher's own
+    // files a metafile, both read the same way).
+    void pubPreviewThumbnail()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("preview.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        QVERIFY(jp::publicationThumbnail(path).isNull());   // JeffPub's own .pub has none
+        // A 40 x 30 red picture as a clipboard bitmap (a BMP without its file header).
+        QImage red(40, 30, QImage::Format_RGB32);
+        red.fill(QColor(200, 20, 30));
+        QByteArray bmp;
+        QBuffer buf(&bmp);
+        buf.open(QIODevice::WriteOnly);
+        red.save(&buf, "BMP");
+        const QByteArray dib = bmp.mid(14);
+        auto u16 = [](quint16 v) { QByteArray b(2, 0); qToLittleEndian(v, b.data()); return b; };
+        auto u32 = [](quint32 v) { QByteArray b(4, 0); qToLittleEndian(v, b.data()); return b; };
+        const QByteArray cf = u32(0xFFFFFFFF) + u32(8) + dib;
+        const QByteArray prop = u32(0x47) + u32(quint32(cf.size())) + cf;
+        const QByteArray section = u32(quint32(16 + prop.size())) + u32(1) + u32(17) + u32(16) + prop;
+        const QByteArray fmtid = QByteArray::fromHex("E0859FF2F94F6810AB9108002B27B3D9");
+        const QByteArray set = u16(0xFFFE) + u16(0) + u32(0x00020006) + QByteArray(16, 0) + u32(1) + fmtid + u32(48) + section;
+        jp::cfb::File c;
+        {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::ReadOnly));
+            QVERIFY(jp::cfb::read(f.readAll(), &c, &err));
+        }
+        QVERIFY(c.setStream(QStringLiteral("\x05SummaryInformation"), set));
+        {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(jp::cfb::write(c));
+        }
+        // Reading one stream straight from the file gives the same bytes.
+        QCOMPARE(jp::cfb::readStream(path, QStringLiteral("\x05SummaryInformation")), set);
+        QCOMPARE(jp::cfb::readStream(path, QStringLiteral("Quill/QuillSub/CONTENTS")), c.stream(QStringLiteral("Quill/QuillSub/CONTENTS")));
+        const QImage th = jp::publicationThumbnail(path);
+        QVERIFY(!th.isNull());
+        QCOMPARE(th.width() * 3, th.height() * 4);
+        QCOMPARE(th.pixelColor(th.width() / 2, th.height() / 2), QColor(200, 20, 30));
+    }
+
     // A spot color names its ink in the fill's extra drawing properties
     // (0x01A1, as Publisher writes "P2,#003d007e00db0000,PANTONE 2727 C" on
     // book covers whose PDFs print that ink on its own plate): the
