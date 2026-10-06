@@ -3438,6 +3438,79 @@ private Q_SLOTS:
         QCOMPARE(at.charFormat().fontStretch(), 150);
     }
 
+    // A .pub saved by JeffPub carries a preview picture of page 1 as
+    // Publisher writes one (a metafile copying in a 24-bit bitmap), which the
+    // Open page then shows, and each run's language, which comes back.
+    void pubPreviewAndLanguages()
+    {
+        jp::MainWindow w;
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto band = std::make_shared<jp::ShapeItem>();
+        band->shape = QStringLiteral("rect");
+        band->rect = QRectF(0, 0, 612, 300);
+        band->fill = jp::Fill::solid(jp::ColorRef::rgb(QColor(200, 30, 40)));
+        band->stroke = jp::Stroke::none();
+        doc->pages[0]->items.push_back(band);
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 360, 468, 300);
+        t->storyId = doc->createStory(QStringLiteral("This text is in English.\nEste texto está en español.\nCe texte est en français.\nDieser Text ist auf Deutsch."));
+        doc->pages[0]->items.push_back(t);
+        const char *langs[] = {"en-US", "es-MX", "fr-FR", "de-DE"};
+        QTextBlock b = doc->storyDoc(t->storyId)->begin();
+        for (const char *lang : langs) {
+            QTextCursor c(b);
+            c.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+            QTextCharFormat f;
+            f.setProperty(jp::tp::Language, QString::fromLatin1(lang));
+            f.setFontPointSize(24);
+            c.mergeCharFormat(f);
+            b = b.next();
+        }
+        w.editor()->setDocument(std::move(doc));
+        const QImage thumb = w.pageThumbnail(0, 160);
+        QCOMPARE(qMax(thumb.width(), thumb.height()), 160);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("preview.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*w.editor()->doc(), path, &err, thumb), qPrintable(err));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test35-preview-and-languages.pub";
+            QFile::remove(out);
+            QFile::copy(path, out);
+        }
+        // Publisher's layout: property 17, a clipboard metafile picture whose
+        // metafile fills white and copies in the bitmap.
+        const QByteArray si = jp::cfb::readStream(path, QStringLiteral("\x05SummaryInformation"));
+        const qsizetype at = si.indexOf(QByteArray::fromHex("47000000"));
+        QVERIFY(at > 0);
+        QCOMPARE(si.mid(at + 8, 10), QByteArray::fromHex("ffffffff030000000800"));
+        const QByteArray wmf = si.mid(at + 24);
+        QCOMPARE(wmf.left(6), QByteArray::fromHex("010009000003"));
+        for (const char *rec : {"05000000 0b02", "05000000 0c02", "07000000 fc02", "04000000 2d01", "09000000 1d06", "4009", "03000000 0000"})
+            QVERIFY2(wmf.contains(QByteArray::fromHex(QByteArray(rec).replace(' ', ""))), rec);
+        // Read back as the Open page shows it: red at the top, white below.
+        const QImage back = jp::publicationThumbnail(path);
+        QVERIFY(!back.isNull());
+        QVERIFY(qAbs(double(back.width()) / back.height() - double(thumb.width()) / thumb.height()) < 0.02);   // drawn at the Open page's size
+        const QColor top = back.pixelColor(back.width() / 2, 5), low = back.pixelColor(5, back.height() - 5);
+        QVERIFY2(top.red() > 180 && top.green() < 60, qPrintable(top.name()));
+        QVERIFY2(low.lightness() > 240, qPrintable(low.name()));
+        // The languages, through the independent reader.
+        auto reopened = jp::importPublisherFile(path, &err);
+        QVERIFY2(reopened, qPrintable(err));
+        QTextDocument *story = nullptr;
+        for (const auto &it : reopened->pages[0]->items)
+            if (auto tx = std::dynamic_pointer_cast<jp::TextItem>(it)) story = reopened->storyDoc(tx->storyId);
+        QVERIFY(story);
+        QStringList got;
+        for (QTextBlock blk = story->begin(); blk.isValid(); blk = blk.next()) {
+            QTextCursor c(blk);
+            c.movePosition(QTextCursor::NextCharacter);
+            got << c.charFormat().stringProperty(jp::tp::Language);
+        }
+        QCOMPARE(got.mid(0, 4), (QStringList{"en-US", "es-MX", "fr-FR", "de-DE"}));
+    }
+
     // A right-to-left paragraph through .pub: written as in a sample made in
     // Publisher (0x06 = 0 and 0x3A = 0xF3FF on that paragraph only; 0x3A
     // appears in none of 247 left-to-right reference files), read back.

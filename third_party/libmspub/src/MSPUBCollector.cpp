@@ -352,6 +352,7 @@ void fillLocale(librevenge::RVNGPropertyList &props, const unsigned lcid)
     {0x041d, "sv", "SE"}, {0x0406, "da", "DK"}, {0x0414, "nb", "NO"}, {0x040b, "fi", "FI"}, {0x0408, "el", "GR"}, {0x041f, "tr", "TR"},
     {0x040d, "he", "IL"}, {0x0401, "ar", "SA"}, {0x0411, "ja", "JP"}, {0x0412, "ko", "KR"}, {0x0804, "zh", "CN"}, {0x0404, "zh", "TW"},
     {0x0422, "uk", "UA"}, {0x0418, "ro", "RO"}, {0x041b, "sk", "SK"}, {0x0424, "sl", "SI"}, {0x041a, "hr", "HR"}, {0x0402, "bg", "BG"},
+    {0x540a, "es", "US"}, {0x1c09, "en", "ZA"}, {0x4009, "en", "IN"},
   };
   for (const auto &e : table)
   {

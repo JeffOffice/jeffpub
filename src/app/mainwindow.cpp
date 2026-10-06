@@ -303,7 +303,7 @@ bool MainWindow::saveTo(const QString &pathIn)
         QFile::copy(path, backup);
     }
     if (path.endsWith(QLatin1String(".pub"), Qt::CaseInsensitive)) {
-        if (!exportPublisher(*m_ed->doc(), path, &err)) {
+        if (!exportPublisher(*m_ed->doc(), path, &err, pageThumbnail(0, 160))) {
             QMessageBox::warning(this, QStringLiteral("Save"), err);
             return false;
         }

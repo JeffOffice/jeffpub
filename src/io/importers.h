@@ -65,7 +65,9 @@ QImage renderPlate(const Document &doc, int page, int plate, double dpi);
 void renderPlateInto(QPainter *p, const PaintContext &ctx, int page, int plate);
 QVector<QVector<int>> bookletOrder(int pages);   // sheet sides -> page indices (-1 blank)
 
-bool exportPublisher(const Document &doc, const QString &path, QString *error);
+// thumbnail: page 1 for the file's preview picture (about 160 pixels across,
+// as Publisher makes it), or none.
+bool exportPublisher(const Document &doc, const QString &path, QString *error, const QImage &thumbnail = QImage());
 // A process color's inks as a .pub file keeps them: the values of drawing
 // properties 0x019F and 0x01A6 (0 when not needed).
 QPair<quint32, quint32> packPubInks(const QColor &cmyk);

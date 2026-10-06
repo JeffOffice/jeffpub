@@ -19,6 +19,17 @@ A compound file (`src/io/cfb.cpp`) with these streams:
 | `\x01CompObj`, `\x03Internal`, `Envelope` | Fixed identification streams |
 | `\x05SummaryInformation`, `\x05DocumentSummaryInformation` | Standard OLE property sets (title, author; a preview picture) |
 
+The preview picture (SummaryInformation property 17, `VT_CF`): in all 282
+reference files Publisher saved, clipboard format 3 (`CF_METAFILEPICT`:
+mapping mode 8, then the picture's size in 0.01 mm at the screen's dpi,
+2540/96 per pixel on a 96-dpi screen) around a Windows metafile of seven
+records: `SetWindowOrg` 0,0; `SetWindowExt` to the bitmap; a white solid
+brush (`CreateBrushIndirect`, `SelectObject` 0); `PatBlt` PATCOPY over the
+window; `SelectObject` 0 again; `DIBBitBlt` SRCCOPY of a 24-bit bottom-up
+bitmap of page 1 (about 141 to 161 pixels across: it follows the view's
+zoom when saved); end of file. JeffPub writes the same, page 1 fitted in
+160 pixels. (Publisher check pending, test35.)
+
 Storage class ids: root `00021201-0000-0000-00C0-000000000046`,
 `Quill/QuillSub` `08C8F6DA-969D-11D1-8E02-00C04FB6FECE`. Empty storages
 `Objects` and `VBA` are present.
@@ -385,7 +396,11 @@ what would be EMU at 96 pt (a multiple of 4) plus 2 (1 line = 1219202;
 Normal's 1.19 lines = 1450850). JeffPub writes spacing and line spacing on
 every paragraph so Normal's own values (6 pt after, 1.19 lines) don't apply.
 
-Character runs (FDPC): `1e:12 = 1` underline, `10:0a` strikethrough,
+Character runs (FDPC): `12:22` and `3e:22` the language as a Windows LCID
+(1033 for US English in every run of the 56 reference files with
+character pages; JeffPub writes the run's language in both, 1034-style
+codes from the table libmspub reads; Publisher check pending, test35),
+`1e:12 = 1` underline, `10:0a` strikethrough,
 `13:0a` small caps, `14:0a` all caps, `0f:12` 1 superscript, 2 subscript,
 `1b:22` space added between letters in EMU (Publisher's "kerning"), `1f:1a`
 tracking in tenths of a percent (1000 normal, 1250 very loose). A run can

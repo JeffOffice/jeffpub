@@ -22,6 +22,7 @@
 #include <QCryptographicHash>
 #include <QDir>
 #include <QImage>
+#include <QPainter>
 #include <QHash>
 #include <QSet>
 #include <QMap>
@@ -585,6 +586,85 @@ QByteArray vtString(const QString &s)
     while (o.size() % 4) o.append('\0');
     return o;
 }
+// The preview picture (summary property 17) as Publisher writes it: a
+// clipboard metafile picture (format 3, mapping mode 8, its size in 0.01 mm
+// at 96 dpi) whose metafile fills the window white and copies in a 24-bit
+// bitmap of the first page. Checked against 282 files Publisher saved.
+QByteArray vtThumbnail(const QImage &thumb)
+{
+    QImage img(thumb.size(), QImage::Format_RGB888);
+    img.fill(Qt::white);
+    {
+        QPainter p(&img);
+        p.drawImage(0, 0, thumb);
+    }
+    const int w = img.width(), h = img.height();
+    const int stride = (w * 3 + 3) & ~3;
+    QByteArray dib;   // BITMAPINFOHEADER, then the rows bottom up in BGR
+    putU32(dib, 40);
+    putU32(dib, quint32(w));
+    putU32(dib, quint32(h));
+    putU16(dib, 1);
+    putU16(dib, 24);
+    putU32(dib, 0);
+    putU32(dib, quint32(stride * h));
+    for (int i = 0; i < 4; ++i) putU32(dib, 0);
+    for (int y = h - 1; y >= 0; --y) {
+        const uchar *row = img.constScanLine(y);
+        for (int x = 0; x < w; ++x) {
+            dib.append(char(row[x * 3 + 2]));
+            dib.append(char(row[x * 3 + 1]));
+            dib.append(char(row[x * 3]));
+        }
+        dib.append(QByteArray(stride - w * 3, '\0'));
+    }
+    auto record = [](quint16 function, const QByteArray &params) {
+        QByteArray r;
+        putU32(r, quint32((6 + params.size()) / 2));
+        putU16(r, function);
+        return r + params;
+    };
+    auto words = [](std::initializer_list<int> v) {
+        QByteArray o;
+        for (int x : v) putU16(o, quint16(x));
+        return o;
+    };
+    QByteArray brush;   // solid white
+    putU16(brush, 0);
+    putU32(brush, 0x00ffffff);
+    putU16(brush, 0);
+    QByteArray patBlt, bitBlt;
+    putU32(patBlt, 0x00f00021);   // PATCOPY
+    patBlt += words({h, w, 0, 0});
+    putU32(bitBlt, 0x00cc0020);   // SRCCOPY
+    bitBlt += words({0, 0, h, w, 0, 0}) + dib;
+    const QByteArray copy = record(0x0940, bitBlt);   // META_DIBBITBLT
+    const QByteArray records = record(0x020b, words({0, 0})) + record(0x020c, words({h, w})) + record(0x02fc, brush) + record(0x012d, words({0})) +
+                               record(0x061d, patBlt) + record(0x012d, words({0})) + copy + record(0x0000, {});
+    QByteArray wmf;
+    putU16(wmf, 1);        // in memory
+    putU16(wmf, 9);        // header words
+    putU16(wmf, 0x0300);
+    putU32(wmf, quint32((18 + records.size()) / 2));
+    putU16(wmf, 1);        // objects: the brush
+    putU32(wmf, quint32(copy.size() / 2));
+    putU16(wmf, 0);
+    wmf += records;
+    QByteArray cf;
+    putU32(cf, 0xffffffffu);   // a Windows clipboard format
+    putU32(cf, 3);             // CF_METAFILEPICT
+    putU16(cf, 8);             // MM_ANISOTROPIC
+    putU16(cf, quint16(std::lround(w * 2540.0 / 96)));
+    putU16(cf, quint16(std::lround(h * 2540.0 / 96)));
+    putU16(cf, 0);
+    cf += wmf;
+    QByteArray o;
+    putU32(o, 0x47);   // VT_CF
+    putU32(o, quint32(cf.size()));
+    o += cf;
+    while (o.size() % 4) o.append('\0');
+    return o;
+}
 QByteArray guidBytes(quint32 a, quint16 b, quint16 c, const QByteArray &d8)
 {
     QByteArray o;
@@ -598,7 +678,7 @@ QByteArray guidBytes(quint32 a, quint16 b, quint16 c, const QByteArray &d8)
 // ---------------------------------------------------------------- the writer
 class PubWriter {
 public:
-    PubWriter(const Document &doc, const QString &path) : m_doc(doc), m_path(path) {}
+    PubWriter(const Document &doc, const QString &path, const QImage &thumbnail) : m_doc(doc), m_path(path), m_thumbnail(thumbnail) {}
     QByteArray write(QStringList *skipped);
 
 private:
@@ -677,6 +757,7 @@ private:
 
     const Document &m_doc;
     QString m_path;
+    QImage m_thumbnail;   // page 1, for the preview picture
     QStringList m_fonts;
     QVector<quint32> m_colors;
     // Text: stream bytes from offset 512, runs, story lengths and ids.
@@ -690,6 +771,25 @@ private:
     QHash<int, int> m_chainLength;   // text id -> boxes in its chain
 };
 
+// The Windows language code (LCID) for a run's language, as Publisher keeps
+// it on every run (properties 0x12 and 0x3E, US English 1033 in every file
+// it saved here); the same table libmspub reads back.
+quint32 languageCode(const QString &tag)
+{
+    static const QHash<QString, quint32> codes{
+        {"en-US", 0x0409}, {"en-GB", 0x0809}, {"en-AU", 0x0c09}, {"en-CA", 0x1009}, {"en-NZ", 0x1409}, {"en-IE", 0x1809},
+        {"en-ZA", 0x1c09}, {"en-IN", 0x4009}, {"fr-FR", 0x040c}, {"fr-CA", 0x0c0c}, {"de-DE", 0x0407}, {"de-CH", 0x0807},
+        {"de-AT", 0x0c07}, {"es-ES", 0x0c0a}, {"es-MX", 0x080a}, {"es-US", 0x540a}, {"it-IT", 0x0410}, {"nl-NL", 0x0413},
+        {"nl-BE", 0x0813}, {"pt-BR", 0x0416}, {"pt-PT", 0x0816}, {"ru-RU", 0x0419}, {"pl-PL", 0x0415}, {"cs-CZ", 0x0405},
+        {"hu-HU", 0x040e}, {"sv-SE", 0x041d}, {"da-DK", 0x0406}, {"nb-NO", 0x0414}, {"fi-FI", 0x040b}, {"el-GR", 0x0408},
+        {"tr-TR", 0x041f}, {"he-IL", 0x040d}, {"ar-SA", 0x0401}, {"ja-JP", 0x0411}, {"ko-KR", 0x0412}, {"zh-CN", 0x0804},
+        {"zh-TW", 0x0404}, {"uk-UA", 0x0422}, {"ro-RO", 0x0418}, {"sk-SK", 0x041b}, {"sl-SI", 0x0424}, {"hr-HR", 0x041a},
+        {"bg-BG", 0x0402}};
+    const QStringList parts = QString(tag).replace('_', '-').split('-', Qt::SkipEmptyParts);
+    const QString key = parts.value(0).toLower() + '-' + parts.value(1).toUpper();
+    return codes.value(key, 0x0409);
+}
+
 QVector<B> PubWriter::charBlocks(const QTextCharFormat &f, const QTextCharFormat &style)
 {
     QVector<B> p;
@@ -699,7 +799,8 @@ QVector<B> PubWriter::charBlocks(const QTextCharFormat &f, const QTextCharFormat
     if (italic) p << flag(0x03, 0x0a);
     double size = f.hasProperty(QTextFormat::FontPointSize) ? f.fontPointSize() : 0;
     if (size > 0) p << u32(0x0c, quint32(emu(size)), 0x22);
-    p << u32(0x12, 1033, 0x22);
+    const quint32 language = languageCode(f.hasProperty(tp::Language) ? f.stringProperty(tp::Language) : style.stringProperty(tp::Language));
+    p << u32(0x12, language, 0x22);
     QString family;
     const QStringList fams = f.fontFamilies().toStringList();
     if (!fams.isEmpty()) family = fams.first();
@@ -727,7 +828,7 @@ QVector<B> PubWriter::charBlocks(const QTextCharFormat &f, const QTextCharFormat
     if (f.verticalAlignment() == QTextCharFormat::AlignSuperScript) p << u16(0x0f, 1, 0x12);
     else if (f.verticalAlignment() == QTextCharFormat::AlignSubScript) p << u16(0x0f, 2, 0x12);
     if (size > 0) p << u32(0x39, quint32(emu(size)), 0x22);
-    p << u32(0x3e, 1033, 0x22);
+    p << u32(0x3e, language, 0x22);
     const QString cref = f.stringProperty(tp::ColorRefP);
     QColor color;
     if (!cref.isEmpty()) color = ColorRef::fromString(cref).resolve(m_doc.colors);
@@ -2205,8 +2306,9 @@ QByteArray PubWriter::write(QStringList *skipped)
     }
 
     // ---- property sets and the compound file
-    const QByteArray summary = propertySet(guidBytes(0xf29f85e0, 0x4ff9, 0x1068, QByteArray::fromHex("ab9108002b27b3d9")),
-                                           {{1, vtI2(1252)}, {2, vtString(m_doc.props.title)}, {4, vtString(m_doc.props.author)}});
+    QVector<QPair<quint32, QByteArray>> summaryProps{{1, vtI2(1252)}, {2, vtString(m_doc.props.title)}, {4, vtString(m_doc.props.author)}};
+    if (!m_thumbnail.isNull()) summaryProps.append({17, vtThumbnail(m_thumbnail)});
+    const QByteArray summary = propertySet(guidBytes(0xf29f85e0, 0x4ff9, 0x1068, QByteArray::fromHex("ab9108002b27b3d9")), summaryProps);
     const QByteArray docSummary = propertySet(guidBytes(0xd5cdd502, 0x2e9c, 0x101b, QByteArray::fromHex("939708002b2cf9ae")), {{1, vtI2(1252)}});
     const QByteArray pubClsid = guidBytes(0x00021201, 0x0000, 0x0000, QByteArray::fromHex("c000000000000046"));
     const QByteArray quillClsid = guidBytes(0x08c8f6da, 0x969d, 0x11d1, QByteArray::fromHex("8e0200c04fb6fece"));
@@ -2266,10 +2368,10 @@ QByteArray PubWriter::write(QStringList *skipped)
 
 } // namespace
 
-bool exportPublisher(const Document &doc, const QString &path, QString *error)
+bool exportPublisher(const Document &doc, const QString &path, QString *error, const QImage &thumbnail)
 {
     QStringList skipped;
-    PubWriter w(doc, path);
+    PubWriter w(doc, path, thumbnail);
     const QByteArray bytes = w.write(&skipped);
     // Written beside the file and swapped in only when complete: a full disk
     // or a crash leaves the old file as it was (often the only copy of a
