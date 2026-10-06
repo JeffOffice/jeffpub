@@ -1235,6 +1235,9 @@ QByteArray PubWriter::write(QStringList *skipped)
                     putU16(b, 0);
                     return b;
                 };
+                // Publisher draws the words only when their font is in the
+                // document's font table.
+                fontIndex(ta->font);
                 QVector<Prop> opt = kInsets;
                 opt << Prop{0xc0c0, 0, utf16z(ta->text)} << Prop{0xc0c5, 0, utf16z(interchangeFontName(ta->font))};
                 // Alignment: Publisher counts stretch 0, center 1, left 2, right 3, letter 4, word 5.
@@ -1254,7 +1257,10 @@ QByteArray PubWriter::write(QStringList *skipped)
                 opt << Prop{0x0181, filled ? bgr(ta->fill.color.resolve(m_doc.colors)) : 0x08000001}
                     << Prop{0x01bf, filled ? 0x00100010u : 0x00100000u};
                 strokeProps(opt, ta->stroke);
-                opt << kTail;
+                // Shadow and 3D settings as Publisher writes them for Text Art.
+                opt << Prop{0x0201, 0x00d8d8d8} << Prop{0x0204, 0} << Prop{0x0205, 0} << Prop{0x0206, 0} << Prop{0x0209, 0} << Prop{0x020c, 0}
+                    << Prop{0x023f, 0x00030000} << Prop{0x027f, 0x00010000} << Prop{0x02bf, 0x000f0001} << Prop{0x02ff, 0x001f0016}
+                    << Prop{0x0384, 36576} << Prop{0x0385, 36576} << Prop{0x0386, 36576} << Prop{0x0387, 36576};
                 rotationProp(opt, ta);
                 QVector<Prop> topt = {{0x017f, 0x02000200}, {0x023f, 0x00040000}, {0x057f, 0x00080000}, {0x05bf, 0x00080000},
                                       {0x05ff, 0x00080000}, {0x063f, 0x00080000}, {0x06ff, 0x00020002}};

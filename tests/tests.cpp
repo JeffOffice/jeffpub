@@ -410,11 +410,20 @@ private Q_SLOTS:
         QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
         QVERIFY2(err.isEmpty(), qPrintable(err));
         if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
-            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test19-textart";
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test20-textart";
             QFile::remove(out + ".pub");
             QFile::copy(path, out + ".pub");
             QString e2;
             jp::savePublication(*doc, out + ".jpub", QImage(), &e2);
+            // The same with an ordinary text box too.
+            auto withText = jp::Document::blank(QSizeF(612, 792));
+            for (const auto &ta : made) withText->pages[0]->items.push_back(ta->clone());
+            auto label = std::make_shared<jp::TextItem>();
+            label->rect = QRectF(60, 720, 400, 30);
+            label->storyId = withText->createStory(QStringLiteral("test21 Text Art with a text box"));
+            withText->pages[0]->items.push_back(label);
+            QFile::remove(qEnvironmentVariable("JP_SHOT_DIR") + "/test21-textart-and-text.pub");
+            QVERIFY(jp::exportPublisher(*withText, qEnvironmentVariable("JP_SHOT_DIR") + "/test21-textart-and-text.pub", &e2));
         }
         QString e1;
         auto back = jp::importPublisherFile(path, &e1);
