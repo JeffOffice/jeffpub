@@ -642,6 +642,55 @@ private Q_SLOTS:
         for (int i = 0; i < 3; ++i) QVERIFY(std::abs(got[i]->rect.left() - rects[i].left()) < 1 && std::abs(got[i]->rect.height() - rects[i].height()) < 1);
     }
 
+    // Objects on the master page are saved there and come back there, once.
+    void pubWriterMaster()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792), QStringLiteral("Letter"), 2);
+        QVERIFY(!doc->masters.isEmpty());
+        auto mt = std::make_shared<jp::TextItem>();
+        mt->rect = QRectF(72, 700, 300, 40);
+        mt->storyId = doc->createStory(QStringLiteral("test23 master page footer"));
+        doc->masters.first()->items.push_back(mt);
+        auto bar = std::make_shared<jp::ShapeItem>();
+        bar->rect = QRectF(72, 690, 468, 6);
+        bar->fill = jp::Fill::solid(jp::ColorRef::rgb(QColor(30, 60, 200)));
+        bar->stroke = jp::Stroke::none();
+        doc->masters.first()->items.push_back(bar);
+        for (int i = 0; i < 2; ++i) {
+            auto t = std::make_shared<jp::TextItem>();
+            t->rect = QRectF(72, 72, 300, 40);
+            t->storyId = doc->createStory(QStringLiteral("Page %1 text").arg(i + 1));
+            doc->pages[i]->items.push_back(t);
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("test23-master.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        QVERIFY2(err.isEmpty(), qPrintable(err));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test23-master.pub";
+            QFile::remove(out);
+            QFile::copy(path, out);
+        }
+        QString e1;
+        auto back = jp::importPublisherFile(path, &e1);
+        QVERIFY2(back, qPrintable(e1));
+        QCOMPARE(back->pages.size(), 2);
+        const jp::MasterPage *m = back->master(QStringLiteral("A"));
+        QVERIFY(m);
+        QCOMPARE(int(m->items.size()), 2);
+        bool footer = false;
+        jp::walkItems(m->items, [&](const jp::ItemPtr &it) {
+            if (it->type() == jp::ItemType::Text)
+                footer = back->storyDoc(static_cast<const jp::TextItem *>(it.get())->storyId)->toPlainText() == QStringLiteral("test23 master page footer");
+        });
+        QVERIFY(footer);
+        for (int i = 0; i < 2; ++i) {
+            QCOMPARE(back->pages[i]->masterId, QStringLiteral("A"));
+            QCOMPARE(int(back->pages[i]->items.size()), 1);
+        }
+    }
+
     // Two pages written to .pub read back as two pages, each with its own objects.
     void pubWriterPages()
     {

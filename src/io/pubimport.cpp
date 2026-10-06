@@ -5,6 +5,7 @@
 #include "text/textprops.h"
 
 #include <QFile>
+#include <QHash>
 #include <QFont>
 #include <QStringDecoder>
 #include <QTextBlock>
@@ -176,14 +177,32 @@ public:
             m_doc.setup.margins = QMarginsF(m, m, m, m);
         }
         auto page = m_doc.addPage();
-        page->masterId = QStringLiteral("A");
+        // The page's master: the one written under that sequence number (A when the file names none).
+        page->masterId = p["jp:master-seq"] ? m_masterIds.value(p["jp:master-seq"]->getInt(), QStringLiteral("A")) : QStringLiteral("A");
         m_page = page.get();
         m_stack.clear();
         ++m_rep.pages;
     }
     void endPage() override { m_page = nullptr; }
-    void startMasterPage(const RVNGPropertyList &) override {}
-    void endMasterPage() override {}
+    // Master pages arrive first, each once: A, B, C... in order.
+    void startMasterPage(const RVNGPropertyList &p) override
+    {
+        const int n = int(m_masterIds.size());
+        const QString id = n < 26 ? QString(QChar('A' + n)) : QStringLiteral("M%1").arg(n + 1);
+        if (p["jp:master-seq"]) m_masterIds.insert(p["jp:master-seq"]->getInt(), id);
+        MasterPage *m = m_doc.master(id);
+        if (!m) {
+            auto mp = std::make_shared<MasterPage>();
+            mp->id = id;
+            mp->abbr = id;
+            mp->name = QStringLiteral("Master Page %1").arg(id);
+            m_doc.masters << mp;
+            m = mp.get();
+        }
+        m_master = m;
+        m_stack.clear();
+    }
+    void endMasterPage() override { m_master = nullptr; }
 
     void setStyle(const RVNGPropertyList &p) override { m_style = p; }
 
@@ -589,6 +608,7 @@ private:
     ItemList &currentList()
     {
         if (!m_stack.empty()) return m_stack.back()->children;
+        if (m_master) return m_master->items;
         if (m_page) return m_page->items;
         return m_doc.scratch;
     }
@@ -839,6 +859,8 @@ private:
     Document &m_doc;
     PubImportReport &m_rep;
     Page *m_page = nullptr;
+    MasterPage *m_master = nullptr;       // set while a master page's objects arrive
+    QHash<int, QString> m_masterIds;      // .pub master page sequence number -> master id
     RVNGPropertyList m_style;
     std::vector<std::shared_ptr<GroupItem>> m_stack;
     std::shared_ptr<TextItem> m_text;

@@ -85,6 +85,7 @@ public:
   void setShapeRotation(unsigned seqNum, double rotation);
   void setShapeFlip(unsigned, bool, bool);
   void setShapeTextArt(unsigned seqNum, const librevenge::RVNGPropertyList &props);
+  void setPageKind(unsigned seqNum, int kind);
   void setShapeMargins(unsigned seqNum, unsigned left, unsigned top, unsigned right, unsigned bottom);
   void setShapeBorderPosition(unsigned seqNum, BorderPosition pos);
   void setShapeCoordinatesRotated90(unsigned seqNum);
@@ -171,6 +172,7 @@ private:
   std::set<unsigned> m_masterPages;
   std::set<unsigned> m_shapesWithCoordinatesRotated90;
   std::map<unsigned, unsigned> m_masterPagesByPageSeqNum;
+  std::map<unsigned, int> m_pageKinds;   // JeffPub 79: first byte of each page's field 06
   std::map<unsigned, std::vector<unsigned> > m_tableCellTextEndsByTextId;
   std::map<unsigned, unsigned> m_stringOffsetsByTextId;
   mutable std::vector<bool> m_calculationValuesSeen;

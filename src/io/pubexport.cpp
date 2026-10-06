@@ -828,7 +828,19 @@ QByteArray PubWriter::write(QStringList *skipped)
     // ---- objects on each page
     struct Obj { quint32 seq; int page; QByteArray escher; };
     QVector<Obj> objs;
-    QVector<QVector<quint32>> pageShapes(m_doc.pages.size());
+    // Objects go on the pages and on the first master page (written as
+    // master A); other master pages aren't written yet.
+    QVector<const PageBase *> surfaces;
+    QVector<quint32> surfaceSeq;
+    for (int i = 0; i < m_doc.pages.size(); ++i) {
+        surfaces << m_doc.pages[i].get();
+        surfaceSeq << pageSeq[i];
+    }
+    if (!m_doc.masters.isEmpty()) {
+        surfaces << m_doc.masters.first().get();
+        surfaceSeq << kMaster;
+    }
+    QVector<QVector<quint32>> pageShapes(surfaces.size());
     int textId = 2;
     int spid = 0x401;
     int skippedCount = 0;
@@ -892,7 +904,7 @@ QByteArray PubWriter::write(QStringList *skipped)
     // in page order by its first box, with a frame per box in chain order.
     QHash<QString, QPair<int, int>> chainPos;   // box id -> text id, place in chain
     QHash<QString, QPair<int, int>> shapeText;  // shape id -> text id, story index
-    for (int pi = 0; pi < m_doc.pages.size(); ++pi) {
+    for (int pi = 0; pi < surfaces.size(); ++pi) {
         std::function<void(const ItemPtr &)> find = [&](const ItemPtr &it) {
             if (it->type() == ItemType::Group) {
                 for (const ItemPtr &c : static_cast<const GroupItem *>(it.get())->children) find(c);
@@ -927,9 +939,9 @@ QByteArray PubWriter::write(QStringList *skipped)
             m_frames << frames;
             m_chainLength[tid] = int(frames.size());
         };
-        for (const ItemPtr &it : m_doc.pages[pi]->items) find(it);
+        for (const ItemPtr &it : surfaces[pi]->items) find(it);
     }
-    for (int pi = 0; pi < m_doc.pages.size(); ++pi) {
+    for (int pi = 0; pi < surfaces.size(); ++pi) {
         std::function<void(const ItemPtr &)> visit = [&](const ItemPtr &it) {
             if (it->type() == ItemType::Group) {
                 for (const ItemPtr &c : static_cast<const GroupItem *>(it.get())->children) visit(c);
@@ -955,7 +967,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 QVector<B> body{flag(0x02), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}), u32(0x27, quint32(tid))};
                 if (t->valign != VAlign::Top) body << u32(0x35, t->valign == VAlign::Middle ? 1 : 2);   // vertical alignment
                 body << u32(0xaa, quint32(emu(r.width()))) << u32(0xab, quint32(emu(r.height()))) << u32(0xb7, 0);
-                cw.put(seq, {0x01, pageSeq[pi], body});
+                cw.put(seq, {0x01, surfaceSeq[pi], body});
                 QVector<Prop> opt = {{0x0080, quint32(tid)}, {0x0081, quint32(emu(t->insets.left()))}, {0x0082, quint32(emu(t->insets.top()))},
                                      {0x0083, quint32(emu(t->insets.right()))}, {0x0084, quint32(emu(t->insets.bottom()))},
                                      {0x0181, 0x08000001}, {0x0183, 0x08000007}, {0x01bf, 0x00100000}, {0x01c0, 0x08000000}, {0x01c2, 0x08000007},
@@ -1034,7 +1046,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 body << u32(0x34, 0);
                 if (hasText && s->valign != VAlign::Top) body << u32(0x35, s->valign == VAlign::Middle ? 1 : 2);
                 body << u32(0xaa, quint32(emu(box.width()))) << u32(0xab, quint32(emu(box.height()))) << u32(0xb7, 0);
-                cw.put(seq, {0x01, pageSeq[pi], body});
+                cw.put(seq, {0x01, surfaceSeq[pi], body});
                 const bool filled = !open && s->fill.type == Fill::Solid;
                 QVector<Prop> opt = kInsets;
                 opt << Prop{0x0181, filled ? bgr(s->fill.color.resolve(m_doc.colors)) : 0x08000001} << Prop{0x0183, 0x08000007}
@@ -1070,7 +1082,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 // and flips say which corner it starts from.
                 auto *l = static_cast<const LineItem *>(it.get());
                 const quint32 seq = next++;
-                cw.put(seq, {0x20, pageSeq[pi], {flag(0x02), flag(0x03), u16(0x04, 256, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
+                cw.put(seq, {0x20, surfaceSeq[pi], {flag(0x02), flag(0x03), u16(0x04, 256, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
                                                  u32(0xb7, 0)}});
                 QVector<Prop> opt = kInsets;
                 opt << Prop{0x01bf, 0x00100000};
@@ -1140,7 +1152,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                     rowEdge << emu(acc);
                     grid << rec(0x00, {u32(0x01, quint32(rowEdge.last())), u32(0x02, quint32(rowEdge.last() - rowEdge[row]))});
                 }
-                cw.put(seq, {0x10, pageSeq[pi], {flag(0x02), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
+                cw.put(seq, {0x10, surfaceSeq[pi], {flag(0x02), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
                                                  u32(0x27, quint32(tid)), flag(0x2a), u32(0x66, quint32(tb->rows)), u32(0x67, quint32(tb->cols)),
                                                  u32(0x68, quint32(colEdge.last())), u32(0x69, quint32(rowEdge.last())), ref(0x6b, cellsSeq),
                                                  list(0x6d, grid, 0x90), u32(0x70, 0xfffffffdu), u32(0xb7, 0)}});
@@ -1228,7 +1240,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 // the words, font, size, spacing and alignment as properties.
                 auto *ta = static_cast<const TextArtItem *>(it.get());
                 const quint32 seq = next++;
-                cw.put(seq, {0x20, pageSeq[pi], {flag(0x02), flag(0x03), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
+                cw.put(seq, {0x20, surfaceSeq[pi], {flag(0x02), flag(0x03), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
                                                  u32(0xb7, 0)}});
                 auto utf16z = [](const QString &str) {
                     QByteArray b;
@@ -1281,7 +1293,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 }
                 const quint32 seq = next++, nameSeq = next++;
                 const QString file = m_blips[blip - 1].fileName;
-                Chunk c{0x01, pageSeq[pi], {flag(0x02), flag(0x03), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}), u32(0x34, 0),
+                Chunk c{0x01, surfaceSeq[pi], {flag(0x02), flag(0x03), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}), u32(0x34, 0),
                                             ref(0x3a, nameSeq), u32(0xaa, quint32(emu(r.width()))), u32(0xab, quint32(emu(r.height())))}};
                 c.dirVer = 0x0102;
                 c.dirB = 1;
@@ -1318,8 +1330,12 @@ QByteArray PubWriter::write(QStringList *skipped)
             }
             ++skippedCount;
         };
-        for (const ItemPtr &it : m_doc.pages[pi]->items) visit(it);
+        for (const ItemPtr &it : surfaces[pi]->items) visit(it);
     }
+    int otherMasterItems = 0;
+    for (int k = 1; k < m_doc.masters.size(); ++k) otherMasterItems += int(m_doc.masters[k]->items.size());
+    if (skipped && otherMasterItems)
+        *skipped << QStringLiteral("%1 object(s) on master pages after the first aren't saved to .pub yet").arg(otherMasterItems);
     // Linked boxes point at their neighbors: 28 = place in the chain,
     // 36 = the box before, 37 = the box after; 2d marks the last box.
     {
@@ -1359,7 +1375,7 @@ QByteArray PubWriter::write(QStringList *skipped)
     cw.put(261, {0x46, 256, {}});
     cw.put(262, {0x54, 256, {}});
     const QSizeF scratch(22860000, 22860000), ext(110185200, 110185200);
-    cw.put(kMaster, {0x43, 256, pageBody({}, 264, 265, true, false, scratch, ext)});
+    cw.put(kMaster, {0x43, 256, pageBody(m_doc.masters.isEmpty() ? QVector<quint32>{} : pageShapes.last(), 264, 265, true, false, scratch, ext)});
     cw.put(264, {0x60, kMaster, {u32(0x05, 1)}});
     cw.put(265, {0x77, kMaster, webForm()});
     for (int i = 0; i < pageSeq.size(); ++i) {

@@ -745,10 +745,22 @@ bool MSPUBParser::parsePageChunk(librevenge::RVNGInputStream *input, const Conte
   {
     m_collector->addPage(chunk.seqNum);
   }
+  // JeffPub 79: the first byte of field 06 says what kind of page this is
+  // (see MSPUBCollector::go()); special pages' sequence numbers vary, so the
+  // fixed list above misses some in older files.
+  int kindByte = -1;
+  bool isMaster = false;
   while (stillReading(input, chunk.offset + length))
   {
     MSPUBBlockInfo info = parseBlock(input);
-    if (info.id == PAGE_BG_SHAPE)
+    if (info.id == 0x06 && info.type == 0x28)
+    {
+      const unsigned long here = input->tell();
+      input->seek(info.dataOffset, librevenge::RVNG_SEEK_SET);
+      kindByte = readU8(input);
+      input->seek(here, librevenge::RVNG_SEEK_SET);
+    }
+    else if (info.id == PAGE_BG_SHAPE)
     {
       m_collector->setPageBgShape(chunk.seqNum, info.data);
     }
@@ -763,6 +775,7 @@ bool MSPUBParser::parsePageChunk(librevenge::RVNGInputStream *input, const Conte
         if (i != 0)
         {
           m_collector->designateMasterPage(chunk.seqNum);
+          isMaster = true;
         }
       }
     }
@@ -775,6 +788,8 @@ bool MSPUBParser::parsePageChunk(librevenge::RVNGInputStream *input, const Conte
       skipBlock(input, info);
     }
   }
+  if (type == NORMAL && !isMaster && kindByte >= 0)
+    m_collector->setPageKind(chunk.seqNum, kindByte);
   return true;
 }
 

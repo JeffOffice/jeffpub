@@ -1,3 +1,4 @@
+#include <set>
 #include <cstdio>
 #include <cstdlib>
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
@@ -1536,6 +1537,11 @@ void MSPUBCollector::setShapeFlip(unsigned seqNum, bool flipVertical, bool flipH
   m_shapeInfosBySeqNum[seqNum].m_flips = std::pair<bool, bool>(flipVertical, flipHorizontal);
 }
 
+void MSPUBCollector::setPageKind(unsigned seqNum, int kind)
+{
+  m_pageKinds[seqNum] = kind;
+}
+
 void MSPUBCollector::setShapeTextArt(unsigned seqNum, const librevenge::RVNGPropertyList &props)
 {
   m_shapeInfosBySeqNum[seqNum].m_textArt = props;
@@ -1865,21 +1871,20 @@ void MSPUBCollector::writePage(unsigned pageSeqNum) const
   {
     pageProps.insert("svg:height", m_height);
   }
-  const auto &shapeGroupsOrdered = pageInfo.m_shapeGroupsOrdered;
-  if (!shapeGroupsOrdered.empty())
+  // JeffPub 79: every page is written, even one with no objects of its own;
+  // its master's objects were written once as a master page (see go()), and
+  // the page names that master.
   {
-    m_painter->startPage(pageProps);
     boost::optional<unsigned> masterSeqNum = getMasterPageSeqNum(pageSeqNum);
     auto hasMaster = bool(masterSeqNum);
+    if (hasMaster)
+      pageProps.insert("jp:master-seq", int(masterSeqNum.get()));
+    m_painter->startPage(pageProps);
     if (hasMaster)
     {
       writePageBackground(masterSeqNum.get());
     }
     writePageBackground(pageSeqNum);
-    if (hasMaster)
-    {
-      writePageShapes(masterSeqNum.get());
-    }
     writePageShapes(pageSeqNum);
     m_painter->endPage();
   }
@@ -1944,29 +1949,62 @@ bool MSPUBCollector::go()
     m_painter->defineEmbeddedFont(props);
   }
 
+  // JeffPub 79: master pages, each once, before the pages that use them.
+  for (unsigned masterSeq : m_masterPages)
+  {
+    if (!hasPage(masterSeq))
+      continue;
+    librevenge::RVNGPropertyList masterProps;
+    masterProps.insert("jp:master-seq", int(masterSeq));
+    if (m_widthSet)
+      masterProps.insert("svg:width", m_width);
+    if (m_heightSet)
+      masterProps.insert("svg:height", m_height);
+    m_painter->startMasterPage(masterProps);
+    writePageShapes(masterSeq);
+    m_painter->endMasterPage();
+  }
+  // JeffPub 79: pages in order, masters and special pages left out, and pages
+  // with no objects of their own kept. Publisher lists its four special
+  // pages (envelope, web and the like) after the real ones; walking back from
+  // the end, up to four entries are special when each is a known special
+  // sequence number, is marked 0 (first byte of field 06), or is blank and
+  // not marked as a first page (1).
+  std::vector<unsigned> listed;
   if (m_pageSeqNumsOrdered.empty())
   {
-    for (std::map<unsigned, PageInfo>::const_iterator i = m_pagesBySeqNum.begin();
-         i != m_pagesBySeqNum.end(); ++i)
-    {
+    for (std::map<unsigned, PageInfo>::const_iterator i = m_pagesBySeqNum.begin(); i != m_pagesBySeqNum.end(); ++i)
       if (!pageIsMaster(i->first))
-      {
-        writePage(i->first);
-      }
-    }
+        listed.push_back(i->first);
   }
   else
   {
     for (unsigned int i : m_pageSeqNumsOrdered)
-    {
-      std::map<unsigned, PageInfo>::const_iterator iter =
-        m_pagesBySeqNum.find(i);
-      if (iter != m_pagesBySeqNum.end() && !pageIsMaster(iter->first))
-      {
-        writePage(iter->first);
-      }
-    }
+      if (!pageIsMaster(i))
+        listed.push_back(i);
   }
+  auto kindOf = [&](unsigned seq)
+  {
+    const auto k = m_pageKinds.find(seq);
+    return k == m_pageKinds.end() ? -1 : k->second;
+  };
+  auto blank = [&](unsigned seq)
+  {
+    const auto pg = m_pagesBySeqNum.find(seq);
+    return pg == m_pagesBySeqNum.end() || pg->second.m_shapeGroupsOrdered.empty();
+  };
+  std::set<unsigned> special;
+  for (size_t k = listed.size(); k > 0 && listed.size() - k < 4; --k)
+  {
+    const unsigned seq = listed[k - 1];
+    const bool knownSpecial = seq == 0x10d || seq == 0x110 || seq == 0x113 || seq == 0x117;
+    if (!(knownSpecial || kindOf(seq) == 0 || (blank(seq) && kindOf(seq) != 1)))
+      break;
+    special.insert(seq);
+  }
+  for (unsigned seq : listed)
+    if (m_pagesBySeqNum.find(seq) != m_pagesBySeqNum.end() && !special.count(seq) && kindOf(seq) != 0)
+      writePage(seq);
   m_painter->endDocument();
   return true;
 }
