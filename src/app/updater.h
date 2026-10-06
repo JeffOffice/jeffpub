@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QPointer>
 
+class QDialog;
 class QWidget;
 
 namespace jp {
@@ -25,6 +26,15 @@ public:
     // from this project's releases on GitHub, with a usable version tag and
     // the SHA-256 GitHub publishes for it.
     static bool trustedInstaller(const QString &url, const QString &tag, const QString &digest);
+
+    // The part of a release's notes worth showing in the offer: its "New
+    // in" sections (headings made bold), without the install steps.
+    static QString releaseHighlights(const QString &notes);
+    // What the offer's exec() returns besides Rejected (Later).
+    enum OfferChoice { Install = 1, Skip, OpenPage };
+    // The update offer: the new version, its notes (Markdown) and a choice;
+    // canInstall offers Update Now, otherwise the download page.
+    static QDialog *offerDialog(QWidget *parent, const QString &version, const QString &notes, bool canInstall, const QString &pageUrl);
 
 private:
     void offer(const QString &tag, const QString &notes, const QString &pageUrl, const QString &setupUrl, const QString &digest);

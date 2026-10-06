@@ -48,6 +48,7 @@
 #include <QTextCursor>
 #include <QTextDocument>
 #include <QTextList>
+#include <QTextBrowser>
 #include <QDirIterator>
 #include <QtTest>
 #include <clocale>
@@ -3671,6 +3672,50 @@ private Q_SLOTS:
     }
 
     // Update check compares versions numerically, previews before releases.
+    // The update offer shows what is new, formatted, without the install
+    // steps or the preview notice the release page carries.
+    void updateOfferNotes()
+    {
+        const QString body = QStringLiteral(
+            "**Early preview for testing. Not finished software.** JeffPub 79 is an independent open-source project.\r\n\r\n"
+            "### Install\r\n- **Windows:** download **JeffPub79-Setup.exe** and run it.\r\n"
+            "- **Debian:** run `sudo apt install ./jeffpub79_0.1.19_amd64.deb`.\r\n\r\n"
+            "JeffPub 79 checks for new versions once a day.\r\n\r\n"
+            "### New in preview 19\r\n- **The New Publication page opens categories at once.** Thumbnails fill in.\r\n- Banners are quicker.\r\n");
+        const QString h = jp::Updater::releaseHighlights(body);
+        QVERIFY(h.startsWith(QLatin1String("**New in preview 19**")));
+        QVERIFY(h.contains(QLatin1String("opens categories at once")));
+        QVERIFY(h.contains(QLatin1String("- Banners are quicker.")));
+        for (const char *gone : {"Early preview", "Install", "sudo apt", "once a day", "\r"}) QVERIFY2(!h.contains(QLatin1String(gone)), gone);
+        // Notes without a "New in" section keep their other sections.
+        QCOMPARE(jp::Updater::releaseHighlights(QStringLiteral("Preview.\n\n### Install\n- run it\n\n### Changes\n- quicker")),
+                 QStringLiteral("**Changes**\n\n- quicker"));
+
+        const QString oldSheet = qApp->styleSheet();
+        const QIcon oldIcon = QApplication::windowIcon();
+        qApp->setStyleSheet(jp::modernStyleSheet());
+        Q_INIT_RESOURCE(resources);   // the app icon lives in the static jpcore library
+        QApplication::setWindowIcon(QIcon(QStringLiteral(":/app.png")));
+        std::unique_ptr<QDialog> d(jp::Updater::offerDialog(nullptr, QStringLiteral("0.1.19"), h, true, QStringLiteral("https://github.com/jeffsteinport/jeffpub79/releases/tag/v0.1.19")));
+        d->show();
+        QApplication::processEvents();
+        auto *notes = d->findChild<QTextBrowser *>();
+        QVERIFY(notes);
+        const QString shown = notes->toPlainText();
+        QVERIFY(shown.contains(QLatin1String("The New Publication page opens categories at once.")));
+        QVERIFY(!shown.contains(QLatin1Char('*')));   // Markdown formatted, not shown as text
+        QPushButton *now = nullptr;
+        for (QPushButton *b : d->findChildren<QPushButton *>())
+            if (b->text() == QLatin1String("Update Now")) now = b;
+        QVERIFY(now && now->isDefault() && now->property("primary").toBool());
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) d->grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/update-offer.png");
+        now->click();
+        QCOMPARE(d->result(), int(jp::Updater::Install));
+        d.reset();
+        qApp->setStyleSheet(oldSheet);
+        QApplication::setWindowIcon(oldIcon);
+    }
+
     void updateVersionOrder()
     {
         QVERIFY(jp::Updater::isNewer("v0.1.6", "0.1.0"));
