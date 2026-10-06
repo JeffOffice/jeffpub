@@ -10,6 +10,8 @@
 #include "core/items.h"
 #include "core/fonts.h"
 #include "io/cfb.h"
+#include "io/pubshapes.h"
+#include "render/shapes.h"
 #include "text/textprops.h"
 
 #include <QFile>
@@ -319,6 +321,72 @@ const QVector<Prop> kSideLines = {{0x0540, 0x08000000}, {0x0542, 0x08000007}, {0
 const QVector<Prop> kShadowFlags = {{0x0295, 0}, {0x0296, 0}, {0x0297, 0}, {0x0298, 0}, {0x0299, 0}, {0x029a, 0}};
 
 quint32 bgr(const QColor &c) { return quint32(c.red()) | (quint32(c.green()) << 8) | (quint32(c.blue()) << 16); }
+
+// A freeform outline: the frame's size as the coordinate space (EMU), the
+// points (pairs of 32-bit numbers) and the path's segments: 0x4000 move,
+// n lines, 0x2000 + n curves (three points each), 0x6001 close, 0x8000 end;
+// runs stay under 256, as readers take the count from the low byte.
+void freeformProps(QVector<Prop> &opt, const QPainterPath &path, const QSizeF &size)
+{
+    QByteArray verts, segs;
+    int nv = 0, ns = 0;
+    auto vert = [&](const QPointF &p) {
+        putU32(verts, quint32(qint32(emu(p.x()))));
+        putU32(verts, quint32(qint32(emu(p.y()))));
+        ++nv;
+    };
+    auto seg = [&](quint32 v) {
+        putU16(segs, v);
+        ++ns;
+    };
+    QPointF start, last;
+    bool open = false;
+    auto closeIfShut = [&] {
+        if (open && QLineF(start, last).length() < 1e-3) seg(0x6001);
+        open = false;
+    };
+    const int n = path.elementCount();
+    for (int i = 0; i < n;) {
+        const QPainterPath::Element e = path.elementAt(i);
+        if (e.type == QPainterPath::MoveToElement) {
+            closeIfShut();
+            seg(0x4000);
+            vert(e);
+            start = last = e;
+            open = true;
+            ++i;
+        } else if (e.type == QPainterPath::LineToElement) {
+            int k = 0;
+            for (; i < n && k < 0xff && path.elementAt(i).type == QPainterPath::LineToElement; ++i, ++k) {
+                vert(path.elementAt(i));
+                last = path.elementAt(i);
+            }
+            seg(quint32(k));
+        } else if (e.type == QPainterPath::CurveToElement) {
+            int k = 0;
+            for (; i + 2 < n && k < 0xff && path.elementAt(i).type == QPainterPath::CurveToElement; i += 3, ++k) {
+                vert(path.elementAt(i));
+                vert(path.elementAt(i + 1));
+                vert(path.elementAt(i + 2));
+                last = path.elementAt(i + 2);
+            }
+            seg(0x2000 | quint32(k));
+        } else {
+            ++i;
+        }
+    }
+    closeIfShut();
+    seg(0x8000);
+    auto array = [](const QByteArray &data, int count, int size) {
+        QByteArray a;
+        putU16(a, quint32(count));
+        putU16(a, quint32(count));
+        putU16(a, quint32(size));
+        return a + data;
+    };
+    opt << Prop{0x0142, quint32(emu(size.width()))} << Prop{0x0143, quint32(emu(size.height()))} << Prop{0x0144, 4}
+        << Prop{0xc145, 0, array(verts, nv, 8)} << Prop{0xc146, 0, array(segs, ns, 2)};
+}
 
 // ---------------------------------------------------------------- Quill
 struct Section { QByteArray name, kind; quint16 id = 0; QByteArray data; bool align = false; };
@@ -892,27 +960,57 @@ QByteArray PubWriter::write(QStringList *skipped)
             }
             if (it->type() == ItemType::Shape) {
                 auto *s = static_cast<const ShapeItem *>(it.get());
-                int st = -1;
-                if (s->shape == QLatin1String("rect") && s->customPath.isEmpty()) st = 1;
-                else if (s->shape == QLatin1String("ellipse") && s->customPath.isEmpty()) st = 3;
-                if (st < 0 || !s->storyId.isEmpty()) {
+                if (!s->storyId.isEmpty()) {
                     ++skippedCount;
                     return;
                 }
+                // Publisher's own shape when it has one (at its standard
+                // handle settings); otherwise the exact outline as a freeform.
+                const ShapeDef *def = shapeDef(s->shape);
+                const QVector<double> adj = s->adj.isEmpty() && def ? def->defaults : s->adj;
+                bool atDefaults = def && adj.size() == def->defaults.size();
+                for (int k = 0; atDefaults && k < adj.size(); ++k) atDefaults = std::abs(adj[k] - def->defaults[k]) < 1e-6;
+                int st = s->customPath.isEmpty() && atDefaults ? pubShapeType(s->shape) : -1;
+                const bool open = s->customPath.isEmpty() && def && def->open;
+                QPainterPath outline;
+                if (st < 0) {
+                    const QSizeF fs = s->rect.size();
+                    outline = !s->customPath.isEmpty() ? s->customPath : shapePath(s->shape, fs, s->adj);
+                    // Overlapping parts that merge on screen become one outline,
+                    // since a freeform's parts fill alternately.
+                    if (outline.fillRule() == Qt::WindingFill && !open) outline = outline.simplified();
+                    if (outline.isEmpty()) {
+                        ++skippedCount;
+                        return;
+                    }
+                    st = 0;
+                }
+                // A freeform reaching outside its frame (a callout's pointer)
+                // gets a frame grown evenly to hold it, keeping the center.
+                QRectF frame = s->rect;
+                if (st == 0) {
+                    const QRectF pb = outline.boundingRect();
+                    const double gx = std::max({0.0, -pb.left(), pb.right() - frame.width()});
+                    const double gy = std::max({0.0, -pb.top(), pb.bottom() - frame.height()});
+                    outline.translate(gx, gy);
+                    frame.adjust(-gx, -gy, gx, gy);
+                }
+                const QRectF box = turnedBox(frame, s->rotation);
                 const quint32 seq = next++;
                 cw.put(seq, {0x01, pageSeq[pi], {flag(0x02), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
-                                                 u32(0x34, 0), u32(0xaa, quint32(emu(r.width()))), u32(0xab, quint32(emu(r.height()))),
+                                                 u32(0x34, 0), u32(0xaa, quint32(emu(box.width()))), u32(0xab, quint32(emu(box.height()))),
                                                  u32(0xb7, 0)}});
-                const bool filled = s->fill.type == Fill::Solid;
+                const bool filled = !open && s->fill.type == Fill::Solid;
                 QVector<Prop> opt = kInsets;
                 opt << Prop{0x0181, filled ? bgr(s->fill.color.resolve(m_doc.colors)) : 0x08000001} << Prop{0x0183, 0x08000007}
                     << Prop{0x01bf, filled ? 0x00100010u : 0x00100000u};
                 strokeProps(opt, s->stroke);
                 opt << kTail;
                 rotationProp(opt, s->rotation);
+                if (st == 0) freeformProps(opt, outline, frame.size());
                 QVector<Prop> topt = {{0x01ff, 0x00400000}, {0x06ff, 0x00020002}};
                 topt << kSideLines << kShadowFlags;
-                QByteArray sp = spRecord(quint16(st), 0x0a00, s) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(r);
+                QByteArray sp = spRecord(quint16(st), 0x0a00, s) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(box);
                 sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
                 finish(seq, sp);
                 return;
@@ -1145,7 +1243,7 @@ QByteArray PubWriter::write(QStringList *skipped)
             }
         }
     }
-    if (skipped && skippedCount) *skipped << QStringLiteral("%1 object(s) (text art and some shapes) aren't saved to .pub yet").arg(skippedCount);
+    if (skipped && skippedCount) *skipped << QStringLiteral("%1 object(s) (text art and shapes holding text) aren't saved to .pub yet").arg(skippedCount);
     const quint32 fontSeq = m_fonts.isEmpty() && m_textIds.isEmpty() ? 0 : next++;
     if (m_fonts.isEmpty()) m_fonts << m_doc.fonts.body;
 

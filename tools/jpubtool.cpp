@@ -11,6 +11,9 @@
 #include "io/pubimport.h"
 #include "render/renderer.h"
 #include "templates/templates.h"
+#include "io/pubshapes.h"
+#include "render/shapes.h"
+#include <QPainter>
 
 #include <QTextBlock>
 #include <QTextDocument>
@@ -36,6 +39,80 @@ int main(int argc, char **argv)
         return 2;
     }
     const QString cmd = args[1], in = args[2];
+    if (cmd == "shapecheck") {
+        // shapecheck <tmpdir> <w>x<h> [preset...]: save each preset shape to
+        // .pub, read it back, and score how well the outlines overlap.
+        const QStringList wh = args[3].split('x');
+        const double w = wh.value(0).toDouble(), h = wh.value(1).toDouble();
+        QStringList ids = args.mid(4);
+        if (ids.isEmpty())
+            for (const ShapeDef &d : shapeLibrary()) ids << d.id;
+        auto mask = [&](const QPainterPath &p, bool stroke) {
+            QImage img(int(w) + 40, int(h) + 40, QImage::Format_Grayscale8);
+            img.fill(0);
+            QPainter g(&img);
+            g.setRenderHint(QPainter::Antialiasing, false);
+            g.translate(20, 20);
+            if (stroke) g.strokePath(p, QPen(Qt::white, 3));
+            else g.fillPath(p, Qt::white);
+            return img;
+        };
+        for (const QString &id : ids) {
+            const ShapeDef *def = shapeDef(id);
+            if (!def) continue;
+            auto doc = Document::blank(QSizeF(612, 792));
+            auto s = std::make_shared<ShapeItem>();
+            s->shape = id;
+            s->rect = QRectF(100, 100, w, h);
+            s->fill = Fill::solid(ColorRef::rgb(QColor(30, 60, 200)));
+            s->stroke = def->open ? Stroke::line(ColorRef::rgb(Qt::black), 1) : Stroke::none();
+            s->rotation = qEnvironmentVariableIntValue("JP_SHAPECHECK_ROT");
+            s->flipH = qEnvironmentVariableIsSet("JP_SHAPECHECK_FLIPH");
+            doc->pages[0]->items.push_back(s);
+            const QString path = in + "/" + id + ".pub";
+            QString err;
+            exportPublisher(*doc, path, &err);
+            auto back = importPublisherFile(path, &err);
+            QPainterPath got;
+            int n = 0;
+            if (back)
+                walkItems(back->pages[0]->items, [&](const ItemPtr &it) {
+                    if (it->type() == ItemType::Shape || it->type() == ItemType::Line) {
+                        const Item *bi = it.get();
+                        QPainterPath p;
+                        if (it->type() == ItemType::Line) {
+                            auto *l = static_cast<const LineItem *>(bi);
+                            p.moveTo(l->p1);
+                            p.lineTo(l->p2);
+                        } else {
+                            auto *bs = static_cast<const ShapeItem *>(bi);
+                            p = bs->customPath.isEmpty() ? QPainterPath() : bs->customPath;
+                            if (p.isEmpty()) p.addRect(QRectF(QPointF(), bs->rect.size()));
+                            p = bi->transform().map(p);
+                        }
+                        got.addPath(p.translated(-100, -100));
+                        ++n;
+                    }
+                });
+            const QImage a = mask(s->transform().map(shapePath(id, QSizeF(w, h))).translated(-100, -100), def->open), b = mask(got, def->open);
+            if (qEnvironmentVariableIsSet("JP_SHAPECHECK_DUMP")) {
+                a.save(in + "/" + id + "-want.png");
+                b.save(in + "/" + id + "-got.png");
+            }
+            qint64 both = 0, any = 0;
+            for (int y = 0; y < a.height(); ++y) {
+                const uchar *ra = a.constScanLine(y), *rb = b.constScanLine(y);
+                for (int x = 0; x < a.width(); ++x) {
+                    both += ra[x] && rb[x];
+                    any += ra[x] || rb[x];
+                }
+            }
+            out << id << "\t" << pubShapeType(id) << "\t" << (any ? QString::number(100.0 * both / any, 'f', 1) : QStringLiteral("-")) << "%\t" << n
+                << " item(s)\n";
+            out.flush();
+        }
+        return 0;
+    }
     if (cmd == "setstream") {
         // setstream <base.pub> <out.pub> <stream> <file>: replace one stream's bytes.
         if (args.size() < 6) { out << "usage: jpubtool setstream <base> <out> <stream> <file>\n"; return 2; }

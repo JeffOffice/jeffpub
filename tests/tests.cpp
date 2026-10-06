@@ -376,6 +376,96 @@ private Q_SLOTS:
         QVERIFY2(shapes >= 2, qPrintable(QString::number(shapes)));
     }
 
+    // Preset shapes saved to .pub (Publisher's own where they match, freeforms
+    // otherwise) read back with the same outline.
+    void pubWriterShapes()
+    {
+        const QStringList ids = {"roundRect", "triangle", "hexagon", "foldedCorner", "fcDecision", "fcPredefined", "star5", "star12",
+                                 "heart", "cloud", "rightArrow", "curvedRightArrow", "chevron", "wave", "ribbon2", "smiley", "sun",
+                                 "moon", "lightning", "donut", "blockArc", "wedgeRoundRectCallout", "cloudCallout", "mathMultiply",
+                                 "bracePair", "arc"};
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto label = std::make_shared<jp::TextItem>();
+        label->rect = QRectF(54, 30, 500, 30);
+        label->storyId = doc->createStory(QStringLiteral("test16 shapes"));
+        doc->pages[0]->items.push_back(label);
+        QVector<std::shared_ptr<jp::ShapeItem>> made;
+        for (int i = 0; i < ids.size(); ++i) {
+            auto sh = std::make_shared<jp::ShapeItem>();
+            sh->shape = ids[i];
+            sh->rect = QRectF(60 + (i % 5) * 104, 80 + (i / 5) * 100, 80, 60);
+            const bool open = jp::shapeDef(ids[i]) && jp::shapeDef(ids[i])->open;
+            sh->fill = jp::Fill::solid(jp::ColorRef::rgb(QColor::fromHsv((i * 37) % 360, 160, 220)));
+            sh->stroke = open ? jp::Stroke::line(jp::ColorRef::rgb(Qt::black), 2) : jp::Stroke::line(jp::ColorRef::rgb(Qt::black), 1);
+            doc->pages[0]->items.push_back(sh);
+            made << sh;
+        }
+        // A right triangle as drawn, and the same one flipped and turned 30°.
+        for (int k = 0; k < 2; ++k) {
+            auto t = std::make_shared<jp::ShapeItem>();
+            t->shape = QStringLiteral("rtTriangle");
+            t->rect = QRectF(160 + k * 200, 650, 100, 80);
+            t->fill = jp::Fill::solid(jp::ColorRef::rgb(QColor(220, 120, 30)));
+            t->stroke = jp::Stroke::none();
+            if (k) {
+                t->flipH = true;
+                t->rotation = 30;
+            }
+            doc->pages[0]->items.push_back(t);
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("test16-shapes.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        QVERIFY2(err.isEmpty(), qPrintable(err));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test16-shapes";
+            QFile::remove(out + ".pub");
+            QFile::copy(path, out + ".pub");
+            QString e2;
+            jp::savePublication(*doc, out + ".jpub", QImage(), &e2);
+        }
+        QString e1;
+        auto back = jp::importPublisherFile(path, &e1);
+        QVERIFY2(back, qPrintable(e1));
+        // Each shape's outline lands where it was (filled area overlap).
+        auto area = [](const QPainterPath &p, bool stroke) {
+            QImage img(612, 792, QImage::Format_Grayscale8);
+            img.fill(0);
+            QPainter g(&img);
+            if (stroke) g.strokePath(p, QPen(Qt::white, 3));
+            else g.fillPath(p, Qt::white);
+            return img;
+        };
+        QVector<const jp::ShapeItem *> got;
+        jp::walkItems(back->pages[0]->items, [&](const jp::ItemPtr &it) {
+            if (it->type() == jp::ItemType::Shape) got << static_cast<const jp::ShapeItem *>(it.get());
+        });
+        for (const auto &sh : made) {
+            auto outline = [](const jp::ShapeItem *x) {
+                QPainterPath p = x->customPath.isEmpty() ? jp::shapePath(x->shape, x->rect.size()) : x->customPath;
+                return x->transform().map(p);
+            };
+            const jp::ShapeItem *match = nullptr;
+            for (const jp::ShapeItem *g : got)
+                if (QLineF(outline(g).boundingRect().center(), outline(sh.get()).boundingRect().center()).length() < 10) match = g;
+            QVERIFY2(match, qPrintable(sh->shape));
+            const bool open = jp::shapeDef(sh->shape)->open;
+            QPainterPath gp = match->customPath;
+            if (gp.isEmpty()) gp.addRect(QRectF(QPointF(), match->rect.size()));
+            const QImage a = area(sh->transform().map(jp::shapePath(sh->shape, sh->rect.size())), open);
+            const QImage b = area(match->transform().map(gp), open);
+            qint64 both = 0, any = 0;
+            for (int y = 0; y < a.height(); ++y)
+                for (int x = 0; x < a.width(); ++x) {
+                    const bool pa = a.constScanLine(y)[x], pb = b.constScanLine(y)[x];
+                    both += pa && pb;
+                    any += pa || pb;
+                }
+            QVERIFY2(any && 100.0 * both / any > 97, qPrintable(QStringLiteral("%1 %2%").arg(sh->shape).arg(100.0 * both / std::max<qint64>(1, any))));
+        }
+    }
+
     // A chain of linked text boxes (across two pages) is one story in .pub.
     void pubWriterLinked()
     {

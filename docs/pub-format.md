@@ -215,3 +215,18 @@ chunk also links its neighbors: `28` = its place in the chain, `36:68` =
 the box before, `37:68` = the box after, and `2d:08` on the last box.
 Without these links Publisher hangs while laying out the text.
 
+### Preset shapes and freeforms
+
+Most shapes use the shape chunk of type 1 (as rectangles do); the drawing
+`Sp` instance is the shape number (2 rounded rectangle, 5 triangle, 12
+star, ...), with handle settings in OPT 0x0147 onward. JeffPub writes a
+preset as Publisher's own shape only where the two look the same at every
+proportion (`src/io/pubshapes.cpp`; `jpubtool shapecheck` measures it);
+anything else is a freeform: `Sp` instance 0 with OPT 0x0142/0x0143 = the
+coordinate space (the frame in EMU), 0x0144 = 4, 0xC145 = the points
+(count, count, 8, then 32-bit x/y pairs) and 0xC146 = the segments (count,
+count, 2, then: 0x4000 move, n lines, 0x2000 + n curves, 0x6001 close,
+0x8000 end). The .pub reader takes a segment's count from its low byte, so
+runs stay under 256. A freeform whose outline reaches past its frame gets
+a frame grown evenly around the same center.
+

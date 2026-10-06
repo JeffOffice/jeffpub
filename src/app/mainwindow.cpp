@@ -265,6 +265,11 @@ bool MainWindow::saveTo(const QString &pathIn)
             QMessageBox::warning(this, QStringLiteral("Save"), err);
             return false;
         }
+        // Saved, but some objects have no .pub form yet: say which.
+        if (!err.isEmpty())
+            QMessageBox::information(this, QStringLiteral("Save as .pub File"),
+                                     QStringLiteral("\"%1\" was saved, but %2.\n\nThey're kept when you save as a JeffPub publication (.jpub).")
+                                         .arg(QFileInfo(path).fileName(), err));
     } else {
         if (!path.endsWith(QLatin1String(".jpub"), Qt::CaseInsensitive)) path += QStringLiteral(".jpub");
         m_ed->doc()->props.modified = QDateTime::currentDateTime();

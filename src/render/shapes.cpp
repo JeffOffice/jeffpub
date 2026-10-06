@@ -281,7 +281,8 @@ static QVector<ShapeDef> build()
     add("cloud", "Cloud", "Basic Shapes", [](double w, double h, V) {
         QPainterPath p;
         const QRectF c[] = {{0.05, 0.3, 0.35, 0.4}, {0.2, 0.08, 0.35, 0.4}, {0.45, 0.05, 0.35, 0.42}, {0.62, 0.25, 0.36, 0.42},
-                            {0.45, 0.5, 0.38, 0.42}, {0.15, 0.52, 0.38, 0.42}, {0.0, 0.42, 0.3, 0.32}};
+                            {0.45, 0.5, 0.38, 0.42}, {0.15, 0.52, 0.38, 0.42}, {0.0, 0.42, 0.3, 0.32},
+                            {0.25, 0.3, 0.5, 0.45}};   // the middle, so the bumps leave no gap
         for (const QRectF &r : c) { QPainterPath e; e.addEllipse(QRectF(r.x() * w, r.y() * h, r.width() * w, r.height() * h)); p = p.united(e); }
         return p; }, {}, {}, 0.22);
     add("arc", "Arc", "Basic Shapes", [](double w, double h, V a) {
@@ -568,7 +569,8 @@ static QVector<ShapeDef> build()
     add("cloudCallout", "Cloud Callout", "Callouts", [](double w, double h, V) {
         QPainterPath p;
         const QRectF c[] = {{0.05, 0.25, 0.35, 0.35}, {0.2, 0.05, 0.35, 0.35}, {0.45, 0.03, 0.35, 0.37}, {0.62, 0.2, 0.36, 0.38},
-                            {0.45, 0.42, 0.38, 0.36}, {0.15, 0.42, 0.38, 0.36}, {0.0, 0.35, 0.3, 0.28}};
+                            {0.45, 0.42, 0.38, 0.36}, {0.15, 0.42, 0.38, 0.36}, {0.0, 0.35, 0.3, 0.28},
+                            {0.25, 0.22, 0.5, 0.38}};   // the middle
         for (const QRectF &r : c) { QPainterPath e; e.addEllipse(QRectF(r.x() * w, r.y() * h, r.width() * w, r.height() * h)); p = p.united(e); }
         p.addEllipse(QRectF(w * 0.18, h * 0.82, w * 0.08, h * 0.07)); p.addEllipse(QRectF(w * 0.1, h * 0.92, w * 0.05, h * 0.05)); return p; },
         {}, {}, 0, [](double w, double h, V) { return QRectF(w * 0.18, h * 0.15, w * 0.64, h * 0.52); });
