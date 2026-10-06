@@ -117,6 +117,8 @@ public:
   void setShapeBeginArrow(unsigned seqNum, const Arrow &arrow);
   void setShapeEndArrow(unsigned seqNum, const Arrow &arrow);
   void setShapeLineOpacity(unsigned seqNum, double opacity);
+  void setShapeCrop(unsigned seqNum, const std::vector<double> &crop) { m_shapeInfosBySeqNum[seqNum].m_crop = crop; }
+  void setShapePictureFillOpacity(unsigned seqNum, double opacity) { m_shapeInfosBySeqNum[seqNum].m_pictureFillOpacity = opacity; }
   void setTextNotHyphenated(unsigned textId) { m_notHyphenated.insert(textId); }
   void setShapePictureFlags(unsigned seqNum, unsigned flags);
   void setShapePictureTransparent(unsigned seqNum, ColorReference color);

@@ -1118,6 +1118,7 @@ QByteArray PubWriter::write(QStringList *skipped)
             if (b > 0) {
                 opt << Prop{0x0180, f.type != Fill::Picture || f.tile ? 2u : 3u} << Prop{0x4186, quint32(b)} << Prop{0x0181, 0x08000001}
                     << Prop{0x0183, 0x08000007} << Prop{0x01bf, 0x00100010};
+                if (f.transparency > 0.001) opt << Prop{0x0182, opacity(f.transparency)};
                 return;
             }
         }
@@ -1518,11 +1519,15 @@ QByteArray PubWriter::write(QStringList *skipped)
             }
             if (it->type() == ItemType::Picture) {
                 auto *pic = static_cast<const PictureItem *>(it.get());
-                if (!pic->maskShape.isEmpty() && pic->maskShape != QLatin1String("rect") && shapeDef(pic->maskShape) && !pic->imageId.isEmpty()) {
+                // A picture cut to a shape, or see-through, is saved the way
+                // .pub files store them: a shape filled with the picture.
+                const bool shapedPic = !pic->maskShape.isEmpty() && pic->maskShape != QLatin1String("rect") && shapeDef(pic->maskShape);
+                if ((shapedPic || pic->transparency > 0.001) && !pic->imageId.isEmpty()) {
                     auto shaped = std::make_shared<ShapeItem>();
                     static_cast<Item &>(*shaped) = static_cast<const Item &>(*pic);
-                    shaped->shape = pic->maskShape;
+                    shaped->shape = shapedPic ? pic->maskShape : QStringLiteral("rect");
                     shaped->fill.type = Fill::Picture;
+                    shaped->fill.transparency = pic->transparency;
                     shaped->fill.imageId = shapedPictureImage(*pic);
                     visit(shaped);
                     return;

@@ -2214,6 +2214,25 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
           // JeffPub patch: the line's opacity (16.16).
           if (unsigned *ptr_lineOpacity = getIfExists(foptValues.m_scalarValues, FIELDID_LINE_OPACITY))
             m_collector->setShapeLineOpacity(*shapeSeqNum, std::min(1.0, double(*ptr_lineOpacity) / 0x10000));
+          // JeffPub patch: a picture's crops (signed 16.16 fractions of the
+          // picture trimmed from the top, bottom, left and right), and a
+          // picture fill's opacity.
+          {
+            std::vector<double> crop(4, 0.0);
+            bool anyCrop = false;
+            for (unsigned k = 0; k < 4; ++k)
+              if (unsigned *ptr_crop = getIfExists(foptValues.m_scalarValues, 0x0100 + k))
+              {
+                crop[k] = toFixedPoint(int(*ptr_crop));
+                anyCrop = anyCrop || crop[k] != 0;
+              }
+            if (anyCrop)
+              m_collector->setShapeCrop(*shapeSeqNum, crop);
+            unsigned *ptr_fillType = getIfExists(foptValues.m_scalarValues, FIELDID_FILL_TYPE);
+            unsigned *ptr_fillOpacity = getIfExists(foptValues.m_scalarValues, FIELDID_FILL_OPACITY);
+            if (ptr_fillType && (*ptr_fillType == 2 || *ptr_fillType == 3) && ptr_fillOpacity && *ptr_fillOpacity < 0x10000)
+              m_collector->setShapePictureFillOpacity(*shapeSeqNum, double(*ptr_fillOpacity) / 0x10000);
+          }
           unsigned *ptr_beginArrowStyle = getIfExists(foptValues.m_scalarValues,
                                                       FIELDID_BEGIN_ARROW_STYLE);
           unsigned *ptr_beginArrowWidth = getIfExists(foptValues.m_scalarValues,

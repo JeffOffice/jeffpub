@@ -64,6 +64,8 @@ struct ShapeInfo
   boost::optional<Arrow> m_beginArrow;
   boost::optional<Arrow> m_endArrow;
   boost::optional<double> m_lineOpacity; // JeffPub patch: 0x01C1
+  boost::optional<std::vector<double>> m_crop; // JeffPub patch: top, bottom, left, right (0x0100-0x0103)
+  boost::optional<double> m_pictureFillOpacity; // JeffPub patch: 0x0182 with a picture fill
   boost::optional<VerticalAlign> m_verticalAlign;
   boost::optional<ColorReference> m_pictureRecolor;
   boost::optional<Shadow> m_shadow;

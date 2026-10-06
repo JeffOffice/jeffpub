@@ -744,6 +744,14 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
     const std::pair<bool, bool> flips = info.m_flips.get_value_or(std::pair<bool, bool>(false, false));
     graphicsProps.insert("jp:frame-flip-v", flips.first);
     graphicsProps.insert("jp:frame-flip-h", flips.second);
+    if (bool(info.m_crop))
+    {
+      const char *names[4] = {"jp:crop-top", "jp:crop-bottom", "jp:crop-left", "jp:crop-right"};
+      for (unsigned k = 0; k < 4; ++k)
+        graphicsProps.insert(names[k], info.m_crop.get()[k]);
+    }
+    if (bool(info.m_pictureFillOpacity))
+      graphicsProps.insert("jp:picture-opacity", info.m_pictureFillOpacity.get());
   }
   // JeffPub 79: Text Art goes to the application as its words and settings
   // with the unturned frame, instead of as the warp's guide curves.
@@ -1997,6 +2005,9 @@ void MSPUBCollector::writePageBackground(unsigned pageSeqNum) const
       bg.m_coordinates = wholePage;
       bg.m_pageSeqNum = pageSeqNum;
       bg.m_fill = ptr_fill;
+      // JeffPub patch: a background picture keeps its crops and transparency.
+      bg.m_crop = ptr_info->m_crop;
+      bg.m_pictureFillOpacity = ptr_info->m_pictureFillOpacity;
       paintShape(bg, Coordinate(), VectorTransformation2D(), false, VectorTransformation2D());
     }
   }

@@ -952,6 +952,16 @@ private:
                 pic->flipH = preset->flipH;
                 pic->flipV = preset->flipV;
             }
+            // Crops: the frame shows what is left after trimming each side by
+            // a fraction of the picture, so the whole picture sits around it.
+            if (m_style["jp:crop-top"]) {
+                const double t = m_style["jp:crop-top"]->getDouble(), bo = m_style["jp:crop-bottom"]->getDouble();
+                const double l = m_style["jp:crop-left"]->getDouble(), r = m_style["jp:crop-right"]->getDouble();
+                const QSizeF fs = pic->rect.size();
+                const double w = fs.width() / std::max(0.01, 1 - l - r), h = fs.height() / std::max(0.01, 1 - t - bo);
+                pic->imgRect = QRectF(-l * w, -t * h, w, h);
+            }
+            if (m_style["jp:picture-opacity"]) pic->transparency = std::clamp(1 - m_style["jp:picture-opacity"]->getDouble(), 0.0, 1.0);
             applyRecolor(pic.get(), m_style);
             applyShadow(*pic);
             add(pic);
