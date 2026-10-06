@@ -16,6 +16,10 @@ class Editor;
 class MainWindow;
 
 void pageSetupDialog(QWidget *p, Editor *ed);
+// Symbols: insert one (in a font, or the text's own when empty) at the text
+// cursor, remembering it; the recently used ones, newest first ("char\tfont").
+bool insertSymbol(QWidget *p, Editor *ed, const QString &ch, const QString &font);
+QStringList recentSymbols();
 // Layout Guides: Margin Guides (tab 0), Grid Guides (1), Baseline Guides (2).
 void gridGuidesDialog(QWidget *p, Editor *ed, int startTab = 1);
 // Page sizes the user created (name and whole setup), and their dialogs.

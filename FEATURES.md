@@ -59,7 +59,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 - [x] Tables: grid picker and Insert Table dialog
 - [x] Illustrations: Pictures (from file), Online Pictures **(alt: Openverse and Wikimedia Commons search with license info)**, Shapes (full gallery), Picture Placeholder
 - [x] Building Blocks: Page Parts (headings, pull quotes, sidebars, stories, tables of contents), Calendars (by month and year, with options), Borders & Accents, Advertisements, and saving your own building blocks to the library
-- [~] Text: Draw Text Box, Business Information fields, Text Art, Insert File (text, RTF, HTML, and `.docx` documents into a text box), Symbol (recent symbols and full character map), Date & Time (formats, update automatically), Object (embed a file) *(partial: Symbol has no recent-symbols row)*
+- [x] Text: Draw Text Box, Business Information fields, Text Art, Insert File (text, RTF, HTML, and `.docx` documents into a text box), Symbol (recently used symbols, kept between sessions, in the Symbol drop-down and the dialog, and the full character map), Date & Time (formats, update automatically), Object (embed a file)
 - [x] Links: Hyperlink (web, email, place in this document, new document), Bookmark
 - [x] Header & Footer: Header, Footer (open the master page), Page Number (position, format, start number)
 

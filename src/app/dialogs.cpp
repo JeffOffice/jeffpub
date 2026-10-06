@@ -1095,6 +1095,33 @@ void insertPageDialog(QWidget *p, Editor *ed)
 }
 
 // ---------------- Symbol ----------------
+QStringList recentSymbols() { return Settings::get().value(QStringLiteral("symbols/recent")).toStringList(); }
+
+bool insertSymbol(QWidget *p, Editor *ed, const QString &ch, const QString &font)
+{
+    if (!ed->isEditingText()) {
+        QMessageBox::information(p, QStringLiteral("Symbol"), QStringLiteral("Click in a text box first."));
+        return false;
+    }
+    if (!font.isEmpty()) {
+        QTextCharFormat cf = ed->cursor().charFormat();
+        cf.setFontFamilies(QStringList{font});
+        ed->beginChange(QStringLiteral("Insert Symbol"));
+        ed->cursor().insertText(ch, cf);
+        ed->endChange();
+        ed->textEdited();
+    } else {
+        ed->insertTextBlock(ch, QStringLiteral("Insert Symbol"));
+    }
+    QStringList recents = recentSymbols();
+    const QString entry = font.isEmpty() ? ch : ch + QLatin1Char('\t') + font;
+    recents.removeAll(entry);
+    recents.prepend(entry);
+    while (recents.size() > 20) recents.removeLast();
+    Settings::get().setValue(QStringLiteral("symbols/recent"), recents);
+    return true;
+}
+
 void symbolDialog(QWidget *p, Editor *ed)
 {
     Dlg dlg(p, QStringLiteral("Symbol"), QDialogButtonBox::Close);
@@ -1114,14 +1141,22 @@ void symbolDialog(QWidget *p, Editor *ed)
     top->addWidget(new QLabel(QStringLiteral("Subset:")));
     top->addWidget(subset, 1);
     dlg.v->addLayout(top);
-    auto *grid = new QTableWidget(&dlg.d);
-    grid->setColumnCount(16);
-    grid->horizontalHeader()->hide();
-    grid->verticalHeader()->hide();
-    grid->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    auto makeGrid = [&](int rows) {
+        auto *g = new QTableWidget(rows, 16, &dlg.d);
+        g->horizontalHeader()->hide();
+        g->verticalHeader()->hide();
+        g->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        for (int c = 0; c < 16; ++c) g->setColumnWidth(c, 32);
+        return g;
+    };
+    auto *grid = makeGrid(0);
     grid->setMinimumSize(560, 300);
-    for (int c = 0; c < 16; ++c) grid->setColumnWidth(c, 32);
-    auto *recent = new QLabel(&dlg.d);
+    // Recently used symbols: one row, each in the font it was used in.
+    auto *recent = makeGrid(1);
+    recent->setRowHeight(0, 32);
+    recent->setFixedHeight(36);
+    recent->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    recent->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     auto *code = new QLabel(&dlg.d);
     auto fill = [=] {
         const auto r = ranges[subset->currentIndex()].second;
@@ -1136,45 +1171,49 @@ void symbolDialog(QWidget *p, Editor *ed)
             cell->setTextAlignment(Qt::AlignCenter);
             cell->setFont(f);
             cell->setData(Qt::UserRole, r.first + i);
+            cell->setData(Qt::UserRole + 1, font->currentIndex() > 0 ? font->currentText() : QString());
             grid->setItem(i / 16, i % 16, cell);
         }
         for (int row = 0; row < grid->rowCount(); ++row) grid->setRowHeight(row, 32);
     };
+    auto fillRecent = [=] {
+        recent->clearContents();
+        const QStringList recents = recentSymbols();
+        for (int i = 0; i < recents.size() && i < 16; ++i) {
+            const QString ch = recents[i].section(QLatin1Char('\t'), 0, 0), fam = recents[i].section(QLatin1Char('\t'), 1);
+            auto *cell = new QTableWidgetItem(ch);
+            QFont f = recent->font();
+            if (!fam.isEmpty()) f.setFamily(fam);
+            f.setPointSize(14);
+            cell->setFont(f);
+            cell->setTextAlignment(Qt::AlignCenter);
+            cell->setData(Qt::UserRole, ch.isEmpty() ? 0 : int(ch.at(0).unicode()));
+            cell->setData(Qt::UserRole + 1, fam);
+            recent->setItem(0, i, cell);
+        }
+    };
     QObject::connect(subset, &QComboBox::currentIndexChanged, &dlg.d, fill);
     QObject::connect(font, &QComboBox::currentIndexChanged, &dlg.d, fill);
     fill();
-    QObject::connect(grid, &QTableWidget::currentItemChanged, &dlg.d, [=](QTableWidgetItem *it) {
+    fillRecent();
+    QTableWidget *chosenFrom = grid;
+    auto showCode = [=](QTableWidgetItem *it) {
         if (it) code->setText(QStringLiteral("Character code: %1 (Unicode U+%2)").arg(it->data(Qt::UserRole).toInt()).arg(it->data(Qt::UserRole).toInt(), 4, 16, QChar('0')).toUpper());
-    });
-    static QStringList recents;
-    auto insert = [=](QTableWidgetItem *it) {
-        if (!it || !ed->isEditingText()) {
-            if (!ed->isEditingText()) QMessageBox::information(grid, QStringLiteral("Symbol"), QStringLiteral("Click in a text box first."));
-            return;
-        }
-        const QString ch = it->text();
-        if (font->currentIndex() > 0) {
-            QTextCharFormat cf = ed->cursor().charFormat();
-            cf.setFontFamilies(QStringList{font->currentText()});
-            ed->beginChange(QStringLiteral("Insert Symbol"));
-            ed->cursor().insertText(ch, cf);
-            ed->endChange();
-            ed->textEdited();
-        } else {
-            ed->insertTextBlock(ch, QStringLiteral("Insert Symbol"));
-        }
-        recents.removeAll(ch);
-        recents.prepend(ch);
-        while (recents.size() > 16) recents.removeLast();
-        recent->setText(QStringLiteral("Recently used: ") + recents.join(' '));
+    };
+    QObject::connect(grid, &QTableWidget::currentItemChanged, &dlg.d, [&, showCode](QTableWidgetItem *it) { chosenFrom = grid; showCode(it); });
+    QObject::connect(recent, &QTableWidget::currentItemChanged, &dlg.d, [&, showCode](QTableWidgetItem *it) { chosenFrom = recent; showCode(it); });
+    auto insert = [&, fillRecent](QTableWidgetItem *it) {
+        if (!it || it->text().isEmpty()) return;
+        if (insertSymbol(&dlg.d, ed, it->text(), it->data(Qt::UserRole + 1).toString())) fillRecent();
     };
     QObject::connect(grid, &QTableWidget::itemDoubleClicked, &dlg.d, insert);
+    QObject::connect(recent, &QTableWidget::itemDoubleClicked, &dlg.d, insert);
     auto *ins = dlg.bb->addButton(QStringLiteral("Insert"), QDialogButtonBox::ActionRole);
-    QObject::connect(ins, &QPushButton::clicked, &dlg.d, [=] { insert(grid->currentItem()); });
-    recent->setText(QStringLiteral("Recently used: ") + recents.join(' '));
+    QObject::connect(ins, &QPushButton::clicked, &dlg.d, [&] { insert(chosenFrom->currentItem()); });
     dlg.v->addWidget(grid, 1);
-    dlg.v->addWidget(code);
+    dlg.v->addWidget(new QLabel(QStringLiteral("Recently used symbols:"), &dlg.d));
     dlg.v->addWidget(recent);
+    dlg.v->addWidget(code);
     dlg.exec();
 }
 

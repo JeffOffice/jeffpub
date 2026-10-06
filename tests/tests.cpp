@@ -1026,6 +1026,33 @@ private Q_SLOTS:
         QVERIFY(bt->cell(1, 0).border.left.isNone());
     }
 
+    // Inserting a symbol puts it in the text and at the front of the recently used list.
+    void recentSymbols()
+    {
+        const QVariant before = jp::Settings::get().value(QStringLiteral("symbols/recent"));
+        jp::Settings::get().setValue(QStringLiteral("symbols/recent"), QStringList());
+        jp::MainWindow w;
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 300, 100);
+        t->storyId = doc->createStory(QStringLiteral("x"));
+        doc->pages[0]->items.push_back(t);
+        w.editor()->setDocument(std::move(doc));
+        jp::Editor *ed = w.editor();
+        const QString id = ed->doc()->pages[0]->items[0]->id;
+        ed->select(id);
+        ed->beginTextEdit(id, 1);
+        QVERIFY(jp::insertSymbol(&w, ed, QString(QChar(0x00A7)), QString()));
+        QVERIFY(jp::insertSymbol(&w, ed, QString(QChar(0x2122)), QStringLiteral("Symbol")));
+        const QString sid = static_cast<const jp::TextItem *>(ed->doc()->pages[0]->items[0].get())->storyId;
+        QCOMPARE(ed->doc()->storyDoc(sid)->toPlainText(), QString(QChar('x')) + QChar(0x00A7) + QChar(0x2122));
+        const QStringList r = jp::recentSymbols();
+        QCOMPARE(r.size(), 2);
+        QCOMPARE(r[0], QString(QChar(0x2122)) + QStringLiteral("\tSymbol"));
+        QCOMPARE(r[1], QString(QChar(0x00A7)));
+        jp::Settings::get().setValue(QStringLiteral("symbols/recent"), before);
+    }
+
     // A right-to-left paragraph keeps its direction when saved and reopened.
     void rightToLeftParagraph()
     {

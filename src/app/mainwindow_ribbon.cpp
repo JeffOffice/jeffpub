@@ -456,7 +456,43 @@ void MainWindow::buildRibbon()
             g->addWidget(wa);
         }
         g->addSmall(act("ins.file"));
-        g->addSmall(act("ins.symbol"));
+        {
+            // Symbol: the recently used symbols to click, then More Symbols.
+            auto *sm = new QMenu(this);
+            connect(sm, &QMenu::aboutToShow, this, [this, sm] {
+                sm->clear();
+                const QStringList recents = recentSymbols();
+                if (!recents.isEmpty()) {
+                    auto *panel = new QWidget(sm);
+                    auto *gl = new QGridLayout(panel);
+                    gl->setContentsMargins(6, 6, 6, 6);
+                    gl->setSpacing(2);
+                    for (int i = 0; i < recents.size() && i < 20; ++i) {
+                        const QString ch = recents[i].section(QLatin1Char('\t'), 0, 0), fam = recents[i].section(QLatin1Char('\t'), 1);
+                        auto *b = new QToolButton(panel);
+                        b->setText(ch);
+                        QFont f = b->font();
+                        if (!fam.isEmpty()) f.setFamily(fam);
+                        f.setPointSize(13);
+                        b->setFont(f);
+                        b->setFixedSize(30, 30);
+                        b->setAutoRaise(true);
+                        connect(b, &QToolButton::clicked, this, [this, sm, ch, fam] {
+                            sm->close();
+                            insertSymbol(this, m_ed, ch, fam);
+                        });
+                        gl->addWidget(b, i / 5, i % 5);
+                    }
+                    auto *wa = new QWidgetAction(sm);
+                    wa->setDefaultWidget(panel);
+                    sm->addAction(wa);
+                    sm->addSeparator();
+                }
+                QAction *more = sm->addAction(icon("omega"), QStringLiteral("More Symbols…"));
+                connect(more, &QAction::triggered, this, [this] { symbolDialog(this, m_ed); });
+            });
+            g->addSmall(act("ins.symbol"), sm, true);
+        }
         g->addSmall(act("ins.datetime"));
         g->addSmall(act("ins.object"));
 
