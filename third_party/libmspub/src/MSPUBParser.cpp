@@ -52,6 +52,16 @@ namespace libmspub
 
 namespace
 {
+// JeffPub 79: JP_PUB_TRACE, read once (it is checked inside loops).
+bool jpTraceOn()
+{
+  static const bool on = getenv("JP_PUB_TRACE") != nullptr;
+  return on;
+}
+}
+
+namespace
+{
 
 // Well above the ~12 ceiling LibreOffice's PowerPoint Escher exporter
 // applies (sd/source/filter/eppt/escherex.cxx
@@ -835,7 +845,7 @@ bool MSPUBParser::parseShape(librevenge::RVNGInputStream *input,
     while (stillReading(input, pos + length))
     {
       MSPUBBlockInfo info = parseBlock(input, true);
-      if (getenv("JP_PUB_TRACE"))
+      if (jpTraceOn())
       {
         fprintf(stderr, "TABLEBLOCK seq=%u id=0x%x type=0x%x data=%u len=%lu bytes=", chunk.seqNum, info.id, info.type, info.data, info.dataLength);
         const unsigned long here = input->tell();
@@ -939,13 +949,13 @@ bool MSPUBParser::parseShape(librevenge::RVNGInputStream *input,
             while (stillReading(input, info.dataOffset + info.dataLength))
             {
               const MSPUBBlockInfo itemInfo = parseBlock(input, true);
-              if (getenv("JP_PUB_TRACE") && itemInfo.id != 0)
+              if (jpTraceOn() && itemInfo.id != 0)
                 fprintf(stderr, "CELLITEM id=0x%x type=0x%x data=%u len=%lu\n", itemInfo.id, itemInfo.type, itemInfo.data, itemInfo.dataLength);
               if (itemInfo.id == 0)
               {
                 input->seek(itemInfo.dataOffset + 4, librevenge::RVNG_SEEK_SET);
                 CellInfo currentCell;
-                if (getenv("JP_PUB_TRACE")) fprintf(stderr, "CELL begin table=%u\n", chunk.seqNum);
+                if (jpTraceOn()) fprintf(stderr, "CELL begin table=%u\n", chunk.seqNum);
                 while (stillReading(input, itemInfo.dataOffset + itemInfo.dataLength))
                 {
                   const MSPUBBlockInfo subInfo = parseBlock(input, true);
@@ -972,7 +982,7 @@ bool MSPUBParser::parseShape(librevenge::RVNGInputStream *input,
                     break;
                   // TODO: 0x09, 0x0e: width/height of content?
                   default:
-                    if (getenv("JP_PUB_TRACE"))
+                    if (jpTraceOn())
                     {
                       fprintf(stderr, "CELLPROP id=0x%x type=0x%x data=%u len=%lu", subInfo.id, subInfo.type, subInfo.data, subInfo.dataLength);
                       if (subInfo.dataLength > 0 && subInfo.dataLength < 400)
@@ -995,7 +1005,7 @@ bool MSPUBParser::parseShape(librevenge::RVNGInputStream *input,
             break;
           }
           default:
-            if (getenv("JP_PUB_TRACE"))
+            if (jpTraceOn())
             {
               fprintf(stderr, "CELLSBLOCK id=0x%x type=0x%x data=%u len=%lu bytes=", info.id, info.type, info.data, info.dataLength);
               const unsigned long here = input->tell();
@@ -1032,7 +1042,7 @@ bool MSPUBParser::parseShape(librevenge::RVNGInputStream *input,
     while (stillReading(input, pos + length))
     {
       MSPUBBlockInfo info = parseBlock(input, true);
-      if (getenv("JP_PUB_TRACE"))
+      if (jpTraceOn())
       {
         char buf[64];
         snprintf(buf, sizeof buf, " %02x:%02x=%u", info.id, info.type, info.data);
@@ -1069,7 +1079,7 @@ bool MSPUBParser::parseShape(librevenge::RVNGInputStream *input,
         m_collector->setShapeCropType(chunk.seqNum, info.data);
       }
     }
-    if (getenv("JP_PUB_TRACE")) fprintf(stderr, "SHAPEREC seq=%u text=%u%s\n", chunk.seqNum, textId, jpTrace.c_str());
+    if (jpTraceOn()) fprintf(stderr, "SHAPEREC seq=%u text=%u%s\n", chunk.seqNum, textId, jpTrace.c_str());
     if (shouldStretchBorderArt)
     {
       m_collector->setShapeStretchBorderArt(chunk.seqNum);
@@ -1178,7 +1188,7 @@ bool MSPUBParser::parseQuill(librevenge::RVNGInputStream *input)
   unsigned whichStsh = 0;
   for (std::list<QuillChunkReference>::const_iterator i = chunkReferences.begin(); i != chunkReferences.end(); ++i)
   {
-    if (getenv("JP_PUB_TRACE"))
+    if (jpTraceOn())
     {
       fprintf(stderr, "QUILL %s id=%u off=%lu len=%lu\n", i->name.c_str(), unsigned(i->id), (unsigned long)i->offset, (unsigned long)i->length);
       if (i->name == "STRS" || i->name == "MCLD" || i->name == "BTEP" || i->name == "BTEC" || i->name == "SYID" || (i->name == "STSH" && i->id != 1))
@@ -1239,7 +1249,7 @@ bool MSPUBParser::parseQuill(librevenge::RVNGInputStream *input)
     }
     else if (i->name == "STSH")
     {
-      if (getenv("JP_PUB_TRACE")) fprintf(stderr, "STSH #%d at %lu len %lu\n", whichStsh, (unsigned long)i->offset, (unsigned long)i->length);
+      if (jpTraceOn()) fprintf(stderr, "STSH #%d at %lu len %lu\n", whichStsh, (unsigned long)i->offset, (unsigned long)i->length);
       if (whichStsh == 0)
       {
         // JeffPub 79: the first sheet names the styles.
@@ -1343,7 +1353,7 @@ void MSPUBParser::parseFonts(librevenge::RVNGInputStream *input, const QuillChun
     {
       std::vector<unsigned char> name;
       readNBytes(input, nameLength * 2, name);
-      if (getenv("JP_PUB_TRACE"))
+      if (jpTraceOn())
       {
         librevenge::RVNGString n;
         appendCharacters(n, name, "UTF-16LE");
@@ -1360,27 +1370,43 @@ void MSPUBParser::parseFonts(librevenge::RVNGInputStream *input, const QuillChun
 // name; -1 is Normal), zero for a named one.
 void MSPUBParser::parseStyleNames(librevenge::RVNGInputStream *input, const QuillChunkReference &chunk)
 {
-  readU32(input);
-  unsigned numElements = std::min(readU32(input), m_length);
-  input->seek(input->tell() + 12, librevenge::RVNG_SEEK_SET);
-  std::vector<unsigned> offsets;
-  for (unsigned i = 0; i < numElements && stillReading(input, chunk.offset + chunk.length); ++i)
-    offsets.push_back(readU32(input));
-  for (unsigned i = 0; i < offsets.size(); ++i)
+  // Names only label styles, so a damaged table loses names, never the
+  // publication. Every entry keeps its place (styles are numbered by it),
+  // and nothing is read outside this section.
+  try
   {
-    input->seek(chunk.offset + 20 + offsets[i], librevenge::RVNG_SEEK_SET);
-    const unsigned len = readU16(input);
-    librevenge::RVNGString name;
-    if (len > 0 && len < 256)
+    const unsigned long long end = (unsigned long long)chunk.length;
+    readU32(input);
+    unsigned numElements = std::min(readU32(input), m_length);
+    input->seek(input->tell() + 12, librevenge::RVNG_SEEK_SET);
+    std::vector<unsigned> offsets;
+    for (unsigned i = 0; i < numElements && 20 + 4ull * (i + 1) <= end && stillReading(input, chunk.offset + chunk.length); ++i)
+      offsets.push_back(readU32(input));
+    for (unsigned i = 0; i < offsets.size(); ++i)
     {
-      std::vector<unsigned char> bytes;
-      for (unsigned k = 0; k < len * 2; ++k) bytes.push_back(readU8(input));
-      appendCharacters(name, bytes, "UTF-16LE");
+      librevenge::RVNGString name;
+      const unsigned long long at = 20ull + offsets[i];
+      if (at + 6 <= end)
+      {
+        input->seek(long(chunk.offset + at), librevenge::RVNG_SEEK_SET);
+        const unsigned len = readU16(input);
+        // The name, then its id (a name too long to fit leaves both unread).
+        if (len < 256 && at + 2 + 2ull * len + 4 <= end)
+        {
+          std::vector<unsigned char> bytes;
+          for (unsigned k = 0; k < len * 2; ++k) bytes.push_back(readU8(input));
+          if (!bytes.empty())
+            appendCharacters(name, bytes, "UTF-16LE");
+          const int id = int(readU32(input));
+          if (name.empty() && id == -1) name = "Normal";
+          if (jpTraceOn()) fprintf(stderr, "STYLENAME %u id=%d %s\n", i, id, name.cstr());
+        }
+      }
+      m_collector->addStyleName(name);
     }
-    const int id = int(readU32(input));
-    if (name.empty() && id == -1) name = "Normal";
-    if (getenv("JP_PUB_TRACE")) fprintf(stderr, "STYLENAME %u id=%d %s\n", i, id, name.cstr());
-    m_collector->addStyleName(name);
+  }
+  catch (const EndOfStreamException &)
+  {
   }
 }
 
@@ -1403,13 +1429,13 @@ void MSPUBParser::parseDefaultStyle(librevenge::RVNGInputStream *input, const Qu
     {
       //FIXME: Does STSH2 hold information for associating style indices in FDPP to indices in STSH1 ?
       CharacterStyle cs = getCharacterStyle(input);
-      if (getenv("JP_PUB_TRACE")) fprintf(stderr, "STYLE %u char bold=%d italic=%d size=%g font=%d\n", i / 2, cs.bold, cs.italic, cs.textSizeInPt ? cs.textSizeInPt.get() : -1.0, cs.fontIndex ? int(cs.fontIndex.get()) : -1);
+      if (jpTraceOn()) fprintf(stderr, "STYLE %u char bold=%d italic=%d size=%g font=%d\n", i / 2, cs.bold, cs.italic, cs.textSizeInPt ? cs.textSizeInPt.get() : -1.0, cs.fontIndex ? int(cs.fontIndex.get()) : -1);
       m_collector->addDefaultCharacterStyle(cs);
     }
     else
     {
       ParagraphStyle ps = getParagraphStyle(input);
-      if (getenv("JP_PUB_TRACE")) fprintf(stderr, "STYLE %u para spacing=%g type=%d defchar=%d align=%d\n", i / 2, ps.m_lineSpacing ? ps.m_lineSpacing.get().m_amount : -1.0, ps.m_lineSpacing ? int(ps.m_lineSpacing.get().m_type) : -1, ps.m_defaultCharStyleIndex ? int(ps.m_defaultCharStyleIndex.get()) : -1, ps.m_align ? int(ps.m_align.get()) : -1);
+      if (jpTraceOn()) fprintf(stderr, "STYLE %u para spacing=%g type=%d defchar=%d align=%d\n", i / 2, ps.m_lineSpacing ? ps.m_lineSpacing.get().m_amount : -1.0, ps.m_lineSpacing ? int(ps.m_lineSpacing.get().m_type) : -1, ps.m_defaultCharStyleIndex ? int(ps.m_defaultCharStyleIndex.get()) : -1, ps.m_align ? int(ps.m_align.get()) : -1);
       m_collector->addDefaultParagraphStyle(ps);
     }
   }
@@ -1492,7 +1518,7 @@ std::vector<MSPUBParser::TextSpanReference> MSPUBParser::parseCharacterStyles(li
 }
 ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input)
 {
-  if (getenv("JP_PUB_TRACE")) fprintf(stderr, "PARASTYLE begin\n");
+  if (jpTraceOn()) fprintf(stderr, "PARASTYLE begin\n");
   ParagraphStyle ret;
 
   bool isList = false;
@@ -1570,7 +1596,7 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
               while (stillReading(input, tabEntryInfo.dataOffset + tabEntryInfo.dataLength))
               {
                 MSPUBBlockInfo tabInfo = parseBlock(input, true);
-                if (getenv("JP_PUB_TRACE")) fprintf(stderr, "TABFIELD id=0x%x type=0x%x data=%u\n", tabInfo.id, tabInfo.type, tabInfo.data);
+                if (jpTraceOn()) fprintf(stderr, "TABFIELD id=0x%x type=0x%x data=%u\n", tabInfo.id, tabInfo.type, tabInfo.data);
                 if (tabInfo.id == TAB_AMOUNT)
                 {
                   position = tabInfo.data;
@@ -1638,7 +1664,7 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
       ret.m_dropCapLetters = info.data;
       break;
     default:
-      if (getenv("JP_PUB_TRACE")) fprintf(stderr, "PARAPROP id=0x%x type=0x%x data=%u\n", info.id, info.type, info.data);
+      if (jpTraceOn()) fprintf(stderr, "PARAPROP id=0x%x type=0x%x data=%u\n", info.id, info.type, info.data);
 
       break;
     }
@@ -1664,7 +1690,7 @@ CharacterStyle MSPUBParser::getCharacterStyle(librevenge::RVNGInputStream *input
   CharacterStyle style;
 
   bool seenBold1 = false, seenBold2 = false, seenItalic1 = false, seenItalic2 = false;
-  if (getenv("JP_PUB_TRACE")) fprintf(stderr, "CHARSTYLE begin\n");
+  if (jpTraceOn()) fprintf(stderr, "CHARSTYLE begin\n");
   int textSize1 = -1, /* textSize2 = -1,*/ colorIndex = -1;
   boost::optional<unsigned> fontIndex;
   unsigned offset = input->tell();
@@ -1676,11 +1702,11 @@ CharacterStyle MSPUBParser::getCharacterStyle(librevenge::RVNGInputStream *input
     {
     case BOLD_1_ID:
       seenBold1 = true;
-      if (getenv("JP_PUB_TRACE")) fprintf(stderr, "CHARPROP bold1 data=%u\n", info.data);
+      if (jpTraceOn()) fprintf(stderr, "CHARPROP bold1 data=%u\n", info.data);
       break;
     case BOLD_2_ID:
       seenBold2 = true;
-      if (getenv("JP_PUB_TRACE")) fprintf(stderr, "CHARPROP bold2 data=%u\n", info.data);
+      if (jpTraceOn()) fprintf(stderr, "CHARPROP bold2 data=%u\n", info.data);
       break;
     case ITALIC_1_ID:
       seenItalic1 = true;
@@ -1703,11 +1729,11 @@ CharacterStyle MSPUBParser::getCharacterStyle(librevenge::RVNGInputStream *input
       break;
     case TEXT_SIZE_1_ID:
       textSize1 = info.data;
-      if (getenv("JP_PUB_TRACE")) fprintf(stderr, "CHARPROP size1=%g\n", info.data * (double(POINTS_IN_INCH) / EMUS_IN_INCH));
+      if (jpTraceOn()) fprintf(stderr, "CHARPROP size1=%g\n", info.data * (double(POINTS_IN_INCH) / EMUS_IN_INCH));
       break;
     case TEXT_SIZE_2_ID:
       // textSize2 = info.data;
-      if (getenv("JP_PUB_TRACE")) fprintf(stderr, "CHARPROP size2=%g\n", info.data * (double(POINTS_IN_INCH) / EMUS_IN_INCH));
+      if (jpTraceOn()) fprintf(stderr, "CHARPROP size2=%g\n", info.data * (double(POINTS_IN_INCH) / EMUS_IN_INCH));
       break;
     case BARE_COLOR_INDEX_ID:
       colorIndex = info.data;
@@ -1766,7 +1792,7 @@ CharacterStyle MSPUBParser::getCharacterStyle(librevenge::RVNGInputStream *input
       break;
     }
     default:
-      if (getenv("JP_PUB_TRACE"))
+      if (jpTraceOn())
       {
         fprintf(stderr, "CHARPROP unknown id=0x%x type=0x%x data=%u len=%lu", info.id, info.type, info.data, info.dataLength);
         if (info.dataLength > 0 && info.dataLength < 256)
@@ -2254,7 +2280,7 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
                                         dotStyle));
           }
 
-          if (getenv("JP_PUB_TRACE"))
+          if (jpTraceOn())
           {
             fprintf(stderr, "FOPT seq=%u", *shapeSeqNum);
             for (const auto &kv : foptValues.m_scalarValues) fprintf(stderr, " %04x=%u", kv.first, kv.second);
@@ -2479,7 +2505,7 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
           if (unsigned *w = getIfExists(v.m_scalarValues, FIELDID_LINE_WIDTH))
             f.widthEmu = *w;
         }
-        if (getenv("JP_PUB_TRACE"))
+        if (jpTraceOn())
           fprintf(stderr, "TABLEFMT table=%u kind=%u f3=%u f4=%u f5=%u f6=%u f7=%u color=%x width=%u\n", f.f[2], f.kind, f.f[3], f.f[4], f.f[5], f.f[6], f.f[7], f.color, f.widthEmu);
         if (f.kind <= 2 && f.f[2] < 0x100000)
           m_collector->addTableCellFormat(f.f[2], f);
@@ -2926,7 +2952,7 @@ bool MSPUBParser::parseContentChunkReference(librevenge::RVNGInputStream *input,
   }
   if (seenType && seenOffset) //FIXME: What if there is an offset, but not a type? Should we still set the end of the preceding chunk to that offset?
   {
-    if (getenv("JP_PUB_TRACE"))
+    if (jpTraceOn())
       fprintf(stderr, "CHUNK type=0x%x off=%lu seq=%u parent=%u\n", type, offset, m_lastSeenSeqNum, seenParentSeqNum ? parentSeqNum : 0);
     if (type == PAGE)
     {

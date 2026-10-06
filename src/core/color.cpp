@@ -26,14 +26,17 @@ QColor contrastText(const QColor &bg)
     return l > 0.55 ? QColor(0x1a, 0x1a, 0x1a) : QColor(Qt::white);
 }
 
+// The plate filter and the ink mode belong to the thread drawing the plate
+// or writing the PDF: a picture drawn elsewhere at the same time keeps its
+// screen colors.
 static std::function<QColor(const QColor &)> &colorFilter()
 {
-    static std::function<QColor(const QColor &)> f;
+    thread_local std::function<QColor(const QColor &)> f;
     return f;
 }
 void setColorFilter(std::function<QColor(const QColor &)> filter) { colorFilter() = std::move(filter); }
 
-static int s_inkOutputs = 0;
+static thread_local int s_inkOutputs = 0;
 bool keepInks() { return s_inkOutputs > 0; }
 InkOutput::InkOutput() { ++s_inkOutputs; }
 InkOutput::~InkOutput() { --s_inkOutputs; }

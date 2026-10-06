@@ -80,11 +80,12 @@ QColor mix(const QColor &a, const QColor &b, double t);  // t = share of b
 QString colorToString(const QColor &c);
 
 // While a separation plate is drawn, every color resolves through this
-// filter (spot plates); an empty function turns it off.
+// filter (spot plates) on the drawing thread; an empty function turns it off.
 void setColorFilter(std::function<QColor(const QColor &)> filter);
 
 // While a CMYK PDF is written, colors given as inks with a screen color
-// resolve to their inks. Held by an InkOutput for the length of the output.
+// resolve to their inks. Held by an InkOutput for the length of the output;
+// it applies to the thread that holds it (as does the plate filter).
 bool keepInks();
 struct InkOutput {
     InkOutput();

@@ -49,6 +49,7 @@
 #include <QTextList>
 #include <QDirIterator>
 #include <QtTest>
+#include <clocale>
 
 using namespace jp;
 
@@ -86,6 +87,53 @@ private Q_SLOTS:
         ctx.doc = doc.get();
         ctx.cache = &cache;
         for (int i = 0; i < doc->pages.size(); ++i) QVERIFY(!Renderer::renderToImage(ctx, i, 0.25).isNull());
+    }
+    // Photos stay JPEG when saved with a gray setting or cut to a shape
+    // (a converted picture always has an alpha channel, which once made
+    // every one of them a much larger PNG).
+    void pubWriterKeepsJpegPhotos()
+    {
+        QImage photo(320, 200, QImage::Format_RGB32);
+        for (int y = 0; y < photo.height(); ++y)
+            for (int x = 0; x < photo.width(); ++x) photo.setPixel(x, y, qRgb(x * 255 / 320, y * 255 / 200, 128));
+        QByteArray jpg;
+        QBuffer buf(&jpg);
+        buf.open(QIODevice::WriteOnly);
+        photo.save(&buf, "JPEG", 90);
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        const QString id = doc->addImage(jpg, QStringLiteral("jpg"));
+        auto gray = std::make_shared<jp::PictureItem>();
+        gray->imageId = id;
+        gray->rect = QRectF(72, 72, 160, 100);
+        gray->recolor = jp::PictureItem::Grayscale;
+        auto oval = std::make_shared<jp::PictureItem>();
+        oval->imageId = id;
+        oval->rect = QRectF(72, 300, 160, 100);
+        oval->maskShape = QStringLiteral("ellipse");
+        oval->brightness = 20;
+        doc->pages[0]->items.push_back(gray);
+        doc->pages[0]->items.push_back(oval);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("photos.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        auto back = jp::importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(back->images.size(), 2);
+        for (auto it = back->images.cbegin(); it != back->images.cend(); ++it) QCOMPARE(it->format, QStringLiteral("jpg"));
+    }
+
+    // A file whose style names point outside their section (made from
+    // JeffPub's own styles sample): it still opens with all its text,
+    // losing only the damaged names.
+    void damagedStyleNamesStillOpen()
+    {
+        QString err;
+        auto doc = importPublisherFile(QStringLiteral(JP_TEST_DATA "/pub/jp-damaged-style-names.pub"), &err);
+        QVERIFY2(doc, qPrintable(err));
+        QString text;
+        for (const auto &story : doc->stories) text += story->doc->toPlainText();
+        QVERIFY2(text.contains(QStringLiteral("A pull quote")) && text.contains(QStringLiteral("Plain text")), qPrintable(text));
     }
     void publisherFuzzFilesDoNotCrash()
     {
@@ -2727,6 +2775,43 @@ private Q_SLOTS:
                 }
         });
         QCOMPARE(found, 7);
+    }
+
+    // Process inks survive reading on a system whose language writes
+    // decimals with a comma (German, French...): nothing on the way may go
+    // through locale-dependent text.
+    void processInksAnyLocale()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto box = std::make_shared<jp::ShapeItem>();
+        box->rect = QRectF(72, 72, 200, 100);
+        box->fill = jp::Fill::solid(jp::ColorRef::inks(QColor::fromCmykF(250 / 255.f, 194 / 255.f, 34 / 255.f, 77 / 255.f), QColor(51, 61, 97)));
+        box->stroke = jp::Stroke::none();
+        doc->pages[0]->items.push_back(box);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("inks.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        const std::string before = setlocale(LC_NUMERIC, nullptr);
+        const char *comma = nullptr;
+        for (const char *l : {"de_DE.UTF-8", "de_DE.utf8", "de_AT.utf8", "fr_FR.UTF-8", "fr_FR.utf8"})
+            if (setlocale(LC_NUMERIC, l)) { comma = l; break; }
+        if (!comma) QSKIP("no comma-decimal locale on this system");
+        char probe[16];
+        snprintf(probe, sizeof probe, "%.1f", 0.5);
+        auto back = jp::importPublisherFile(path, &err);
+        setlocale(LC_NUMERIC, before.c_str());
+        QCOMPARE(QString::fromLatin1(probe), QStringLiteral("0,5"));   // the locale really writes commas
+        QVERIFY2(back, qPrintable(err));
+        int found = 0;
+        jp::walkItems(back->pages[0]->items, [&](const jp::ItemPtr &it) {
+            if (it->type() != jp::ItemType::Shape) return;
+            const QColor k = static_cast<const jp::ShapeItem *>(it.get())->fill.color.rgbValue();
+            QCOMPARE(k.spec(), QColor::Cmyk);
+            QVERIFY2(std::abs(k.cyanF() - 250 / 255.0) < 0.003 && std::abs(k.blackF() - 77 / 255.0) < 0.003, qPrintable(jp::colorToString(k)));
+            ++found;
+        });
+        QCOMPARE(found, 1);
     }
 
     // A process color from a .pub file: the screen shows the color the file

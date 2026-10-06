@@ -766,6 +766,7 @@ private:
         QByteArray bitmap;
         QString mime;
         ta->fill = fillFromStyle(&bitmap, &mime);
+        noteInks(ta->fill);
         if (ta->fill.type == Fill::Picture || ta->fill.type == Fill::Texture) ta->fill = Fill::solid(ColorRef::rgb(Qt::black));
         ta->stroke = strokeFromStyle();
         ta->wrap.mode = Wrap::None;
@@ -796,19 +797,23 @@ private:
         m_cursor.insertText(t, cf);
     }
 
+    // A fill given as process inks means the publication was set up for
+    // process-color printing; its PDFs are CMYK.
+    void noteInks(const Fill &f)
+    {
+        if (f.type == Fill::Solid && f.color.shownValue().isValid() && m_doc.print.model == PrintInfo::RGB) m_doc.print.model = PrintInfo::ProcessCMYK;
+    }
+
     Fill fillFromStyle(QByteArray *bitmap, QString *mime) const
     {
         const QString f = str(m_style["draw:fill"]);
         const double opacity = m_style["draw:opacity"] ? percent(m_style["draw:opacity"]) : 1.0;
         if (f == "solid") {
             const QColor c = color(m_style["draw:fill-color"]);
-            // A process color: its inks, shown as the file shows it.
-            const QStringList inks = str(m_style["jp:fill-inks"]).split(QLatin1Char(' '), Qt::SkipEmptyParts);
-            if (c.isValid() && inks.size() == 4) {
-                // Inks mean the publication was set up for process-color
-                // printing; its PDFs are CMYK.
-                if (m_doc.print.model == PrintInfo::RGB) m_doc.print.model = PrintInfo::ProcessCMYK;
-                return Fill::solid(ColorRef::inks(QColor::fromCmykF(inks[0].toFloat(), inks[1].toFloat(), inks[2].toFloat(), inks[3].toFloat()), c), 1 - opacity);
+            // A process color: its inks (0-255 each), shown as the file shows it.
+            if (c.isValid() && m_style["jp:ink-c"] && m_style["jp:ink-m"] && m_style["jp:ink-y"] && m_style["jp:ink-k"]) {
+                auto ink = [&](const char *name) { return float(std::clamp(m_style[name]->getInt(), 0, 255)) / 255.f; };
+                return Fill::solid(ColorRef::inks(QColor::fromCmykF(ink("jp:ink-c"), ink("jp:ink-m"), ink("jp:ink-y"), ink("jp:ink-k")), c), 1 - opacity);
             }
             return Fill::solid(ColorRef::rgb(c.isValid() ? c : QColor(Qt::white)), 1 - opacity);
         }
@@ -912,6 +917,7 @@ private:
         QByteArray bitmap;
         QString mime;
         Fill fill = open ? Fill::none() : fillFromStyle(&bitmap, &mime);
+        noteInks(fill);
         const Stroke stroke = strokeFromStyle();
         if (fill.type == Fill::NoFill && stroke.isNone() && !open) return;
         // A line explicitly drawn without a stroke (a box's absent border side) shows nothing.

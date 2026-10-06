@@ -16,6 +16,7 @@
 #include <cassert>
 #include <functional>
 #include <math.h>
+#include <cmath>
 #include <memory>
 
 #include <boost/multi_array.hpp>
@@ -38,6 +39,16 @@
 
 namespace libmspub
 {
+
+namespace
+{
+// JeffPub 79: JP_PUB_TRACE, read once (it is checked for every shape and paragraph).
+bool jpTraceOn()
+{
+  static const bool on = getenv("JP_PUB_TRACE") != nullptr;
+  return on;
+}
+}
 
 using namespace std::placeholders;
 
@@ -764,10 +775,12 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
     std::transform(given.begin(), given.end(), given.begin(), [](unsigned char ch) { return char(std::tolower(ch)); });
     if (given == shown)
     {
+      // As whole numbers (0-255): text from printf would follow the
+      // system's decimal comma in some languages.
       const std::vector<double> &k = info.m_fillInks.get();
-      char inks[64];
-      snprintf(inks, sizeof inks, "%.4f %.4f %.4f %.4f", k[0], k[1], k[2], k[3]);
-      graphicsProps.insert("jp:fill-inks", inks);
+      const char *names[4] = {"jp:ink-c", "jp:ink-m", "jp:ink-y", "jp:ink-k"};
+      for (unsigned i = 0; i < 4; ++i)
+        graphicsProps.insert(names[i], int(std::lround(std::min(1.0, std::max(0.0, k[i])) * 255)));
     }
   }
   // JeffPub 79: Text Art goes to the application as its words and settings
@@ -819,7 +832,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
   }
   librevenge::RVNGString fill = graphicsProps["draw:fill"] ? graphicsProps["draw:fill"]->getStr() : "none";
   bool hasFill = fill != "none";
-  if (getenv("JP_PUB_TRACE"))
+  if (jpTraceOn())
   {
     const Coordinate c = info.m_coordinates.get_value_or(Coordinate());
     fprintf(stderr, "PAINT type=%d fill=%s stroke=%d lines=%zu xs=%d ys=%d xe=%d ye=%d hasFillObj=%d\n", int(info.m_type.get_value_or(RECTANGLE)), fill.cstr(), int(hasStroke),
@@ -1406,7 +1419,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
       for (const auto &line : text)
       {
         librevenge::RVNGPropertyList paraProps = getParaStyleProps(line.style, line.style.m_defaultCharStyleIndex);
-        if (getenv("JP_PUB_TRACE"))
+        if (jpTraceOn())
         {
           const unsigned si = line.style.m_defaultCharStyleIndex ? line.style.m_defaultCharStyleIndex.get() : 0;
           fprintf(stderr, "PSTYLE defchar=%d ownraw=%d styleraw=%d\n", line.style.m_defaultCharStyleIndex ? int(si) : -1, line.style.m_alignRaw,

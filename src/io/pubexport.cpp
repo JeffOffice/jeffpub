@@ -645,6 +645,7 @@ private:
     QString extraImage(const QByteArray &bytes, quint16 kind);
     QString shapedPictureImage(const PictureItem &pic);
     QString recoloredPictureImage(const PictureItem &pic);
+    QString madeImage(const QImage &img, const QString &sourceId, bool seeThrough);
 
     // Tables: each table story's cell ends (by story index), the table
     // stories' text ids, and the cell fill and border records, which live in
@@ -904,13 +905,23 @@ QString PubWriter::shapedPictureImage(const PictureItem &pic)
                              .intersected(img.rect());
         if (!px.isEmpty()) img = img.copy(px);
     }
-    const auto src = m_doc.images.constFind(pic.imageId);
-    const bool jpeg = src != m_doc.images.cend() && (src->format.toLower() == QLatin1String("jpg") || src->format.toLower() == QLatin1String("jpeg"))
-                      && !img.hasAlphaChannel();
+    return madeImage(img, pic.imageId, pic.hasTransparentColor);
+}
+
+// A picture made from one of the publication's: a JPEG source stays JPEG
+// (photos stay small) unless the change made parts of it see-through. The
+// decision is the source's, since a converted image always has an alpha
+// channel whether it uses it or not.
+QString PubWriter::madeImage(const QImage &img, const QString &sourceId, bool seeThrough)
+{
+    const auto src = m_doc.images.constFind(sourceId);
+    const bool jpeg = !seeThrough && src != m_doc.images.cend() &&
+                      (src->format.toLower() == QLatin1String("jpg") || src->format.toLower() == QLatin1String("jpeg"));
     QByteArray bytes;
     QBuffer buf(&bytes);
     buf.open(QIODevice::WriteOnly);
-    img.save(&buf, jpeg ? "JPEG" : "PNG", jpeg ? 92 : -1);
+    if (jpeg) img.convertToFormat(QImage::Format_RGB32).save(&buf, "JPEG", 92);
+    else img.save(&buf, "PNG");
     return extraImage(bytes, jpeg ? 5 : 6);
 }
 
@@ -933,15 +944,7 @@ QString PubWriter::recoloredPictureImage(const PictureItem &pic)
             line[x] = qRgba(v, v, v, qAlpha(c));
         }
     }
-    const auto src = m_doc.images.constFind(pic.imageId);
-    const bool jpeg = src != m_doc.images.cend() && (src->format.toLower() == QLatin1String("jpg") || src->format.toLower() == QLatin1String("jpeg"))
-                      && !img.hasAlphaChannel();
-    QByteArray bytes;
-    QBuffer buf(&bytes);
-    buf.open(QIODevice::WriteOnly);
-    if (jpeg) img.convertToFormat(QImage::Format_RGB32).save(&buf, "JPEG", 92);
-    else img.save(&buf, "PNG");
-    return extraImage(bytes, jpeg ? 5 : 6);
+    return madeImage(img, pic.imageId, false);
 }
 
 int PubWriter::blipIndex(const QString &imageId)

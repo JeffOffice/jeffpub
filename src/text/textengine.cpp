@@ -332,6 +332,15 @@ static KnownMetrics knownMetrics(const QString &family, bool bold = false)
 static bool isSubstituted(const QString &family) { return !substituteFor(family).isEmpty() || substituteStretch(family) != 100; }
 static QString requestedFamily(const QFont &f) { return f.families().isEmpty() ? f.family() : f.families().first(); }
 
+// A cache key for metrics given in ems, which don't change with size: the
+// font's families, weight, slant and stretch (QFont::key() includes the size,
+// so every new size would read the font's tables again).
+static QString emKey(const QFont &f)
+{
+    return f.families().join(QLatin1Char(',')) + QLatin1Char('|') + f.family() + QLatin1Char('|') + QString::number(f.weight()) + QLatin1Char('|') +
+           QString::number(int(f.style())) + QLatin1Char('|') + QString::number(f.stretch());
+}
+
 // A font's average character width in ems (OS/2 xAvgCharWidth), the unit of
 // .pub tracking. Substituted fonts use the original's, read from fonts
 // embedded in reference PDFs.
@@ -346,7 +355,7 @@ static double averageCharEm(const QFont &f, const QString &requested)
         if (fam == "gill sans mt") return (bold ? 956.0 : italic ? 769.0 : 834.0) / 2048;
     }
     static QHash<QString, double> cache;
-    const QString key = f.key();
+    const QString key = emKey(f);
     auto it = cache.constFind(key);
     if (it != cache.constEnd()) return *it;
     double em = 0.5;
@@ -380,7 +389,7 @@ double naturalLineEm(const QFont &f, const QString &requestedFamily)
     }
     static QHash<QString, double> cache;
     const bool typo = usesTypoMetrics(requestedFamily);
-    const QString key = f.key() + (typo ? QStringLiteral("|t") : QStringLiteral("|h"));
+    const QString key = emKey(f) + (typo ? QStringLiteral("|t") : QStringLiteral("|h"));
     auto it = cache.constFind(key);
     if (it != cache.constEnd()) return *it;
     double em = 1.15;
@@ -552,7 +561,9 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                 }
                 // All capitals (or all lowercase): Qt ignores these in a
                 // layout's format ranges, so the letters are changed here, one
-                // for one so positions still map.
+                // for one so positions still map. That is deliberate: a letter
+                // whose capital is two letters (German ß, "SS") stays as it is,
+                // since the caret and selection count display letters 1:1.
                 if (rf.fontCapitalization() == QFont::AllUppercase || rf.fontCapitalization() == QFont::AllLowercase) {
                     const bool up = rf.fontCapitalization() == QFont::AllUppercase;
                     for (QChar &ch : shown) ch = up ? ch.toUpper() : ch.toLower();
