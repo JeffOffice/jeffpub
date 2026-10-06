@@ -63,6 +63,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         }
     }));
     m_ed = new Editor(this);
+    // The color drop-downs offer this publication's spot colors.
+    setSpotColorSource([ed = QPointer<Editor>(m_ed)] {
+        QVector<QPair<QString, QColor>> out;
+        if (!ed || !ed->doc() || !ed->doc()->print.usesSpots()) return out;
+        const PrintInfo &pi = ed->doc()->print;
+        for (int i = 0; i < pi.spotColors.size(); ++i) out << qMakePair(pi.spotName(i), pi.spotColors[i]);
+        return out;
+    });
     m_canvas = new Canvas(m_ed, this);
     m_ribbon = new Ribbon(this);
     m_pages = new PagesPane(m_ed, this);

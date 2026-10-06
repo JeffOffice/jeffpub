@@ -51,7 +51,7 @@ void styleDialog(QWidget *p, Editor *ed, const QString &styleName = QString());
 void wordCountDialog(QWidget *p, Editor *ed);
 void optionsDialog(QWidget *p, Editor *ed);
 void pageNumberDialog(QWidget *p, Editor *ed);
-void documentPropertiesDialog(QWidget *p, Editor *ed);
+void documentPropertiesDialog(QWidget *p, Editor *ed, int tab = 0);   // 1 = Commercial Print
 void measurementWindow(QWidget *p, Editor *ed);
 void tintsDialog(QWidget *p, Editor *ed, const std::function<void(const ColorRef &)> &apply);
 void spellingDialog(QWidget *p, Editor *ed);

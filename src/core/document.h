@@ -150,6 +150,9 @@ struct PrintInfo {
     enum ColorModel { RGB, SingleSpot, SpotColors, ProcessCMYK, ProcessPlusSpot };
     ColorModel model = RGB;
     QVector<QColor> spotColors;
+    QStringList spotNames;           // a name for each spot color (an ink's name, "PANTONE 286 C")
+    bool usesSpots() const { return model == SingleSpot || model == SpotColors || model == ProcessPlusSpot; }
+    QString spotName(int i) const { return i < spotNames.size() && !spotNames[i].isEmpty() ? spotNames[i] : QStringLiteral("Spot color %1").arg(i + 1); }
     bool embedFonts = true;
 };
 

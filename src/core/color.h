@@ -4,6 +4,7 @@
 // Switching the publication's color scheme recolors every scheme reference.
 
 #include <QColor>
+#include <functional>
 #include <QString>
 #include <QVector>
 
@@ -72,6 +73,10 @@ QColor mix(const QColor &a, const QColor &b, double t);  // t = share of b
 // (with ",a" for alpha 0-255) for a color given as ink amounts, so those
 // survive saving and reach a CMYK PDF unchanged.
 QString colorToString(const QColor &c);
+
+// While a separation plate is drawn, every color resolves through this
+// filter (spot plates); an empty function turns it off.
+void setColorFilter(std::function<QColor(const QColor &)> filter);
 QColor colorFromString(const QString &s);
 QColor contrastText(const QColor &bg);
 

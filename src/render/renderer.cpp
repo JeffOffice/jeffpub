@@ -550,6 +550,7 @@ static void paintText(QPainter *p, const PaintContext &ctx, const TextItem &t)
 
 static void paintPicture(QPainter *p, const PaintContext &ctx, const PictureItem &pic)
 {
+    if (ctx.opt.skipPictures) return;
     const QRectF r(QPointF(0, 0), pic.rect.size());
     const ColorScheme &cs = ctx.doc->colors;
     const QPainterPath mask = shapePath(pic.maskShape, r.size());

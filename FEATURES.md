@@ -8,7 +8,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 
 ### Info
 - [x] Business Information: create, edit, and switch between named sets (name, tagline, contact person, title, address, phone/fax/email, logo)
-- [~] Commercial Print Information: color model (RGB, process CMYK, spot colors, process + spot) and embedded-font management *(partial: a process-color publication makes a CMYK PDF, with colors entered as CMYK kept exactly; spot colors are printed as process colors)*
+- [~] Commercial Print Information: color model (RGB, process CMYK, spot colors, process + spot) and embedded-font management *(partial: spot colors are entered by name and color and print on their own separation plates; a process-color publication makes a CMYK PDF with colors entered as CMYK kept exactly, but PDFs show spot colors as process colors)*
 - [x] Run Design Checker from Info
 - [x] Publication properties (title, author, subject, keywords, comments)
 
@@ -31,7 +31,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 - [x] Paper size, one-sided or two-sided (flip on long or short edge), color, grayscale, or composite
 - [x] Print preview with ruler, page navigation, front/back view, and "show numbers"
 - [x] Crop marks, bleed marks, registration marks, density bars, color bars, job information, and "allow bleeds"
-- [~] Separations (CMYK and spot plates) *(partial: process CMYK plates; spot colors print on the process plates)*
+- [x] Separations (CMYK and spot plates): a plate per process ink and per spot color; tints of a spot color print as lighter ink on its plate, and spot colors are knocked out of the process plates
 - [x] Mail merge and catalog merge printing
 
 ### Share and Export

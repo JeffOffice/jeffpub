@@ -16,6 +16,8 @@ class QWidget;
 
 namespace jp {
 
+struct PaintContext;
+
 class Editor;
 
 bool loadTextFileInto(QTextDocument *doc, const QString &path);
@@ -49,8 +51,17 @@ void drawPrinterMarks(QPainter *p, const QRectF &page, const PrinterMarks &m, co
 
 // One process-color plate (0 cyan, 1 magenta, 2 yellow, 3 black) of a page
 // image, as grayscale where black is full ink.
+// Plates 0-3 are cyan, magenta, yellow and black; 4 on are the
+// publication's spot colors in order.
 QImage separationPlate(const QImage &rgb, int plate);
-QString plateName(int plate);
+QString plateName(int plate, const Document *doc = nullptr);
+// How much of spot color `spot` a color is: 1 for the spot color, less for
+// its tints, and -1 for any other color.
+double spotAmount(const QColor &c, const QColor &spot);
+// One page's plate as a grayscale picture (black = full ink), and the same
+// drawn with a painter for printing.
+QImage renderPlate(const Document &doc, int page, int plate, double dpi);
+void renderPlateInto(QPainter *p, const PaintContext &ctx, int page, int plate);
 QVector<QVector<int>> bookletOrder(int pages);   // sheet sides -> page indices (-1 blank)
 
 bool exportPublisher(const Document &doc, const QString &path, QString *error);

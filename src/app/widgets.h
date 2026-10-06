@@ -18,6 +18,9 @@ class QGridLayout;
 namespace jp {
 
 // ---------- colors ----------
+// The current publication's spot colors (name, color) for the color drop-downs.
+void setSpotColorSource(std::function<QVector<QPair<QString, QColor>>()> source);
+
 class ColorPopup : public QFrame {
     Q_OBJECT
 public:

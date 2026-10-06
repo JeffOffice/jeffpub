@@ -656,10 +656,31 @@ PrinterMarks PrinterMarks::fromJson(const QJsonObject &o)
     return m;
 }
 
-QString plateName(int plate)
+QString plateName(int plate, const Document *doc)
 {
     static const char *names[] = {"Cyan", "Magenta", "Yellow", "Black"};
+    if (plate >= 4 && doc) return doc->print.spotName(plate - 4);
     return QString::fromLatin1(names[std::clamp(plate, 0, 3)]);
+}
+
+double spotAmount(const QColor &c, const QColor &spot)
+{
+    // A tint mixes the spot color with white: every channel the same share
+    // of the way to white.
+    const int sc[3] = {spot.red(), spot.green(), spot.blue()}, cc[3] = {c.red(), c.green(), c.blue()};
+    double t = -1;
+    for (int k = 0; k < 3; ++k) {
+        if (255 - sc[k] < 8) {
+            if (std::abs(cc[k] - 255) > 8) return -1;
+            continue;
+        }
+        const double tk = double(cc[k] - sc[k]) / (255 - sc[k]);
+        if (t < 0) t = tk;
+        else if (std::abs(tk - t) > 0.04) return -1;
+    }
+    if (t < 0) t = 0;   // white spot color
+    if (t < -0.02 || t > 0.98) return -1;
+    return 1 - std::clamp(t, 0.0, 1.0);
 }
 
 QImage separationPlate(const QImage &rgb, int plate)
@@ -696,7 +717,7 @@ void drawPrinterMarks(QPainter *p, const QRectF &page, const PrinterMarks &m, co
         if (m.plate < 0) return c;
         QImage px(1, 1, QImage::Format_RGB32);
         px.setPixel(0, 0, c.rgb());
-        const int g = qGray(separationPlate(px, m.plate).pixel(0, 0));
+        const int g = qGray(separationPlate(px, std::min(m.plate, 3)).pixel(0, 0));
         return QColor(g, g, g);
     };
     const QRectF bleed = page.adjusted(-m.bleedSize, -m.bleedSize, m.bleedSize, m.bleedSize);
@@ -765,6 +786,52 @@ void drawPrinterMarks(QPainter *p, const QRectF &page, const PrinterMarks &m, co
     p->restore();
 }
 
+void renderPlateInto(QPainter *p, const PaintContext &ctx, int page, int plate)
+{
+    // Spot colors and their tints print on their own plates and are knocked
+    // out of the process plates. Text is laid out afresh so its colors go
+    // through the filter too.
+    const Document *d = ctx.doc;
+    const QVector<QColor> spots = d->print.usesSpots() ? d->print.spotColors : QVector<QColor>{};
+    PaintContext pc = ctx;
+    LayoutCache plateCache;
+    pc.cache = &plateCache;
+    if (plate >= 4) {
+        const QColor spot = spots.value(plate - 4);
+        setColorFilter([spot](const QColor &c) {
+            const double a = spotAmount(c, spot);
+            return a < 0 ? QColor(255, 255, 255, c.alpha()) : QColor::fromRgbF(float(1 - a), float(1 - a), float(1 - a), c.alphaF());
+        });
+        pc.opt.skipPictures = true;
+    } else if (!spots.isEmpty()) {
+        setColorFilter([spots](const QColor &c) {
+            for (const QColor &s : spots)
+                if (spotAmount(c, s) > 0) return QColor(255, 255, 255, c.alpha());
+            return c;
+        });
+    }
+    Renderer::paintPage(p, pc, page);
+    setColorFilter({});
+}
+
+QImage renderPlate(const Document &doc, int page, int plate, double dpi)
+{
+    const QSizeF ps = doc.pageSize();
+    QImage img(QSize(int(std::ceil(ps.width() * dpi / 72)), int(std::ceil(ps.height() * dpi / 72))), QImage::Format_RGB32);
+    img.fill(Qt::white);
+    QPainter ip(&img);
+    ip.setRenderHint(QPainter::Antialiasing);
+    ip.scale(dpi / 72, dpi / 72);
+    PaintContext ctx;
+    ctx.doc = &doc;
+    LayoutCache cache;
+    ctx.cache = &cache;
+    ctx.opt.output = true;
+    renderPlateInto(&ip, ctx, page, plate);
+    ip.end();
+    return separationPlate(img, std::min(plate, 3));
+}
+
 void printDocument(Editor *ed, QPrinter *printer, const QJsonObject &opts)
 {
     Document *d = ed->doc();
@@ -786,6 +853,9 @@ void printDocument(Editor *ed, QPrinter *printer, const QJsonObject &opts)
         const QString want = opts.value("plates").toString(QStringLiteral("CMYK"));
         for (int i = 0; i < 4; ++i)
             if (want.contains(QLatin1Char("CMYK"[i]))) plates << i;
+        // Spot plates: "0"-"9" for the publication's spot colors.
+        for (int i = 0; i < std::min<qsizetype>(10, d->print.spotColors.size()); ++i)
+            if (d->print.usesSpots() && want.contains(QChar('0' + i))) plates << 4 + i;
         if (plates.isEmpty()) plates << 3;
     }
     int from = printer->fromPage() > 0 ? printer->fromPage() - 1 : 0;
@@ -831,9 +901,9 @@ void printDocument(Editor *ed, QPrinter *printer, const QJsonObject &opts)
             ip.setRenderHint(QPainter::Antialiasing);
             ip.scale(res, res);
             ip.translate(bl, bl);
-            Renderer::paintPage(&ip, ctx, page);
+            renderPlateInto(&ip, ctx, page, plate);
             ip.end();
-            p.drawImage(area, separationPlate(img, plate));
+            p.drawImage(area, separationPlate(img, std::min(plate, 3)));
         }
         p.restore();
         if (marks.any()) {
@@ -843,7 +913,7 @@ void printDocument(Editor *ed, QPrinter *printer, const QJsonObject &opts)
             m.bleedSize *= s;
             m.plate = plate;
             QString info = QStringLiteral("%1  ·  Page %2 of %3  ·  %4").arg(title).arg(page + 1).arg(d->pages.size()).arg(stamp);
-            if (plate >= 0) info += QStringLiteral("  ·  ") + plateName(plate);
+            if (plate >= 0) info += QStringLiteral("  ·  ") + plateName(plate, d);
             drawPrinterMarks(&p, QRectF(target.topLeft(), ps * s), m, info);
             p.restore();
         }

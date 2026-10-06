@@ -506,7 +506,7 @@ QWidget *Backstage::buildInfo()
     card("contact", QStringLiteral("Business Information"), QStringLiteral("Edit the contact details that templates and Business Information fields use."),
          [this] { businessInfoDialog(this, m_win->editor()); });
     card("printer", QStringLiteral("Commercial Print Settings"), QStringLiteral("Choose the color model (RGB, process CMYK, spot colors) and font embedding for a print shop."),
-         [this] { documentPropertiesDialog(this, m_win->editor()); });
+         [this] { documentPropertiesDialog(this, m_win->editor(), 1); });
     card("shield-check", QStringLiteral("Run Design Checker"), QStringLiteral("Find problems such as text that doesn't fit, empty frames and low-resolution pictures."),
          [this] { m_win->showTaskPane("designchecker"); Q_EMIT closeRequested(); });
     left->addStretch(1);
@@ -1040,6 +1040,14 @@ QWidget *Backstage::buildPrint()
         pl->addWidget(b);
         plateBoxes << b;
     }
+    // A plate for each spot color.
+    if (d->print.usesSpots())
+        for (int i = 0; i < std::min<qsizetype>(10, d->print.spotColors.size()); ++i) {
+            auto *b = new QCheckBox(d->print.spotName(i), plates);
+            b->setChecked(true);
+            pl->addWidget(b);
+            plateBoxes << b;
+        }
     pl->addStretch(1);
     plates->setVisible(false);
     auto *merged = new QCheckBox(QStringLiteral("Print all mail merge records"), w);
@@ -1185,8 +1193,8 @@ QWidget *Backstage::buildPrint()
         opts["grayscale"] = color->currentIndex() == 1;
         opts["separations"] = color->currentIndex() == 2;
         QString want;
-        for (int i = 0; i < 4; ++i)
-            if (plateBoxes[i]->isChecked()) want += QLatin1Char("CMYK"[i]);
+        for (int i = 0; i < plateBoxes.size(); ++i)
+            if (plateBoxes[i]->isChecked()) want += i < 4 ? QChar("CMYK"[i]) : QChar('0' + (i - 4));
         opts["plates"] = want;
         opts["merged"] = merged->isChecked();
         QGuiApplication::setOverrideCursor(Qt::WaitCursor);

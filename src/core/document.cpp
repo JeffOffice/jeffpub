@@ -650,7 +650,8 @@ QJsonObject Document::toJson() const
     o["templateOptions"] = templateOptions;
     o["facing"] = facingPages;
     QJsonArray spots;
-    for (const auto &c : print.spotColors) spots.append(c.name());
+    for (int i = 0; i < print.spotColors.size(); ++i)
+        spots.append(QJsonObject{{"name", print.spotName(i)}, {"color", colorToString(print.spotColors[i])}});
     o["print"] = QJsonObject{{"model", int(print.model)}, {"spots", spots}, {"embedFonts", print.embedFonts}};
     return o;
 }
@@ -720,7 +721,16 @@ void Document::fromJson(const QJsonObject &o)
     const auto pr = o["print"].toObject();
     print.model = PrintInfo::ColorModel(pr["model"].toInt());
     print.spotColors.clear();
-    for (const auto &c : pr["spots"].toArray()) print.spotColors << QColor(c.toString());
+    print.spotNames.clear();
+    for (const auto &c : pr["spots"].toArray()) {
+        if (c.isString()) {   // older files: the color alone
+            print.spotColors << QColor(c.toString());
+            print.spotNames << QString();
+        } else {
+            print.spotColors << colorFromString(c.toObject()["color"].toString());
+            print.spotNames << c.toObject()["name"].toString();
+        }
+    }
     print.embedFonts = pr["embedFonts"].toBool(true);
     if (masters.isEmpty()) resetDefaults();
 }

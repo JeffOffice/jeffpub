@@ -2045,7 +2045,7 @@ void pageNumberDialog(QWidget *p, Editor *ed)
 }
 
 // ---------------- Properties ----------------
-void documentPropertiesDialog(QWidget *p, Editor *ed)
+void documentPropertiesDialog(QWidget *p, Editor *ed, int tab)
 {
     DocProps pr = ed->doc()->props;
     Dlg dlg(p, QStringLiteral("Properties"));
@@ -2072,8 +2072,92 @@ void documentPropertiesDialog(QWidget *p, Editor *ed)
     auto *embed = new QCheckBox(QStringLiteral("Embed TrueType fonts when saving PDF"), print);
     embed->setChecked(ed->doc()->print.embedFonts);
     pf->addRow(QStringLiteral("Color model:"), model);
+    // Spot colors: inks the print shop mixes, by name and color. They show
+    // in every color drop-down, and print on plates of their own.
+    QVector<QColor> spotColors = ed->doc()->print.spotColors;
+    QStringList spotNames;
+    for (int i = 0; i < spotColors.size(); ++i) spotNames << ed->doc()->print.spotName(i);
+    auto *spotBox = new QWidget(print);
+    auto *sv = new QVBoxLayout(spotBox);
+    sv->setContentsMargins(0, 0, 0, 0);
+    auto *spotList = new QListWidget(spotBox);
+    spotList->setIconSize(QSize(28, 16));
+    spotList->setMinimumHeight(110);
+    auto fillSpots = [=, &spotColors, &spotNames] {
+        spotList->clear();
+        for (int i = 0; i < spotColors.size(); ++i) {
+            QPixmap pm(28, 16);
+            pm.fill(spotColors[i]);
+            spotList->addItem(new QListWidgetItem(QIcon(pm), spotNames[i]));
+        }
+    };
+    fillSpots();
+    auto *sr = new QHBoxLayout();
+    auto *addSpot = new QPushButton(QStringLiteral("Add…"), spotBox), *editSpot = new QPushButton(QStringLiteral("Modify…"), spotBox),
+         *delSpot = new QPushButton(QStringLiteral("Remove"), spotBox);
+    sr->addWidget(addSpot);
+    sr->addWidget(editSpot);
+    sr->addWidget(delSpot);
+    sr->addStretch(1);
+    sv->addWidget(spotList);
+    sv->addLayout(sr);
+    pf->addRow(QStringLiteral("Spot colors:"), spotBox);
+    // Name and color of one spot color.
+    auto askSpot = [&](QString *name, QColor *color) {
+        QDialog sd(&dlg.d);
+        sd.setWindowTitle(QStringLiteral("Spot Color"));
+        auto *f = new QFormLayout(&sd);
+        auto *n = new QLineEdit(*name, &sd);
+        n->setPlaceholderText(QStringLiteral("The ink's name, as the print shop knows it"));
+        auto *c = new QPushButton(&sd);
+        QColor chosen = *color;
+        auto paintBtn = [c, &chosen] { c->setStyleSheet(QStringLiteral("background:%1; border:1px solid #888; min-width:80px; min-height:22px;").arg(chosen.name())); };
+        paintBtn();
+        QObject::connect(c, &QPushButton::clicked, &sd, [&] {
+            const QColor got = colorsDialog(&sd, chosen, QStringLiteral("Spot Color"));
+            if (got.isValid()) { chosen = got; paintBtn(); }
+        });
+        auto *bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &sd);
+        QObject::connect(bb, &QDialogButtonBox::accepted, &sd, &QDialog::accept);
+        QObject::connect(bb, &QDialogButtonBox::rejected, &sd, &QDialog::reject);
+        f->addRow(QStringLiteral("Name:"), n);
+        f->addRow(QStringLiteral("Color:"), c);
+        f->addRow(bb);
+        if (sd.exec() != QDialog::Accepted) return false;
+        *name = n->text().trimmed();
+        *color = chosen;
+        return true;
+    };
+    QObject::connect(addSpot, &QPushButton::clicked, &dlg.d, [&] {
+        if (model->currentIndex() == int(PrintInfo::SingleSpot) && !spotColors.isEmpty()) return;
+        QString name = QStringLiteral("Spot color %1").arg(spotColors.size() + 1);
+        QColor color(0, 90, 170);
+        if (!askSpot(&name, &color)) return;
+        spotColors << color;
+        spotNames << name;
+        fillSpots();
+    });
+    QObject::connect(editSpot, &QPushButton::clicked, &dlg.d, [&] {
+        const int i = spotList->currentRow();
+        if (i < 0) return;
+        if (askSpot(&spotNames[i], &spotColors[i])) fillSpots();
+    });
+    QObject::connect(delSpot, &QPushButton::clicked, &dlg.d, [&] {
+        const int i = spotList->currentRow();
+        if (i < 0) return;
+        spotColors.remove(i);
+        spotNames.removeAt(i);
+        fillSpots();
+    });
+    auto showSpots = [=] {
+        const auto m = PrintInfo::ColorModel(model->currentIndex());
+        spotBox->setEnabled(m == PrintInfo::SingleSpot || m == PrintInfo::SpotColors || m == PrintInfo::ProcessPlusSpot);
+    };
+    QObject::connect(model, &QComboBox::currentIndexChanged, &dlg.d, showSpots);
+    showSpots();
     pf->addRow(embed);
     tabs->addTab(print, QStringLiteral("Commercial Print"));
+    tabs->setCurrentIndex(std::clamp(tab, 0, 1));
     dlg.v->addWidget(tabs);
     if (!dlg.exec()) return;
     ed->change(QStringLiteral("Properties"), [&] {
@@ -2082,6 +2166,8 @@ void documentPropertiesDialog(QWidget *p, Editor *ed)
         d.company = company->text(); d.category = category->text(); d.keywords = keywords->text(); d.comments = comments->toPlainText();
         ed->doc()->print.model = PrintInfo::ColorModel(model->currentIndex());
         ed->doc()->print.embedFonts = embed->isChecked();
+        ed->doc()->print.spotColors = spotColors;
+        ed->doc()->print.spotNames = spotNames;
     });
 }
 

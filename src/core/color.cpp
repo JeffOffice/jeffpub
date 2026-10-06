@@ -26,19 +26,26 @@ QColor contrastText(const QColor &bg)
     return l > 0.55 ? QColor(0x1a, 0x1a, 0x1a) : QColor(Qt::white);
 }
 
+static std::function<QColor(const QColor &)> &colorFilter()
+{
+    static std::function<QColor(const QColor &)> f;
+    return f;
+}
+void setColorFilter(std::function<QColor(const QColor &)> filter) { colorFilter() = std::move(filter); }
+
 QColor ColorRef::resolve(const ColorScheme &s) const
 {
+    QColor c;
     switch (m_kind) {
     case None: return QColor(Qt::transparent);
-    case Rgb: return m_rgb;
-    case Scheme: {
-        QColor c = s.slot(m_slot);
+    case Rgb: c = m_rgb; break;
+    case Scheme:
+        c = s.slot(m_slot);
         if (m_lighten > 0) c = mix(c, Qt::white, m_lighten / 100.0);
         if (m_darken > 0) c = mix(c, Qt::black, m_darken / 100.0);
-        return c;
+        break;
     }
-    }
-    return QColor();
+    return colorFilter() ? colorFilter()(c) : c;
 }
 
 QString colorToString(const QColor &c)

@@ -34,6 +34,13 @@
 
 namespace jp {
 
+static std::function<QVector<QPair<QString, QColor>>()> &spotColorSource()
+{
+    static std::function<QVector<QPair<QString, QColor>>()> source;
+    return source;
+}
+void setSpotColorSource(std::function<QVector<QPair<QString, QColor>>()> source) { spotColorSource() = std::move(source); }
+
 static QList<QColor> &recentColors()
 {
     static QList<QColor> r;
@@ -121,6 +128,25 @@ ColorPopup::ColorPopup(const ColorScheme &s, bool allowNone, const QString &none
     }
     grid->setRowMinimumHeight(1, 4);
     v->addLayout(grid);
+    // Spot colors, each with its tints.
+    const auto spots = spotColorSource() ? spotColorSource()() : QVector<QPair<QString, QColor>>{};
+    if (!spots.isEmpty()) {
+        label(QStringLiteral("Spot Colors"));
+        auto *sg = new QGridLayout();
+        sg->setSpacing(0);
+        for (int i = 0; i < spots.size(); ++i) {
+            sg->addWidget(swatch(ColorRef::rgb(spots[i].second), spots[i].second, spots[i].first), 0, i);
+            const int tints[] = {20, 40, 60, 80};
+            for (int k = 0; k < 4; ++k) {
+                const QColor t = mix(spots[i].second, Qt::white, tints[k] / 100.0);
+                sg->addWidget(swatch(ColorRef::rgb(t), t, QStringLiteral("%1, tint %2%").arg(spots[i].first).arg(100 - tints[k])), k + 1, i);
+            }
+        }
+        auto *sw = new QHBoxLayout();
+        sw->addLayout(sg);
+        sw->addStretch(1);
+        v->addLayout(sw);
+    }
     label(QStringLiteral("Standard Colors"));
     auto *std = new QHBoxLayout();
     std->setSpacing(0);

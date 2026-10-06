@@ -1779,6 +1779,69 @@ private Q_SLOTS:
         }
     }
 
+    // Spot colors: saved with their names, offered in the color drop-downs,
+    // and printed on plates of their own (tints as lighter ink), knocked out
+    // of the process plates.
+    void spotColorPlates()
+    {
+        const QColor spot(0, 90, 170);
+        QCOMPARE(jp::spotAmount(spot, spot), 1.0);
+        QVERIFY(std::abs(jp::spotAmount(jp::mix(spot, Qt::white, 0.6), spot) - 0.4) < 0.02);
+        QCOMPARE(jp::spotAmount(QColor(200, 30, 30), spot), -1.0);
+        QCOMPARE(jp::spotAmount(Qt::white, spot), -1.0);
+
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        doc->print.model = jp::PrintInfo::ProcessPlusSpot;
+        doc->print.spotColors = {spot};
+        doc->print.spotNames = {QStringLiteral("Harbor Blue")};
+        auto box = [&](const QRectF &r, const QColor &c) {
+            auto s = std::make_shared<jp::ShapeItem>();
+            s->rect = r;
+            s->fill = jp::Fill::solid(jp::ColorRef::rgb(c));
+            s->stroke = jp::Stroke::none();
+            doc->pages[0]->items.push_back(s);
+        };
+        box(QRectF(72, 72, 100, 100), spot);                                // the spot color
+        box(QRectF(200, 72, 100, 100), jp::mix(spot, Qt::white, 0.5));     // a 50% tint
+        box(QRectF(330, 72, 100, 100), QColor(200, 30, 30));                // red, process
+        QString err;
+        auto again = jp::publicationFromBytes(jp::publicationBytes(*doc, QImage()), &err);
+        QCOMPARE(again->print.spotName(0), QStringLiteral("Harbor Blue"));
+        QCOMPARE(again->print.spotColors.first(), spot);
+        QCOMPARE(jp::plateName(4, doc.get()), QStringLiteral("Harbor Blue"));
+
+        auto ink = [](const QImage &plate, const QPointF &pt) { return 1 - qGray(plate.pixel(int(pt.x() * 72 / 72), int(pt.y()))) / 255.0; };
+        const QImage spotPlate = jp::renderPlate(*doc, 0, 4, 72);
+        QVERIFY(ink(spotPlate, QPointF(122, 122)) > 0.95);
+        QVERIFY(std::abs(ink(spotPlate, QPointF(250, 122)) - 0.5) < 0.06);
+        QVERIFY(ink(spotPlate, QPointF(380, 122)) < 0.02);
+        const QImage cyan = jp::renderPlate(*doc, 0, 0, 72), magenta = jp::renderPlate(*doc, 0, 1, 72);
+        QVERIFY(ink(cyan, QPointF(122, 122)) < 0.02);       // knocked out
+        QVERIFY(ink(cyan, QPointF(250, 122)) < 0.02);
+        QVERIFY(ink(magenta, QPointF(380, 122)) > 0.7);     // red stays on the process plates
+        // Text colors go through the plates too.
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 300, 400, 80);
+        t->storyId = doc->createStory(QStringLiteral("HHHHHHHH"));
+        {
+            QTextCursor c(doc->storyDoc(t->storyId));
+            c.select(QTextCursor::Document);
+            QTextCharFormat f;
+            f.setFontPointSize(48);
+            f.setProperty(jp::tp::ColorRefP, jp::ColorRef::rgb(spot).toString());
+            c.mergeCharFormat(f);
+        }
+        doc->pages[0]->items.push_back(t);
+        auto inkIn = [](const QImage &plate, const QRect &r) {
+            double sum = 0;
+            for (int y = r.top(); y <= r.bottom(); ++y)
+                for (int x = r.left(); x <= r.right(); ++x) sum += 1 - qGray(plate.pixel(x, y)) / 255.0;
+            return sum;
+        };
+        QVERIFY(inkIn(jp::renderPlate(*doc, 0, 4, 72), QRect(72, 300, 400, 80)) > 300);
+        QVERIFY(inkIn(jp::renderPlate(*doc, 0, 0, 72), QRect(72, 300, 400, 80)) < 5);
+    }
+
     // A color given as ink amounts keeps them: in the file, in tints and
     // shades, from the Colors dialog, and in the PDF of a process-color
     // publication.
