@@ -669,18 +669,23 @@ void paragraphDialog(QWidget *p, Editor *ed, int tab)
     f.setProperty(tp::KeepWithNext, withNext->isChecked());
     f.setProperty(tp::KeepTogether, together->isChecked());
     f.setProperty(tp::StartInNextBox, nextBox->isChecked());
-    QList<QTextOption::Tab> newTabs;
-    QString newLeaders;
+    // Tab stops sorted by position, each keeping its own leader.
+    QVector<QPair<QTextOption::Tab, QChar>> rows;
     for (int r = 0; r < tabList->rowCount(); ++r) {
         double pt = 0;
         if (!Settings::get().parse(tabList->item(r, 0)->text(), &pt)) continue;
         const int a = static_cast<QComboBox *>(tabList->cellWidget(r, 1))->currentIndex();
         const int l = static_cast<QComboBox *>(tabList->cellWidget(r, 2))->currentIndex();
         QTextOption::Tab t(pt, a == 0 ? QTextOption::LeftTab : a == 1 ? QTextOption::CenterTab : a == 2 ? QTextOption::RightTab : QTextOption::DelimiterTab, a == 3 ? QChar('.') : QChar());
-        newTabs << t;
-        newLeaders += QString(" .-_•").at(l);
+        rows << qMakePair(t, QString(" .-_•").at(l));
     }
-    std::sort(newTabs.begin(), newTabs.end(), [](const auto &a, const auto &b) { return a.position < b.position; });
+    std::sort(rows.begin(), rows.end(), [](const auto &a, const auto &b) { return a.first.position < b.first.position; });
+    QList<QTextOption::Tab> newTabs;
+    QString newLeaders;
+    for (const auto &r : rows) {
+        newTabs << r.first;
+        newLeaders += r.second;
+    }
     f.setTabPositions(newTabs);
     f.setProperty(tp::TabLeaders, newLeaders);
     ed->mergeBlockFormat(f, QStringLiteral("Paragraph"));

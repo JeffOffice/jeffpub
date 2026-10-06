@@ -13,8 +13,8 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 - [x] Publication properties (title, author, subject, keywords, comments)
 
 ### New
-- [~] Template gallery with live previews and categories: Award Certificates, Banners, Brochures, Business Cards, Business Forms, Calendars, Catalogs, Email, Envelopes, Flyers, Gift Certificates, Greeting Cards, Invitation Cards, Labels, Letterhead, Menus, Newsletters, Paper Folding Projects, Postcards, Programs, Resumes, Signs, With Compliments Cards *(partial: 32 designs; not every category has several yet)*
-- [~] Customize a template before creating it: color scheme, font scheme, business information, and template options (for example "include logo" or "mailing address") *(partial: color scheme, font scheme and business information; only some templates have options)*
+- [x] Template gallery with live previews and categories: Award Certificates, Banners, Brochures, Business Cards, Business Forms, Calendars, Catalogs, Email, Envelopes, Flyers, Gift Certificates, Greeting Cards, Invitation Cards, Labels, Letterhead, Menus, Newsletters, Paper Folding Projects, Postcards, Programs, Resumes, Signs, With Compliments Cards *(48 designs, at least two in every category)*
+- [x] Customize a template before creating it: color scheme, font scheme, business information, and template options (for example "include logo" or "mailing address") *(the New page shows the options each template has: "Include logo" on 15 templates, which places the business logo and makes room for it, and "Include mailing address" on postcards)*
 - [x] Blank page sizes, More Blank Page Sizes, Create New Page Size
 - [x] Save as a template and reuse your own templates ("My Templates")
 

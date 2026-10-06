@@ -123,11 +123,79 @@ private Q_SLOTS:
     }
     // Every built-in template must open with all of its text visible: no text box
     // (except a linked chain's last box, which may continue) and no shape text overflows.
+    // Template options: "Include logo" places the business logo (or an empty
+    // frame for it) and makes room; "Include mailing address" adds the
+    // address side of a postcard. Templates show only their own options.
+    void templateOptions()
+    {
+        QImage logo(40, 40, QImage::Format_RGB32);
+        logo.fill(QColor(200, 30, 30));
+        QByteArray png;
+        QBuffer buf(&png);
+        buf.open(QIODevice::WriteOnly);
+        logo.save(&buf, "PNG");
+        auto logos = [](const jp::Document &d) {
+            QVector<const jp::PictureItem *> out;
+            for (const auto &pg : d.pages)
+                jp::walkItems(pg->items, [&](const jp::ItemPtr &it) {
+                    if (it->type() == jp::ItemType::Picture && it->name == QLatin1String("Logo")) out << static_cast<const jp::PictureItem *>(it.get());
+                });
+            return out;
+        };
+        int withLogo = 0;
+        for (const jp::TemplateInfo &t : jp::templates()) {
+            jp::TemplateOptions on;
+            on.options["logo"] = true;
+            on.logoBytes = png;
+            on.logoFormat = QStringLiteral("png");
+            auto a = t.build(on);
+            auto b = t.build(jp::TemplateOptions());
+            QVERIFY2(logos(*b).isEmpty(), qPrintable(t.id));
+            if (!t.optionKeys.contains(QStringLiteral("logo"))) continue;
+            ++withLogo;
+            const auto got = logos(*a);
+            QCOMPARE(got.size(), 1);
+            QCOMPARE(a->image(got.first()->imageId).pixelColor(20, 20), QColor(200, 30, 30));
+            // No text box on its page sits on top of the logo.
+            const QRectF lr = got.first()->rect.adjusted(2, 2, -2, -2);
+            for (const auto &pg : a->pages) {
+                bool here = false;
+                for (const auto &it : pg->items) here = here || it.get() == got.first();
+                if (!here) continue;
+                for (const auto &it : pg->items)
+                    if (it->type() == jp::ItemType::Text) QVERIFY2(!it->rect.intersects(lr), qPrintable(t.id + QStringLiteral(" ") + a->storyDoc(static_cast<const jp::TextItem *>(it.get())->storyId)->toPlainText().left(30)));
+            }
+        }
+        QVERIFY(withLogo >= 10);
+        auto mergeBlocks = [](const jp::Document &d) {
+            int n = 0;
+            for (const auto &pg : d.pages)
+                jp::walkItems(pg->items, [&](const jp::ItemPtr &it) {
+                    if (it->type() != jp::ItemType::Text) return;
+                    QTextDocument *sd = d.storyDoc(static_cast<const jp::TextItem *>(it.get())->storyId);
+                    for (QTextBlock bl = sd->begin(); bl.isValid(); bl = bl.next())
+                        for (auto f = bl.begin(); !f.atEnd(); ++f)
+                            n += f.fragment().charFormat().stringProperty(jp::tp::Field) == QLatin1String("mergeblock:address");
+                });
+            return n;
+        };
+        const jp::TemplateInfo *pc = jp::findTemplate(QStringLiteral("postcard-greetings"));
+        QVERIFY(pc && pc->optionKeys.contains(QStringLiteral("address")));
+        jp::TemplateOptions off;
+        off.options["address"] = false;
+        QCOMPARE(mergeBlocks(*pc->build(off)), 0);
+        QCOMPARE(mergeBlocks(*pc->build(jp::TemplateOptions())), 1);
+    }
+
     void templatesFitTheirText()
     {
         QStringList problems;
+        for (int withLogo = 0; withLogo < 2; ++withLogo)
         for (const jp::TemplateInfo &t : jp::templates()) {
-            std::unique_ptr<jp::Document> doc = t.build(jp::TemplateOptions());
+            if (withLogo && !t.optionKeys.contains(QStringLiteral("logo"))) continue;
+            jp::TemplateOptions opts;
+            if (withLogo) opts.options["logo"] = true;
+            std::unique_ptr<jp::Document> doc = t.build(opts);
             QVERIFY2(doc && !doc->pages.isEmpty(), qPrintable(t.id));
             jp::LayoutCache cache;
             jp::PaintContext ctx;

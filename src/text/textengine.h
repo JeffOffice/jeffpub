@@ -102,6 +102,7 @@ public:
         QString dropText; QFont dropFont; QColor dropColor; int dropLines = 0; double dropWidth = 0;
         QVector<QTextLayout::FormatRange> effects;   // ranges with shadow/emboss/engrave/glow
         QVector<QPair<int, int>> fieldRanges;        // display ranges of fields
+        QString leaders;                             // a leader character per tab stop (space = none)
         int dispFromDoc(int rel) const;
         int docFromDisp(int d) const;
     };

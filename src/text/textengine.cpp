@@ -509,6 +509,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
         for (auto &t : tabs) t.position *= scale;
         opt.setTabs(tabs);
         opt.setTabStopDistance(36 * scale);
+        B->leaders = bf.stringProperty(tp::TabLeaders);
         if (bf.layoutDirection() == Qt::RightToLeft) opt.setTextDirection(Qt::RightToLeft);
         opt.setFlags(QTextOption::IncludeTrailingSpaces);
         B->tl->setTextOption(opt);
@@ -949,6 +950,40 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
         }
 
         B->tl->draw(p, off, {}, clip);
+
+        // Tab leaders: the stop each tab goes to is the first one past where
+        // it starts; its leader fills the gap, on a grid so rows line up.
+        if (!B->leaders.trimmed().isEmpty()) {
+            const QList<QTextOption::Tab> stops = B->tl->textOption().tabs();
+            const QList<QTextLayout::FormatRange> fmts = B->tl->formats();
+            for (int i = 0; i < B->lines.size(); ++i) {
+                if (B->lines[i].frame != frame) continue;
+                const QTextLine l = B->tl->lineAt(i);
+                for (int k = l.textStart(); k < l.textStart() + l.textLength(); ++k) {
+                    if (B->disp[k] != QLatin1Char('\t')) continue;
+                    const double x0 = l.cursorToX(k), x1 = l.cursorToX(k + 1);
+                    int idx = -1;
+                    for (int s = 0; s < stops.size() && idx < 0; ++s)
+                        if (stops[s].position > x0 + 0.01) idx = s;
+                    if (idx < 0 || idx >= B->leaders.size() || B->leaders[idx].isSpace() || B->leaders[idx].isNull()) continue;
+                    QTextCharFormat cf;
+                    for (const auto &r : fmts)
+                        if (k >= r.start && k < r.start + r.length) cf = r.format;
+                    const QFont f = cf.hasProperty(QTextFormat::FontFamilies) ? cf.font() : B->tl->font();
+                    const QString ch(B->leaders[idx]);
+                    const double w = QFontMetricsF(f).horizontalAdvance(ch);
+                    if (w <= 0.01) continue;
+                    const double gap = w * 0.4;
+                    double x = std::ceil((x0 + gap) / w) * w;
+                    QString run;
+                    const double startX = x;
+                    for (; x + w <= x1 - gap; x += w) run += ch;
+                    if (run.isEmpty()) continue;
+                    p->setPen(cf.foreground().style() != Qt::NoBrush ? cf.foreground().color() : m_env.colors.slot(Main));
+                    drawPlainText(p, off + QPointF(startX, l.position().y() + l.ascent()), f, run);
+                }
+            }
+        }
 
         // Misspelling squiggles.
         if (o.showSpelling)

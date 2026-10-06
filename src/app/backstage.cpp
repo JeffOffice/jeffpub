@@ -696,6 +696,13 @@ QWidget *Backstage::buildNew()
         o.business = biz.value(bizBox->currentIndex(), BusinessInfo());
         o.options["logo"] = optLogo->isChecked();
         o.options["address"] = optAddr->isChecked();
+        // The business logo's picture comes along for templates that place it.
+        const Document *cur = m_win->editor()->doc();
+        const auto img = cur->images.constFind(o.business.logoImageId);
+        if (!o.business.logoImageId.isEmpty() && img != cur->images.cend()) {
+            o.logoBytes = img->bytes;
+            o.logoFormat = img->format;
+        }
         return o;
     };
     const qreal dpr = devicePixelRatioF();
@@ -817,6 +824,9 @@ QWidget *Backstage::buildNew()
         title->setText(it->text().section('\n', 0, 0));
         const TemplateInfo *t = key.startsWith("tpl:") ? findTemplate(key.mid(4)) : nullptr;
         desc->setText(t ? t->description : QString());
+        // Only the options this template has.
+        optLogo->setVisible(t && t->optionKeys.contains(QStringLiteral("logo")));
+        optAddr->setVisible(t && t->optionKeys.contains(QStringLiteral("address")));
         if (key == "custom") { preview->clear(); return; }
         auto doc = build(key);
         if (!doc) return;
@@ -830,6 +840,11 @@ QWidget *Backstage::buildNew()
         img.setDevicePixelRatio(dpr);
         preview->setPixmap(paperPixmap(img, preview->size(), dpr));
     });
+    // Changing an option redraws the preview.
+    for (QCheckBox *cb : {optLogo, optAddr})
+        connect(cb, &QCheckBox::toggled, this, [=] {
+            if (QListWidgetItem *it = list->currentItem()) Q_EMIT list->currentItemChanged(it, it);
+        });
     auto doCreate = [=] {
         QListWidgetItem *it = list->currentItem();
         if (!it) return;

@@ -168,7 +168,17 @@ int main(int argc, char **argv)
         QDir().mkpath(args[3]);
         for (const TemplateInfo &t : templates()) {
             if (in != "all" && in != t.id) continue;
-            std::unique_ptr<Document> doc = t.build(TemplateOptions());
+            TemplateOptions topt;
+            // JP_TEMPLATE_LOGO=<picture file> turns on "Include logo" with that picture.
+            if (qEnvironmentVariableIsSet("JP_TEMPLATE_LOGO")) {
+                QFile lf(qEnvironmentVariable("JP_TEMPLATE_LOGO"));
+                if (lf.open(QIODevice::ReadOnly)) {
+                    topt.options["logo"] = true;
+                    topt.logoBytes = lf.readAll();
+                    topt.logoFormat = QFileInfo(lf.fileName()).suffix().toLower();
+                }
+            }
+            std::unique_ptr<Document> doc = t.build(topt);
             LayoutCache cache;
             PaintContext ctx;
             ctx.doc = doc.get();

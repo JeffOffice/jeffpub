@@ -12,7 +12,9 @@ struct TemplateOptions {
     QString colorScheme;
     QString fontScheme;
     BusinessInfo business;
-    QJsonObject options;
+    QJsonObject options;        // "logo" (default off), "address" (default on)
+    QByteArray logoBytes;       // the business logo's picture, when it has one
+    QString logoFormat;
 };
 
 struct TemplateInfo {
