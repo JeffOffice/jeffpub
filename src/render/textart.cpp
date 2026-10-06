@@ -1,8 +1,11 @@
 #include "render/textart.h"
 
+#include "core/fonts.h"
+
 #include <QFont>
 #include <QFontMetricsF>
 #include <QtMath>
+#include <algorithm>
 #include <cmath>
 #include <functional>
 
@@ -26,7 +29,9 @@ const QVector<TextArtTransform> &textArtTransforms()
 static QPainterPath textOutline(const TextArtItem &w, double *outW, double *outH)
 {
     QFont f(w.font);
-    f.setPointSizeF(100);
+    f.setPixelSize(100);   // 1 em = 100 units
+    // A missing font's spaces as wide as its own, where its stand-in's differ.
+    const double spaceEm = substituteSpaceEm(w.font);
     f.setBold(w.bold);
     f.setItalic(w.italic);
     const QFontMetricsF fm(f);
@@ -68,7 +73,7 @@ static QPainterPath textOutline(const TextArtItem &w, double *outW, double *outH
                     }
                 }
                 lp.addPath(cp.translated(x, 0));
-                x += fm.horizontalAdvance(ch) * w.spacing;
+                x += (spaceEm > 0 && ch == QLatin1String(" ") ? spaceEm * 100 : fm.horizontalAdvance(ch)) * w.spacing;
             }
             widths << x;
         }
@@ -105,11 +110,63 @@ QPainterPath textArtPath(const TextArtItem &w, const QSizeF &size)
     const double k = std::clamp(w.transformAdj, 0.0, 1.0);
     const QString t = w.transform_;
 
+    // Publisher's circle: the line runs clockwise round the ellipse the frame
+    // holds, from just above 9 o'clock to just below it (its default angle,
+    // -179°, from the shape's definition), shrunk or grown as a whole until
+    // the text, spaces and all, fills the path. The path runs 0.31 of a
+    // capital's height above the baseline, so letters may reach past the
+    // frame, as in Publisher (measured on Publisher's PDFs of two book covers:
+    // start angle, where the text ends, the letters' inner and outer edges).
+    if (t == "circle" && !w.vertical) {
+        const double rx = size.width() / 2, ry = size.height() / 2;
+        const double start = qDegreesToRadians(-179.0), sweep = qDegreesToRadians(358.0);
+        constexpr int kSteps = 720;
+        QVector<double> along(kSteps + 1, 0.0);   // path length up to each step
+        for (int i = 1; i <= kSteps; ++i) {
+            const double a0 = start + sweep * (i - 1) / kSteps, a1 = start + sweep * i / kSteps;
+            along[i] = along[i - 1] + std::hypot(rx * (std::cos(a1) - std::cos(a0)), ry * (std::sin(a1) - std::sin(a0)));
+        }
+        const double len = along[kSteps];
+        if (len <= 0) return QPainterPath();
+        const double sc = len / tw;   // text units to points
+        QFont f(w.font);
+        f.setPixelSize(100);   // as textOutline
+        f.setBold(w.bold);
+        f.setItalic(w.italic);
+        const QFontMetricsF fm(f);
+        const double lineH = fm.ascent() + fm.descent();
+        const double baseline = th / 2 - lineH / 2 + fm.ascent();   // the middle line's
+        const double onPath = baseline - 0.31 * fm.capHeight();
+        auto place = [&](const QPointF &q) {
+            const double d = std::clamp(q.x() * sc, 0.0, len);
+            const int i = int(std::upper_bound(along.cbegin(), along.cend(), d) - along.cbegin());
+            const int hi = std::clamp(i, 1, kSteps);
+            const double f = (d - along[hi - 1]) / std::max(1e-9, along[hi] - along[hi - 1]);
+            const double a = start + sweep * (hi - 1 + f) / kSteps;
+            const double off = (onPath - q.y()) * sc;   // outward from the path
+            return QPointF(rx + (rx + off) * std::cos(a), ry + (ry + off) * std::sin(a));
+        };
+        QPainterPath res;
+        res.setFillRule(Qt::OddEvenFill);
+        for (const QPolygonF &pl : src.toSubpathPolygons()) {
+            QPolygonF bent;
+            for (int i = 0; i < pl.size(); ++i) {
+                const QPointF a = pl[i], b = pl[(i + 1) % pl.size()];
+                const int steps = std::max(1, int(std::hypot(b.x() - a.x(), b.y() - a.y()) / (tw * 0.002)));
+                for (int k = 0; k < steps; ++k) bent << place(a + (b - a) * (double(k) / steps));
+            }
+            res.addPolygon(bent);
+            res.closeSubpath();
+        }
+        res.setFillRule(Qt::WindingFill);
+        return res;
+    }
+
     // Warp maps normalized (u, v) in [0,1]² to an arbitrary plane; the result
     // is stretched to the frame afterwards.
     std::function<QPointF(double, double)> warp;
     if (t == "archUp" || t == "archDown" || t == "circle" || t == "ringInside" || t == "ringOutside" || t == "button") {
-        const double span = (t == "circle" ? 1.9 * M_PI : t == "button" ? 1.0 * M_PI : (0.6 + k * 1.4) * M_PI / 1.0 * 0.5 + 0.4);
+        const double span = (t == "circle" ? 1.9 * M_PI : t == "button" ? 1.0 * M_PI : (0.6 + k * 1.4) * M_PI / 1.0 * 0.5 + 0.4);   // circle: vertical text
         const double thick = 0.35;
         const bool down = (t == "archDown" || t == "ringInside");
         warp = [=](double u, double v) {

@@ -824,6 +824,68 @@ private Q_SLOTS:
         QVERIFY(std::abs(spacing(old) - spacing(loose)) < 0.001);
     }
 
+    // A missing AG_Futura keeps its own half-em spaces with its stand-in
+    // Jost, whose spaces are 0.3 em (word gaps measured in Publisher's PDFs).
+    void substituteSpaceWidth()
+    {
+        if (QFontDatabase::hasFamily(QStringLiteral("AG_Futura"))) QSKIP("AG_Futura is installed: its own spaces are used");
+        jp::LayoutEnv env;
+        QTextCharFormat f;
+        f.setFontFamilies(QStringList{QStringLiteral("AG_Futura")});
+        f.setFontPointSize(20);
+        const QTextCharFormat r = jp::resolveCharFormat(f, env);
+        QTextLayout tl(QStringLiteral("A B"), r.font());
+        tl.beginLayout();
+        QTextLine line = tl.createLine();
+        line.setLineWidth(1000);
+        tl.endLayout();
+        const double space = line.cursorToX(2) - line.cursorToX(1);
+        QVERIFY2(std::abs(space - 10) < 0.3, qPrintable(QString::number(space)));
+        // Fonts whose stand-ins match keep their spaces as drawn.
+        QTextCharFormat arial = f;
+        arial.setFontFamilies(QStringList{QStringLiteral("Arial")});
+        QVERIFY(!jp::resolveCharFormat(arial, env).hasProperty(QTextFormat::FontWordSpacing));
+    }
+
+    // Circle Text Art follows Publisher's path: clockwise from just above
+    // 9 o'clock, the whole text (trailing spaces too) filling it, letters
+    // straddling the frame's ellipse.
+    void textArtCircle()
+    {
+        jp::TextArtItem w;
+        w.transform_ = QStringLiteral("circle");
+        w.font = QStringLiteral("Arimo");
+        w.text = QStringLiteral("A") + QString(30, QLatin1Char(' '));
+        const QPainterPath p = jp::textArtPath(w, QSizeF(200, 200));
+        QVERIFY(!p.isEmpty());
+        const QPointF c = p.boundingRect().center() - QPointF(100, 100);
+        const double ang = std::fmod(qRadiansToDegrees(std::atan2(c.y(), c.x())) + 360, 360);   // clockwise from 3 o'clock
+        QVERIFY2(ang > 181 && ang < 215, qPrintable(QString::number(ang)));
+        const double r = std::hypot(c.x(), c.y());
+        QVERIFY2(r > 96 && r < 112, qPrintable(QString::number(r)));
+        // A long text goes all the way round.
+        w.text = QStringLiteral("UNITED STATES SENTENCING COMMISSION");
+        const QRectF all = jp::textArtPath(w, QSizeF(200, 200)).boundingRect();
+        QVERIFY2(all.left() < 0 && all.top() < 0 && all.right() > 200, qPrintable(QStringLiteral("%1 %2 %3").arg(all.left()).arg(all.top()).arg(all.right())));
+        // A missing AG_Futura's wide spaces leave its letters less of the circle.
+        if (!QFontDatabase::hasFamily(QStringLiteral("AG_Futura"))) {
+            auto span = [&](const QString &font) {
+                w.font = font;
+                w.text = QStringLiteral("AB") + QString(10, QLatin1Char(' '));
+                const QPainterPath q = jp::textArtPath(w, QSizeF(200, 200));
+                double lo = 360, hi = 0;
+                for (const QPolygonF &poly : q.toSubpathPolygons())
+                    for (const QPointF &pt : poly) {
+                        const double a = std::fmod(qRadiansToDegrees(std::atan2(pt.y() - 100, pt.x() - 100)) + 360 - 170, 360);
+                        lo = std::min(lo, a);
+                        hi = std::max(hi, a);
+                    }
+                return hi - lo;
+            };
+            QVERIFY(span(QStringLiteral("AG_Futura")) < span(QStringLiteral("Jost")) * 0.85);
+        }
+    }
+
     // AutoFormat as you type: dashes, fractions, ordinals and lists.
     void typingAutoFormat()
     {

@@ -110,6 +110,15 @@ int substituteStretch(const QString &family)
     return s;
 }
 
+double substituteSpaceEm(const QString &family)
+{
+    if (QFontDatabase::hasFamily(family)) return 0;
+    // AG_Futura's spaces are half an em (word gaps in reference PDFs of
+    // book covers at 11, 16 and 36 pt); its stand-in Jost's are 0.3 em.
+    if (family.compare(QLatin1String("AG_Futura"), Qt::CaseInsensitive) == 0) return 0.5;
+    return 0;
+}
+
 int substituteWeight(const QString &family)
 {
     static QHash<QString, int> cache;

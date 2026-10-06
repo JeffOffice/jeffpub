@@ -340,6 +340,16 @@ zero), `0x00C2` alignment (0 stretch, 1 center (default), 2 left, 3 right,
 which are set, the low half has bit 4 italic, 5 bold, 7 even height, 8 best
 fit, 10 stretch, 12 kern, 13 vertical, 14 Text Art.
 
+How Publisher draws circle Text Art (146), measured on its PDFs of ten book
+covers that all hold `0x00FF = 0xFFFF5720` and no adjust value: the line runs
+clockwise round the ellipse the frame holds, from the shape's default angle
+(-179°, just above 9 o'clock) to +179°, so the frame's rotation moves the
+start (308° puts it at 129°, measured 128°). The whole text, trailing spaces
+included, is scaled as one to fill the path whatever the alignment (where the
+letters end shows it: 2019 cover 45°, 2026 cover 68°, both as computed). The
+path runs about 0.31 cap heights above the baseline (0.305 and 0.32), so the
+letters reach past the frame.
+
 ### Paragraph and character settings
 
 Seen in Publisher's files and written by JeffPub (paragraph runs, FDPP):

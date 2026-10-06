@@ -18,6 +18,9 @@ QString interchangeFontName(const QString &family);  // horizontal scale (percen
 // Weight a missing font's name implies ("Franklin Gothic Medium" -> 500), so its
 // substitute is set in that weight; 0 when the font is installed or no hint.
 int substituteWeight(const QString &family);
+// The width (ems) of a space in a missing font whose stand-in's spaces are
+// narrower or wider; 0 when the font is installed or the stand-in matches.
+double substituteSpaceEm(const QString &family);
 QStringList bundledFamilies();
 
 // Symbol fonts (Symbol, Wingdings) give their pictures their own character

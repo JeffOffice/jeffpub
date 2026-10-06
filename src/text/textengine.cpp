@@ -129,6 +129,21 @@ void drawPlainText(QPainter *p, const QPointF &baseline, const QFont &font, cons
 // ---------- formats ----------
 namespace { static double trackingSpace(const QTextCharFormat &f, const QFont &resolved); }
 
+// The space width (ems) of the font a format is drawn with, without letter
+// or word spacing.
+static double standInSpaceEm(QFont f)
+{
+    static QHash<QString, double> cache;   // main thread only, like all layout
+    f.setLetterSpacing(QFont::AbsoluteSpacing, 0);
+    f.setWordSpacing(0);
+    f.setPixelSize(1000);
+    const QString key = f.key();
+    if (const auto it = cache.constFind(key); it != cache.constEnd()) return *it;
+    const double em = QFontMetricsF(f).horizontalAdvance(QLatin1Char(' ')) / 1000;
+    cache.insert(key, em);
+    return em;
+}
+
 QTextCharFormat resolveCharFormat(const QTextCharFormat &f, const LayoutEnv &env)
 {
     QTextCharFormat r = f;
@@ -168,6 +183,15 @@ QTextCharFormat resolveCharFormat(const QTextCharFormat &f, const LayoutEnv &env
         if (kern != 0 || track != 0 || f.hasProperty(QTextFormat::FontLetterSpacing)) {
             r.setFontLetterSpacingType(QFont::AbsoluteSpacing);
             r.setFontLetterSpacing(kern + track);
+        }
+    }
+    // A missing font's word spaces, where its stand-in's differ.
+    if (f.hasProperty(QTextFormat::FontFamilies) && !f.hasProperty(QTextFormat::FontWordSpacing)) {
+        const QStringList fams = f.fontFamilies().toStringList();
+        if (const double want = fams.isEmpty() ? 0 : substituteSpaceEm(fams.first()); want > 0) {
+            const QFont rf = r.font();
+            const double em = rf.pointSizeF() / fontPointFactor();
+            r.setFontWordSpacing((want - standInSpaceEm(rf)) * em);
         }
     }
     const QString cref = f.stringProperty(tp::ColorRefP);

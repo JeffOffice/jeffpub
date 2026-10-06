@@ -499,7 +499,12 @@ bool MSPUBParser::parseContents(librevenge::RVNGInputStream *input)
             }
           }
         }
-        else(skipBlock(input, m_blockInfo.back()));
+        else
+        {
+          if (jpTraceOn())
+            fprintf(stderr, "TRAILER seq=%u id=0x%x type=0x%x data=%u len=%lu\n", m_lastSeenSeqNum, m_blockInfo.back().id, m_blockInfo.back().type, m_blockInfo.back().data, m_blockInfo.back().dataLength);
+          skipBlock(input, m_blockInfo.back());
+        }
       }
       if (!m_contentChunks.empty())
       {
