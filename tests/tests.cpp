@@ -34,6 +34,7 @@
 #include <QDialogButtonBox>
 #include <QPushButton>
 #include <QComboBox>
+#include <QCheckBox>
 #include <QJsonArray>
 #include <QApplication>
 #include <QDialog>
@@ -293,6 +294,35 @@ private Q_SLOTS:
         QString err;
         auto again = jp::publicationFromBytes(jp::publicationBytes(*doc, QImage()), &err);
         QCOMPARE(static_cast<jp::TextItem *>(again->pages[0]->items[0].get())->hyphenZone, 30.0);
+    }
+
+    // Print preview: rulers and page numbers on a booklet sheet.
+    void printPreviewRulersAndNumbers()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        auto doc = jp::Document::blank(QSizeF(396, 612));
+        for (int i = 0; i < 3; ++i) doc->pages.push_back(std::make_shared<jp::Page>());
+        w.editor()->setDocument(std::move(doc));
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        w.showBackstage(QStringLiteral("print"));
+        QTest::qWait(100);
+        QComboBox *layout = nullptr;
+        for (QComboBox *c : w.findChildren<QComboBox *>())
+            for (int i = 0; i < c->count(); ++i)
+                if (c->itemText(i).contains(QStringLiteral("Booklet"), Qt::CaseInsensitive)) { layout = c; c->setCurrentIndex(i); break; }
+        QVERIFY(layout);
+        QCheckBox *rulers = nullptr, *numbers = nullptr;
+        for (QCheckBox *c : w.findChildren<QCheckBox *>()) {
+            if (c->text() == QStringLiteral("Show rulers")) rulers = c;
+            if (c->text() == QStringLiteral("Show page numbers")) numbers = c;
+        }
+        QVERIFY(rulers && numbers);
+        rulers->setChecked(true);
+        numbers->setChecked(true);
+        QTest::qWait(100);
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) w.grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/print-preview.png");
     }
 
     // "Always create backup copy" keeps the file as it was before saving.

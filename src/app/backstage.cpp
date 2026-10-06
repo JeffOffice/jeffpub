@@ -1086,6 +1086,14 @@ QWidget *Backstage::buildPrint()
     nav->addStretch(1);
     right->addWidget(preview, 1);
     right->addLayout(nav);
+    auto *showRulers = new QCheckBox(QStringLiteral("Show rulers"), w);
+    auto *showNumbers = new QCheckBox(QStringLiteral("Show page numbers"), w);
+    auto *viewRow = new QHBoxLayout();
+    viewRow->addStretch(1);
+    viewRow->addWidget(showRulers);
+    viewRow->addWidget(showNumbers);
+    viewRow->addStretch(1);
+    right->addLayout(viewRow);
     h->addLayout(right, 2);
     auto *state = new int(0);
     connect(w, &QObject::destroyed, [state] { delete state; });
@@ -1099,6 +1107,8 @@ QWidget *Backstage::buildPrint()
         ctx.opt.output = true;
         ctx.opt.mergeRecord = ed->mergeRecord();
         const QSizeF ps = d->pageSize();
+        double scale = 1;                        // preview pixels per point
+        QVector<QPair<QRectF, int>> numbered;    // page areas on the preview and their numbers
         if (booklet) {
             const auto order = bookletOrder(d->pages.size());
             *state = std::clamp(*state, 0, int(order.size()) - 1);
@@ -1111,15 +1121,20 @@ QWidget *Backstage::buildPrint()
             for (int k = 0; k < 2; ++k) {
                 if (side[k] < 0) continue;
                 const QImage pg = Renderer::renderToImage(ctx, side[k], s);
-                p.drawImage(topFold ? QPointF(0, k * ps.height() * s) : QPointF(k * ps.width() * s, 0), pg);
+                const QPointF at = topFold ? QPointF(0, k * ps.height() * s) : QPointF(k * ps.width() * s, 0);
+                p.drawImage(at, pg);
+                numbered << qMakePair(QRectF(at, ps * s), side[k] + 1);
             }
+            scale = s;
             p.setPen(QPen(QColor(150, 150, 150), 1, Qt::DashLine));
             if (topFold) p.drawLine(0, img.height() / 2, img.width(), img.height() / 2);
             else p.drawLine(img.width() / 2, 0, img.width() / 2, img.height());
             pageLabel->setText(QStringLiteral("Sheet %1 %2 of %3").arg(*state / 2 + 1).arg(*state % 2 ? "(back)" : "(front)").arg(order.size() / 2));
         } else {
             *state = std::clamp(*state, 0, int(d->pages.size()) - 1);
-            img = Renderer::renderToImage(ctx, *state, 500.0 / std::max(ps.width(), ps.height()));
+            scale = 500.0 / std::max(ps.width(), ps.height());
+            img = Renderer::renderToImage(ctx, *state, scale);
+            numbered << qMakePair(QRectF(QPointF(0, 0), ps * scale), *state + 1);
             // Two-sided printing: say which side of which sheet this page lands on.
             if (sides->currentIndex() > 0 && layout->currentIndex() == 0)
                 pageLabel->setText(QStringLiteral("%1 of %2 (sheet %3, %4)").arg(*state + 1).arg(d->pages.size()).arg(*state / 2 + 1)
@@ -1134,8 +1149,61 @@ QWidget *Backstage::buildPrint()
                 if (plateBoxes[i]->isChecked()) { img = separationPlate(img, i); pageLabel->setText(pageLabel->text() + QStringLiteral(" · ") + plateName(i)); break; }
         }
         img = img.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        if (showNumbers->isChecked()) {
+            // Each page's number in a badge at its center.
+            QPainter p(&img);
+            p.setRenderHint(QPainter::Antialiasing);
+            QFont f = p.font();
+            f.setPixelSize(std::max(12, img.height() / 14));
+            f.setBold(true);
+            p.setFont(f);
+            for (const auto &[r, n] : numbered) {
+                const QString t = QString::number(n);
+                const double side = QFontMetricsF(f).horizontalAdvance(t) + f.pixelSize();
+                const QRectF badge(r.center() - QPointF(side / 2, f.pixelSize() * 0.8), QSizeF(side, f.pixelSize() * 1.6));
+                p.setPen(Qt::NoPen);
+                p.setBrush(QColor(40, 40, 40, 170));
+                p.drawRoundedRect(badge, 6, 6);
+                p.setPen(Qt::white);
+                p.drawText(badge, Qt::AlignCenter, t);
+            }
+        }
+        if (showRulers->isChecked()) {
+            // Rulers along the top and left in the user's units.
+            const int band = 18;
+            QImage framed(img.size() + QSize(band, band), QImage::Format_ARGB32_Premultiplied);
+            framed.fill(QColor(236, 238, 241));
+            QPainter p(&framed);
+            p.drawImage(band, band, img);
+            QFont f = p.font();
+            f.setPixelSize(9);
+            p.setFont(f);
+            p.setPen(QColor(90, 90, 90));
+            const double unitPt = Settings::get().fromUnit(1.0);   // points in one unit
+            double step = unitPt;                                  // a labeled tick at least 40 px apart
+            while (step * scale < 40) step *= 2;
+            auto ticks = [&](bool across, double lengthPt) {
+                for (double v = 0; v <= lengthPt + 0.01; v += step / 4) {
+                    const double px = band + v * scale;
+                    const bool major = std::fmod(v + 0.001, step) < 0.01;
+                    const int len = major ? 8 : 4;
+                    if (across) p.drawLine(QPointF(px, band - len), QPointF(px, band));
+                    else p.drawLine(QPointF(band - len, px), QPointF(band, px));
+                    if (major && v > 0) {
+                        const QString label = QString::number(std::round(Settings::get().toUnit(v) * 100) / 100);
+                        if (across) p.drawText(QPointF(px + 2, 9), label);
+                        else p.drawText(QPointF(1, px - 2), label);
+                    }
+                }
+            };
+            ticks(true, img.width() / scale);
+            ticks(false, img.height() / scale);
+            p.end();
+            img = framed;
+        }
         preview->setPixmap(paperPixmap(img, preview->size(), preview->devicePixelRatioF()));
     };
+    for (QCheckBox *b : {showRulers, showNumbers}) connect(b, &QCheckBox::toggled, w, [=] { render(); });
     connect(prev, &QToolButton::clicked, w, [=] { --*state; render(); });
     connect(next, &QToolButton::clicked, w, [=] { ++*state; render(); });
     connect(layout, &QComboBox::currentIndexChanged, w, [=] { *state = 0; render(); });
