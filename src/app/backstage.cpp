@@ -721,6 +721,17 @@ QWidget *Backstage::buildNew()
                 it->setData(Qt::UserRole, "blank:" + bs.name);
                 list->addItem(it);
             }
+            // The user's own sizes, then making a new one.
+            const auto own = customPageSizes();
+            for (int i = 0; i < own.size(); ++i) {
+                auto doc = Document::blank(own[i].second.size, own[i].first);
+                doc->setup = own[i].second;
+                doc->setup.sizeName = own[i].first;
+                auto *it = new QListWidgetItem(QIcon(thumbFor(*doc)), QStringLiteral("%1\n%2 × %3").arg(own[i].first, Settings::get().format(own[i].second.size.width()),
+                                                                                                   Settings::get().format(own[i].second.size.height())));
+                it->setData(Qt::UserRole, QStringLiteral("customsize:%1").arg(i));
+                list->addItem(it);
+            }
             auto *custom = new QListWidgetItem(icon("ruler"), QStringLiteral("Create New Page Size…"));
             custom->setData(Qt::UserRole, "custom");
             list->addItem(custom);
@@ -780,6 +791,19 @@ QWidget *Backstage::buildNew()
             }
             return Document::blank(QSizeF(612, 792));
         }
+        if (key.startsWith("customsize:")) {
+            const auto own = customPageSizes();
+            const int i = key.mid(11).toInt();
+            if (i < 0 || i >= own.size()) return nullptr;
+            auto d = Document::blank(own[i].second.size, own[i].first);
+            d->setup = own[i].second;
+            d->setup.sizeName = own[i].first;
+            TemplateOptions o = options();
+            if (const ColorScheme *cs = findColorScheme(o.colorScheme)) d->colors = *cs;
+            if (const FontScheme *fs = findFontScheme(o.fontScheme)) d->fonts = *fs;
+            d->biz = {o.business};
+            return d;
+        }
         if (key.startsWith("file:")) {
             QString err;
             auto d = loadPublication(key.mid(5), &err);
@@ -810,7 +834,16 @@ QWidget *Backstage::buildNew()
         QListWidgetItem *it = list->currentItem();
         if (!it) return;
         const QString key = it->data(Qt::UserRole).toString();
-        if (key == "custom") { pageSetupDialog(this, m_win->editor()); return; }
+        if (key == "custom") {
+            // Save a new size, then select it in the list.
+            if (createPageSizeDialog(this, m_win->editor(), -1, false)) {
+                populate();
+                const QString want = QStringLiteral("customsize:%1").arg(customPageSizes().size() - 1);
+                for (int r = 0; r < list->count(); ++r)
+                    if (list->item(r)->data(Qt::UserRole).toString() == want) list->setCurrentRow(r);
+            }
+            return;
+        }
         if (!m_win->maybeSave()) return;
         auto doc = build(key);
         if (doc) {
@@ -953,6 +986,8 @@ QWidget *Backstage::buildPrint()
     auto *layout = new QComboBox(w);
     layout->addItems({"One page per sheet", "Multiple pages per sheet", "Multiple copies per sheet", "Booklet, side-fold", "Booklet, top-fold", "Tiled (posters and banners)"});
     if (d->setup.layout == PageSetup::Booklet) layout->setCurrentIndex(3);
+    // Business cards and labels: copies of the page across the sheet.
+    else if (d->setup.layout == PageSetup::MultiplePerSheet || d->setup.layout == PageSetup::Labels) layout->setCurrentIndex(2);
     auto *paper = new QComboBox(w);
     paper->addItems({"Letter", "Legal", "Tabloid", "A4", "A3", "Same as publication"});
     auto *sides = new QComboBox(w);

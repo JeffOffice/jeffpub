@@ -547,7 +547,10 @@ void MainWindow::createActions()
         mk(QStringLiteral("margins.%1").arg(QString::fromLatin1(m.first)), QStringLiteral("%1 (%2)").arg(QString::fromLatin1(m.first), Settings::get().format(v)), "",
            QKeySequence(), [ed, v] { ed->change(QStringLiteral("Margins"), [ed, v] { ed->doc()->setup.margins = QMarginsF(v, v, v, v); }); });
     }
-    mk("pd.customMargins", QStringLiteral("Custom Margins…"), "", QKeySequence(), [this] { pageSetupDialog(this, m_ed); });
+    // Margins on the Page Design tab are the margin guides (Publisher's word for them).
+    mk("pd.customMargins", QStringLiteral("Custom Margins…"), "", QKeySequence(), [this] { gridGuidesDialog(this, m_ed, 0); });
+    mk("pd.newPageSize", QStringLiteral("Create New Page Size…"), "file-plus", QKeySequence(), [this] { createPageSizeDialog(this, m_ed); });
+    mk("pd.customSizes", QStringLiteral("Edit Custom Page Sizes…"), "", QKeySequence(), [this] { customPageSizesDialog(this, m_ed); });
     mk("pd.newColorScheme", QStringLiteral("Create New Color Scheme…"), "palette", QKeySequence(), [this] { colorSchemeDialog(this, m_ed); });
     mk("pd.newFontScheme", QStringLiteral("Create New Font Scheme…"), "type", QKeySequence(), [this] { fontSchemeDialog(this, m_ed); });
     mk("pd.updateFonts", QStringLiteral("Update Font Scheme"), "refresh-cw", QKeySequence(), [ed] {

@@ -1,9 +1,12 @@
 #pragma once
 // Dialog boxes.
 
+#include "core/document.h"
 #include "core/style.h"
 
+#include <QPair>
 #include <QString>
+#include <QVector>
 
 class QWidget;
 
@@ -13,7 +16,14 @@ class Editor;
 class MainWindow;
 
 void pageSetupDialog(QWidget *p, Editor *ed);
-void gridGuidesDialog(QWidget *p, Editor *ed);
+// Layout Guides: Margin Guides (tab 0), Grid Guides (1), Baseline Guides (2).
+void gridGuidesDialog(QWidget *p, Editor *ed, int startTab = 1);
+// Page sizes the user created (name and whole setup), and their dialogs.
+QVector<QPair<QString, PageSetup>> customPageSizes();
+// With apply false the new size is only saved (for a new publication).
+bool createPageSizeDialog(QWidget *p, Editor *ed, int editIndex = -1, bool apply = true);
+void customPageSizesDialog(QWidget *p, Editor *ed);
+void applyPageSetup(Editor *ed, const PageSetup &setup, const QString &sizeName, const QString &undoName);
 void fontDialog(QWidget *p, Editor *ed);
 void paragraphDialog(QWidget *p, Editor *ed, int tab = 0);
 void bulletsDialog(QWidget *p, Editor *ed, bool numbering);

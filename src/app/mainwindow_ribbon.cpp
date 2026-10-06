@@ -484,14 +484,12 @@ void MainWindow::buildRibbon()
         g->addLarge(menuAction(this, QStringLiteral("Margins"), "square-dashed-bottom"), menuOf(this, margins));
         g->addLarge(menuAction(this, QStringLiteral("Orientation"), "rotate-3d"), menuOf(this, {act("pd.portrait"), act("pd.landscape")}));
         {
+            // Built each time it opens: the preset sizes, then the user's own
+            // (Custom), then creating and editing custom sizes and Page Setup.
             auto *sizeMenu = new QMenu(this);
-            QString group;
-            for (const auto &bs : blankSizes()) {
-                if (bs.group != group) { group = bs.group; sizeMenu->addSection(group); }
-                QAction *a = sizeMenu->addAction(QStringLiteral("%1 (%2 × %3)").arg(bs.name, Settings::get().format(bs.size.width()), Settings::get().format(bs.size.height())));
-                const QSizeF s = bs.size;
-                const QString name = bs.name;
-                connect(a, &QAction::triggered, this, [this, s, name] {
+            connect(sizeMenu, &QMenu::aboutToShow, this, [this, sizeMenu] {
+                sizeMenu->clear();
+                auto applySize = [this](const QSizeF &s, const QString &name) {
                     m_ed->change(QStringLiteral("Page Size"), [&] {
                         // Keep the current orientation.
                         QSizeF ns = s;
@@ -501,10 +499,34 @@ void MainWindow::buildRibbon()
                         m_ed->doc()->setup.sheet = ns;
                         m_ed->doc()->setup.sizeName = name;
                     });
-                });
-            }
-            sizeMenu->addSeparator();
-            sizeMenu->addAction(act("pd.pageSetup"));
+                };
+                QString group;
+                for (const auto &bs : blankSizes()) {
+                    if (bs.group != group) { group = bs.group; sizeMenu->addSection(group); }
+                    QAction *a = sizeMenu->addAction(QStringLiteral("%1 (%2 × %3)").arg(bs.name, Settings::get().format(bs.size.width()), Settings::get().format(bs.size.height())));
+                    a->setCheckable(true);
+                    a->setChecked(m_ed->doc()->setup.sizeName == bs.name);
+                    const QSizeF s = bs.size;
+                    const QString name = bs.name;
+                    connect(a, &QAction::triggered, this, [applySize, s, name] { applySize(s, name); });
+                }
+                const auto custom = customPageSizes();
+                if (!custom.isEmpty()) {
+                    sizeMenu->addSection(QStringLiteral("Custom"));
+                    for (const auto &c : custom) {
+                        QAction *a = sizeMenu->addAction(QStringLiteral("%1 (%2 × %3)").arg(c.first, Settings::get().format(c.second.size.width()), Settings::get().format(c.second.size.height())));
+                        a->setCheckable(true);
+                        a->setChecked(m_ed->doc()->setup.sizeName == c.first);
+                        const PageSetup setup = c.second;
+                        const QString name = c.first;
+                        connect(a, &QAction::triggered, this, [this, setup, name] { applyPageSetup(m_ed, setup, name, QStringLiteral("Page Size")); });
+                    }
+                }
+                sizeMenu->addSeparator();
+                sizeMenu->addAction(act("pd.newPageSize"));
+                if (!custom.isEmpty()) sizeMenu->addAction(act("pd.customSizes"));
+                sizeMenu->addAction(act("pd.pageSetup"));
+            });
             g->addLarge(menuAction(this, QStringLiteral("Size"), "file-scan"), sizeMenu);
         }
         {

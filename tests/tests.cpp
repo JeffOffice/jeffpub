@@ -27,6 +27,11 @@
 #include "canvas/canvas.h"
 #include <QTemporaryDir>
 #include <QLineEdit>
+#include <QLabel>
+#include <QDialogButtonBox>
+#include <QPushButton>
+#include <QComboBox>
+#include <QJsonArray>
 #include <QApplication>
 #include <QDialog>
 #include <QTimer>
@@ -1503,6 +1508,52 @@ private Q_SLOTS:
         });
         jp::fillEffectsDialog(&w, w.editor(), fill, QStringLiteral("Format Background"));
         QVERIFY(checked);
+    }
+
+    // A custom page size (business cards, ten to a sheet) is saved, offered
+    // again, and applied with its sheet margins, apart from margin guides.
+    void customPageSizes()
+    {
+        jp::installUiPolish();
+        const QJsonArray before = jp::Settings::get().customPageSizes();
+        jp::Settings::get().setCustomPageSizes(QJsonArray());
+        jp::MainWindow w;
+        w.resize(1200, 800);
+        w.show();
+        QString perSheet;
+        QTimer::singleShot(300, [&] {
+            QWidget *mod = QApplication::activeModalWidget();
+            if (!mod) return;
+            mod->findChild<QLineEdit *>("pageSizeName")->setText(QStringLiteral("Test Card"));
+            mod->findChild<QComboBox *>("pageLayout")->setCurrentIndex(jp::PageSetup::MultiplePerSheet);
+            auto set = [&](const char *n, double pt) { mod->findChild<jp::MeasureSpin *>(n)->setValue(pt); };
+            set("pageWidth", 252);
+            set("pageHeight", 144);
+            set("paperWidth", 612);
+            set("paperHeight", 792);
+            set("sideMargin", 54);
+            set("topMargin", 36);
+            set("gapH", 0);
+            set("gapV", 0);
+            perSheet = mod->findChild<QLabel *>("perSheet")->text();
+            QTimer::singleShot(100, [mod] {
+                if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) mod->grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/newpagesize.png");
+                if (auto *box = mod->findChild<QDialogButtonBox *>()) box->button(QDialogButtonBox::Ok)->click();
+            });
+        });
+        QVERIFY(jp::createPageSizeDialog(&w, w.editor()));
+        QCOMPARE(perSheet, QStringLiteral("2 across × 5 down = 10 per sheet"));
+        const auto saved = jp::customPageSizes();
+        QCOMPARE(saved.size(), 1);
+        QCOMPARE(saved[0].first, QStringLiteral("Test Card"));
+        const jp::PageSetup &ps = w.editor()->doc()->setup;
+        QCOMPARE(ps.layout, jp::PageSetup::MultiplePerSheet);
+        QCOMPARE(ps.size, QSizeF(252, 144));
+        QCOMPARE(ps.sideMargin, 54.0);
+        QCOMPARE(ps.gridCols, 2);
+        QCOMPARE(ps.gridRows, 5);
+        QCOMPARE(ps.sizeName, QStringLiteral("Test Card"));
+        jp::Settings::get().setCustomPageSizes(before);
     }
 
     // The thesaurus finds synonyms, including for inflected words.

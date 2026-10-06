@@ -1,5 +1,6 @@
 #include "app/settings.h"
 
+#include <QJsonDocument>
 #include <QRegularExpression>
 
 namespace jp {
@@ -75,6 +76,16 @@ bool Settings::parse(const QString &text, double *pt) const
 }
 
 QStringList Settings::recentFiles() const { return m_s.value("recent").toStringList(); }
+
+QJsonArray Settings::customPageSizes() const
+{
+    return QJsonDocument::fromJson(m_s.value("pageSizes/custom").toByteArray()).array();
+}
+
+void Settings::setCustomPageSizes(const QJsonArray &sizes)
+{
+    m_s.setValue("pageSizes/custom", QJsonDocument(sizes).toJson(QJsonDocument::Compact));
+}
 
 void Settings::addRecentFile(const QString &path)
 {

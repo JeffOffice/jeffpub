@@ -40,6 +40,7 @@
 #include <QSpinBox>
 #include <QStackedWidget>
 #include <QTabWidget>
+#include <QTimer>
 #include <QTableWidget>
 #include <QTextBlock>
 #include <QTextDocument>
@@ -107,66 +108,189 @@ ColorButton *colorPick(Editor *ed, const ColorRef &c, bool allowNone, QWidget *p
 } // namespace
 
 // ---------------- Page Setup ----------------
-void pageSetupDialog(QWidget *p, Editor *ed)
+// ---------------- Page size, margins and margin guides ----------------
+// The page fields Page Setup and Create New Page Size share. Margin guides
+// are the non-printing guides on each page; margins and gaps place pages on
+// the printed sheet when several share one (multiple pages per sheet, labels).
+namespace {
+
+struct PageForm {
+    QComboBox *layout = nullptr, *preset = nullptr;
+    MeasureSpin *w = nullptr, *h = nullptr, *sheetW = nullptr, *sheetH = nullptr;
+    MeasureSpin *side = nullptr, *top = nullptr, *gapH = nullptr, *gapV = nullptr;
+    MeasureSpin *gTop = nullptr, *gBottom = nullptr, *gLeft = nullptr, *gRight = nullptr;
+    QLabel *fits = nullptr;
+    QFormLayout *pageForm = nullptr;
+
+    bool multiple() const
+    {
+        const int l = layout->currentIndex();
+        return l == PageSetup::MultiplePerSheet || l == PageSetup::Labels;
+    }
+    // How many pages fit across and down the sheet.
+    QPair<int, int> grid() const
+    {
+        const double cw = w->value() + gapH->value(), ch = h->value() + gapV->value();
+        const int cols = cw > 0 ? std::max(1, int((sheetW->value() - 2 * side->value() + gapH->value() + 0.001) / cw)) : 1;
+        const int rows = ch > 0 ? std::max(1, int((sheetH->value() - 2 * top->value() + gapV->value() + 0.001) / ch)) : 1;
+        return qMakePair(cols, rows);
+    }
+    void update()
+    {
+        const bool m = multiple();
+        const bool changed = pageForm->isRowVisible(side) != m;
+        for (QWidget *f : {static_cast<QWidget *>(side), static_cast<QWidget *>(top), static_cast<QWidget *>(gapH), static_cast<QWidget *>(gapV),
+                           static_cast<QWidget *>(fits)})
+            pageForm->setRowVisible(f, m);
+        if (m) {
+            const auto g = grid();
+            fits->setText(QStringLiteral("%1 across × %2 down = %3 per sheet").arg(g.first).arg(g.second).arg(g.first * g.second));
+        }
+        // Grow or shrink the dialog with the rows shown, so none are squeezed.
+        if (QWidget *win = fits->window(); win && (changed || win->width() < win->sizeHint().width()))
+            QTimer::singleShot(0, win, [win] { win->adjustSize(); });
+    }
+    void read(PageSetup &s) const
+    {
+        s.layout = PageSetup::Layout(layout->currentIndex());
+        s.size = QSizeF(w->value(), h->value());
+        s.sheet = QSizeF(sheetW->value(), sheetH->value());
+        if (s.layout == PageSetup::OnePerSheet && (s.sheet.width() < s.size.width() || s.sheet.height() < s.size.height())) s.sheet = s.size;
+        s.margins = QMarginsF(gLeft->value(), gTop->value(), gRight->value(), gBottom->value());
+        s.sideMargin = side->value();
+        s.topMargin = top->value();
+        s.gapH = gapH->value();
+        s.gapV = gapV->value();
+        const auto g = grid();
+        s.gridCols = multiple() ? g.first : 1;
+        s.gridRows = multiple() ? g.second : 1;
+    }
+};
+
+// Builds the Page and Margin Guides tabs into `tabs` from a page setup.
+PageForm buildPageForm(QTabWidget *tabs, const PageSetup &s)
 {
-    Document *doc = ed->doc();
-    Dlg dlg(p, QStringLiteral("Page Setup"));
-    auto *tabs = new QTabWidget(&dlg.d);
-    // Page tab.
+    PageForm f;
     auto *page = new QWidget();
     auto *form = new QFormLayout(page);
-    auto *layout = new QComboBox(page);
-    layout->addItems({"One page per sheet", "Booklet", "Multiple pages per sheet", "Envelope", "Folded card", "Labels"});
-    layout->setCurrentIndex(int(doc->setup.layout));
-    auto *preset = new QComboBox(page);
-    preset->addItem(QStringLiteral("Custom"));
-    for (const auto &bs : blankSizes()) preset->addItem(bs.name);
-    auto *w = measure(doc->setup.size.width(), page, 9), *h = measure(doc->setup.size.height(), page, 9);
-    QObject::connect(preset, &QComboBox::currentIndexChanged, page, [=](int i) {
-        if (i <= 0) return;
-        const auto &bs = blankSizes()[i - 1];
-        w->setValue(bs.size.width());
-        h->setValue(bs.size.height());
-    });
+    f.pageForm = form;
+    f.layout = new QComboBox(page);
+    f.layout->addItems({"One page per sheet", "Booklet", "Multiple pages per sheet", "Envelope", "Folded card", "Labels"});
+    f.layout->setCurrentIndex(int(s.layout));
+    f.preset = new QComboBox(page);
+    f.preset->addItem(QStringLiteral("Custom"));
+    for (const auto &bs : blankSizes()) f.preset->addItem(bs.name);
+    const QJsonArray custom = Settings::get().customPageSizes();
+    for (const QJsonValue &c : custom) f.preset->addItem(c.toObject()["name"].toString(), QStringLiteral("custom"));
+    f.w = measure(s.size.width(), page, 9);
+    f.h = measure(s.size.height(), page, 9);
+    f.sheetW = measure(s.sheet.width(), page, 9);
+    f.sheetH = measure(s.sheet.height(), page, 9);
+    f.side = measure(s.sideMargin, page);
+    f.top = measure(s.topMargin, page);
+    f.gapH = measure(s.gapH, page);
+    f.gapV = measure(s.gapV, page);
+    f.fits = new QLabel(page);
+    f.layout->setObjectName("pageLayout");
+    f.w->setObjectName("pageWidth");
+    f.h->setObjectName("pageHeight");
+    f.sheetW->setObjectName("paperWidth");
+    f.sheetH->setObjectName("paperHeight");
+    f.side->setObjectName("sideMargin");
+    f.top->setObjectName("topMargin");
+    f.gapH->setObjectName("gapH");
+    f.gapV->setObjectName("gapV");
+    f.fits->setObjectName("perSheet");
     auto *portrait = new QRadioButton(QStringLiteral("Portrait"), page), *land = new QRadioButton(QStringLiteral("Landscape"), page);
-    (doc->setup.size.width() > doc->setup.size.height() ? land : portrait)->setChecked(true);
+    (s.size.width() > s.size.height() ? land : portrait)->setChecked(true);
+    MeasureSpin *w = f.w, *h = f.h;
     auto swapIf = [=](bool landscape) {
-        if ((w->value() > h->value()) != landscape) { const double t = w->value(); w->setValue(h->value()); h->setValue(t); }
+        if ((w->value() > h->value()) != landscape) {
+            const double t = w->value();
+            w->setValue(h->value());
+            h->setValue(t);
+        }
     };
     QObject::connect(portrait, &QRadioButton::toggled, page, [=](bool on) { if (on) swapIf(false); });
     QObject::connect(land, &QRadioButton::toggled, page, [=](bool on) { if (on) swapIf(true); });
     auto *orient = new QHBoxLayout();
     orient->addWidget(portrait);
     orient->addWidget(land);
-    form->addRow(QStringLiteral("Layout type:"), layout);
-    form->addRow(QStringLiteral("Page size:"), preset);
-    form->addRow(QStringLiteral("Width:"), w);
-    form->addRow(QStringLiteral("Height:"), h);
+    form->addRow(QStringLiteral("Layout type:"), f.layout);
+    form->addRow(QStringLiteral("Page size:"), f.preset);
+    form->addRow(QStringLiteral("Width:"), f.w);
+    form->addRow(QStringLiteral("Height:"), f.h);
     form->addRow(QStringLiteral("Orientation:"), orient);
-    auto *sheetW = measure(doc->setup.sheet.width(), page, 9), *sheetH = measure(doc->setup.sheet.height(), page, 9);
-    form->addRow(QStringLiteral("Paper width:"), sheetW);
-    form->addRow(QStringLiteral("Paper height:"), sheetH);
+    form->addRow(QStringLiteral("Paper width:"), f.sheetW);
+    form->addRow(QStringLiteral("Paper height:"), f.sheetH);
+    form->addRow(QStringLiteral("Side margin:"), f.side);
+    form->addRow(QStringLiteral("Top margin:"), f.top);
+    form->addRow(QStringLiteral("Horizontal gap:"), f.gapH);
+    form->addRow(QStringLiteral("Vertical gap:"), f.gapV);
+    form->addRow(QString(), f.fits);
     tabs->addTab(page, QStringLiteral("Page"));
-    // Margins tab.
-    auto *mw = new QWidget();
-    auto *mf = new QFormLayout(mw);
-    const QMarginsF m = doc->setup.margins;
-    auto *mt = measure(m.top(), mw), *mb = measure(m.bottom(), mw), *ml = measure(m.left(), mw), *mr = measure(m.right(), mw);
-    mf->addRow(QStringLiteral("Top:"), mt);
-    mf->addRow(QStringLiteral("Bottom:"), mb);
-    mf->addRow(QStringLiteral("Left (inside):"), ml);
-    mf->addRow(QStringLiteral("Right (outside):"), mr);
-    tabs->addTab(mw, QStringLiteral("Margin Guides"));
-    dlg.v->addWidget(tabs);
-    if (!dlg.exec()) return;
-    ed->change(QStringLiteral("Page Setup"), [&] {
+
+    auto *mg = new QWidget();
+    auto *mf = new QFormLayout(mg);
+    auto *note = new QLabel(QStringLiteral("Margin guides are non-printing lines on every page for lining up objects."), mg);
+    note->setWordWrap(true);
+    mf->addRow(note);
+    f.gTop = measure(s.margins.top(), mg);
+    f.gBottom = measure(s.margins.bottom(), mg);
+    f.gLeft = measure(s.margins.left(), mg);
+    f.gRight = measure(s.margins.right(), mg);
+    mf->addRow(QStringLiteral("Top:"), f.gTop);
+    mf->addRow(QStringLiteral("Bottom:"), f.gBottom);
+    mf->addRow(QStringLiteral("Left:"), f.gLeft);
+    mf->addRow(QStringLiteral("Right:"), f.gRight);
+    tabs->addTab(mg, QStringLiteral("Margin Guides"));
+
+    // Choosing a size fills the fields; a custom size brings its whole setup.
+    PageForm *pf = new PageForm(f);
+    QObject::connect(page, &QObject::destroyed, [pf] { delete pf; });
+    QObject::connect(f.preset, &QComboBox::currentIndexChanged, page, [pf](int i) {
+        if (i <= 0) return;
+        const int presets = int(blankSizes().size());
+        if (i <= presets) {
+            const auto &bs = blankSizes()[i - 1];
+            pf->w->setValue(bs.size.width());
+            pf->h->setValue(bs.size.height());
+        } else {
+            const PageSetup cs = PageSetup::fromJson(Settings::get().customPageSizes().at(i - 1 - presets).toObject()["setup"].toObject());
+            pf->layout->setCurrentIndex(int(cs.layout));
+            pf->w->setValue(cs.size.width());
+            pf->h->setValue(cs.size.height());
+            pf->sheetW->setValue(cs.sheet.width());
+            pf->sheetH->setValue(cs.sheet.height());
+            pf->side->setValue(cs.sideMargin);
+            pf->top->setValue(cs.topMargin);
+            pf->gapH->setValue(cs.gapH);
+            pf->gapV->setValue(cs.gapV);
+            pf->gTop->setValue(cs.margins.top());
+            pf->gBottom->setValue(cs.margins.bottom());
+            pf->gLeft->setValue(cs.margins.left());
+            pf->gRight->setValue(cs.margins.right());
+        }
+        pf->update();
+    });
+    for (MeasureSpin *m : {f.w, f.h, f.sheetW, f.sheetH, f.side, f.top, f.gapH, f.gapV})
+        QObject::connect(m, &QDoubleSpinBox::valueChanged, page, [pf] { pf->update(); });
+    QObject::connect(f.layout, &QComboBox::currentIndexChanged, page, [pf] { pf->update(); });
+    pf->update();
+    return f;
+}
+
+} // namespace
+
+void applyPageSetup(Editor *ed, const PageSetup &ns, const QString &sizeName, const QString &undoName)
+{
+    Document *doc = ed->doc();
+    ed->change(undoName, [&] {
         const QSizeF oldSize = doc->setup.size;
-        doc->setup.layout = PageSetup::Layout(layout->currentIndex());
-        doc->setup.size = QSizeF(w->value(), h->value());
-        doc->setup.sheet = QSizeF(sheetW->value(), sheetH->value());
-        if (doc->setup.layout == PageSetup::OnePerSheet && doc->setup.sheet.width() < doc->setup.size.width()) doc->setup.sheet = doc->setup.size;
-        doc->setup.margins = QMarginsF(ml->value(), mt->value(), mr->value(), mb->value());
-        doc->setup.sizeName = preset->currentIndex() > 0 ? preset->currentText() : QStringLiteral("Custom");
+        const PageSetup::Fold fold = doc->setup.fold;
+        doc->setup = ns;
+        doc->setup.fold = fold;
+        doc->setup.sizeName = sizeName;
         // Keep objects in proportion when the page size changes (reflow).
         if (oldSize != doc->setup.size && oldSize.width() > 0) {
             const QRectF from(QPointF(0, 0), oldSize), to(QPointF(0, 0), doc->setup.size);
@@ -176,8 +300,97 @@ void pageSetupDialog(QWidget *p, Editor *ed)
     });
 }
 
+void pageSetupDialog(QWidget *p, Editor *ed)
+{
+    Document *doc = ed->doc();
+    Dlg dlg(p, QStringLiteral("Page Setup"));
+    auto *tabs = new QTabWidget(&dlg.d);
+    const PageForm f = buildPageForm(tabs, doc->setup);
+    int pi = f.preset->findText(doc->setup.sizeName);
+    f.preset->blockSignals(true);
+    f.preset->setCurrentIndex(pi > 0 ? pi : 0);
+    f.preset->blockSignals(false);
+    dlg.v->addWidget(tabs);
+    if (!dlg.exec()) return;
+    PageSetup ns = doc->setup;
+    f.read(ns);
+    applyPageSetup(ed, ns, f.preset->currentIndex() > 0 ? f.preset->currentText() : QStringLiteral("Custom"), QStringLiteral("Page Setup"));
+}
+
+QVector<QPair<QString, PageSetup>> customPageSizes()
+{
+    QVector<QPair<QString, PageSetup>> out;
+    for (const QJsonValue &v : Settings::get().customPageSizes())
+        out << qMakePair(v.toObject()["name"].toString(), PageSetup::fromJson(v.toObject()["setup"].toObject()));
+    return out;
+}
+
+bool createPageSizeDialog(QWidget *p, Editor *ed, int editIndex, bool apply)
+{
+    QJsonArray sizes = Settings::get().customPageSizes();
+    const bool editing = editIndex >= 0 && editIndex < sizes.size();
+    PageSetup start = editing ? PageSetup::fromJson(sizes.at(editIndex).toObject()["setup"].toObject()) : ed->doc()->setup;
+    Dlg dlg(p, editing ? QStringLiteral("Edit Page Size") : QStringLiteral("Create New Page Size"));
+    auto *nameRow = new QFormLayout();
+    auto *name = new QLineEdit(editing ? sizes.at(editIndex).toObject()["name"].toString() : QStringLiteral("Custom %1").arg(sizes.size() + 1), &dlg.d);
+    name->setObjectName("pageSizeName");
+    nameRow->addRow(QStringLiteral("Name:"), name);
+    dlg.v->addLayout(nameRow);
+    auto *tabs = new QTabWidget(&dlg.d);
+    const PageForm f = buildPageForm(tabs, start);
+    f.pageForm->setRowVisible(f.preset, false);
+    dlg.v->addWidget(tabs);
+    if (!dlg.exec()) return false;
+    PageSetup ns = start;
+    f.read(ns);
+    const QString n = name->text().trimmed().isEmpty() ? QStringLiteral("Custom") : name->text().trimmed();
+    const QJsonObject entry{{"name", n}, {"setup", ns.toJson()}};
+    if (editing) sizes.replace(editIndex, entry);
+    else sizes.append(entry);
+    Settings::get().setCustomPageSizes(sizes);
+    if (!editing && apply) applyPageSetup(ed, ns, n, QStringLiteral("Page Size"));
+    return true;
+}
+
+void customPageSizesDialog(QWidget *p, Editor *ed)
+{
+    Dlg dlg(p, QStringLiteral("Custom Page Sizes"));
+    auto *list = new QListWidget(&dlg.d);
+    auto fill = [list] {
+        list->clear();
+        for (const auto &c : customPageSizes())
+            list->addItem(QStringLiteral("%1 (%2 × %3)").arg(c.first, Settings::get().format(c.second.size.width()), Settings::get().format(c.second.size.height())));
+        list->setCurrentRow(0);
+    };
+    fill();
+    auto *row = new QHBoxLayout();
+    auto *add = new QPushButton(QStringLiteral("New…"), &dlg.d), *edit = new QPushButton(QStringLiteral("Edit…"), &dlg.d),
+         *del = new QPushButton(QStringLiteral("Delete"), &dlg.d), *use = new QPushButton(QStringLiteral("Use This Size"), &dlg.d);
+    for (QPushButton *b : {add, edit, del, use}) row->addWidget(b);
+    QObject::connect(add, &QPushButton::clicked, &dlg.d, [&] { if (createPageSizeDialog(&dlg.d, ed)) fill(); });
+    QObject::connect(edit, &QPushButton::clicked, &dlg.d, [&] { if (list->currentRow() >= 0 && createPageSizeDialog(&dlg.d, ed, list->currentRow())) fill(); });
+    QObject::connect(del, &QPushButton::clicked, &dlg.d, [&] {
+        const int r = list->currentRow();
+        QJsonArray sizes = Settings::get().customPageSizes();
+        if (r < 0 || r >= sizes.size()) return;
+        sizes.removeAt(r);
+        Settings::get().setCustomPageSizes(sizes);
+        fill();
+    });
+    QObject::connect(use, &QPushButton::clicked, &dlg.d, [&] {
+        const auto all = customPageSizes();
+        const int r = list->currentRow();
+        if (r < 0 || r >= all.size()) return;
+        applyPageSetup(ed, all[r].second, all[r].first, QStringLiteral("Page Size"));
+        dlg.d.accept();
+    });
+    dlg.v->addWidget(list);
+    dlg.v->addLayout(row);
+    dlg.exec();
+}
+
 // ---------------- Grid and Baseline Guides ----------------
-void gridGuidesDialog(QWidget *p, Editor *ed)
+void gridGuidesDialog(QWidget *p, Editor *ed, int startTab)
 {
     Document *doc = ed->doc();
     MasterPage *mp = ed->masterView().isEmpty() ? doc->masterFor(*doc->pages[ed->currentPage()]) : doc->master(ed->masterView());
@@ -218,8 +431,15 @@ void gridGuidesDialog(QWidget *p, Editor *ed)
     mgf->addRow(QStringLiteral("Bottom:"), mb);
     mgf->addRow(QStringLiteral("Left:"), ml);
     mgf->addRow(QStringLiteral("Right:"), mr);
+    // A two-page master's side guides are inside and outside.
+    auto sideNames = [=](bool two) {
+        if (auto *l = qobject_cast<QLabel *>(mgf->labelForField(ml))) l->setText(two ? QStringLiteral("Inside:") : QStringLiteral("Left:"));
+        if (auto *l = qobject_cast<QLabel *>(mgf->labelForField(mr))) l->setText(two ? QStringLiteral("Outside:") : QStringLiteral("Right:"));
+    };
+    sideNames(mp->twoPage);
+    QObject::connect(twoPage, &QCheckBox::toggled, mg, sideNames);
     tabs->insertTab(0, mg, QStringLiteral("Margin Guides"));
-    tabs->setCurrentIndex(1);
+    tabs->setCurrentIndex(std::clamp(startTab, 0, tabs->count() - 1));
     dlg.v->addWidget(tabs);
     if (!dlg.exec()) return;
     ed->change(QStringLiteral("Layout Guides"), [&] {

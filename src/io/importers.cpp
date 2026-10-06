@@ -722,7 +722,8 @@ void drawPrinterMarks(QPainter *p, const QRectF &page, const PrinterMarks &m, co
 void printDocument(Editor *ed, QPrinter *printer, const QJsonObject &opts)
 {
     Document *d = ed->doc();
-    const QString layout = opts.value("layout").toString(d->setup.layout == PageSetup::Booklet ? "booklet" : "one");
+    const bool sheetLayout = d->setup.layout == PageSetup::MultiplePerSheet || d->setup.layout == PageSetup::Labels;
+    const QString layout = opts.value("layout").toString(d->setup.layout == PageSetup::Booklet ? "booklet" : sheetLayout ? "multiple" : "one");
     const PrinterMarks marks = PrinterMarks::fromJson(opts);
     const bool allowBleeds = opts.value("allowBleeds").toBool();
     const bool merged = opts.value("merged").toBool() && !d->merge.isEmpty();
@@ -821,11 +822,18 @@ void printDocument(Editor *ed, QPrinter *printer, const QJsonObject &opts)
                     }
                 }
         } else if (layout == "multiple") {
+            // A publication laid out for several pages per sheet (business
+            // cards, labels) places them by its own side and top margins and
+            // gaps; any other is spaced evenly and centered.
+            const bool ownSheet = d->setup.layout == PageSetup::MultiplePerSheet || d->setup.layout == PageSetup::Labels;
             const double gap = marks.any() ? 2 * kMarksMargin : 9;
-            const int cols = std::max(1, int((sheet.width() + gap) / (ps.width() + gap)));
-            const int rows = std::max(1, int((sheet.height() + gap) / (ps.height() + gap)));
+            const double gapH = ownSheet ? d->setup.gapH : gap, gapV = ownSheet ? d->setup.gapV : gap;
+            const double sideM = ownSheet ? d->setup.sideMargin : 0, topM = ownSheet ? d->setup.topMargin : 0;
+            const int cols = std::max(1, int((sheet.width() - 2 * sideM + gapH + 0.001) / (ps.width() + gapH)));
+            const int rows = std::max(1, int((sheet.height() - 2 * topM + gapV + 0.001) / (ps.height() + gapV)));
             const bool copies = opts.value("copiesPerSheet").toBool(true);
-            const double ox = (sheet.width() - (cols * ps.width() + (cols - 1) * gap)) / 2, oy = (sheet.height() - (rows * ps.height() + (rows - 1) * gap)) / 2;
+            const double ox = ownSheet ? sideM : (sheet.width() - (cols * ps.width() + (cols - 1) * gapH)) / 2;
+            const double oy = ownSheet ? topM : (sheet.height() - (rows * ps.height() + (rows - 1) * gapV)) / 2;
             int page = from;
             while (page <= to) {
                 for (int pl : plates) {
@@ -835,7 +843,7 @@ void printDocument(Editor *ed, QPrinter *printer, const QJsonObject &opts)
                         for (int cc = 0; cc < cols; ++cc) {
                             const int pg = copies ? page : page + rr * cols + cc;
                             if (pg > to) continue;
-                            drawPage(pg, QRectF(QPointF(ox + cc * (ps.width() + gap), oy + rr * (ps.height() + gap)), ps));
+                            drawPage(pg, QRectF(QPointF(ox + cc * (ps.width() + gapH), oy + rr * (ps.height() + gapV)), ps));
                         }
                 }
                 page += copies ? 1 : rows * cols;

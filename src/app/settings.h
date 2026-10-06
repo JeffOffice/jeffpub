@@ -1,6 +1,7 @@
 #pragma once
 // User preferences (stored with QSettings) and measurement units.
 
+#include <QJsonArray>
 #include <QSettings>
 #include <QString>
 #include <QStringList>
@@ -26,6 +27,10 @@ public:
     void removeRecentFile(const QString &path);
     QStringList pinnedFiles() const;
     void setPinned(const QString &path, bool pinned);
+
+    // Page sizes the user created: each {"name", "setup" (a page setup)}.
+    QJsonArray customPageSizes() const;
+    void setCustomPageSizes(const QJsonArray &sizes);
 
     QVariant value(const QString &key, const QVariant &def = QVariant()) const { return m_s.value(key, def); }
     void setValue(const QString &key, const QVariant &v) { m_s.setValue(key, v); }

@@ -65,7 +65,8 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 
 ## Page Design tab
 - [x] Template: Change Template, Options
-- [x] Page Setup: Margins (presets and custom), Orientation, Size (presets, custom, and Create New Page Size), and the Page Setup dialog (layout type: one page per sheet, booklet, envelope, folded card, multiple pages per sheet, labels)
+- [x] Page Setup: Margins (margin guide presets, and Custom Margins opening the Margin Guides settings), Orientation, Size (presets, the user's saved custom sizes, Create New Page Size, and editing or deleting saved sizes), and the Page Setup dialog (layout type: one page per sheet, booklet, envelope, folded card, multiple pages per sheet, labels; for several pages per sheet, the sheet's side and top margins and the gaps between pages, kept apart from the margin guides, with how many fit)
+- [x] Printing several pages per sheet (business cards, labels) places them by the publication's own side and top margins and gaps
 - [x] Guides: built-in guide layouts, Grid and Baseline Guides dialog (columns, rows, spacing, center guide, baseline spacing and offset), Add Horizontal and Vertical Ruler Guides, Clear All Ruler Guides
 - [x] Layout: Align To Guides, Align To Objects
 - [x] Pages: Delete, Move, Rename, Master Pages (apply or none)
