@@ -266,10 +266,10 @@ void MainWindow::createActions()
     // ---------------- Paragraph ----------------
     mk("para.bullets", QStringLiteral("Bullets"), "list", QKeySequence(), [ed] {
         ed->setList(ed->currentBlockFormat().isValid() && ed->isEditingText() && ed->cursor().block().textList() &&
-                            ed->cursor().block().textList()->format().style() < 0 ? 0 : 1);
+                            isBulletList(ed->cursor().block().textList()->format().style()) ? 0 : 1);
     }, true);
     mk("para.numbers", QStringLiteral("Numbering"), "list-ordered", QKeySequence(), [ed] {
-        ed->setList(ed->isEditingText() && ed->cursor().block().textList() && ed->cursor().block().textList()->format().style() > 0 ? 0 : 2, 1);
+        ed->setList(ed->isEditingText() && ed->cursor().block().textList() && !isBulletList(ed->cursor().block().textList()->format().style()) ? 0 : 2, 1);
     }, true);
     for (const auto &[id, ch] : {std::pair{"bullet.disc", "•"}, {"bullet.circle", "◦"}, {"bullet.square", "▪"}, {"bullet.diamond", "❖"},
                                  {"bullet.arrow", "➢"}, {"bullet.check", "✔"}, {"bullet.star", "★"}, {"bullet.dash", "–"}}) {

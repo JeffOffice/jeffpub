@@ -2,6 +2,15 @@
 // Custom QTextFormat properties JeffPub stores alongside Qt's own.
 
 #include <QTextFormat>
+#include <QTextListFormat>
+
+namespace jp {
+// Qt's list styles are all negative; these three are bullets, the rest numbers.
+inline bool isBulletList(QTextListFormat::Style s)
+{
+    return s == QTextListFormat::ListDisc || s == QTextListFormat::ListCircle || s == QTextListFormat::ListSquare;
+}
+} // namespace jp
 
 namespace jp::tp {
 

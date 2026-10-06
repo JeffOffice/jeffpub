@@ -2340,6 +2340,7 @@ void Canvas::handleTextKey(QKeyEvent *e)
     case Qt::Key_Return:
     case Qt::Key_Enter:
         m_ed->autoCorrectWord();   // a word ends here too
+        m_ed->autoFormatWord();
         m_ed->editText([&](QTextCursor &c) {
             if (shift) { c.insertText(QString(QChar::LineSeparator)); return; }
             // An empty list item ends the list.

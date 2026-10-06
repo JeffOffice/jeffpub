@@ -1437,8 +1437,8 @@ void MainWindow::refreshUi()
     act("para.rtl")->setChecked(textish && bf.layoutDirection() == Qt::RightToLeft);
     act("para.ltr")->setChecked(textish && bf.layoutDirection() != Qt::RightToLeft);
     QTextList *list = editing ? ed->cursor().block().textList() : nullptr;
-    act("para.bullets")->setChecked(list && list->format().style() < 0);
-    act("para.numbers")->setChecked(list && list->format().style() > 0);
+    act("para.bullets")->setChecked(list && isBulletList(list->format().style()));
+    act("para.numbers")->setChecked(list && !isBulletList(list->format().style()));
     act("para.special")->setChecked(ed->view.special);
     act("view.boundaries")->setChecked(ed->view.boundaries);
     act("view.guides")->setChecked(ed->view.guides);

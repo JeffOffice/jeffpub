@@ -1933,12 +1933,15 @@ void optionsDialog(QWidget *p, Editor *ed)
     auto *autocorrect = new QCheckBox(QStringLiteral("Replace text as you type (AutoCorrect)"), proof);
     autocorrect->setChecked(st.value("proof/autocorrect", true).toBool());
     auto *quotes = new QCheckBox(QStringLiteral("Replace straight quotes with smart quotes"), proof);
+    auto *autoformat = new QCheckBox(QStringLiteral("AutoFormat as you type (dashes, fractions, ordinals, automatic lists)"), proof);
+    autoformat->setChecked(st.value("proof/autoformat", true).toBool());
     quotes->setChecked(st.value("proof/smartQuotes", true).toBool());
     pf->addRow(asType);
     pf->addRow(ignoreUpper);
     pf->addRow(ignoreNum);
     pf->addRow(autocorrect);
     pf->addRow(quotes);
+    pf->addRow(autoformat);
     tabs->addTab(proof, QStringLiteral("Proofing"));
     auto *save = new QWidget();
     auto *sf = new QFormLayout(save);
@@ -1983,6 +1986,7 @@ void optionsDialog(QWidget *p, Editor *ed)
     st.setValue("proof/ignoreNumbers", ignoreNum->isChecked());
     st.setValue("proof/autocorrect", autocorrect->isChecked());
     st.setValue("proof/smartQuotes", quotes->isChecked());
+    st.setValue("proof/autoformat", autoformat->isChecked());
     st.setValue("save/autoRecoverMinutes", recover->value());
     st.setValue("save/backup", backup->isChecked());
     st.setUnit(Unit(units->currentIndex()));

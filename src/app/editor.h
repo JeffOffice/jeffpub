@@ -199,6 +199,7 @@ public:
     // in Options > Proofing).
     void typeText(const QString &t);
     void autoCorrectWord();   // the word just before the cursor
+    void autoFormatWord();    // dashes, fractions and ordinals just before the cursor
     void editTextAs(const QString &label, const std::function<void(QTextCursor &)> &fn);   // one undo step of its own
     void editText(const std::function<void(QTextCursor &)> &fn);   // keystroke-level edit, grouped as Typing
     void retargetText(const QString &itemId);                       // caret moved into another linked box

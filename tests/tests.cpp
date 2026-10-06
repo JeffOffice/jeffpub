@@ -350,6 +350,46 @@ private Q_SLOTS:
         QCOMPARE(jp::autoflowText(ed, box->id), 0);   // nothing more to do
     }
 
+    // AutoFormat as you type: dashes, fractions, ordinals and lists.
+    void typingAutoFormat()
+    {
+        jp::MainWindow w;
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        jp::Editor *ed = w.editor();
+        auto box = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 72, 400, 300)));
+        ed->addItem(box);
+        ed->beginTextEdit(box->id);
+        auto type = [&](const QString &s) { for (QChar c : s) ed->typeText(QString(c)); };
+        type(QStringLiteral("It was 1/2 done--almost the 1st try - really "));
+        QTextDocument *doc = ed->doc()->storyDoc(box->storyId);
+        QCOMPARE(doc->toPlainText(), QString::fromUtf8("It was \u00BD done\u2014almost the 1st try \u2013 really "));
+        // The ordinal's letters are raised.
+        const int st = int(doc->toPlainText().indexOf(QStringLiteral("1st"))) + 1;
+        QTextCursor c(doc);
+        c.setPosition(st + 1);
+        QCOMPARE(c.charFormat().verticalAlignment(), QTextCharFormat::AlignSuperScript);
+        // Lists.
+        auto list = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 400, 400, 200)));
+        ed->endTextEdit();
+        ed->addItem(list);
+        ed->beginTextEdit(list->id);
+        type(QStringLiteral("* apples "));
+        QTextDocument *ld = ed->doc()->storyDoc(list->storyId);
+        QVERIFY(ld->begin().textList());
+        QVERIFY(jp::isBulletList(ld->begin().textList()->format().style()));
+        QCOMPARE(ld->begin().text(), QStringLiteral("Apples "));   // and AutoCorrect capitalizes the item
+        ed->endTextEdit();
+        auto nums = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 600, 400, 100)));
+        ed->addItem(nums);
+        ed->beginTextEdit(nums->id);
+        type(QStringLiteral("3) third"));
+        QTextBlock nb = ed->doc()->storyDoc(nums->storyId)->begin();
+        QVERIFY(nb.textList());
+        QVERIFY(!jp::isBulletList(nb.textList()->format().style()));
+        QCOMPARE(nb.textList()->format().numberSuffix(), QStringLiteral(")"));
+        QCOMPARE(nb.textList()->format().start(), 3);
+    }
+
     // "Always create backup copy" keeps the file as it was before saving.
     void saveBackupCopy()
     {

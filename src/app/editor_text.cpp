@@ -7,6 +7,7 @@
 
 #include "text/textprops.h"
 
+#include <QRegularExpression>
 #include <QTextBlock>
 #include <QTextDocument>
 #include <QTextList>
@@ -593,10 +594,81 @@ void Editor::autoCorrectWord()
     textEdited();
 }
 
+// AutoFormat as you type: "word--word" becomes an em dash, "word - word" an
+// en dash, 1/2 1/4 3/4 become fractions, and 1st 2nd 3rd 4th get raised
+// suffixes, when the word after ends.
+void Editor::autoFormatWord()
+{
+    if (!isEditingText() || m_cursor.hasSelection() || !Settings::get().value("proof/autoformat", true).toBool()) return;
+    const QTextBlock b = m_cursor.block();
+    const QString text = b.text().left(m_cursor.position() - b.position());
+    auto replace = [&](int from, int to, const QString &with, const QTextCharFormat *fmt = nullptr) {
+        if (!m_typing) {
+            beginChange(QStringLiteral("Typing"));
+            m_typing = true;
+        }
+        QTextCursor c = m_cursor;
+        c.setPosition(b.position() + from);
+        c.setPosition(b.position() + to, QTextCursor::KeepAnchor);
+        if (fmt) c.mergeCharFormat(*fmt);
+        else c.insertText(with, c.charFormat());
+        textEdited();
+    };
+    static const QRegularExpression emDash(QStringLiteral("[\\w.,!?)\"'”’]--[\\w(\"'“‘]\\S*$"));
+    static const QRegularExpression enDash(QStringLiteral("\\w - [\\w(\"'“‘]\\S*$"));
+    static const QRegularExpression fraction(QStringLiteral("(?:^|\\s)(1/2|1/4|3/4)$"));
+    static const QRegularExpression ordinal(QStringLiteral("(?:^|\\s)\\d*(?:1st|2nd|3rd|[04-9]th|1[1-3]th)$"));
+    if (const auto m = emDash.match(text); m.hasMatch()) {
+        replace(int(m.capturedStart()) + 1, int(m.capturedStart()) + 3, QString(QChar(0x2014)));
+        return;
+    }
+    if (const auto m = enDash.match(text); m.hasMatch()) {
+        replace(int(m.capturedStart()) + 2, int(m.capturedStart()) + 3, QString(QChar(0x2013)));
+        return;
+    }
+    if (const auto m = fraction.match(text); m.hasMatch()) {
+        const QString f = m.captured(1);
+        replace(int(m.capturedStart(1)), int(m.capturedEnd(1)), f == QLatin1String("1/2") ? QStringLiteral("½") : f == QLatin1String("1/4") ? QStringLiteral("¼") : QStringLiteral("¾"));
+        m_cursor.setPosition(b.position() + int(m.capturedStart(1)) + 1);
+        return;
+    }
+    if (const auto m = ordinal.match(text); m.hasMatch()) {
+        QTextCharFormat sup;
+        sup.setVerticalAlignment(QTextCharFormat::AlignSuperScript);
+        replace(int(text.size()) - 2, int(text.size()), QString(), &sup);
+        // Typing goes on in plain text.
+        QTextCharFormat plain = m_cursor.charFormat();
+        plain.setVerticalAlignment(QTextCharFormat::AlignNormal);
+        m_cursor.setCharFormat(plain);
+    }
+}
+
 void Editor::typeText(const QString &t)
 {
     if (!isEditingText()) return;
     QString s = t;
+    // AutoFormat: "* " or "- " starts a bulleted list, "1. " or "1) " a
+    // numbered one, at the start of a paragraph.
+    if (s == QLatin1String(" ") && !m_cursor.hasSelection() && !m_cursor.block().textList() && Settings::get().value("proof/autoformat", true).toBool()) {
+        const QTextBlock b = m_cursor.block();
+        const QString before = b.text().left(m_cursor.position() - b.position());
+        static const QRegularExpression numbered(QStringLiteral("^(\\d{1,3})([.)])$"));
+        const auto m = numbered.match(before);
+        if (before == QLatin1String("*") || before == QLatin1String("-") || m.hasMatch()) {
+            flushTyping();
+            beginChange(QStringLiteral("AutoFormat List"));
+            QTextCursor c = m_cursor;
+            c.setPosition(b.position());
+            c.setPosition(b.position() + int(before.size()), QTextCursor::KeepAnchor);
+            c.removeSelectedText();
+            m_cursor.setPosition(b.position());
+            if (m.hasMatch()) setList(2, m.captured(2) == QLatin1String(")") ? 6 : 0, QString(), m.captured(1).toInt());
+            else setList(1);
+            endChange();
+            textEdited();
+            return;
+        }
+    }
     // Smart quotes: opening after a space, an opening bracket or the start
     // of the paragraph; closing (and apostrophes) otherwise.
     if ((s == QLatin1String("\"") || s == QLatin1String("'")) && Settings::get().value("proof/smartQuotes", true).toBool()) {
@@ -608,7 +680,10 @@ void Editor::typeText(const QString &t)
         else s = opening ? QStringLiteral("‘") : QStringLiteral("’");
     }
     // A word ends: fix it before going on.
-    if (s.size() == 1 && (s[0].isSpace() || QStringLiteral(".,;:!?").contains(s[0]))) autoCorrectWord();
+    if (s.size() == 1 && (s[0].isSpace() || QStringLiteral(".,;:!?").contains(s[0]))) {
+        autoCorrectWord();
+        autoFormatWord();
+    }
     insertText(s);
 }
 
