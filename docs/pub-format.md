@@ -184,15 +184,16 @@ Whether a line fits in a box counts its text, not the spacing below it.
 
 A fill given as process inks keeps, in the tertiary OPT, the color as shown
 (0x019E, the same as 0x0181) and its inks in 0x019F and 0x01A6. Read the two
-as one run of bits, 31 from each (0x019F's bits 0-30, then 0x01A6's): C, M, Y
-and K are 8 bits each (÷255) from bit 9. Checked against three reference
-PDFs: C 98 M 76.1 Y 13.3 K 30.2 (0x019F 0x4585F5E8, 0x01A6 308), C 60 M 40
-Y 40 K 100 (0x4CCD33E8, 1021) and C 75.3 M 40 (0x00CD8188, no 0x01A6). The
-low 9 bits are flags: Publisher writes 0x1E8, or 0x188 when yellow and black
-are both zero. Other values (0x28 for yellow alone, 0x48 for black alone)
-make Publisher read the inks as all zero, though the screen color still
-shows; the writer uses only Publisher's two values. Publisher shows the 0x0181 color
-on screen and writes the inks to CMYK PDFs.
+as one run of bits, 31 from each (0x019F's bits 0-30, then 0x01A6's): bits
+0-4 are the bits per ink (8); bits 5-8 say which inks there are (0x100 cyan,
+0x80 magenta, 0x40 yellow, 0x20 black); then come only those inks' values,
+in C M Y K order, from bit 9. Three reference files hold all four inks
+(0x1E8: C 98 M 76.1 Y 13.3 K 30.2 is 0x4585F5E8 with 0x01A6 308; C 60 M 40
+Y 40 K 100 is 0x4CCD33E8 with 1021) or cyan and magenta (0x188: C 75.3
+M 40 is 0x00CD8188). Checked one ink at a time in Publisher's color dialog:
+a value of 255 in the first place reads as C 100 with 0x108 and M 100 with
+0x88; flags that don't match the values read as no ink. Publisher shows the
+0x0181 color on screen and writes the inks to CMYK PDFs.
 
 ## Text (Quill/QuillSub/CONTENTS)
 

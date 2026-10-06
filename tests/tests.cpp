@@ -2659,6 +2659,22 @@ private Q_SLOTS:
         }
     }
 
+    // How a .pub file packs process inks, checked against values Publisher
+    // wrote (three reference files) and read (single inks, checked one at a
+    // time in its color dialog).
+    void pubInkPacking()
+    {
+        using P = QPair<quint32, quint32>;
+        QCOMPARE(jp::packPubInks(QColor::fromCmykF(250 / 255.f, 194 / 255.f, 34 / 255.f, 77 / 255.f)), P(0x4585F5E8u, 308u));
+        QCOMPARE(jp::packPubInks(QColor::fromCmykF(0.6f, 0.4f, 0.4f, 1.0f)), P(0x4CCD33E8u, 1021u));
+        QCOMPARE(jp::packPubInks(QColor::fromCmykF(192 / 255.f, 0.4f, 0, 0)), P(0x00CD8188u, 0u));
+        QCOMPARE(jp::packPubInks(QColor::fromCmykF(1, 0, 0, 0)), P(0x0001FF08u, 0u));   // read as C 100
+        QCOMPARE(jp::packPubInks(QColor::fromCmykF(0, 1, 0, 0)), P(0x0001FE88u, 0u));   // read as M 100
+        // Only the inks used are packed, in C M Y K order.
+        QCOMPARE(jp::packPubInks(QColor::fromCmykF(0, 0, 1, 0)), P(0x0001FE48u, 0u));
+        QCOMPARE(jp::packPubInks(QColor::fromCmykF(0, 0, 0, 1)), P(0x0001FE28u, 0u));
+    }
+
     // Process inks survive saving as .pub: the file keeps the color as shown
     // and the inks (checked against values reference files hold).
     void pubWriterProcessInks()
@@ -2668,17 +2684,19 @@ private Q_SLOTS:
                             {0.6f, 0.4f, 0.4f, 1.0f, QColor(29, 31, 25), "rich black C60 M40 Y40 K100"},
                             {0.753f, 0.4f, 0, 0, QColor(91, 125, 179), "blue C75 M40"},
                             {0, 0, 1.0f, 0, QColor(255, 242, 0), "yellow Y100"},
-                            {0, 0, 0, 1.0f, QColor(35, 31, 32), "black K100"}};
+                            {0, 0, 0, 1.0f, QColor(35, 31, 32), "black K100"},
+                            {0, 0.5f, 1.0f, 0.2f, QColor(220, 140, 30), "orange M50 Y100 K20"},
+                            {0.3f, 0, 0, 0.6f, QColor(80, 100, 110), "slate C30 K60"}};
         auto doc = jp::Document::blank(QSizeF(612, 792));
         doc->print.model = jp::PrintInfo::ProcessCMYK;
-        for (int i = 0; i < 5; ++i) {
+        for (int i = 0; i < 7; ++i) {
             auto box = std::make_shared<jp::ShapeItem>();
-            box->rect = QRectF(72, 72 + i * 120, 200, 90);
+            box->rect = QRectF(72, 50 + i * 100, 200, 80);
             box->fill = jp::Fill::solid(jp::ColorRef::inks(QColor::fromCmykF(inks[i].c, inks[i].m, inks[i].y, inks[i].k), inks[i].shown));
             box->stroke = jp::Stroke::none();
             doc->pages[0]->items.push_back(box);
             auto t = std::make_shared<jp::TextItem>();
-            t->rect = QRectF(290, 100 + i * 120, 260, 40);
+            t->rect = QRectF(290, 70 + i * 100, 260, 40);
             t->storyId = doc->createStory(QString::fromLatin1(inks[i].label));
             doc->pages[0]->items.push_back(t);
         }
@@ -2707,7 +2725,7 @@ private Q_SLOTS:
                     ++found;
                 }
         });
-        QCOMPARE(found, 5);
+        QCOMPARE(found, 7);
     }
 
     // A process color from a .pub file: the screen shows the color the file

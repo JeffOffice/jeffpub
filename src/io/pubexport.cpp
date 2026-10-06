@@ -1150,20 +1150,16 @@ QByteArray PubWriter::write(QStringList *skipped)
     // 2 tiled). The reader turns a stored angle a into 90 + a, and treats
     // -45 and -135 specially, so angles are stored minus 90 within 0-360.
     // A solid fill given as process inks: in the tertiary properties, the
-    // color as shown (0x019E) and the inks packed into 0x019F and 0x01A6
-    // (as one run of bits, 31 from each: 9 bits of flags, then C, M, Y and
-    // K at 8 bits each). Publisher writes only two flag values, 0x188 when
-    // yellow and black are both zero and 0x1E8 otherwise, and reads other
-    // values as no ink at all.
+    // color as shown (0x019E) and the inks packed into 0x019F and 0x01A6 as
+    // one run of bits, 31 from each: the bits per ink (8), which inks there
+    // are (0x100 cyan, 0x80 magenta, 0x40 yellow, 0x20 black), then only
+    // those inks' values, in that order. Checked in Publisher one ink at a
+    // time and against three reference files.
     auto inkProps = [&](QVector<Prop> &topt, const Fill &f) {
         if (f.type != Fill::Solid || f.color.kind() != ColorRef::Rgb || f.color.rgbValue().spec() != QColor::Cmyk) return;
-        const QColor k = f.color.rgbValue();
-        const quint64 c = quint64(std::lround(k.cyanF() * 255)), m = quint64(std::lround(k.magentaF() * 255)),
-                      y = quint64(std::lround(k.yellowF() * 255)), b = quint64(std::lround(k.blackF() * 255));
-        const quint64 used = y || b ? 0x1e8 : 0x188;
-        const quint64 bits = used | c << 9 | m << 17 | y << 25 | b << 33;
-        topt << Prop{0x019e, bgr(f.color.resolve(m_doc.colors))} << Prop{0x019f, quint32(bits & 0x7fffffff)};
-        if (bits >> 31) topt << Prop{0x01a6, quint32((bits >> 31) & 0x7fffffff)};
+        const QPair<quint32, quint32> packed = packPubInks(f.color.rgbValue());
+        topt << Prop{0x019e, bgr(f.color.resolve(m_doc.colors))} << Prop{0x019f, packed.first};
+        if (packed.second) topt << Prop{0x01a6, packed.second};
     };
     auto fillProps = [&](QVector<Prop> &opt, const Fill &f) {
         auto rgb = [&](const ColorRef &c) { return bgr(c.resolve(m_doc.colors)); };
@@ -2256,6 +2252,22 @@ bool exportPublisher(const Document &doc, const QString &path, QString *error)
     }
     if (error) *error = skipped.join(QStringLiteral("; "));
     return true;
+}
+
+QPair<quint32, quint32> packPubInks(const QColor &cmyk)
+{
+    const QColor k = cmyk.toCmyk();
+    const quint64 v[4] = {quint64(std::lround(k.cyanF() * 255)), quint64(std::lround(k.magentaF() * 255)), quint64(std::lround(k.yellowF() * 255)),
+                          quint64(std::lround(k.blackF() * 255))};
+    quint64 bits = 8;   // bits per ink
+    int at = 9;
+    for (int i = 0; i < 4; ++i)
+        if (v[i]) {
+            bits |= quint64(0x100) >> i;   // this ink is there
+            bits |= v[i] << at;
+            at += 8;
+        }
+    return {quint32(bits & 0x7fffffff), quint32((bits >> 31) & 0x7fffffff)};
 }
 
 } // namespace jp
