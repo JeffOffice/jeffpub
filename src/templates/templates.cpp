@@ -27,9 +27,25 @@ constexpr double IN = 72.0;
 QString art(Document &d, const QString &kind, const QSize &px, quint32 seed = 1)
 {
     const ColorScheme &s = d.colors;
-    QImage img(px, QImage::Format_ARGB32_Premultiplied);
+    // Made at most 3,000 pixels on its longest side: decorative art on a
+    // 5-foot banner needs no more (60 dpi there), and every pixel past that
+    // cost time and file size. It is drawn in the size asked for and scaled
+    // down, so it looks the same, only less finely.
+    const int longest = std::max(px.width(), px.height());
+    const double fit = longest > 3000 ? 3000.0 / longest : 1.0;
+    const QSize made = QSize(std::max(1, int(std::lround(px.width() * fit))), std::max(1, int(std::lround(px.height() * fit))));
+    // The same picture in the same colors is made once per session (the New
+    // page builds every template to show it).
+    static QHash<QString, QByteArray> done;
+    QString key = kind + QLatin1Char('|') + QString::number(px.width()) + QLatin1Char('x') + QString::number(px.height()) + QLatin1Char('|') +
+                  QString::number(seed);
+    for (int i = 0; i < SlotCount; ++i) key += QLatin1Char('|') + s.c[i].name();
+    if (const auto hit = done.constFind(key); hit != done.constEnd()) return d.addImage(*hit, "png", "art:" + kind);
+    QImage img(made, QImage::Format_ARGB32_Premultiplied);
     QPainter p(&img);
     p.setRenderHint(QPainter::Antialiasing);
+    p.scale(double(made.width()) / std::max(1, px.width()), double(made.height()) / std::max(1, px.height()));
+    const QRectF all(0, 0, px.width(), px.height());
     // qHash is randomized per process; artwork must be the same every run.
     QRandomGenerator rng(seed * 7919 + qChecksum(kind.toUtf8()));
     const double w = px.width(), h = px.height();
@@ -38,7 +54,7 @@ QString art(Document &d, const QString &kind, const QSize &px, quint32 seed = 1)
         QLinearGradient sky(0, 0, 0, h);
         sky.setColorAt(0, c(Accent2, 50));
         sky.setColorAt(1, c(Accent5));
-        p.fillRect(img.rect(), sky);
+        p.fillRect(all, sky);
         p.setPen(Qt::NoPen);
         p.setBrush(c(Accent3, 10));
         p.drawEllipse(QPointF(w * 0.72, h * 0.3), w * 0.09, w * 0.09);
@@ -59,7 +75,7 @@ QString art(Document &d, const QString &kind, const QSize &px, quint32 seed = 1)
         QLinearGradient bg(0, 0, w, h);
         bg.setColorAt(0, ColorRef::scheme(Accent1, 0, 40).resolve(s));
         bg.setColorAt(1, ColorRef::scheme(Main).resolve(s));
-        p.fillRect(img.rect(), bg);
+        p.fillRect(all, bg);
         for (int i = 0; i < 46; ++i) {
             const double r = w * (0.02 + 0.07 * rng.generateDouble());
             QColor col = c(1 + int(rng.bounded(4)), 30);
@@ -74,7 +90,7 @@ QString art(Document &d, const QString &kind, const QSize &px, quint32 seed = 1)
             p.drawEllipse(g.center(), r, r);
         }
     } else if (kind == "confetti") {
-        p.fillRect(img.rect(), c(Accent5));
+        p.fillRect(all, c(Accent5));
         for (int i = 0; i < 160; ++i) {
             p.save();
             p.translate(rng.bounded(int(w)), rng.bounded(int(h)));
@@ -87,7 +103,7 @@ QString art(Document &d, const QString &kind, const QSize &px, quint32 seed = 1)
             p.restore();
         }
     } else if (kind == "waves") {
-        p.fillRect(img.rect(), c(Accent5));
+        p.fillRect(all, c(Accent5));
         for (int i = 0; i < 7; ++i) {
             QPainterPath wave;
             const double y0 = h * (0.25 + i * 0.11);
@@ -101,7 +117,7 @@ QString art(Document &d, const QString &kind, const QSize &px, quint32 seed = 1)
             p.drawPath(wave);
         }
     } else if (kind == "geo") {
-        p.fillRect(img.rect(), c(Main));
+        p.fillRect(all, c(Main));
         const int n = 8;
         const double cw = w / n, ch = h / (n * h / w);
         for (int yy = 0; yy * ch < h + ch; ++yy)
@@ -113,7 +129,7 @@ QString art(Document &d, const QString &kind, const QSize &px, quint32 seed = 1)
                 p.fillPath(tri, c(1 + int(rng.bounded(4)), int(rng.bounded(3)) * 20));
             }
     } else if (kind == "sunburst") {
-        p.fillRect(img.rect(), c(Accent3, 20));
+        p.fillRect(all, c(Accent3, 20));
         const QPointF ctr(w / 2, h * 0.9);
         for (int i = 0; i < 24; ++i) {
             QPainterPath ray;
@@ -131,7 +147,7 @@ QString art(Document &d, const QString &kind, const QSize &px, quint32 seed = 1)
         QLinearGradient sky(0, 0, 0, h);
         sky.setColorAt(0, c(Accent1, 0));
         sky.setColorAt(1, c(Accent3, 40));
-        p.fillRect(img.rect(), sky);
+        p.fillRect(all, sky);
         double x = 0;
         while (x < w) {
             const double bw = w * (0.05 + 0.08 * rng.generateDouble()), bh = h * (0.25 + 0.45 * rng.generateDouble());
@@ -142,7 +158,7 @@ QString art(Document &d, const QString &kind, const QSize &px, quint32 seed = 1)
             x += bw + 2;
         }
     } else if (kind == "leaves") {
-        p.fillRect(img.rect(), c(Accent5));
+        p.fillRect(all, c(Accent5));
         for (int i = 0; i < 26; ++i) {
             p.save();
             p.translate(rng.bounded(int(w)), rng.bounded(int(h)));
@@ -169,7 +185,9 @@ QString art(Document &d, const QString &kind, const QSize &px, quint32 seed = 1)
     QByteArray png;
     QBuffer b(&png);
     b.open(QIODevice::WriteOnly);
-    img.save(&b, "PNG");
+    img.save(&b, "PNG", 90);   // light compression: quick to make, a little larger
+    if (done.size() > 64) done.clear();   // a session's worth; templates use a few dozen
+    done.insert(key, png);
     return d.addImage(png, "png", "art:" + kind);
 }
 

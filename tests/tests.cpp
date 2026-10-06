@@ -2914,6 +2914,49 @@ private Q_SLOTS:
         }
     }
 
+    // Clicking a category lists its templates at once with blank pages; the
+    // thumbnails are drawn afterward between events, a newer click replaces
+    // the work left, and thumbnails already made come back at once.
+    void newPageThumbnailsFillAfter()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        w.showBackstage(QStringLiteral("new"));
+        QApplication::processEvents();
+        QListWidget *cats = nullptr, *grid = nullptr;
+        for (QListWidget *l : w.findChildren<QListWidget *>())
+            if (l->count() > 3 && l->item(0)->data(Qt::UserRole).toString() == QLatin1String("Featured")) cats = l;
+        QVERIFY(cats);
+        for (QListWidget *l : cats->parentWidget()->findChildren<QListWidget *>())
+            if (l != cats && l->viewMode() == QListView::IconMode) grid = l;
+        QVERIFY(grid);
+        auto row = [&](const QString &key) {
+            for (int i = 0; i < cats->count(); ++i)
+                if (cats->item(i)->data(Qt::UserRole).toString() == key) return i;
+            return -1;
+        };
+        const int calendars = row(QStringLiteral("Calendars")), banners = row(QStringLiteral("Banners"));
+        QVERIFY(calendars > 0 && banners > 0);
+        // Distinct thumbnails in the grid (all blank placeholders count as one).
+        auto distinct = [&] {
+            QSet<qint64> keys;
+            for (int i = 0; i < grid->count(); ++i) keys.insert(grid->item(i)->icon().cacheKey());
+            return keys.size();
+        };
+        cats->setCurrentRow(calendars);
+        QVERIFY(grid->count() >= 2);
+        QCOMPARE(distinct(), 1);   // listed, nothing drawn yet
+        cats->setCurrentRow(banners);   // before any calendar was drawn
+        const int bannerCount = grid->count();
+        QVERIFY(bannerCount >= 2);
+        QTRY_COMPARE(distinct(), bannerCount);
+        cats->setCurrentRow(calendars);
+        QTRY_COMPARE(distinct(), grid->count());
+        cats->setCurrentRow(banners);
+        QCOMPARE(distinct(), bannerCount);   // kept, no waiting
+    }
+
     // How a .pub file packs process inks, checked against values Publisher
     // wrote (three reference files) and read (single inks, checked one at a
     // time in its color dialog).

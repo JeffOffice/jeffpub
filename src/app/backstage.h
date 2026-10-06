@@ -2,6 +2,8 @@
 // The File screen: a sidebar of grouped commands (New, Open, Save, Print,
 // Export, Share, Properties, Close, Settings, About) beside the chosen page.
 
+#include <QHash>
+#include <QIcon>
 #include <QWidget>
 
 class QAbstractButton;
@@ -36,6 +38,10 @@ private:
     QHash<QString, QAbstractButton *> m_navItems;
     QStackedWidget *m_stack;
     QHash<QString, int> m_index;
+    // New page thumbnails made so far, by template id, all made with the
+    // options in m_thumbOptions (other options start the collection afresh).
+    QHash<QString, QIcon> m_thumbs;
+    QString m_thumbOptions;
 };
 
 } // namespace jp

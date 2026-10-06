@@ -23,6 +23,9 @@
 #include <QAbstractButton>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QJsonDocument>
+#include <QTimer>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -751,7 +754,40 @@ QWidget *Backstage::buildNew()
         img.setDevicePixelRatio(dpr);
         return paperPixmap(img, QSize(150, 150), dpr);
     };
+    // A category's list appears at once; thumbnails not made yet are drawn
+    // one at a time after it (building the twelve months of a calendar takes
+    // a moment), and are kept for the session in m_thumbs.
+    // One thumbnail per tick of a zero-interval timer, so clicks and typing
+    // are answered between them; a newer list (another category, a search, a
+    // different scheme) replaces the work left.
+    auto pending = std::make_shared<QVector<QPair<QListWidgetItem *, const TemplateInfo *>>>();
+    auto pendingOptions = std::make_shared<TemplateOptions>();
+    auto *thumbTimer = new QTimer(list);
+    thumbTimer->setInterval(0);
+    const QIcon placeholder = [&] {
+        auto blank = Document::blank(QSizeF(612, 792));
+        return QIcon(thumbFor(*blank));
+    }();
+    auto optionsKey = [](const TemplateOptions &o) {
+        return o.colorScheme + QLatin1Char('|') + o.fontScheme + QLatin1Char('|') +
+               QString::fromUtf8(QJsonDocument(o.business.toJson()).toJson(QJsonDocument::Compact)) + QLatin1Char('|') +
+               QString::fromUtf8(QJsonDocument(o.options).toJson(QJsonDocument::Compact)) + QLatin1Char('|') +
+               QString::fromLatin1(QCryptographicHash::hash(o.logoBytes, QCryptographicHash::Md5).toHex());
+    };
+    connect(thumbTimer, &QTimer::timeout, list, [=]() {
+        if (pending->isEmpty()) {
+            thumbTimer->stop();
+            return;
+        }
+        const auto [it, t] = pending->takeFirst();
+        auto doc = t->build(*pendingOptions);
+        const QIcon made(thumbFor(*doc));
+        m_thumbs.insert(t->id, made);
+        it->setIcon(made);
+    });
     auto populate = [=]() {
+        thumbTimer->stop();
+        pending->clear();   // before the items go
         list->clear();
         const QString cat = cats->currentItem() ? cats->currentItem()->data(Qt::UserRole).toString() : QStringLiteral("Featured");
         const QString q = search->text().trimmed();
@@ -789,8 +825,7 @@ QWidget *Backstage::buildNew()
             return;
         }
         if (cat == "Featured" && q.isEmpty()) {
-            auto blank = Document::blank(QSizeF(612, 792));
-            auto *it = new QListWidgetItem(QIcon(thumbFor(*blank)), QStringLiteral("Blank 8.5 × 11\""));
+            auto *it = new QListWidgetItem(placeholder, QStringLiteral("Blank 8.5 × 11\""));
             it->setData(Qt::UserRole, "blank:Letter");
             list->addItem(it);
             auto blankL = Document::blank(QSizeF(792, 612));
@@ -798,16 +833,25 @@ QWidget *Backstage::buildNew()
             it->setData(Qt::UserRole, "blank:Letter Landscape");
             list->addItem(it);
         }
-        TemplateOptions o = options();
+        const TemplateOptions o = options();
+        if (const QString k = optionsKey(o); k != m_thumbOptions) {
+            m_thumbs.clear();
+            m_thumbOptions = k;
+        }
         for (const auto &t : templates()) {
             if (!q.isEmpty() && !t.name.contains(q, Qt::CaseInsensitive) && !t.category.contains(q, Qt::CaseInsensitive)) continue;
             if (q.isEmpty() && cat != "Featured" && t.category != cat) continue;
             if (q.isEmpty() && cat == "Featured" && list->count() >= 14) continue;
-            auto doc = t.build(o);
-            auto *it = new QListWidgetItem(QIcon(thumbFor(*doc)), t.name);
+            const auto known = m_thumbs.constFind(t.id);
+            auto *it = new QListWidgetItem(known != m_thumbs.cend() ? *known : placeholder, t.name);
             it->setData(Qt::UserRole, "tpl:" + t.id);
             it->setToolTip(t.description);
             list->addItem(it);
+            if (known == m_thumbs.cend()) *pending << qMakePair(it, &t);
+        }
+        if (!pending->isEmpty()) {
+            *pendingOptions = o;
+            thumbTimer->start();
         }
     };
     connect(cats, &QListWidget::currentRowChanged, this, [populate] { populate(); });
