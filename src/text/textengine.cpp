@@ -302,7 +302,7 @@ static bool usesTypoMetrics(const QString &family)
 // fonts embedded in reference PDFs of .pub files. When such a font is missing and a
 // substitute is drawn, lines keep the original's spacing and baseline.
 struct KnownMetrics { double line = 0, descent = 0; };
-static KnownMetrics knownMetrics(const QString &family)
+static KnownMetrics knownMetrics(const QString &family, bool bold = false)
 {
     const QString f = family.toLower();
     // OS/2 typographic metrics of the core fonts, which their stand-ins
@@ -324,7 +324,8 @@ static KnownMetrics knownMetrics(const QString &family)
     if (f == "lucida handwriting") return {(2098.0 + 727) / 2048, 727.0 / 2048};
     if (f == "juice itc") return {(1903.0 + 532) / 2048, 532.0 / 2048};
     if (f == "symbol") return {(2059.0 + 450) / 2048, 450.0 / 2048};                    // hhea
-    if (f == "ag_futura") return {(4051.0 + 1081) / 4096, 1081.0 / 4096};               // win
+    if (f == "ag_futura") return bold ? KnownMetrics{(4264.0 + 1049) / 4096, 1049.0 / 4096}   // win, bold
+                                      : KnownMetrics{(4051.0 + 1081) / 4096, 1081.0 / 4096};  // win
     if (f == "wingdings") return {(1841.0 + 432) / 2048, 432.0 / 2048};                 // hhea
     return {};
 }
@@ -374,7 +375,7 @@ static double trackingSpace(const QTextCharFormat &f, const QFont &resolved)
 double naturalLineEm(const QFont &f, const QString &requestedFamily)
 {
     if (isSubstituted(requestedFamily)) {
-        const double known = knownMetrics(requestedFamily).line;
+        const double known = knownMetrics(requestedFamily, f.weight() >= QFont::DemiBold).line;
         if (known > 0) return known;
     }
     static QHash<QString, double> cache;
@@ -421,7 +422,7 @@ double knownDescent(const QVector<QTextLayout::FormatRange> &ranges, int from, i
             const QFont f = r.format.font();
             const QString fam = requestedFamily(f);
             if (!isSubstituted(fam)) continue;
-            const double kd = knownMetrics(fam).descent;
+            const double kd = knownMetrics(fam, f.weight() >= QFont::DemiBold).descent;
             if (kd > 0) d = std::max(d, f.pointSizeF() / fontPointFactor() * kd);
         }
     return d;
@@ -650,7 +651,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
             // The bullet's own line height counts on the item's first line: a
             // Symbol bullet (as .pub lists have) is taller than most text.
             const QString mfam = bfont.isEmpty() ? requestedFamily(B->markerFont) : bfont;
-            const double known = knownMetrics(mfam).line;
+            const double known = knownMetrics(mfam, B->markerFont.weight() >= QFont::DemiBold).line;
             markerSingle = B->markerFont.pointSizeF() / fontPointFactor() * (known > 0 ? known : naturalLineEm(B->markerFont, mfam));
         }
 
