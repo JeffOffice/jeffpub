@@ -88,7 +88,7 @@ void useIsbnRanges(QObject *receiver, const std::function<void()> &arrived)
     QObject::connect(r, &QNetworkReply::finished, net, [r, open, arrived] {
         r->deleteLater();
         if (r->error() != QNetworkReply::NoError) return;
-        const QByteArray xml = r->readAll();
+        const QByteArray xml = r->read(8 << 20);   // the table is about 230 KB
         if (!barcode::loadIsbnRanges(xml)) return;
         loaded = true;
         QDir().mkpath(QFileInfo(isbnRangesPath()).path());

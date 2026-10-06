@@ -592,11 +592,14 @@ QByteArray vtString(const QString &s)
 // bitmap of the first page. Checked against 282 files Publisher saved.
 QByteArray vtThumbnail(const QImage &thumb)
 {
-    QImage img(thumb.size(), QImage::Format_RGB888);
+    // At most 160 pixels across, as Publisher's are (and the size fields
+    // are 16-bit).
+    const QImage fitted = std::max(thumb.width(), thumb.height()) > 160 ? thumb.scaled(160, 160, Qt::KeepAspectRatio, Qt::SmoothTransformation) : thumb;
+    QImage img(fitted.size(), QImage::Format_RGB888);
     img.fill(Qt::white);
     {
         QPainter p(&img);
-        p.drawImage(0, 0, thumb);
+        p.drawImage(0, 0, fitted);
     }
     const int w = img.width(), h = img.height();
     const int stride = (w * 3 + 3) & ~3;

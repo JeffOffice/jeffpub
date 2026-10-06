@@ -1,12 +1,18 @@
 #include "text/dictionaries.h"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QFile>
 #include <QHash>
 #include <QMutex>
 
 #include <hunspell/hunspell.hxx>
 #include <memory>
+#include <vector>
+
+#ifdef Q_OS_WIN
+#include <windows.h>   // GetShortPathNameW
+#endif
 
 namespace jp::dict {
 
@@ -74,7 +80,7 @@ Checker *checker(const QString &code)
     const QString base = e && !root().isEmpty() ? root() + '/' + QLatin1String(e->spelling) : QString();
     if (!base.isEmpty() && QFile::exists(base + ".dic") && QFile::exists(base + ".aff")) {
         c = std::make_shared<Checker>();
-        c->h = std::make_unique<Hunspell>(QFile::encodeName(base + ".aff").constData(), QFile::encodeName(base + ".dic").constData());
+        c->h = std::make_unique<Hunspell>(hunspellFileName(base + ".aff").constData(), hunspellFileName(base + ".dic").constData());
         c->utf8 = QString::fromStdString(c->h->get_dict_encoding()).compare(QLatin1String("UTF-8"), Qt::CaseInsensitive) == 0;
     }
     loaded.insert(code, c);
@@ -159,6 +165,20 @@ QStringList suggest(const QString &code, const QString &word)
     if (!c) return out;
     for (const std::string &s : c->h->suggest(c->encode(word))) out << c->decode(s);
     return out;
+}
+
+QByteArray hunspellFileName(const QString &path)
+{
+    const QByteArray local = QFile::encodeName(path);
+#ifdef Q_OS_WIN
+    if (QFile::decodeName(local) != path) {
+        const std::wstring wide = QDir::toNativeSeparators(path).toStdWString();
+        std::vector<wchar_t> shortName(32768);
+        const DWORD n = GetShortPathNameW(wide.c_str(), shortName.data(), DWORD(shortName.size()));
+        if (n > 0 && n < shortName.size()) return QFile::encodeName(QString::fromWCharArray(shortName.data(), int(n)));
+    }
+#endif
+    return local;
 }
 
 QString hyphenationFile(const QString &code)

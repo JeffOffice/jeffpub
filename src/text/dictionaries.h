@@ -36,4 +36,10 @@ QStringList suggest(const QString &code, const QString &word);
 // The language's hyphenation patterns (a LibreOffice hyph_*.dic), or empty.
 QString hyphenationFile(const QString &code);
 
+// `path` as Hunspell can open it. It takes 8-bit names, which on Windows are
+// in the system's code page, and JeffPub installs under the user's own
+// folder; when the user name doesn't fit that code page, the short (8.3)
+// form of the path does.
+QByteArray hunspellFileName(const QString &path);
+
 } // namespace jp::dict

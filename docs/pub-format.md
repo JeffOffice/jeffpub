@@ -28,7 +28,8 @@ brush (`CreateBrushIndirect`, `SelectObject` 0); `PatBlt` PATCOPY over the
 window; `SelectObject` 0 again; `DIBBitBlt` SRCCOPY of a 24-bit bottom-up
 bitmap of page 1 (about 141 to 161 pixels across: it follows the view's
 zoom when saved); end of file. JeffPub writes the same, page 1 fitted in
-160 pixels. (Publisher check pending, test35.)
+160 pixels. (Not yet seen in File Explorer: the test computer showed no
+previews for any office files, test35, Oct 6.)
 
 Storage class ids: root `00021201-0000-0000-00C0-000000000046`,
 `Quill/QuillSub` `08C8F6DA-969D-11D1-8E02-00C04FB6FECE`. Empty storages
@@ -399,8 +400,9 @@ every paragraph so Normal's own values (6 pt after, 1.19 lines) don't apply.
 Character runs (FDPC): `12:22` and `3e:22` the language as a Windows LCID
 (1033 for US English in every run of the 56 reference files with
 character pages; JeffPub writes the run's language in both, such as 2058
-for Spanish (Mexico), from the table libmspub reads; Publisher check
-pending, test35),
+for Spanish (Mexico), from the table libmspub reads; Publisher showed
+English (United States), Spanish (Mexico), French (France) and German
+(Germany) for the four lines of test35, Oct 6),
 `1e:12 = 1` underline, `10:0a` strikethrough,
 `13:0a` small caps, `14:0a` all caps, `0f:12` 1 superscript, 2 subscript,
 `1b:22` space added between letters in EMU (Publisher's "kerning"), `1f:1a`

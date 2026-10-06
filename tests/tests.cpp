@@ -1544,6 +1544,21 @@ private Q_SLOTS:
     // Which bundled dictionary text in a language uses.
     void dictionaryMatch()
     {
+        // Windows: a folder whose name doesn't fit the system's code page
+        // still opens (spelling was silently off for such user names).
+#ifdef Q_OS_WIN
+        {
+            QTemporaryDir tmp;
+            const QString odd = tmp.filePath(QString::fromUtf8("\u5b57\u5178 \u03a9"));
+            QVERIFY(QDir().mkpath(odd));
+            QFile f(odd + QStringLiteral("/x.dic"));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("1\nword\n");
+            f.close();
+            const QByteArray name = jp::dict::hunspellFileName(f.fileName());
+            QVERIFY(QFile::exists(QFile::decodeName(name)));
+        }
+#endif
         QCOMPARE(jp::dict::match(QString()), QStringLiteral("en-US"));
         QCOMPARE(jp::dict::match(QStringLiteral("en-US")), QStringLiteral("en-US"));
         QCOMPARE(jp::dict::match(QStringLiteral("en_gb")), QStringLiteral("en-GB"));
@@ -3495,6 +3510,11 @@ private Q_SLOTS:
         const QColor top = back.pixelColor(back.width() / 2, 5), low = back.pixelColor(5, back.height() - 5);
         QVERIFY2(top.red() > 180 && top.green() < 60, qPrintable(top.name()));
         QVERIFY2(low.lightness() > 240, qPrintable(low.name()));
+        // Each run's language code in both of Publisher's places (Spanish
+        // (Mexico) 0x080A; Publisher showed all four languages, test35, Oct 6).
+        const QByteArray quill = jp::cfb::readStream(path, QStringLiteral("Quill/QuillSub/CONTENTS"));
+        QVERIFY(quill.contains(QByteArray::fromHex("12220a080000")) && quill.contains(QByteArray::fromHex("3e220a080000")));
+        QVERIFY(quill.contains(QByteArray::fromHex("12220c040000")) && quill.contains(QByteArray::fromHex("12220704" "0000")));
         // The languages, through the independent reader.
         auto reopened = jp::importPublisherFile(path, &err);
         QVERIFY2(reopened, qPrintable(err));
@@ -3509,6 +3529,15 @@ private Q_SLOTS:
             got << c.charFormat().stringProperty(jp::tp::Language);
         }
         QCOMPARE(got.mid(0, 4), (QStringList{"en-US", "es-MX", "fr-FR", "de-DE"}));
+        // A bigger picture is fitted to Publisher's size.
+        QVERIFY(jp::exportPublisher(*w.editor()->doc(), path, &err, w.pageThumbnail(0, 2000)));
+        const QImage fitted = jp::publicationThumbnail(path);
+        QVERIFY(!fitted.isNull());
+        const QByteArray si2 = jp::cfb::readStream(path, QStringLiteral("\x05SummaryInformation"));
+        const qsizetype copy = si2.indexOf(QByteArray::fromHex("2000cc00"));   // DIBBitBlt's SRCCOPY, then six numbers and the bitmap
+        QVERIFY(copy > 0);
+        QVERIFY(qFromLittleEndian<quint32>(si2.constData() + copy + 4 + 12 + 4) < 160);              // bitmap width
+        QCOMPARE(qFromLittleEndian<quint32>(si2.constData() + copy + 4 + 12 + 8), quint32(160));   // and height
     }
 
     // A right-to-left paragraph through .pub: written as in a sample made in
