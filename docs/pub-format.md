@@ -190,9 +190,10 @@ as one run of bits, 31 from each (0x019F's bits 0-30, then 0x01A6's): bits
 in C M Y K order, from bit 9. Three reference files hold all four inks
 (0x1E8: C 98 M 76.1 Y 13.3 K 30.2 is 0x4585F5E8 with 0x01A6 308; C 60 M 40
 Y 40 K 100 is 0x4CCD33E8 with 1021) or cyan and magenta (0x188: C 75.3
-M 40 is 0x00CD8188). Checked one ink at a time in Publisher's color dialog:
-a value of 255 in the first place reads as C 100 with 0x108 and M 100 with
-0x88; flags that don't match the values read as no ink. Publisher shows the
+M 40 is 0x00CD8188). Checked in Publisher's color dialog: single inks
+(C 100 0x0001FF08, M 100 0x0001FE88, Y 100 0x0001FE48, K 100 0x0001FE28)
+and M 50 Y 100 K 20 (0x67FF00E8) all read back exactly; flags that don't
+match the values read as no ink. Publisher shows the
 0x0181 color on screen and writes the inks to CMYK PDFs.
 
 ## Text (Quill/QuillSub/CONTENTS)
