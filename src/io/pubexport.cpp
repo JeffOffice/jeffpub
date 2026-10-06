@@ -1151,14 +1151,16 @@ QByteArray PubWriter::write(QStringList *skipped)
     // -45 and -135 specially, so angles are stored minus 90 within 0-360.
     // A solid fill given as process inks: in the tertiary properties, the
     // color as shown (0x019E) and the inks packed into 0x019F and 0x01A6
-    // (as one run of bits, 31 from each: which inks are used, then C, M, Y
-    // and K at 8 bits each from bit 9).
+    // (as one run of bits, 31 from each: 9 bits of flags, then C, M, Y and
+    // K at 8 bits each). Publisher writes only two flag values, 0x188 when
+    // yellow and black are both zero and 0x1E8 otherwise, and reads other
+    // values as no ink at all.
     auto inkProps = [&](QVector<Prop> &topt, const Fill &f) {
         if (f.type != Fill::Solid || f.color.kind() != ColorRef::Rgb || f.color.rgbValue().spec() != QColor::Cmyk) return;
         const QColor k = f.color.rgbValue();
         const quint64 c = quint64(std::lround(k.cyanF() * 255)), m = quint64(std::lround(k.magentaF() * 255)),
                       y = quint64(std::lround(k.yellowF() * 255)), b = quint64(std::lround(k.blackF() * 255));
-        const quint64 used = 0x08 | (c ? 0x80 : 0) | (m ? 0x100 : 0) | (y ? 0x20 : 0) | (b ? 0x40 : 0);
+        const quint64 used = y || b ? 0x1e8 : 0x188;
         const quint64 bits = used | c << 9 | m << 17 | y << 25 | b << 33;
         topt << Prop{0x019e, bgr(f.color.resolve(m_doc.colors))} << Prop{0x019f, quint32(bits & 0x7fffffff)};
         if (bits >> 31) topt << Prop{0x01a6, quint32((bits >> 31) & 0x7fffffff)};

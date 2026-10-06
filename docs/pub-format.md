@@ -188,10 +188,10 @@ as one run of bits, 31 from each (0x019F's bits 0-30, then 0x01A6's): C, M, Y
 and K are 8 bits each (÷255) from bit 9. Checked against three reference
 PDFs: C 98 M 76.1 Y 13.3 K 30.2 (0x019F 0x4585F5E8, 0x01A6 308), C 60 M 40
 Y 40 K 100 (0x4CCD33E8, 1021) and C 75.3 M 40 (0x00CD8188, no 0x01A6). The
-low 9 bits are 0x1E8 (all four inks used) or 0x188 (only C and M): seemingly
-0x08 always, with 0x80, 0x100, 0x20 and 0x40 for C, M, Y and K in use, which
-the writer follows (it reproduces all three files' values; which of 0x20 and
-0x40 is Y and which K is not yet confirmed). Publisher shows the 0x0181 color
+low 9 bits are flags: Publisher writes 0x1E8, or 0x188 when yellow and black
+are both zero. Other values (0x28 for yellow alone, 0x48 for black alone)
+make Publisher read the inks as all zero, though the screen color still
+shows; the writer uses only Publisher's two values. Publisher shows the 0x0181 color
 on screen and writes the inks to CMYK PDFs.
 
 ## Text (Quill/QuillSub/CONTENTS)
