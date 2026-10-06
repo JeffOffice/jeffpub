@@ -99,6 +99,7 @@ jobs:
           exit $code
         env:
           QT_QPA_PLATFORM: offscreen
+          JP_TEST_TRACE: '1'
 
       - name: Export check PDFs
         shell: bash

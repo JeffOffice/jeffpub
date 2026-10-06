@@ -30,6 +30,7 @@
 #include "app/widgets.h"
 #include "app/settings.h"
 #include "canvas/canvas.h"
+#include <cstdio>
 #include <QTemporaryDir>
 #include <QFileOpenEvent>
 #include <QSettings>
@@ -1409,6 +1410,11 @@ private Q_SLOTS:
             QAction *a = w.act(id);
             if (!a) continue;
             current = id;
+            // Which command a hang or crash is in (CI asks for this).
+            if (qEnvironmentVariableIsSet("JP_TEST_TRACE")) {
+                std::fprintf(stderr, "command %s\n", qPrintable(id));
+                std::fflush(stderr);
+            }
             const QString cat = id.section('.', 0, 0);
             // Fresh publication: the flyer has a picture, shapes, TextArt and text;
             // the newsletter's page 2 has a table.
