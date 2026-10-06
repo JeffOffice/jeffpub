@@ -36,6 +36,7 @@
 #include <QComboBox>
 #include <QCheckBox>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QApplication>
 #include <QDialog>
 #include <QTimer>
@@ -456,6 +457,107 @@ private Q_SLOTS:
         got = run(paras);
         QCOMPARE(got[fit - 1], qMakePair(0, 1));
         QCOMPARE(got.last(), qMakePair(0, 3));
+    }
+
+    // Distribute spreads the last line too; baseline alignment puts lines on
+    // the baseline guides; a raised cap stands on the first line.
+    void paragraphDistributeBaselineRaisedCap()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto box = [&](const QRectF &r, const QString &text, const std::function<void(QTextBlockFormat &)> &fmt) {
+            auto t = std::make_shared<jp::TextItem>();
+            t->rect = r;
+            t->storyId = doc->createStory(text);
+            QTextCursor c(doc->storyDoc(t->storyId));
+            c.select(QTextCursor::Document);
+            QTextBlockFormat bf;
+            fmt(bf);
+            c.mergeBlockFormat(bf);
+            doc->pages[0]->items.push_back(t);
+            return t;
+        };
+        // Distribute: "Hi there" reaches both sides of the box.
+        auto d = box(QRectF(100, 100, 300, 40), QStringLiteral("Hi there"), [](QTextBlockFormat &bf) {
+            bf.setAlignment(Qt::AlignJustify);
+            bf.setProperty(jp::tp::Distribute, true);
+        });
+        jp::PaintContext ctx;
+        ctx.doc = doc.get();
+        jp::LayoutCache cache;
+        ctx.cache = &cache;
+        ctx.opt.output = true;
+        QImage img(612, 792, QImage::Format_RGB32);
+        img.fill(Qt::white);
+        {
+            QPainter p(&img);
+            jp::Renderer::paintPage(&p, ctx, 0);
+        }
+        int minX = 9999, maxX = -1;
+        for (int y = 100; y < 140; ++y)
+            for (int x = 100; x < 400; ++x)
+                if (qGray(img.pixel(x, y)) < 128) { minX = std::min(minX, x); maxX = std::max(maxX, x); }
+        QVERIFY2(minX < 112 && maxX > 386, qPrintable(QStringLiteral("%1..%2").arg(minX).arg(maxX)));
+        Q_UNUSED(d);
+        // Baseline guides every 18 pt: lines land 18 pt apart.
+        doc->masters.first()->grid.baseline = 18;
+        auto g = box(QRectF(100, 200, 300, 200), QStringLiteral("one\ntwo\nthree"), [](QTextBlockFormat &bf) { bf.setProperty(jp::tp::AlignToBaseline, true); });
+        jp::RenderOptions opt;
+        const auto lines = cache.textFrame(*doc, *g, 1, opt).layout->lineInfo(0);
+        QCOMPARE(lines.size(), 3);
+        // (Paragraph spacing can carry a line past one guide to the next.)
+        auto onGrid = [](double d) { const double r = std::fmod(d, 18.0); return d > 1 && (r < 0.01 || r > 17.99); };
+        QVERIFY2(onGrid(lines[1].rect.top() - lines[0].rect.top()) && onGrid(lines[2].rect.top() - lines[1].rect.top()),
+                 qPrintable(QStringLiteral("%1 %2 %3").arg(lines[0].rect.top()).arg(lines[1].rect.top()).arg(lines[2].rect.top())));
+        // A raised cap: room above the first line, and only it is indented.
+        const QString words = QStringLiteral("Once upon a time there was a long paragraph with enough words to fill several lines of this box, "
+                                             "and then it went on a good while longer so that it runs well past the drop cap's lines.");
+        auto drop = box(QRectF(100, 450, 200, 200), words, [](QTextBlockFormat &bf) { bf.setProperty(jp::tp::DropCapLines, 3); bf.setProperty(jp::tp::DropCapChars, 1); });
+        auto up = box(QRectF(320, 450, 200, 200), words, [](QTextBlockFormat &bf) {
+            bf.setProperty(jp::tp::DropCapLines, 3);
+            bf.setProperty(jp::tp::DropCapChars, 1);
+            bf.setProperty(jp::tp::DropCapUpper, true);
+        });
+        const auto dl = cache.textFrame(*doc, *drop, 1, opt).layout->lineInfo(0), ul = cache.textFrame(*doc, *up, 1, opt).layout->lineInfo(0);
+        QVERIFY(ul[0].rect.top() > dl[0].rect.top() + 5);      // room for the raised letter
+        QVERIFY2(ul.size() >= 4 && dl.size() >= 5, qPrintable(QStringLiteral("%1 %2").arg(ul.size()).arg(dl.size())));
+        QVERIFY(std::abs(ul[1].rect.left() - ul[2].rect.left()) < 0.5);   // a raised one only the first
+        QVERIFY(ul[0].rect.left() > ul[1].rect.left() + 5);
+        QVERIFY(dl[1].rect.left() > dl[3].rect.left() + 5);      // a dropped cap indents its lines
+
+        // A gradient text fill: red on the left of the word, blue on the right.
+        auto gt = std::make_shared<jp::TextItem>();
+        gt->rect = QRectF(50, 700, 500, 80);
+        gt->storyId = doc->createStory(QStringLiteral("MMMMMMMMMM"));
+        {
+            QTextCursor c(doc->storyDoc(gt->storyId));
+            c.select(QTextCursor::Document);
+            QTextCharFormat f;
+            f.setFontPointSize(48);
+            const jp::Fill g = jp::Fill::gradient(jp::ColorRef::rgb(QColor(220, 0, 0)), jp::ColorRef::rgb(QColor(0, 0, 220)), 0);
+            f.setProperty(jp::tp::TextFill, QString::fromUtf8(QJsonDocument(g.toJson()).toJson(QJsonDocument::Compact)));
+            c.mergeCharFormat(f);
+        }
+        doc->pages[0]->items.push_back(gt);
+        QImage gimg(612, 792, QImage::Format_RGB32);
+        gimg.fill(Qt::white);
+        {
+            jp::LayoutCache gc;
+            ctx.cache = &gc;
+            QPainter p(&gimg);
+            jp::Renderer::paintPage(&p, ctx, 0);
+        }
+        auto inkColor = [&](int x0, int x1) {
+            long r = 0, b = 0;
+            for (int y = 700; y < 780; ++y)
+                for (int x = x0; x < x1; ++x) {
+                    const QRgb px = gimg.pixel(x, y);
+                    if (qGray(px) < 200) { r += qRed(px); b += qBlue(px); }
+                }
+            return qMakePair(r, b);
+        };
+        const auto leftInk = inkColor(55, 120), rightInk = inkColor(380, 545);
+        QVERIFY2(leftInk.first > leftInk.second && rightInk.second > rightInk.first,
+                 qPrintable(QStringLiteral("%1/%2 %3/%4").arg(leftInk.first).arg(leftInk.second).arg(rightInk.first).arg(rightInk.second)));
     }
 
     // "Always create backup copy" keeps the file as it was before saving.

@@ -42,6 +42,8 @@ struct FrameSpec {
     VAlign valign = VAlign::Top;
     bool hyphenate = true;          // insert soft hyphens at allowed break points
     double hyphenZone = 18;         // points: hyphenate only if moving the word would leave more space
+    double baselineGrid = 0;        // the page's baseline guides: spacing (0 = none)
+    double baselineOrigin = 0;      // and one baseline's position, frame-local
     QVector<QPolygonF> obstacles;   // frame-local, already expanded by wrap distances
     FieldContext ctx;
 };
@@ -101,6 +103,7 @@ public:
         QVector<Line> lines;
         QString marker; QFont markerFont; QColor markerColor; double markerX = 0;
         QString dropText; QFont dropFont; QColor dropColor; int dropLines = 0; double dropWidth = 0;
+        bool dropUp = false;   // a raised cap: on the first line, rising above it
         QVector<QTextLayout::FormatRange> effects;   // ranges with shadow/emboss/engrave/glow
         QVector<QPair<int, int>> fieldRanges;        // display ranges of fields
         QString leaders;                             // a leader character per tab stop (space = none)

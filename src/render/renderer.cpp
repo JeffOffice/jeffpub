@@ -164,6 +164,13 @@ FrameSpec Renderer::frameSpec(const Document &doc, const TextItem &t, int pageNu
     s.valign = t.valign;
     s.hyphenate = t.hyphenate;
     s.hyphenZone = t.hyphenZone;
+    // Baseline guides of the page's master (for "align text to baseline guides").
+    const auto at = doc.find(t.id);
+    const MasterPage *mp = at.page >= 0 ? doc.masterFor(*doc.pages[at.page]) : (!at.masterId.isEmpty() ? doc.master(at.masterId) : nullptr);
+    if (mp && mp->grid.baseline > 1 && !t.vertical && std::abs(t.rotation) < 0.01) {
+        s.baselineGrid = mp->grid.baseline;
+        s.baselineOrigin = doc.setup.margins.top() + mp->grid.baselineOffset - t.rect.top();
+    }
     if (!t.vertical) s.obstacles = wrapObstacles(doc, t);
     const auto loc = doc.find(t.id);
     s.ctx.doc = &doc;
@@ -186,6 +193,7 @@ static QString specSig(const FrameSpec &s)
 {
     QString k = QStringLiteral("%1x%2|%3,%4,%5,%6|%7|%8|%9|%10;").arg(s.size.width()).arg(s.size.height()).arg(s.insets.left()).arg(s.insets.top())
                     .arg(s.insets.right()).arg(s.insets.bottom()).arg(s.columns).arg(s.gap).arg(int(s.valign)).arg(s.ctx.key());
+    k += QStringLiteral("h%1,%2|b%3,%4;").arg(int(s.hyphenate)).arg(s.hyphenZone).arg(s.baselineGrid).arg(s.baselineOrigin);
     for (const auto &o : s.obstacles) {
         const QRectF b = o.boundingRect();
         // The points' sum too, so moving a point inside the same bounds re-wraps.

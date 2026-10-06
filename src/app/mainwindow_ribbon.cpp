@@ -843,6 +843,9 @@ void MainWindow::buildRibbon()
         {
             auto *fill = new ColorButton("paint-bucket", QStringLiteral("Text Fill"), false, QString());
             connect(fill, &ColorButton::colorPicked, this, [this](const ColorRef &c) { m_ed->setTextColor(c); });
+            auto *gradient = new QAction(icon("blend"), QStringLiteral("Gradient…"), this);
+            connect(gradient, &QAction::triggered, this, [this] { textGradientDialog(this, m_ed); });
+            fill->setExtraActions({gradient});
             auto *outline = new ColorButton("pen-line", QStringLiteral("Text Outline"), true, QStringLiteral("No Outline"));
             connect(outline, &ColorButton::colorPicked, this, [this](const ColorRef &c) {
                 if (c.isNone()) m_ed->clearCharProperty(tp::OutlineRef, QStringLiteral("Text Outline"));

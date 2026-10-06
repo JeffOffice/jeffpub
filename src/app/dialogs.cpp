@@ -17,6 +17,7 @@
 #include <QCheckBox>
 
 #include <QComboBox>
+#include <QJsonDocument>
 #include <QDateTimeEdit>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -785,6 +786,32 @@ void dropCapDialog(QWidget *p, Editor *ed)
     } else {
         ed->mergeBlockFormat(f, QStringLiteral("Drop Cap"));
     }
+}
+
+// ---------------- Gradient text fill ----------------
+void textGradientDialog(QWidget *p, Editor *ed)
+{
+    const QTextCharFormat cf = ed->currentCharFormat();
+    Fill current = Fill::fromJson(QJsonDocument::fromJson(cf.stringProperty(tp::TextFill).toUtf8()).object());
+    if (current.type != Fill::Gradient) current = Fill::gradient(ColorRef::scheme(Accent1), ColorRef::scheme(Accent2), 0);
+    Dlg dlg(p, QStringLiteral("Gradient Text Fill"));
+    auto *form = new QFormLayout();
+    auto *from = colorPick(ed, current.color, false, &dlg.d);
+    auto *to = colorPick(ed, current.color2, false, &dlg.d);
+    auto *dir = new QComboBox(&dlg.d);
+    dir->addItems({QStringLiteral("Left to right"), QStringLiteral("Top to bottom"), QStringLiteral("Diagonal down"), QStringLiteral("Diagonal up")});
+    const double angles[] = {0, 90, 45, -45};
+    for (int i = 0; i < 4; ++i)
+        if (std::abs(current.angle - angles[i]) < 0.5) dir->setCurrentIndex(i);
+    form->addRow(QStringLiteral("From:"), from);
+    form->addRow(QStringLiteral("To:"), to);
+    form->addRow(QStringLiteral("Direction:"), dir);
+    dlg.v->addLayout(form);
+    if (!dlg.exec()) return;
+    const Fill g = Fill::gradient(from->current(), to->current(), angles[dir->currentIndex()]);
+    QTextCharFormat f;
+    f.setProperty(tp::TextFill, QString::fromUtf8(QJsonDocument(g.toJson()).toJson(QJsonDocument::Compact)));
+    ed->mergeCharFormat(f, QStringLiteral("Text Fill"));
 }
 
 // ---------------- Character Spacing ----------------

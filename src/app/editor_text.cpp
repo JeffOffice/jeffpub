@@ -288,6 +288,7 @@ void Editor::setTextColor(const ColorRef &c)
     if (c.isNone()) { clearCharProperty(tp::ColorRefP, QStringLiteral("Font Color")); return; }
     QTextCharFormat f;
     f.setProperty(tp::ColorRefP, c.toString());
+    f.setProperty(tp::TextFill, QString());   // a solid color replaces a gradient fill
     f.clearForeground();
     mergeCharFormat(f, QStringLiteral("Font Color"));
 }

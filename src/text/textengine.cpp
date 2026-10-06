@@ -6,6 +6,10 @@
 #include "text/textprops.h"
 
 #include <QFontMetricsF>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QLinearGradient>
+#include <QtMath>
 #include <QGlyphRun>
 #include <QPainter>
 #include <QRegularExpression>
@@ -157,6 +161,24 @@ QTextCharFormat resolveCharFormat(const QTextCharFormat &f, const LayoutEnv &env
     const QString cref = f.stringProperty(tp::ColorRefP);
     if (!cref.isEmpty()) r.setForeground(ColorRef::fromString(cref).resolve(env.colors));
     else if (!f.hasProperty(QTextFormat::ForegroundBrush)) r.setForeground(env.colors.slot(Main));
+    // A gradient text fill, spread over each run of text as it is drawn.
+    const QString tf = f.stringProperty(tp::TextFill);
+    if (!tf.isEmpty()) {
+        const Fill fill = Fill::fromJson(QJsonDocument::fromJson(tf.toUtf8()).object());
+        if (fill.type == Fill::Gradient) {
+            const double a = qDegreesToRadians(fill.angle);
+            const QPointF dir(std::cos(a) / 2, std::sin(a) / 2);
+            QLinearGradient g(QPointF(0.5, 0.5) - dir, QPointF(0.5, 0.5) + dir);
+            g.setCoordinateMode(QGradient::ObjectBoundingMode);
+            if (fill.stops.isEmpty()) {
+                g.setColorAt(0, fill.color.resolve(env.colors));
+                g.setColorAt(1, fill.color2.resolve(env.colors));
+            } else {
+                for (const GradientStop &st : fill.stops) g.setColorAt(st.pos, st.color.resolve(env.colors));
+            }
+            r.setForeground(QBrush(g));
+        }
+    }
     if (f.isAnchor() && cref.isEmpty()) {
         r.setForeground(env.colors.slot(Hyperlink));
         r.setFontUnderline(true);
@@ -554,6 +576,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
         // Drop cap metrics: cap height spans dropLines lines.
         if (!B->dropText.isEmpty()) {
             B->dropLines = dropLines;
+            B->dropUp = bf.boolProperty(tp::DropCapUpper);
             QFont df = dropFmt.font();
             const QString dfam = bf.stringProperty(tp::DropCapFont);
             if (!dfam.isEmpty()) df.setFamily(dfam);
@@ -584,6 +607,9 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
             if (startNext && f < nF) advance();
             if (f < nF && y > 0) y += before;
             else if (f < nF) y += before;  // space before also applies at the top of a frame
+            // A raised cap rises above the first line: room for it.
+            if (f < nF && B->dropUp && !B->dropText.isEmpty())
+                y += std::max(0.0, QFontMetricsF(B->dropFont).capHeight() - QFontMetricsF(base).capHeight());
 
             // Estimate with the same rule the placed line will use, so wrap checks
             // see the obstacles the real line will meet.
@@ -598,7 +624,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                     if (!B->marker.isEmpty()) indL = textIndent < 0 ? leftM : leftM + textIndent + markerW;
                     else indL = leftM + textIndent;
                 }
-                if (B->dropLines > 0 && lineNo < B->dropLines) indL += B->dropWidth;
+                if (B->dropLines > 0 && lineNo < (B->dropUp ? 1 : B->dropLines)) indL += B->dropWidth;
                 if (lineNo == breakAfter && f < nF && !columnEmpty) advance();   // widow control: carry this line over
 
                 bool placed = false;
@@ -665,6 +691,17 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                     // proprietary font, the original font's descent.
                     const double kd = knownDescent(ranges, line.textStart(), std::max(1, line.textLength()));
                     const double lead = kd > 0 ? h - kd - line.ascent() : h - line.height();
+                    // Align to baseline guides: the baseline moves down onto the next guide.
+                    if (bf.boolProperty(tp::AlignToBaseline) && frames[f].baselineGrid > 0.5) {
+                        const double grid = frames[f].baselineGrid * scale, origin = frames[f].baselineOrigin * scale;
+                        const double base = col.top() + y + lead + line.ascent();
+                        const double snapped = origin + std::ceil((base - origin) / grid - 1e-6) * grid;
+                        if (snapped > base) y += snapped - base;
+                    }
+                    if (col.top() + y + h > col.bottom() + 0.01 && !firstInColumn) {   // snapped past the bottom
+                        advance();
+                        continue;
+                    }
                     line.setPosition(QPointF(iv.x0, f * kStride + col.top() + y + lead));
                     B->lines << Line{f, c, QRectF(iv.x0, col.top() + y, iv.x1 - iv.x0, h)};
                     m_used[f] = std::max(m_used[f], col.top() + y + h);
@@ -703,6 +740,36 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
             else if (split && at == 1 && bf.boolProperty(tp::WidowControl)) redo(true, -1);  // an orphan: one line left behind
             else if (split && int(B->lines.size()) - at == 1 && at >= 2 && bf.boolProperty(tp::WidowControl))
                 redo(false, at - 1);                                                          // a widow: one line carried over
+        }
+        // Distribute: the last line is spread across the line too (Qt
+        // justifies every line but the last), by spacing its letters out.
+        if (bf.boolProperty(tp::Distribute) && !B->lines.isEmpty() && B->lines.last().frame >= 0) {
+            const int li = int(B->lines.size()) - 1;
+            const QTextLine last = B->tl->lineAt(li);
+            int n = last.textLength();
+            while (n > 0 && B->disp.at(last.textStart() + n - 1).isSpace()) --n;
+            const double room = B->lines[li].rect.width() - last.naturalTextWidth();
+            if (n > 1 && room > 0.5) {
+                QList<QTextLayout::FormatRange> fmts = B->tl->formats();
+                const double extra = room * 0.995 / (n - 1);
+                QList<QTextLayout::FormatRange> spread;
+                for (const auto &r : fmts) {
+                    // Split each range at the last line's start; spacing on its part.
+                    const int s0 = r.start, e0 = r.start + r.length, ls = last.textStart(), le = last.textStart() + n - 1;
+                    if (e0 <= ls || s0 >= le) { spread << r; continue; }
+                    if (s0 < ls) { auto a = r; a.length = ls - s0; spread << a; }
+                    auto mid = r;
+                    mid.start = std::max(s0, ls);
+                    mid.length = std::min(e0, le) - mid.start;
+                    QFont mf = mid.format.font();
+                    mid.format.setFontLetterSpacingType(QFont::AbsoluteSpacing);
+                    mid.format.setFontLetterSpacing((mf.letterSpacingType() == QFont::AbsoluteSpacing ? mf.letterSpacing() : 0) + extra);
+                    spread << mid;
+                    if (e0 > le) { auto z = r; z.start = le; z.length = e0 - le; spread << z; }
+                }
+                B->tl->setFormats(spread);
+                redo(false, -1);
+            }
         }
         // Keep with next: when the next paragraph's first line won't fit
         // after this one, this one moves on with it.
@@ -1077,7 +1144,8 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
                 drawPlainText(p, QPointF(B->markerX, l0.position().y() - frame * kStride + l0.ascent()), B->markerFont, B->marker);
             }
             if (!B->dropText.isEmpty()) {
-                const int n = std::min<int>(B->dropLines, B->lines.size());
+                // A raised cap stands on the first line; a dropped one on the last line it spans.
+                const int n = B->dropUp ? 1 : std::min<int>(B->dropLines, B->lines.size());
                 const QTextLine ln = B->tl->lineAt(n - 1);
                 const double baseline = ln.position().y() - frame * kStride + ln.ascent();
                 p->setPen(B->dropColor);

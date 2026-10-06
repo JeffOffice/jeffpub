@@ -33,6 +33,7 @@ void paragraphDialog(QWidget *p, Editor *ed, int tab = 0);
 void bulletsDialog(QWidget *p, Editor *ed, bool numbering);
 void dropCapDialog(QWidget *p, Editor *ed);
 void characterSpacingDialog(QWidget *p, Editor *ed);
+void textGradientDialog(QWidget *p, Editor *ed);   // Text Fill > Gradient
 void formatObjectDialog(QWidget *p, Editor *ed, int tab = 0);
 void insertTableDialog(QWidget *p, Editor *ed);
 void insertPageDialog(QWidget *p, Editor *ed);
