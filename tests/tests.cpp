@@ -3205,6 +3205,70 @@ private Q_SLOTS:
         QCOMPARE(at.charFormat().fontStretch(), 150);
     }
 
+    // Saving keeps spot inks and character scaling: the fill names its ink
+    // exactly as Publisher's covers do, and both come back on opening.
+    void pubWriterSpotAndScaling()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        const QColor ink = QColor::fromCmyk(192, 102, 0, 0);
+        doc->print.model = jp::PrintInfo::SpotColors;
+        doc->print.spotColors = {ink};
+        doc->print.spotNames = {QStringLiteral("PANTONE 2727 C")};
+        auto box = std::make_shared<jp::ShapeItem>();
+        box->rect = QRectF(72, 72, 300, 200);
+        box->fill = jp::Fill::solid(jp::ColorRef::inks(ink, QColor(0x3d, 0x7e, 0xdb)));
+        box->stroke = jp::Stroke::none();
+        doc->pages[0]->items.push_back(box);
+        auto text = [&](const QRectF &r, const QString &words, int stretch) {
+            auto t = std::make_shared<jp::TextItem>();
+            t->rect = r;
+            t->storyId = doc->createStory(words);
+            doc->pages[0]->items.push_back(t);
+            if (stretch != 100) {
+                QTextCursor all(doc->storyDoc(t->storyId));
+                all.select(QTextCursor::Document);
+                QTextCharFormat wide;
+                wide.setFontStretch(stretch);
+                all.mergeCharFormat(wide);
+            }
+        };
+        text(QRectF(72, 400, 400, 40), QStringLiteral("Wide words"), 150);   // checked below
+        // Labels for checking the file in Publisher.
+        text(QRectF(72, 280, 400, 30), QStringLiteral("A: the box above is PANTONE 2727 C (a spot color)"), 100);
+        text(QRectF(72, 440, 400, 30), QStringLiteral("B: the words above are scaled 150%"), 100);
+        text(QRectF(72, 500, 400, 30), QStringLiteral("Narrow words"), 80);
+        text(QRectF(72, 540, 400, 30), QStringLiteral("C: the words above are scaled 80%"), 100);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("spot-scale.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test33-spot-and-scaling.pub";
+            QFile::remove(out);
+            QFile::copy(path, out);
+        }
+        jp::cfb::File c;
+        {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::ReadOnly));
+            QVERIFY2(jp::cfb::read(f.readAll(), &c, &err), qPrintable(err));
+        }
+        const QString name = QStringLiteral("P2,#003d007e00db0000,PANTONE 2727 C");
+        QVERIFY(c.stream(QStringLiteral("Escher/EscherStm")).contains(QByteArray(reinterpret_cast<const char *>(name.utf16()), name.size() * 2)));
+        auto back = jp::importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QVERIFY(back->print.usesSpots());
+        QCOMPARE(back->print.spotNames, QStringList{QStringLiteral("PANTONE 2727 C")});
+        QTextDocument *story = nullptr;
+        for (const auto &it : back->pages[0]->items)
+            if (auto tx = std::dynamic_pointer_cast<jp::TextItem>(it); tx && !story) story = back->storyDoc(tx->storyId);
+        QVERIFY(story);
+        QCOMPARE(story->toPlainText().trimmed(), QStringLiteral("Wide words"));
+        QTextCursor at(story);
+        at.setPosition(2);
+        QCOMPARE(at.charFormat().fontStretch(), 150);
+    }
+
     // Every dash style comes back from .pub as it was saved (square dots
     // came back as dashes, and dash-dot patterns as plain dashes).
     void pubDashStylesRoundTrip()

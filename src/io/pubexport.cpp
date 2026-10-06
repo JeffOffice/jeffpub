@@ -90,6 +90,15 @@ B bytesB(quint8 id, quint8 type, const QByteArray &d)
     b.data = d.leftJustified(fixedSize(type), '\0', true);
     return b;
 }
+// Text with a closing zero, as drawing properties keep it (UTF-16).
+QByteArray utf16z(const QString &str)
+{
+    QByteArray b;
+    for (QChar ch : str) putU16(b, ch.unicode());
+    putU16(b, 0);
+    return b;
+}
+
 B str(quint8 id, const QString &s)
 {
     B b;
@@ -710,6 +719,9 @@ QVector<B> PubWriter::charBlocks(const QTextCharFormat &f, const QTextCharFormat
     // tenths of a percent (0x1F).
     if (const double kern = tp::kerningOf(f); std::abs(kern) > 0.001) p << u32(0x1b, quint32(qint32(emu(kern))), 0x22);
     if (const double track = tp::trackingOf(f); std::abs(track - 100) > 0.01) p << u16(0x1f, quint32(std::llround(track * 10)), 0x1a);
+    // Character scaling, in tenths of a percent like tracking (0x20; a flyer
+    // keeps 100.1% as 1001).
+    if (f.hasProperty(QTextFormat::FontStretch) && f.fontStretch() > 0 && f.fontStretch() != 100) p << u16(0x20, quint32(f.fontStretch() * 10), 0x1a);
     if (f.fontCapitalization() == QFont::SmallCaps) p << flag(0x13, 0x0a);
     else if (f.fontCapitalization() == QFont::AllUppercase) p << flag(0x14, 0x0a);
     if (f.verticalAlignment() == QTextCharFormat::AlignSuperScript) p << u16(0x0f, 1, 0x12);
@@ -1159,11 +1171,24 @@ QByteArray PubWriter::write(QStringList *skipped)
     // are (0x100 cyan, 0x80 magenta, 0x40 yellow, 0x20 black), then only
     // those inks' values, in that order. Checked in Publisher one ink at a
     // time and against three reference files.
+    // A fill in one of the publication's spot colors also names its ink
+    // (0x01A1, UTF-16 "P2,#" + the shown color as four 16-bit hex values + ","
+    // + the ink's name), as ten book covers keep PANTONE 2727 C.
     auto inkProps = [&](QVector<Prop> &topt, const Fill &f) {
         if (f.type != Fill::Solid || f.color.kind() != ColorRef::Rgb || f.color.rgbValue().spec() != QColor::Cmyk) return;
         const QPair<quint32, quint32> packed = packPubInks(f.color.rgbValue());
-        topt << Prop{0x019e, bgr(f.color.resolve(m_doc.colors))} << Prop{0x019f, packed.first};
+        const QColor shown = f.color.resolve(m_doc.colors);
+        topt << Prop{0x019e, bgr(shown)} << Prop{0x019f, packed.first};
         if (packed.second) topt << Prop{0x01a6, packed.second};
+        if (m_doc.print.usesSpots())
+            for (int i = 0; i < m_doc.print.spotColors.size(); ++i)
+                if (packPubInks(m_doc.print.spotColors[i].toCmyk()) == packed) {
+                    const QString text = QStringLiteral("P2,#%1%2%3%4,%5")
+                                             .arg(shown.red(), 4, 16, QLatin1Char('0')).arg(shown.green(), 4, 16, QLatin1Char('0'))
+                                             .arg(shown.blue(), 4, 16, QLatin1Char('0')).arg(0, 4, 16, QLatin1Char('0')).arg(m_doc.print.spotName(i));
+                    topt << Prop{0xc1a1, 0, utf16z(text)};
+                    break;
+                }
     };
     auto fillProps = [&](QVector<Prop> &opt, const Fill &f) {
         auto rgb = [&](const ColorRef &c) { return bgr(c.resolve(m_doc.colors)); };
@@ -1562,12 +1587,6 @@ QByteArray PubWriter::write(QStringList *skipped)
                 const quint32 seq = next++;
                 cw.put(seq, {0x20, surfaceSeq[pi], {flag(0x02), flag(0x03), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
                                                  u32(0xb7, 0)}});
-                auto utf16z = [](const QString &str) {
-                    QByteArray b;
-                    for (QChar ch : str) putU16(b, ch.unicode());
-                    putU16(b, 0);
-                    return b;
-                };
                 // Publisher draws the words only when their font is in the
                 // document's font table.
                 fontIndex(ta->font);
