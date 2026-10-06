@@ -799,8 +799,12 @@ private:
             const QColor c = color(m_style["draw:fill-color"]);
             // A process color: its inks, shown as the file shows it.
             const QStringList inks = str(m_style["jp:fill-inks"]).split(QLatin1Char(' '), Qt::SkipEmptyParts);
-            if (c.isValid() && inks.size() == 4)
+            if (c.isValid() && inks.size() == 4) {
+                // Inks mean the publication was set up for process-color
+                // printing; its PDFs are CMYK.
+                if (m_doc.print.model == PrintInfo::RGB) m_doc.print.model = PrintInfo::ProcessCMYK;
                 return Fill::solid(ColorRef::inks(QColor::fromCmykF(inks[0].toFloat(), inks[1].toFloat(), inks[2].toFloat(), inks[3].toFloat()), c), 1 - opacity);
+            }
             return Fill::solid(ColorRef::rgb(c.isValid() ? c : QColor(Qt::white)), 1 - opacity);
         }
         if (f == "gradient") {
