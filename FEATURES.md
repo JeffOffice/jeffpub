@@ -1,8 +1,28 @@
 # Feature list
 
-The features a complete desktop publishing program needs, and where JeffPub 79 stands on each. A box is checked only when the feature works in JeffPub 79. Last reviewed October 5, 2026.
+The features a complete desktop publishing program needs, and where JeffPub 79 stands on each. A box is checked only when the feature works in JeffPub 79. Last reviewed October 6, 2026.
 
 Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missing) · **(alt)** the usual way to do this depends on a proprietary online service, so JeffPub 79 provides an open replacement with the same purpose.
+
+## Beyond Publisher
+
+Features JeffPub 79 has that Publisher never did, then the ones planned before version 1.
+
+- [x] Runs on Linux as well as Windows; Publisher only ever ran on Windows
+- [x] Free and open source (GPL-3.0): no license fee, subscription or account
+- [x] Installs without administrator rights, or runs with no installation at all (the Windows `.zip` and the Linux AppImage)
+- [x] An open file format: a `.jpub` publication is a ZIP of readable JSON and the original pictures, alongside opening and saving `.pub`
+- [x] Barcodes: book ISBNs with or without a price add-on (hyphenated as the ISBN agency assigns them, for every country), EAN-13, UPC-A and EAN-8 with add-ons, Code 128 and Code 39, drawn as vector bars and editable after placing
+- [x] WebP and SVG pictures
+- [ ] macOS app (Apple silicon and Intel)
+- [ ] PDF/X-1a and PDF/X-4 export for commercial printers, with overprint settings and a print check before export
+- [ ] Automatic table of contents from heading styles, updated with one click
+- [ ] Footnotes and endnotes
+- [ ] Insert > Icons: a gallery of recolorable vector icons
+- [ ] SVG export, and SVG pictures converted to editable shapes
+- [ ] EPUB export for e-book readers and stores
+- [ ] PDF pages placed as sharp vector graphics
+- [ ] A published specification of the `.jpub` format
 
 ## File (backstage)
 
