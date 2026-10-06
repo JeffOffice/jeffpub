@@ -35,7 +35,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 - [x] Mail merge and catalog merge printing
 
 ### Share and Export
-- [x] Create PDF (standard, minimum size, high quality, commercial press; page ranges; document properties; PDF/A)
+- [x] Create PDF (standard, minimum size, high quality, commercial press; page ranges; document properties; PDF/A; open the PDF after saving it)
 - [x] Save pages as pictures: PNG, JPEG, GIF, TIFF, and BMP at a chosen resolution
 - [x] Web page export (single-file HTML)
 - [x] Pack and Go: Save for a Commercial Printer, Save for Another Computer (bundle fonts and linked pictures)
@@ -67,7 +67,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 - [x] Template: Change Template, Options
 - [x] Page Setup: Margins (margin guide presets, and Custom Margins opening the Margin Guides settings), Orientation, Size (presets, the user's saved custom sizes, Create New Page Size, and editing or deleting saved sizes), and the Page Setup dialog (layout type: one page per sheet, booklet, envelope, folded card, multiple pages per sheet, labels; for several pages per sheet, the sheet's side and top margins and the gaps between pages, kept apart from the margin guides, with how many fit)
 - [x] Printing several pages per sheet (business cards, labels) places them by the publication's own side and top margins and gaps
-- [x] Guides: built-in guide layouts, Grid and Baseline Guides dialog (columns, rows, spacing, center guide, baseline spacing and offset), Add Horizontal and Vertical Ruler Guides, Clear All Ruler Guides
+- [x] Guides: built-in guide layouts, Grid and Baseline Guides dialog (columns, rows, spacing, center guide, baseline spacing and offset), Add Horizontal and Vertical Ruler Guides (each new one beside the last), Ruler Guides dialog (add, move and remove guides by position, or add a series at even spacing), Clear All Ruler Guides
 - [x] Layout: Align To Guides, Align To Objects
 - [x] Pages: Delete, Move, Rename, Master Pages (apply or none)
 - [x] Schemes: color scheme gallery (90+ schemes), Create New Color Scheme, font schemes, Create New Font Scheme, Update Font Scheme

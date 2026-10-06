@@ -26,6 +26,9 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QUrl>
+#include <QGuiApplication>
+#include <QDesktopServices>
 #include <QSaveFile>
 #include <QCloseEvent>
 #include <QDir>
@@ -441,8 +444,11 @@ void MainWindow::exportPdfWithOptions()
     auto *props = new QCheckBox(QStringLiteral("Include document properties (title, author, subject, keywords)"), &dlg);
     props->setChecked(true);
     auto *pdfa = new QCheckBox(QStringLiteral("PDF/A for long-term archiving"), &dlg);
+    auto *openAfter = new QCheckBox(QStringLiteral("Open the PDF after saving it"), &dlg);
+    openAfter->setChecked(openPdfAfterSaving());
     form->addRow(props);
     form->addRow(pdfa);
+    form->addRow(openAfter);
     v->addLayout(form);
     auto *bb = new QDialogButtonBox(QDialogButtonBox::Cancel, &dlg);
     bb->addButton(QStringLiteral("Save PDF…"), QDialogButtonBox::AcceptRole);
@@ -451,6 +457,7 @@ void MainWindow::exportPdfWithOptions()
     v->addWidget(bb);
     if (dlg.exec() != QDialog::Accepted) return;
     Settings::get().setValue(QStringLiteral("pdf/preset"), preset->currentIndex());
+    setOpenPdfAfterSaving(openAfter->isChecked());
     PdfSettings s;
     s.preset = PdfSettings::Preset(preset->currentIndex());
     s.properties = props->isChecked();
@@ -566,8 +573,17 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
     }
     QApplication::restoreOverrideCursor();
     statusBar()->showMessage(QStringLiteral("Exported %1%2").arg(QFileInfo(path).fileName(), s.archival ? QStringLiteral(" (PDF/A)") : QString()), 5000);
+    // Not for exports from the command line, which show no window.
+    if (openPdfAfterSaving() && isVisible() && openFileHook) openFileHook(path);
     return true;
 }
+
+bool MainWindow::openPdfAfterSaving() { return Settings::get().value(QStringLiteral("pdf/openAfter"), true).toBool(); }
+void MainWindow::setOpenPdfAfterSaving(bool on) { Settings::get().setValue(QStringLiteral("pdf/openAfter"), on); }
+std::function<bool(const QString &)> MainWindow::openFileHook = [](const QString &path) {
+    if (QGuiApplication::platformName() == QLatin1String("offscreen")) return false;
+    return QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+};
 
 void MainWindow::exportImages()
 {

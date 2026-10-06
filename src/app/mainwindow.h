@@ -7,6 +7,7 @@
 
 #include <QHash>
 #include <QMainWindow>
+#include <functional>
 #include <QPointer>
 #include <QTimer>
 
@@ -62,6 +63,12 @@ public:
     };
     void exportPdfWithOptions();
     bool exportPdfTo(const QString &path, const PdfSettings &s);
+    // Whether a PDF opens in the system's viewer once it is saved (on by
+    // default, as the other program's "open file after publishing"), and how
+    // it is opened (replaceable for tests; does nothing without a screen).
+    static bool openPdfAfterSaving();
+    static void setOpenPdfAfterSaving(bool on);
+    static std::function<bool(const QString &path)> openFileHook;
     void exportImages();
     void exportHtml();
     bool exportHtmlTo(const QString &path);

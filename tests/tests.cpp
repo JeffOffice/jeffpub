@@ -3362,6 +3362,29 @@ private Q_SLOTS:
         QCOMPARE(w.editor()->surface()->guides.h, (QVector<double>{396, 432}));
     }
 
+    // A saved PDF opens in the system's viewer when the option is on (the
+    // default), not when it's off, and never for command-line exports.
+    void pdfOpensAfterSaving()
+    {
+        QStringList opened;
+        const auto hook = jp::MainWindow::openFileHook;
+        jp::MainWindow::openFileHook = [&](const QString &path) { opened << path; return true; };
+        const bool was = jp::MainWindow::openPdfAfterSaving();
+        jp::MainWindow w;
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        QTemporaryDir dir;
+        const QString a = dir.filePath(QStringLiteral("a.pdf")), b = dir.filePath(QStringLiteral("b.pdf")), c = dir.filePath(QStringLiteral("c.pdf"));
+        jp::MainWindow::setOpenPdfAfterSaving(true);
+        QVERIFY(w.exportPdfTo(a, jp::MainWindow::PdfSettings()));   // a window not shown, as from the command line
+        w.show();
+        QVERIFY(w.exportPdfTo(b, jp::MainWindow::PdfSettings()));
+        jp::MainWindow::setOpenPdfAfterSaving(false);
+        QVERIFY(w.exportPdfTo(c, jp::MainWindow::PdfSettings()));
+        QCOMPARE(opened, QStringList{b});
+        jp::MainWindow::setOpenPdfAfterSaving(was);
+        jp::MainWindow::openFileHook = hook;
+    }
+
     // A spot color names its ink in the fill's extra drawing properties
     // (0x01A1, as Publisher writes "P2,#003d007e00db0000,PANTONE 2727 C" on
     // book covers whose PDFs print that ink on its own plate): the

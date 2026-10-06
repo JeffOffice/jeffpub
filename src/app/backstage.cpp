@@ -1392,6 +1392,11 @@ QWidget *Backstage::buildExport()
     row("file-text", QStringLiteral("Create PDF"), QStringLiteral("Preserves layout and fonts; text stays selectable. Choose the quality, from small files for email to commercial press."), [this] { m_win->exportPdfWithOptions(); });
     row("archive", QStringLiteral("Create PDF/A for Archiving"), QStringLiteral("An ISO 19005 (PDF/A-1b) file for long-term storage and court or records filing: every font embedded, standard sRGB color, no transparency."),
         [this] { m_win->exportPdf(QString(), false, true); });
+    auto *openAfter = new QCheckBox(QStringLiteral("Open PDFs after saving them"), w);
+    openAfter->setObjectName(QStringLiteral("openPdfAfter"));
+    openAfter->setChecked(MainWindow::openPdfAfterSaving());
+    connect(openAfter, &QCheckBox::toggled, this, [](bool on) { MainWindow::setOpenPdfAfterSaving(on); });
+    v->addWidget(openAfter);
     row("image-down", QStringLiteral("Save as Picture"), QStringLiteral("PNG, JPEG, GIF, TIFF or BMP at the resolution you choose, one file per page."), [this] { m_win->exportImages(); });
     row("globe", QStringLiteral("Save as Web Page"), QStringLiteral("A single HTML file you can open in any browser."), [this] { m_win->exportHtml(); });
     row("file-output", QStringLiteral("Save as .pub File"), QStringLiteral("Saves a .pub file for people who work with .pub publications."), [this] { m_win->saveAs("pub"); });
