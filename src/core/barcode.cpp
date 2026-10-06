@@ -340,12 +340,33 @@ QString isbn13(const QString &input, QString *error)
     return {};
 }
 
+QString hyphenateIsbn(const QString &isbn13)
+{
+    if (isbn13.size() != 13 || !allDigits(isbn13)) return {};
+    // Publisher-prefix lengths by range, from the ISBN agency's tables for
+    // the English-language groups (978-1 checked against the ISBNs printed
+    // on Michigan Legal Publishing's books: 978-1-64002-..., 978-1-942842-...).
+    struct Range { int from, to, length; };   // over the first 7 digits after the group
+    static const Range kGroup0[] = {{0, 1999999, 2}, {2000000, 6999999, 3}, {7000000, 8499999, 4}, {8500000, 8999999, 5},
+                                    {9000000, 9499999, 6}, {9500000, 9999999, 7}};
+    static const Range kGroup1[] = {{0, 999999, 2}, {1000000, 3999999, 3}, {4000000, 5499999, 4}, {5500000, 8697999, 5},
+                                    {8698000, 9989999, 6}, {9990000, 9999999, 7}};
+    if (!isbn13.startsWith(QLatin1String("978")) || (isbn13[3] != '0' && isbn13[3] != '1')) return {};
+    const int seven = isbn13.mid(4, 7).toInt();
+    int length = 0;
+    for (const Range &r : isbn13[3] == '0' ? kGroup0 : kGroup1)
+        if (seven >= r.from && seven <= r.to) length = r.length;
+    if (length == 0) return {};
+    return QStringLiteral("%1-%2-%3-%4-%5").arg(isbn13.left(3), isbn13.mid(3, 1), isbn13.mid(4, length), isbn13.mid(4 + length, 8 - length), isbn13.right(1));
+}
+
 QString isbnCaption(const QString &input)
 {
     const QString t = input.trimmed();
     QString err;
     const QString digits = isbn13(t, &err);
     if (digits.isEmpty()) return {};
+    if (const QString h = hyphenateIsbn(digits); !h.isEmpty()) return QStringLiteral("ISBN ") + h;
     // Hyphens as typed, if they are hyphenated as a 13-digit ISBN.
     if (t.contains(QLatin1Char('-')) && digitsOnly(t).size() == 13) return QStringLiteral("ISBN ") + t;
     return QStringLiteral("ISBN ") + digits;

@@ -41,8 +41,14 @@ Layout make(const Options &o);
 // The 13 digits of an ISBN typed as 10 or 13 digits (spaces and hyphens
 // allowed, X as an ISBN-10's check), or empty with the reason in *error.
 QString isbn13(const QString &input, QString *error);
-// "ISBN " and the ISBN as typed when it has hyphens, else as 13 digits.
+// "ISBN " and the ISBN-13 with its standard hyphens (978-1-64002-163-1);
+// for registration groups whose ranges aren't known here, as typed when it
+// has hyphens, else as 13 digits.
 QString isbnCaption(const QString &input);
+// The 13 digits with the standard hyphens (prefix, group, publisher, title,
+// check), or empty when the group's publisher ranges aren't known here
+// (978-0 and 978-1, the English-language groups, are).
+QString hyphenateIsbn(const QString &isbn13);
 
 // The 5-digit price add-on of a book: the currency's digit and the price in
 // cents (US$19.95 -> 51995), 90000 for no suggested price.

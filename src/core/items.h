@@ -216,6 +216,7 @@ public:
     ItemType type() const override { return ItemType::Group; }
     ItemPtr clone() const override;
     ItemList children;
+    QJsonObject barcode;        // the settings of a barcode made by Insert > Barcode, for editing it
 
     QRectF bounds() const override;
     void moveBy(double dx, double dy) override;

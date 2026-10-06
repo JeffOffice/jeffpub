@@ -591,6 +591,7 @@ ItemPtr GroupItem::clone() const
     auto g = std::make_shared<GroupItem>();
     g->copyBase(*this);
     for (const auto &c : children) g->children.push_back(c->clone());
+    g->barcode = barcode;
     return g;
 }
 
@@ -620,6 +621,7 @@ QJsonObject GroupItem::toJson() const
     QJsonArray a;
     for (const auto &c : children) a.append(c->toJson());
     o["children"] = a;
+    if (!barcode.isEmpty()) o["barcode"] = barcode;
     return o;
 }
 
@@ -629,6 +631,7 @@ void GroupItem::fromJson(const QJsonObject &o)
     children.clear();
     for (const auto &v : o["children"].toArray())
         if (auto it = Item::fromJsonAny(v.toObject())) children.push_back(it);
+    barcode = o["barcode"].toObject();
     syncRect();
 }
 

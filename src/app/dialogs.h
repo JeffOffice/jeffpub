@@ -32,7 +32,8 @@ void rulerGuidesDialog(QWidget *p, Editor *ed);
 // outline (barcode-local points), grouped on a white quiet zone.
 void barcodeDialog(QWidget *p, Editor *ed);
 QPainterPath barcodePath(const barcode::Layout &l);
-ItemPtr barcodeItem(const barcode::Layout &l, const QPointF &topLeft, bool whiteBackground, const QString &description);
+ItemPtr barcodeItem(const barcode::Layout &l, const QPointF &topLeft, bool whiteBackground, const QString &description,
+                    const QJsonObject &settings = QJsonObject());
 // Page sizes the user created (name and whole setup), and their dialogs.
 QVector<QPair<QString, PageSetup>> customPageSizes();
 // With apply false the new size is only saved (for a new publication).

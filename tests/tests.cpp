@@ -3401,6 +3401,15 @@ private Q_SLOTS:
         QVERIFY(err.contains(QLatin1String("should be 7")));
         QCOMPARE(isbn13(QStringLiteral("080442957X"), &err), QStringLiteral("9780804429573"));
         QCOMPARE(isbnCaption(QStringLiteral("978-0-306-40615-7")), QStringLiteral("ISBN 978-0-306-40615-7"));
+        // Standard hyphens for the English-language groups (as printed on 88
+        // ISBNs in Michigan Legal Publishing's PDFs, all reproduced).
+        QCOMPARE(hyphenateIsbn(QStringLiteral("9781640021631")), QStringLiteral("978-1-64002-163-1"));
+        QCOMPARE(hyphenateIsbn(QStringLiteral("9781942842187")), QStringLiteral("978-1-942842-18-7"));
+        QCOMPARE(hyphenateIsbn(QStringLiteral("9780306406157")), QStringLiteral("978-0-306-40615-7"));
+        QCOMPARE(hyphenateIsbn(QStringLiteral("9780199535569")), QStringLiteral("978-0-19-953556-9"));
+        QCOMPARE(isbnCaption(QStringLiteral("9781640021631")), QStringLiteral("ISBN 978-1-64002-163-1"));
+        QVERIFY(hyphenateIsbn(QStringLiteral("9783161484100")).isEmpty());   // group 3: ranges not known here
+        QCOMPARE(isbnCaption(QStringLiteral("978-3-16-148410-0")), QStringLiteral("ISBN 978-3-16-148410-0"));
         QCOMPARE(priceAddOn(Currency::UsDollar, 19.95, &err), QStringLiteral("51995"));
         QCOMPARE(priceAddOn(Currency::CanadianDollar, 24.99, &err), QStringLiteral("62499"));
         QCOMPARE(priceAddOn(Currency::Pound, 7.5, &err), QStringLiteral("00750"));
@@ -3469,6 +3478,44 @@ private Q_SLOTS:
         // Main symbol plus add-on: 167 modules (2.17 in) by about 1.2 in at 100%.
         QVERIFY2(std::abs(g->rect.width() - 167 * 0.33 * 72 / 25.4) < 0.01 && g->rect.height() > 80 && g->rect.height() < 100,
                  qPrintable(QStringLiteral("%1 x %2").arg(g->rect.width()).arg(g->rect.height())));
+        QCOMPARE(g->barcode.value(QLatin1String("priceMode")).toInt(), 1);
+
+        // With the barcode selected, Barcode edits it: a pasted ISBN gets its
+        // hyphens, "no suggested price" replaces the price, and the new
+        // barcode takes the old one's place (one undo step back).
+        const QString id = g->id;
+        g->moveBy(-100, 50);
+        const QPointF where = g->rect.topLeft();
+        w.editor()->select(id);
+        QTimer::singleShot(0, &w, [&] {
+            auto *d = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            QVERIFY(d);
+            QCOMPARE(d->windowTitle(), QStringLiteral("Edit Barcode"));
+            auto *isbn = d->findChild<QLineEdit *>();
+            QCOMPARE(isbn->text(), QStringLiteral("978-0-306-40615-7"));
+            isbn->setText(QStringLiteral("9781640021631"));
+            QCOMPARE(isbn->text(), QStringLiteral("978-1-64002-163-1"));
+            for (auto *r : d->findChildren<QRadioButton *>())
+                if (r->text().startsWith(QLatin1String("No suggested price"))) r->click();
+            for (auto *b : d->findChildren<QPushButton *>())
+                if (b->text() == QLatin1String("Update")) b->click();
+        });
+        jp::barcodeDialog(&w, w.editor());
+        QCOMPARE(int(items.size()), 1);
+        auto g2 = std::dynamic_pointer_cast<jp::GroupItem>(items[0]);
+        QVERIFY(g2 && g2 != g);
+        QCOMPARE(g2->id, id);
+        QCOMPARE(g2->rect.topLeft(), where);
+        QCOMPARE(g2->altText, QStringLiteral("Barcode: ISBN 978-1-64002-163-1"));
+        QCOMPARE(g2->barcode.value(QLatin1String("priceMode")).toInt(), 2);
+        // Saved and opened again, it can still be edited.
+        auto copy = jp::publicationFromBytes(jp::publicationBytes(*w.editor()->doc(), QImage()), nullptr);
+        QVERIFY(copy);
+        auto g3 = std::dynamic_pointer_cast<jp::GroupItem>(copy->pages[0]->items[0]);
+        QVERIFY(g3);
+        QCOMPARE(g3->barcode, g2->barcode);
+        w.editor()->undoStack()->undo();
+        QCOMPARE(std::dynamic_pointer_cast<jp::GroupItem>(w.editor()->doc()->pages[0]->items[0])->altText, QStringLiteral("Barcode: ISBN 978-0-306-40615-7"));
     }
 
     // The Open page shows a .pub file's own preview: the picture kept in its
