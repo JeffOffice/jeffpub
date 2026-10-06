@@ -13,6 +13,7 @@
 #include <QSizeF>
 #include <QTextBlockFormat>
 #include <QTextCharFormat>
+#include <algorithm>
 #include <memory>
 
 class QTextDocument;
@@ -123,6 +124,21 @@ struct MergeSource {
     static MergeSource fromJson(const QJsonObject &o);
 };
 
+// Catalog merge: an area on one page that repeats for each record of the
+// data source, in rows and columns of equal cells (filled across, then
+// down). The objects in the first cell are the template the others copy.
+struct CatalogArea {
+    QString pageId;            // the page holding the area; empty = none
+    QRectF rect;
+    int rows = 2, cols = 1;
+    bool isActive() const { return !pageId.isEmpty() && rect.width() > 1 && rect.height() > 1; }
+    int perPage() const { return std::max(1, rows) * std::max(1, cols); }
+    QRectF cell(int k) const;                 // cell k in reading order
+    bool inTemplate(const QRectF &bounds) const;   // centered in the first cell
+    QJsonObject toJson() const;
+    static CatalogArea fromJson(const QJsonObject &o);
+};
+
 struct DocProps {
     QString title, subject, author, manager, company, category, keywords, comments;
     QDateTime created = QDateTime::currentDateTime(), modified = QDateTime::currentDateTime();
@@ -156,6 +172,7 @@ public:
     QVector<BusinessInfo> biz;
     int bizCurrent = 0;
     MergeSource merge;
+    CatalogArea catalog;
     DocProps props;
     PrintInfo print;
     QString templateId;

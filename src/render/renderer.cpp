@@ -907,6 +907,38 @@ void Renderer::paintMaster(QPainter *p, const PaintContext &ctx, const MasterPag
     p->restore();
 }
 
+// Catalog merge: the catalog area's other cells repeat the objects in its
+// first cell, each with the next record; while designing on screen they show
+// faded, with the field names.
+static void paintCatalogCells(QPainter *p, const PaintContext &c, const Page &pg)
+{
+    const Document &doc = *c.doc;
+    const CatalogArea &cat = doc.catalog;
+    if (!cat.isActive() || pg.id != cat.pageId) return;
+    ItemList tmpl;
+    for (const auto &it : pg.items)
+        if (cat.inTemplate(it->bounds())) tmpl.push_back(it);
+    if (tmpl.empty()) return;
+    const QVector<int> rows = doc.merge.includedRows();
+    const bool preview = c.opt.mergeRecord >= 0 && !rows.isEmpty();
+    if (!preview && c.opt.output) return;
+    const int start = preview ? std::max(0, int(rows.indexOf(c.opt.mergeRecord))) : 0;
+    for (int k = 1; k < cat.perPage(); ++k) {
+        PaintContext ck = c;
+        ck.opt.editStory.clear();
+        if (preview) {
+            if (start + k >= rows.size()) break;
+            ck.opt.mergeRecord = rows[start + k];
+        }
+        const QPointF d = cat.cell(k).topLeft() - cat.cell(0).topLeft();
+        p->save();
+        if (!preview) p->setOpacity(0.35);
+        p->translate(d);
+        Renderer::paintItems(p, ck, tmpl);
+        p->restore();
+    }
+}
+
 void Renderer::paintPage(QPainter *p, const PaintContext &ctx, int pageIndex)
 {
     const Document &doc = *ctx.doc;
@@ -925,6 +957,7 @@ void Renderer::paintPage(QPainter *p, const PaintContext &ctx, int pageIndex)
     }
     if (!ctx.opt.flattenTransparency) {
         paintItems(p, c, pg.items);
+        paintCatalogCells(p, c, pg);
         return;
     }
     // Flattened output: transparent items become opaque patches holding the

@@ -376,8 +376,43 @@ void Canvas::paintPageSlot(QPainter &p, const Slot &s, bool current)
         Renderer::paintPage(&p, ctx, s.page);
     }
     if (m_ed->view.guides) paintGuides(p, s);
+    if (s.page >= 0) paintCatalogArea(p, s);
     p.restore();
     if (s.page >= 0 && !current) return;
+}
+
+// The catalog merge area: its outline and cells, never printed.
+void Canvas::paintCatalogArea(QPainter &p, const Slot &s)
+{
+    const Document *d = m_ed->doc();
+    const CatalogArea &cat = d->catalog;
+    if (!cat.isActive() || s.page >= d->pages.size() || d->pages[s.page]->id != cat.pageId) return;
+    p.save();
+    QPen edge(QColor(230, 120, 20), 0, Qt::DashLine);
+    p.setPen(edge);
+    p.setBrush(Qt::NoBrush);
+    p.drawRect(cat.rect);
+    QPen inner(QColor(230, 120, 20, 150), 0, Qt::DotLine);
+    p.setPen(inner);
+    for (int c = 1; c < cat.cols; ++c) {
+        const double x = cat.cell(c).left();
+        p.drawLine(QPointF(x, cat.rect.top()), QPointF(x, cat.rect.bottom()));
+    }
+    for (int r = 1; r < cat.rows; ++r) {
+        const double y = cat.cell(r * cat.cols).top();
+        p.drawLine(QPointF(cat.rect.left(), y), QPointF(cat.rect.right(), y));
+    }
+    // A tag above the area, the same size at any zoom.
+    QFont f = font();
+    f.setPointSizeF(8.0 / std::max(0.05, ppp()));
+    p.setFont(f);
+    const QString tag = QStringLiteral("Catalog area: %1 per page").arg(cat.perPage());
+    const QFontMetricsF fm(f);
+    const QRectF box(cat.rect.left(), cat.rect.top() - fm.height() * 1.3, fm.horizontalAdvance(tag) + fm.height(), fm.height() * 1.3);
+    p.fillRect(box, QColor(230, 120, 20));
+    p.setPen(Qt::white);
+    p.drawText(box, Qt::AlignCenter, tag);
+    p.restore();
 }
 
 void Canvas::paintGuides(QPainter &p, const Slot &s)

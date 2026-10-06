@@ -1546,6 +1546,106 @@ private Q_SLOTS:
         QCOMPARE(got.pixelColor(35, 5), QColor(30, 30, 220));
     }
 
+    // Catalog merge: the first cell of the catalog area repeats for each
+    // record, a pageful at a time; objects outside the area stay on every page.
+    void catalogMerge()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        doc->merge.fields = {QStringLiteral("Name"), QStringLiteral("Price")};
+        const QStringList names = {"Apples", "Bread", "Cheese", "Dates", "Eggs"};
+        for (int i = 0; i < names.size(); ++i) doc->merge.rows << QStringList{names[i], QString::number(i + 1)};
+        doc->catalog.pageId = doc->pages[0]->id;
+        doc->catalog.rect = QRectF(36, 72, 540, 684);
+        doc->catalog.rows = 2;
+        doc->catalog.cols = 2;
+        QCOMPARE(doc->catalog.perPage(), 4);
+        QCOMPARE(doc->catalog.cell(3), QRectF(306, 414, 270, 342));
+        auto title = std::make_shared<jp::TextItem>();
+        title->rect = QRectF(36, 20, 540, 40);
+        title->storyId = doc->createStory(QStringLiteral("Our catalog"));
+        doc->pages[0]->items.push_back(title);
+        auto box = std::make_shared<jp::TextItem>();
+        box->rect = QRectF(48, 84, 200, 30);
+        box->storyId = doc->createStory();
+        {
+            QTextCursor c(doc->storyDoc(box->storyId));
+            QTextCharFormat cf;
+            cf.setProperty(jp::tp::Field, QStringLiteral("merge:Name"));
+            c.insertText(QString(QChar::ObjectReplacementCharacter), cf);
+            c.insertText(QStringLiteral(" $"), QTextCharFormat());
+            cf.setProperty(jp::tp::Field, QStringLiteral("merge:Price"));
+            c.insertText(QString(QChar::ObjectReplacementCharacter), cf);
+        }
+        doc->pages[0]->items.push_back(box);
+        QVERIFY(doc->catalog.inTemplate(box->bounds()));
+        QVERIFY(!doc->catalog.inTemplate(title->bounds()));
+
+        // The area survives saving.
+        QString err;
+        auto again = jp::publicationFromBytes(jp::publicationBytes(*doc, QImage()), &err);
+        QVERIFY2(again, qPrintable(err));
+        QCOMPARE(again->catalog.pageId, doc->catalog.pageId);
+        QCOMPARE(again->catalog.rect, doc->catalog.rect);
+        QCOMPARE(again->catalog.cols, 2);
+
+        auto merged = jp::mergeToNewPublication(*doc);
+        QCOMPARE(merged->pages.size(), 2);
+        QVERIFY(!merged->catalog.isActive());
+        auto texts = [&](int page) {
+            QMap<QString, QPointF> out;
+            for (const auto &it : merged->pages[page]->items)
+                if (it->type() == jp::ItemType::Text)
+                    out.insert(merged->storyDoc(static_cast<const jp::TextItem *>(it.get())->storyId)->toPlainText(), it->rect.topLeft());
+            return out;
+        };
+        const auto p1 = texts(0), p2 = texts(1);
+        QCOMPARE(p1.size(), 5);
+        QCOMPARE(p2.size(), 2);
+        QVERIFY(p1.contains("Our catalog") && p2.contains("Our catalog"));
+        QCOMPARE(p1.value("Apples $1"), QPointF(48, 84));
+        QCOMPARE(p1.value("Bread $2"), QPointF(318, 84));
+        QCOMPARE(p1.value("Cheese $3"), QPointF(48, 426));
+        QCOMPARE(p1.value("Dates $4"), QPointF(318, 426));
+        QCOMPARE(p2.value("Eggs $5"), QPointF(48, 84));
+
+        // Previewing a record paints the next records in the other cells.
+        jp::PaintContext ctx;
+        ctx.doc = doc.get();
+        jp::LayoutCache cache;
+        ctx.cache = &cache;
+        ctx.opt.output = true;
+        auto inkIn = [&](int record, const QRectF &r) {
+            ctx.opt.mergeRecord = record;
+            QImage img(612, 792, QImage::Format_RGB32);
+            img.fill(Qt::white);
+            QPainter p(&img);
+            jp::Renderer::paintPage(&p, ctx, 0);
+            p.end();
+            int dark = 0;
+            for (int y = int(r.top()); y < int(r.bottom()); ++y)
+                for (int x = int(r.left()); x < int(r.right()); ++x) dark += qGray(img.pixel(x, y)) < 128;
+            return dark;
+        };
+        const QRectF cell4(306, 414, 270, 60);
+        QVERIFY(inkIn(0, cell4) > 20);      // Dates in the fourth cell
+        QCOMPARE(inkIn(-1, cell4), 0);       // unmerged output prints only the template
+        QCOMPARE(inkIn(4, QRectF(306, 72, 270, 60)), 0);   // Eggs is the last: nothing after it
+
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            jp::MainWindow w;
+            w.resize(1400, 900);
+            w.editor()->setDocument(std::move(doc));
+            w.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&w));
+            w.showTaskPane(QStringLiteral("catalog"));
+            QTest::qWait(200);
+            w.grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/catalog-design.png");
+            w.editor()->setMergeRecord(0);
+            QTest::qWait(200);
+            w.grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/catalog-preview.png");
+        }
+    }
+
     // A color given as ink amounts keeps them: in the file, in tints and
     // shades, from the Colors dialog, and in the PDF of a process-color
     // publication.

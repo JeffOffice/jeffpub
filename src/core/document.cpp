@@ -573,6 +573,33 @@ static void pageBaseF(PageBase &p, const QJsonObject &o)
     p.guides.v = dblF(o["guidesV"]);
 }
 
+QRectF CatalogArea::cell(int k) const
+{
+    const int c = std::max(1, cols), r = std::max(1, rows);
+    const QSizeF sz(rect.width() / c, rect.height() / r);
+    return QRectF(rect.left() + (k % c) * sz.width(), rect.top() + (k / c) * sz.height(), sz.width(), sz.height());
+}
+
+bool CatalogArea::inTemplate(const QRectF &bounds) const
+{
+    return isActive() && cell(0).contains(bounds.center());
+}
+
+QJsonObject CatalogArea::toJson() const
+{
+    return {{"page", pageId}, {"x", rect.x()}, {"y", rect.y()}, {"w", rect.width()}, {"h", rect.height()}, {"rows", rows}, {"cols", cols}};
+}
+
+CatalogArea CatalogArea::fromJson(const QJsonObject &o)
+{
+    CatalogArea a;
+    a.pageId = o["page"].toString();
+    a.rect = QRectF(o["x"].toDouble(), o["y"].toDouble(), o["w"].toDouble(), o["h"].toDouble());
+    a.rows = std::clamp(o["rows"].toInt(2), 1, 50);
+    a.cols = std::clamp(o["cols"].toInt(1), 1, 50);
+    return a;
+}
+
 QJsonObject Document::toJson() const
 {
     QJsonObject o;
@@ -617,6 +644,7 @@ QJsonObject Document::toJson() const
     o["colorScheme"] = QJsonObject{{"name", colors.name}, {"colors", cs}};
     o["fontScheme"] = QJsonObject{{"name", fonts.name}, {"heading", fonts.heading}, {"body", fonts.body}};
     o["merge"] = merge.toJson();
+    if (catalog.isActive()) o["catalog"] = catalog.toJson();
     o["props"] = props.toJson();
     o["template"] = templateId;
     o["templateOptions"] = templateOptions;
@@ -684,6 +712,7 @@ void Document::fromJson(const QJsonObject &o)
         d.linked = io["linked"].toBool();
     }
     merge = MergeSource::fromJson(o["merge"].toObject());
+    catalog = CatalogArea::fromJson(o["catalog"].toObject());
     props = DocProps::fromJson(o["props"].toObject());
     templateId = o["template"].toString();
     templateOptions = o["templateOptions"].toObject();

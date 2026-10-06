@@ -659,9 +659,11 @@ void MainWindow::createActions()
         const QVector<int> rows = ed->doc()->merge.includedRows();
         if (rows.isEmpty()) return;
         int i = std::max(0, int(rows.indexOf(ed->mergeRecord())));
+        // A catalog page shows a pageful of records, so it steps by a page.
+        const int step = ed->doc()->catalog.isActive() ? ed->doc()->catalog.perPage() : 1;
         if (how == 0) i = 0;
-        else if (how == 3) i = rows.size() - 1;
-        else i = std::clamp(i + (how == 1 ? -1 : 1), 0, int(rows.size()) - 1);
+        else if (how == 3) i = int(rows.size() - 1) / step * step;
+        else i = std::clamp(i + (how == 1 ? -step : step), 0, int(rows.size()) - 1);
         ed->setMergeRecord(rows[i]);
     };
     mk("mm.first", QStringLiteral("First Record"), "chevrons-left", QKeySequence(), [stepRecord] { stepRecord(0); });

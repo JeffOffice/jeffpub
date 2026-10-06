@@ -5,6 +5,7 @@
 #include "app/icons.h"
 #include "app/mainwindow.h"
 #include "app/settings.h"
+#include "app/widgets.h"
 #include "canvas/canvas.h"
 #include "io/importers.h"
 #include "text/textprops.h"
@@ -13,6 +14,8 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFileDialog>
+#include <QFormLayout>
+#include <QSpinBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -550,6 +553,225 @@ private:
     QListWidget *m_fields;
 };
 
+// ---------------- Catalog Merge ----------------
+// A catalog: one area on a page repeats for each record of a product list.
+class CatalogPane : public QWidget {
+    Q_OBJECT
+public:
+    explicit CatalogPane(MainWindow *win) : m_win(win)
+    {
+        auto *v = new QVBoxLayout(this);
+        v->setContentsMargins(0, 0, 0, 0);
+        m_step = new QLabel(this);
+        QFont f = m_step->font();
+        f.setBold(true);
+        m_step->setFont(f);
+        v->addWidget(m_step);
+        m_body = new QStackedWidget(this);
+        v->addWidget(m_body, 1);
+        // Step 1: the product list.
+        {
+            auto *w = new QWidget();
+            auto *l = new QVBoxLayout(w);
+            auto *intro = new QLabel(QStringLiteral("Choose the list of products or items (a spreadsheet, a CSV file or a list you type)."), w);
+            intro->setWordWrap(true);
+            l->addWidget(intro);
+            for (const char *id : {"mm.existing", "mm.typeNew", "mm.editList"}) {
+                QAction *a = win->act(id);
+                auto *b = new QPushButton(a->icon(), a->text(), w);
+                connect(b, &QPushButton::clicked, a, &QAction::trigger);
+                l->addWidget(b);
+            }
+            m_summary = new QLabel(w);
+            m_summary->setWordWrap(true);
+            l->addWidget(m_summary);
+            l->addStretch(1);
+            m_body->addWidget(w);
+        }
+        // Step 2: the catalog area and what goes in its first cell.
+        {
+            auto *w = new QWidget();
+            auto *l = new QVBoxLayout(w);
+            m_insert = new QPushButton(icon("layout-grid"), QStringLiteral("Insert Catalog Area"), w);
+            connect(m_insert, &QPushButton::clicked, this, &CatalogPane::insertArea);
+            l->addWidget(m_insert);
+            m_areaBox = new QWidget(w);
+            auto *form = new QFormLayout(m_areaBox);
+            form->setContentsMargins(0, 0, 0, 0);
+            m_rows = new QSpinBox(m_areaBox);
+            m_cols = new QSpinBox(m_areaBox);
+            for (QSpinBox *sb : {m_rows, m_cols}) sb->setRange(1, 20);
+            form->addRow(QStringLiteral("Rows:"), m_rows);
+            form->addRow(QStringLiteral("Columns:"), m_cols);
+            for (MeasureSpin **ms : {&m_x, &m_y, &m_w, &m_h}) {
+                *ms = new MeasureSpin(m_areaBox);
+                (*ms)->setRange(0, 10000);
+            }
+            form->addRow(QStringLiteral("Left:"), m_x);
+            form->addRow(QStringLiteral("Top:"), m_y);
+            form->addRow(QStringLiteral("Width:"), m_w);
+            form->addRow(QStringLiteral("Height:"), m_h);
+            for (QSpinBox *sb : {m_rows, m_cols}) connect(sb, &QSpinBox::valueChanged, this, &CatalogPane::areaEdited);
+            for (MeasureSpin *ms : {m_x, m_y, m_w, m_h}) connect(ms, &QDoubleSpinBox::valueChanged, this, &CatalogPane::areaEdited);
+            auto *hint = new QLabel(QStringLiteral("Put the fields for one item in the first cell. Double-click a field to add it there (or into the text box you're typing in)."), m_areaBox);
+            hint->setWordWrap(true);
+            form->addRow(hint);
+            m_fields = new QListWidget(m_areaBox);
+            form->addRow(m_fields);
+            connect(m_fields, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *it) { addField(it->data(Qt::UserRole).toString(), it->data(Qt::UserRole + 1).toBool()); });
+            auto *remove = new QPushButton(icon("trash-2"), QStringLiteral("Remove Catalog Area"), m_areaBox);
+            connect(remove, &QPushButton::clicked, this, [this] {
+                Editor *ed = m_win->editor();
+                ed->change(QStringLiteral("Remove Catalog Area"), [ed] { ed->doc()->catalog = CatalogArea(); });
+                refresh();
+            });
+            form->addRow(remove);
+            l->addWidget(m_areaBox, 1);
+            m_body->addWidget(w);
+        }
+        // Step 3: preview and merge.
+        {
+            auto *w = new QWidget();
+            auto *l = new QVBoxLayout(w);
+            auto *intro = new QLabel(QStringLiteral("Preview the pages, then make them: each page shows as many items as the area has cells."), w);
+            intro->setWordWrap(true);
+            l->addWidget(intro);
+            auto *nav = new QHBoxLayout();
+            for (const char *id : {"mm.first", "mm.prev", "mm.next", "mm.last"}) {
+                auto *b = new QToolButton(w);
+                b->setDefaultAction(win->act(id));
+                nav->addWidget(b);
+            }
+            l->addLayout(nav);
+            for (const char *id : {"mm.mergeNew", "mm.mergePdf", "mm.mergePrint"}) {
+                QAction *a = win->act(id);
+                auto *b = new QPushButton(a->icon(), a->text(), w);
+                connect(b, &QPushButton::clicked, a, &QAction::trigger);
+                l->addWidget(b);
+            }
+            l->addStretch(1);
+            m_body->addWidget(w);
+        }
+        auto *row = new QHBoxLayout();
+        auto *prev = new QPushButton(QStringLiteral("Previous"), this);
+        auto *next = new QPushButton(QStringLiteral("Next"), this);
+        row->addWidget(prev);
+        row->addWidget(next);
+        v->addLayout(row);
+        connect(prev, &QPushButton::clicked, this, [this] { m_body->setCurrentIndex(std::max(0, m_body->currentIndex() - 1)); refresh(); });
+        connect(next, &QPushButton::clicked, this, [this] {
+            m_body->setCurrentIndex(std::min(2, m_body->currentIndex() + 1));
+            if (m_body->currentIndex() == 2 && m_win->editor()->mergeRecord() < 0) m_win->act("mm.preview")->trigger();
+            refresh();
+        });
+    }
+
+    Q_INVOKABLE void refresh()
+    {
+        const Document *d = m_win->editor()->doc();
+        const MergeSource &m = d->merge;
+        const CatalogArea &cat = d->catalog;
+        m_step->setText(QStringLiteral("Step %1 of 3").arg(m_body->currentIndex() + 1));
+        m_summary->setText(m.isEmpty() ? QStringLiteral("No product list yet.")
+                                       : QStringLiteral("%1 items, %2 fields.\nSource: %3").arg(m.includedRows().size()).arg(m.fields.size())
+                                             .arg(m.path.isEmpty() ? QStringLiteral("typed list") : m.path));
+        m_insert->setVisible(!cat.isActive());
+        m_areaBox->setVisible(cat.isActive());
+        m_syncing = true;
+        if (cat.isActive()) {
+            m_rows->setValue(cat.rows);
+            m_cols->setValue(cat.cols);
+            m_x->setPoints(cat.rect.left());
+            m_y->setPoints(cat.rect.top());
+            m_w->setPoints(cat.rect.width());
+            m_h->setPoints(cat.rect.height());
+        }
+        m_syncing = false;
+        m_fields->clear();
+        for (const QString &f : m.fields) {
+            auto *it = new QListWidgetItem(icon("braces"), f);
+            it->setData(Qt::UserRole, f);
+            m_fields->addItem(it);
+            auto *pic = new QListWidgetItem(icon("image"), QStringLiteral("%1 (picture)").arg(f));
+            pic->setData(Qt::UserRole, f);
+            pic->setData(Qt::UserRole + 1, true);
+            m_fields->addItem(pic);
+        }
+    }
+
+private:
+    void insertArea()
+    {
+        Editor *ed = m_win->editor();
+        Document *d = ed->doc();
+        const int pi = std::clamp(ed->currentPage(), 0, int(d->pages.size()) - 1);
+        ed->change(QStringLiteral("Insert Catalog Area"), [&] {
+            d->catalog = CatalogArea();
+            d->catalog.pageId = d->pages[pi]->id;
+            d->catalog.rect = QRectF(QPointF(0, 0), d->pageSize()).marginsRemoved(d->setup.margins);
+            d->catalog.rows = 2;
+            d->catalog.cols = 1;
+        });
+        refresh();
+    }
+    void areaEdited()
+    {
+        if (m_syncing) return;
+        Editor *ed = m_win->editor();
+        CatalogArea a = ed->doc()->catalog;
+        if (!a.isActive()) return;
+        a.rows = m_rows->value();
+        a.cols = m_cols->value();
+        a.rect = QRectF(m_x->value(), m_y->value(), std::max(2.0, m_w->value()), std::max(2.0, m_h->value()));
+        ed->change(QStringLiteral("Catalog Area"), [&] { ed->doc()->catalog = a; });
+    }
+    // A field goes into the text box being typed in, or into a new text box
+    // (or picture frame) in the first cell.
+    void addField(const QString &field, bool picture)
+    {
+        Editor *ed = m_win->editor();
+        Document *d = ed->doc();
+        if (!d->catalog.isActive()) return;
+        if (!picture && ed->isEditingText()) {
+            ed->insertField("merge:" + field);
+            return;
+        }
+        const QRectF cell = d->catalog.cell(0);
+        // Stack new objects down the cell.
+        double y = cell.top() + 6;
+        const int pi = d->pageIndexOf(d->catalog.pageId);
+        if (pi >= 0)
+            for (const auto &it : d->pages[pi]->items)
+                if (d->catalog.inTemplate(it->bounds())) y = std::max(y, it->bounds().bottom() + 4);
+        if (picture) {
+            ed->change(QStringLiteral("Picture Field"), [&] { if (d->merge.pictureField.isEmpty()) d->merge.pictureField = field; });
+            auto pic = std::make_shared<PictureItem>();
+            pic->name = "merge:" + field;
+            const double side = std::min({cell.width() - 12, cell.bottom() - y - 6, 144.0});
+            pic->rect = QRectF(cell.left() + 6, y, std::max(24.0, side), std::max(24.0, side));
+            pic->imgRect = QRectF(QPointF(0, 0), pic->rect.size());
+            ed->addItem(pic);
+            return;
+        }
+        auto tb = std::static_pointer_cast<TextItem>(ed->newTextBox(QRectF(cell.left() + 6, y, cell.width() - 12, 24)));
+        QTextCursor c(d->storyDoc(tb->storyId));
+        QTextCharFormat cf;
+        cf.setProperty(tp::Field, "merge:" + field);
+        c.insertText(QString(QChar::ObjectReplacementCharacter), cf);
+        ed->addItem(tb);
+    }
+
+    MainWindow *m_win;
+    QLabel *m_step, *m_summary;
+    QStackedWidget *m_body;
+    QPushButton *m_insert;
+    QWidget *m_areaBox;
+    QSpinBox *m_rows, *m_cols;
+    MeasureSpin *m_x, *m_y, *m_w, *m_h;
+    QListWidget *m_fields;
+    bool m_syncing = false;
+};
+
 // ---------------- Research (local dictionary) ----------------
 class ResearchPane : public QWidget {
     Q_OBJECT
@@ -600,7 +822,8 @@ QWidget *TaskPane::create(const QString &name)
     if (name == "designchecker") return new DesignChecker(m_win);
     if (name == "find") return new FindPane(m_win);
     if (name == "graphics") return new GraphicsPane(m_win);
-    if (name == "mailmerge" || name == "catalog") return new MailMergePane(m_win);
+    if (name == "mailmerge") return new MailMergePane(m_win);
+    if (name == "catalog") return new CatalogPane(m_win);
     if (name == "research") return new ResearchPane(m_win);
     if (name == "online") {
         auto *w = new QWidget();

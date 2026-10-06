@@ -437,10 +437,20 @@ static QByteArray pdfXmp(const DocProps &pr, const QString &title)
     return x;
 }
 
-bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &s)
+bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
 {
     m_ed->endTextEdit();
     Document *d = m_ed->doc();
+    PdfSettings s = sIn;
+    // A catalog makes a PDF of its merged pages: a record in each cell.
+    std::unique_ptr<Document> catalogPages;
+    if (s.merged && d->catalog.isActive() && !d->merge.isEmpty()) {
+        catalogPages = mergeToNewPublication(*d);
+        d = catalogPages.get();
+        s.merged = false;
+        s.from = 0;
+        s.to = -1;
+    }
     const bool press = s.preset == PdfSettings::CommercialPress;
     const double margin = press ? kMarksMargin : 0;
     QPdfWriter pdf(path);
@@ -477,7 +487,7 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &s)
     const QString stamp = QLocale().toString(QDateTime::currentDateTime(), QLocale::ShortFormat);
     const int from = std::clamp(s.from, 0, int(d->pages.size()) - 1);
     const int to = s.to < 0 ? d->pages.size() - 1 : std::clamp(s.to, from, int(d->pages.size()) - 1);
-    QVector<int> records{m_ed->mergeRecord()};
+    QVector<int> records{catalogPages ? -1 : m_ed->mergeRecord()};
     if (s.merged && !d->merge.isEmpty()) records = d->merge.includedRows();
     bool first = true;
     for (int rec : records) {

@@ -455,59 +455,105 @@ bool saveMergeCsv(const MergeSource &m, const QString &path)
     return true;
 }
 
-// Replace merge fields with each record's values in a copy of the publication.
+// Freeze merge fields in these items to one record's values: text fields
+// become plain text, picture fields load the record's picture.
+static void freezeMergeFields(Document &out, const MergeSource &src, const ItemList &items, int rec)
+{
+    FieldContext ctx;
+    ctx.doc = &out;
+    ctx.mergeRecord = rec;
+    walkItems(items, [&](const ItemPtr &it) {
+        QStringList stories;
+        if (it->type() == ItemType::Text) stories << static_cast<TextItem *>(it.get())->storyId;
+        if (it->type() == ItemType::Shape) stories << static_cast<ShapeItem *>(it.get())->storyId;
+        if (it->type() == ItemType::Table) for (const auto &c : static_cast<TableItem *>(it.get())->cells) stories << c.storyId;
+        if (it->type() == ItemType::Picture && it->name.startsWith("merge:")) {
+            const QString file = src.value(rec, it->name.mid(6));
+            QFile f(QDir(QFileInfo(src.path).absolutePath()).absoluteFilePath(file));
+            if (!file.isEmpty() && f.open(QIODevice::ReadOnly)) {
+                auto *pic = static_cast<PictureItem *>(it.get());
+                pic->imageId = out.addImage(f.readAll(), QFileInfo(file).suffix().toLower(), f.fileName());
+                pic->fitImage(out.imageSize(pic->imageId), true);
+            }
+            it->name.clear();
+        }
+        for (const QString &sid : stories) {
+            QTextDocument *d = out.storyDoc(sid);
+            if (!d) continue;
+            for (QTextBlock b = d->begin(); b.isValid(); b = b.next()) {
+                QVector<QPair<int, QString>> fields;
+                for (auto fi = b.begin(); !fi.atEnd(); ++fi) {
+                    const QString code = fi.fragment().charFormat().stringProperty(tp::Field);
+                    if (code.startsWith("merge")) fields << qMakePair(fi.fragment().position(), code);
+                }
+                for (int k = fields.size() - 1; k >= 0; --k) {
+                    QTextCursor c(d);
+                    c.setPosition(fields[k].first);
+                    c.setPosition(fields[k].first + 1, QTextCursor::KeepAnchor);
+                    QTextCharFormat cf = c.charFormat();
+                    cf.clearProperty(tp::Field);
+                    c.insertText(ctx.resolve(fields[k].second), cf);
+                }
+            }
+        }
+    });
+}
+
+// Replace merge fields with each record's values in a copy of the
+// publication: every page once per record, or, with a catalog area, the
+// catalog page once per pageful of records with a record in each cell.
 std::unique_ptr<Document> mergeToNewPublication(const Document &src)
 {
     QString err;
     auto out = publicationFromBytes(publicationBytes(src, QImage()), &err);
     if (!out) return Document::blank(src.pageSize());
     out->pages.clear();
+    out->catalog = CatalogArea();
     auto tmpl = publicationFromBytes(publicationBytes(src, QImage()), &err);
-    for (int rec : src.merge.includedRows()) {
+    const QVector<int> records = src.merge.includedRows();
+    auto copyPage = [&](const Page &pg) {
+        auto np = out->addPage(-1, pg.masterId);
+        np->background = pg.background;
+        np->guides = pg.guides;
+        np->title = pg.title;
+        return np;
+    };
+    if (src.catalog.isActive()) {
+        const CatalogArea &cat = src.catalog;
+        const int n = cat.perPage();
         for (const auto &pg : tmpl->pages) {
-            auto np = out->addPage(-1, pg->masterId);
-            np->background = pg->background;
-            for (const auto &it : pg->items) np->items.push_back(out->cloneItem(*it));
+            const bool catalogPage = pg->id == cat.pageId;
+            if (!catalogPage) {
+                auto np = copyPage(*pg);
+                for (const auto &it : pg->items) np->items.push_back(out->cloneItem(*it));
+                continue;
+            }
+            for (int first = 0; first < std::max<qsizetype>(1, records.size()); first += n) {
+                auto np = copyPage(*pg);
+                for (const auto &it : pg->items)
+                    if (!cat.inTemplate(it->bounds())) np->items.push_back(out->cloneItem(*it));
+                for (int k = 0; k < n && first + k < records.size(); ++k) {
+                    const QPointF d = cat.cell(k).topLeft() - cat.cell(0).topLeft();
+                    ItemList cell;
+                    for (const auto &it : pg->items) {
+                        if (!cat.inTemplate(it->bounds())) continue;
+                        ItemPtr c = out->cloneItem(*it);
+                        c->moveBy(d.x(), d.y());
+                        cell.push_back(c);
+                    }
+                    freezeMergeFields(*out, src.merge, cell, records[first + k]);
+                    for (const auto &c : cell) np->items.push_back(c);
+                }
+            }
         }
-        // Freeze fields on the pages just added.
-        FieldContext ctx;
-        ctx.doc = out.get();
-        ctx.mergeRecord = rec;
-        for (int p = out->pages.size() - tmpl->pages.size(); p < out->pages.size(); ++p) {
-            walkItems(out->pages[p]->items, [&](const ItemPtr &it) {
-                QStringList stories;
-                if (it->type() == ItemType::Text) stories << static_cast<TextItem *>(it.get())->storyId;
-                if (it->type() == ItemType::Shape) stories << static_cast<ShapeItem *>(it.get())->storyId;
-                if (it->type() == ItemType::Table) for (const auto &c : static_cast<TableItem *>(it.get())->cells) stories << c.storyId;
-                if (it->type() == ItemType::Picture && it->name.startsWith("merge:")) {
-                    const QString file = src.merge.value(rec, it->name.mid(6));
-                    QFile f(QDir(QFileInfo(src.merge.path).absolutePath()).absoluteFilePath(file));
-                    if (f.open(QIODevice::ReadOnly)) {
-                        auto *pic = static_cast<PictureItem *>(it.get());
-                        pic->imageId = out->addImage(f.readAll(), QFileInfo(file).suffix().toLower(), f.fileName());
-                        pic->fitImage(out->imageSize(pic->imageId), true);
-                    }
-                }
-                for (const QString &sid : stories) {
-                    QTextDocument *d = out->storyDoc(sid);
-                    if (!d) continue;
-                    for (QTextBlock b = d->begin(); b.isValid(); b = b.next()) {
-                        QVector<QPair<int, QString>> fields;
-                        for (auto fi = b.begin(); !fi.atEnd(); ++fi) {
-                            const QString code = fi.fragment().charFormat().stringProperty(tp::Field);
-                            if (code.startsWith("merge")) fields << qMakePair(fi.fragment().position(), code);
-                        }
-                        for (int k = fields.size() - 1; k >= 0; --k) {
-                            QTextCursor c(d);
-                            c.setPosition(fields[k].first);
-                            c.setPosition(fields[k].first + 1, QTextCursor::KeepAnchor);
-                            QTextCharFormat cf = c.charFormat();
-                            cf.clearProperty(tp::Field);
-                            c.insertText(ctx.resolve(fields[k].second), cf);
-                        }
-                    }
-                }
-            });
+    } else {
+        for (int rec : records) {
+            const int before = out->pages.size();
+            for (const auto &pg : tmpl->pages) {
+                auto np = copyPage(*pg);
+                for (const auto &it : pg->items) np->items.push_back(out->cloneItem(*it));
+            }
+            for (int p = before; p < out->pages.size(); ++p) freezeMergeFields(*out, src.merge, out->pages[p]->items, rec);
         }
     }
     out->merge = MergeSource();
@@ -722,6 +768,12 @@ void drawPrinterMarks(QPainter *p, const QRectF &page, const PrinterMarks &m, co
 void printDocument(Editor *ed, QPrinter *printer, const QJsonObject &opts)
 {
     Document *d = ed->doc();
+    // A catalog prints its merged pages: a record in each cell.
+    std::unique_ptr<Document> catalogPages;
+    if (opts.value("merged").toBool() && d->catalog.isActive() && !d->merge.isEmpty()) {
+        catalogPages = mergeToNewPublication(*d);
+        d = catalogPages.get();
+    }
     const bool sheetLayout = d->setup.layout == PageSetup::MultiplePerSheet || d->setup.layout == PageSetup::Labels;
     const QString layout = opts.value("layout").toString(d->setup.layout == PageSetup::Booklet ? "booklet" : sheetLayout ? "multiple" : "one");
     const PrinterMarks marks = PrinterMarks::fromJson(opts);
@@ -796,7 +848,7 @@ void printDocument(Editor *ed, QPrinter *printer, const QJsonObject &opts)
             p.restore();
         }
     };
-    QVector<int> records{ed->mergeRecord()};
+    QVector<int> records{catalogPages ? -1 : ed->mergeRecord()};
     if (merged) records = d->merge.includedRows();
     for (int rec : records) {
         ctx.opt.mergeRecord = rec;
