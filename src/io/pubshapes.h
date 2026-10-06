@@ -13,4 +13,9 @@ int pubShapeType(const QString &preset);
 // The preset for one of Publisher's shape numbers, or an empty string.
 QString presetForPubShapeType(int type);
 
+// Publisher's Text Art shape number for a Text Art transform (plain text
+// when unknown), and back (an empty string when the number isn't Text Art).
+int pubTextArtType(const QString &transform);
+QString textArtTransformForPubType(int type);
+
 } // namespace jp

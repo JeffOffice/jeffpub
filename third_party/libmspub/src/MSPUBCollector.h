@@ -84,6 +84,7 @@ public:
   void setAdjustValue(unsigned seqNum, unsigned index, int adjust);
   void setShapeRotation(unsigned seqNum, double rotation);
   void setShapeFlip(unsigned, bool, bool);
+  void setShapeTextArt(unsigned seqNum, const librevenge::RVNGPropertyList &props);
   void setShapeMargins(unsigned seqNum, unsigned left, unsigned top, unsigned right, unsigned bottom);
   void setShapeBorderPosition(unsigned seqNum, BorderPosition pos);
   void setShapeCoordinatesRotated90(unsigned seqNum);

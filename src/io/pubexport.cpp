@@ -1222,6 +1222,49 @@ QByteArray PubWriter::write(QStringList *skipped)
                 finish(seq, sp);
                 return;
             }
+            if (it->type() == ItemType::TextArt) {
+                // Publisher's Text Art: a shape whose number is the warp, with
+                // the words, font, size, spacing and alignment as properties.
+                auto *ta = static_cast<const TextArtItem *>(it.get());
+                const quint32 seq = next++;
+                cw.put(seq, {0x20, pageSeq[pi], {flag(0x02), flag(0x03), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
+                                                 u32(0xb7, 0)}});
+                auto utf16z = [](const QString &str) {
+                    QByteArray b;
+                    for (QChar ch : str) putU16(b, ch.unicode());
+                    putU16(b, 0);
+                    return b;
+                };
+                QVector<Prop> opt = kInsets;
+                opt << Prop{0xc0c0, 0, utf16z(ta->text)} << Prop{0xc0c5, 0, utf16z(interchangeFontName(ta->font))};
+                // Alignment: Publisher counts stretch 0, center 1, left 2, right 3, letter 4, word 5.
+                static const quint32 kAlign[] = {2, 1, 3, 5, 4, 0};
+                if (ta->align != 1 && ta->align >= 0 && ta->align <= 5) opt << Prop{0x00c2, kAlign[ta->align]};
+                if (std::abs(ta->size - 36) > 0.01) opt << Prop{0x00c3, quint32(std::llround(ta->size * 65536))};
+                if (std::abs(ta->spacing - 1) > 0.001) opt << Prop{0x00c4, quint32(std::llround(ta->spacing * 65536))};
+                // On/off settings (all marked as set): Text Art, kerning,
+                // stretch to fit, best fit; bold, italic, even height, vertical.
+                quint32 flags = 0x5700;
+                if (ta->bold) flags |= 0x20;
+                if (ta->italic) flags |= 0x10;
+                if (ta->evenHeight) flags |= 0x80;
+                if (ta->vertical) flags |= 0x2000;
+                opt << Prop{0x00ff, 0xffff0000u | flags} << Prop{0x017f, 0x00100010};
+                const bool filled = ta->fill.type == Fill::Solid;
+                opt << Prop{0x0181, filled ? bgr(ta->fill.color.resolve(m_doc.colors)) : 0x08000001}
+                    << Prop{0x01bf, filled ? 0x00100010u : 0x00100000u};
+                strokeProps(opt, ta->stroke);
+                opt << kTail;
+                rotationProp(opt, ta);
+                QVector<Prop> topt = {{0x017f, 0x02000200}, {0x023f, 0x00040000}, {0x057f, 0x00080000}, {0x05bf, 0x00080000},
+                                      {0x05ff, 0x00080000}, {0x063f, 0x00080000}, {0x06ff, 0x00020002}};
+                topt << kShadowFlags << kSideLines;
+                QByteArray sp = spRecord(quint16(pubTextArtType(ta->transform_)), 0x0a00, ta) + escherProps(0xf00b, opt) +
+                                escherProps(0xf122, topt) + anchor(r);
+                sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
+                finish(seq, sp);
+                return;
+            }
             if (it->type() == ItemType::Picture) {
                 auto *pic = static_cast<const PictureItem *>(it.get());
                 const int blip = blipIndex(pic->imageId);
@@ -1292,7 +1335,7 @@ QByteArray PubWriter::write(QStringList *skipped)
             }
         }
     }
-    if (skipped && skippedCount) *skipped << QStringLiteral("%1 object(s) (text art) aren't saved to .pub yet").arg(skippedCount);
+    if (skipped && skippedCount) *skipped << QStringLiteral("%1 object(s) couldn't be saved to .pub").arg(skippedCount);
     const quint32 fontSeq = m_fonts.isEmpty() && m_textIds.isEmpty() ? 0 : next++;
     if (m_fonts.isEmpty()) m_fonts << m_doc.fonts.body;
 

@@ -715,6 +715,34 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
   {
     info.m_fill->getProperties(&graphicsProps);
   }
+  // JeffPub 79: Text Art goes to the application as its words and settings
+  // with the unturned frame, instead of as the warp's guide curves.
+  if (bool(info.m_textArt))
+  {
+    librevenge::RVNGPropertyList props = info.m_textArt.get();
+    const Coordinate c = info.m_coordinates.get_value_or(Coordinate());
+    props.insert("svg:x", c.getXIn(m_width));
+    props.insert("svg:y", c.getYIn(m_height));
+    props.insert("svg:width", c.getWidthIn());
+    props.insert("svg:height", c.getHeightIn());
+    props.insert("jp:textart-type", int(info.m_type.get_value_or(TEXT_PLAIN_TEXT)));
+    props.insert("jp:rotation", info.m_rotation.get_value_or(0));
+    const std::pair<bool, bool> flips = info.m_flips.get_value_or(std::pair<bool, bool>(false, false));
+    props.insert("jp:flip-v", flips.first);
+    props.insert("jp:flip-h", flips.second);
+    librevenge::RVNGPropertyList style = graphicsProps;
+    if (!info.m_lines.empty() && info.m_lines[0].m_lineExists)
+    {
+      style.insert("draw:stroke", "solid");
+      style.insert("svg:stroke-color", getColorString(info.m_lines[0].m_color.getFinalColor(m_paletteColors)));
+      style.insert("svg:stroke-width", double(info.m_lines[0].m_widthInEmu) / EMUS_IN_INCH);
+    }
+    else
+      style.insert("draw:stroke", "none");
+    m_painter->setStyle(style);
+    m_painter->drawRectangle(props);
+    return &no_op;
+  }
   bool hasStroke = false;
   bool hasBorderArt = false;
   boost::optional<unsigned> maybeBorderImg = info.m_borderImgIndex;
@@ -1506,6 +1534,11 @@ void MSPUBCollector::setShapeRotation(unsigned seqNum, double rotation)
 void MSPUBCollector::setShapeFlip(unsigned seqNum, bool flipVertical, bool flipHorizontal)
 {
   m_shapeInfosBySeqNum[seqNum].m_flips = std::pair<bool, bool>(flipVertical, flipHorizontal);
+}
+
+void MSPUBCollector::setShapeTextArt(unsigned seqNum, const librevenge::RVNGPropertyList &props)
+{
+  m_shapeInfosBySeqNum[seqNum].m_textArt = props;
 }
 
 void MSPUBCollector::setShapeType(unsigned seqNum, unsigned type)

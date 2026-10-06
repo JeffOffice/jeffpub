@@ -48,6 +48,8 @@ struct ShapeInfo
   std::vector<int> m_adjustValues;
   boost::optional<double> m_rotation;
   boost::optional<std::pair<bool, bool> > m_flips;
+  // JeffPub 79: Text Art (words, font, size, spacing, alignment, settings).
+  boost::optional<librevenge::RVNGPropertyList> m_textArt;
   boost::optional<Margins> m_margins;
   boost::optional<BorderPosition> m_borderPosition; // Irrelevant except for rectangular shapes
   std::shared_ptr<const Fill> m_fill;

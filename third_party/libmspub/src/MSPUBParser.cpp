@@ -1880,6 +1880,43 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
         if (findEscherContainer(input, sp, cFopt, OFFICE_ART_FOPT))
         {
           FOPTValues foptValues = extractFOPTValues(input, cFopt);
+          // JeffPub 79: Text Art's words and settings.
+          if (st >= TEXT_PLAIN_TEXT && st <= TEXT_CAN_DOWN && !foptValues.m_complexValues[0xC0C0].empty())
+          {
+            auto utf8 = [](const std::vector<unsigned char> &d)
+            {
+              librevenge::RVNGString out;
+              for (size_t i = 0; i + 1 < d.size(); i += 2)
+              {
+                unsigned c = d[i] | (d[i + 1] << 8);
+                if (!c)
+                  break;
+                if (c >= 0xD800 && c < 0xDC00 && i + 3 < d.size())
+                {
+                  const unsigned lo = d[i + 2] | (d[i + 3] << 8);
+                  c = 0x10000 + ((c - 0xD800) << 10) + (lo - 0xDC00);
+                  i += 2;
+                }
+                char buf[5] = {0, 0, 0, 0, 0};
+                if (c < 0x80) buf[0] = char(c);
+                else if (c < 0x800) { buf[0] = char(0xC0 | (c >> 6)); buf[1] = char(0x80 | (c & 0x3F)); }
+                else if (c < 0x10000) { buf[0] = char(0xE0 | (c >> 12)); buf[1] = char(0x80 | ((c >> 6) & 0x3F)); buf[2] = char(0x80 | (c & 0x3F)); }
+                else { buf[0] = char(0xF0 | (c >> 18)); buf[1] = char(0x80 | ((c >> 12) & 0x3F)); buf[2] = char(0x80 | ((c >> 6) & 0x3F)); buf[3] = char(0x80 | (c & 0x3F)); }
+                out.append(buf);
+              }
+              return out;
+            };
+            librevenge::RVNGPropertyList ta;
+            ta.insert("jp:textart-text", utf8(foptValues.m_complexValues[0xC0C0]));
+            if (!foptValues.m_complexValues[0xC0C5].empty())
+              ta.insert("jp:textart-font", utf8(foptValues.m_complexValues[0xC0C5]));
+            const std::pair<unsigned, const char *> scalars[] = {{0x00C2, "jp:textart-align"}, {0x00C3, "jp:textart-size"},
+              {0x00C4, "jp:textart-spacing"}, {0x00FF, "jp:textart-flags"}};
+            for (const auto &sc : scalars)
+              if (foptValues.m_scalarValues.count(sc.first))
+                ta.insert(sc.second, int(foptValues.m_scalarValues[sc.first]));
+            m_collector->setShapeTextArt(*shapeSeqNum, ta);
+          }
           unsigned *pxId = getIfExists(foptValues.m_scalarValues, FIELDID_PXID);
           if (pxId)
           {
@@ -2650,6 +2687,16 @@ FOPTValues MSPUBParser::extractFOPTValues(librevenge::RVNGInputStream *input, co
     if (!length)
     {
       continue;
+    }
+    // JeffPub 79: text values (Text Art words and font, picture and shape
+    // names) are plain bytes of the stated length, not arrays.
+    switch (id & 0x3FFF)
+    {
+    case 0x00C0: case 0x00C1: case 0x00C5: case 0x0105: case 0x0107: case 0x0380: case 0x0381: case 0x0382: case 0x038D:
+      readNBytes(input, length, ret.m_complexValues[id]);
+      continue;
+    default:
+      break;
     }
     unsigned short numEntries = readU16(input);
     input->seek(2, librevenge::RVNG_SEEK_CUR);

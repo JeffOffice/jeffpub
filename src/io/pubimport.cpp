@@ -1,6 +1,7 @@
 #include "io/pubimport.h"
 
 #include "render/renderer.h"
+#include "io/pubshapes.h"
 #include "text/textprops.h"
 
 #include <QFile>
@@ -204,6 +205,10 @@ public:
 
     void drawRectangle(const RVNGPropertyList &p) override
     {
+        if (p["jp:textart-text"]) {
+            addTextArt(p);
+            return;
+        }
         QPainterPath path;
         const QRectF r(toPt(p["svg:x"]), toPt(p["svg:y"]), toPt(p["svg:width"]), toPt(p["svg:height"]));
         const double rx = toPt(p["svg:rx"]);
@@ -589,6 +594,44 @@ private:
     }
 
     void add(const ItemPtr &it) { currentList().push_back(it); }
+
+    // Publisher's Text Art: the warp from its shape number, the words and
+    // settings, the unturned frame. A shape flipped one way turns the other
+    // way round in Publisher (JeffPub always turns clockwise).
+    void addTextArt(const RVNGPropertyList &p)
+    {
+        auto ta = std::make_shared<TextArtItem>();
+        ta->rect = QRectF(toPt(p["svg:x"]), toPt(p["svg:y"]), toPt(p["svg:width"]), toPt(p["svg:height"]));
+        ta->text = str(p["jp:textart-text"]);
+        if (p["jp:textart-font"]) ta->font = str(p["jp:textart-font"]);
+        const QString tf = p["jp:textart-type"] ? textArtTransformForPubType(p["jp:textart-type"]->getInt()) : QString();
+        ta->transform_ = tf.isEmpty() ? QStringLiteral("plain") : tf;
+        if (p["jp:textart-size"]) ta->size = (p["jp:textart-size"]->getInt() & 0xffffffff) / 65536.0;
+        if (p["jp:textart-spacing"]) ta->spacing = (p["jp:textart-spacing"]->getInt() & 0xffffffff) / 65536.0;
+        // Publisher's alignment: stretch 0, center 1, left 2, right 3, letter 4, word 5.
+        static const int kAlign[] = {5, 1, 0, 2, 4, 3};
+        if (p["jp:textart-align"]) ta->align = kAlign[std::clamp(p["jp:textart-align"]->getInt(), 0, 5)];
+        if (p["jp:textart-flags"]) {
+            const unsigned f = unsigned(p["jp:textart-flags"]->getInt());
+            ta->bold = f & 0x20;
+            ta->italic = f & 0x10;
+            ta->evenHeight = f & 0x80;
+            ta->vertical = f & 0x2000;
+        }
+        ta->flipH = p["jp:flip-h"] && p["jp:flip-h"]->getInt();
+        ta->flipV = p["jp:flip-v"] && p["jp:flip-v"]->getInt();
+        double rot = p["jp:rotation"] ? p["jp:rotation"]->getDouble() : 0;
+        if (ta->flipH != ta->flipV) rot = -rot;
+        ta->rotation = std::fmod(std::fmod(rot, 360.0) + 360.0, 360.0);
+        QByteArray bitmap;
+        QString mime;
+        ta->fill = fillFromStyle(&bitmap, &mime);
+        if (ta->fill.type == Fill::Picture) ta->fill = Fill::solid(ColorRef::rgb(Qt::black));
+        ta->stroke = strokeFromStyle();
+        ta->wrap.mode = Wrap::None;
+        add(ta);
+        ++m_rep.shapes;
+    }
 
     void put(const QString &s)
     {

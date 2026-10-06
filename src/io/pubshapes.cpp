@@ -46,7 +46,30 @@ const QHash<QString, int> &byPreset()
     return h;
 }
 
+const Pair kTextArt[] = {
+    {"plain", 136}, {"triangleUp", 138}, {"triangleDown", 139}, {"chevronUp", 140}, {"chevronDown", 141},
+    {"ringInside", 142}, {"ringOutside", 143}, {"archUp", 144}, {"archDown", 145}, {"circle", 146}, {"button", 147},
+    {"cascadeUp", 154}, {"cascadeDown", 155}, {"waveUp", 156}, {"waveDown", 157}, {"doubleWave", 158},
+    {"inflate", 160}, {"deflate", 161}, {"inflateBottom", 162}, {"deflateBottom", 163}, {"inflateTop", 164},
+    {"deflateTop", 165}, {"fadeRight", 168}, {"fadeLeft", 169}, {"fadeUp", 170}, {"fadeDown", 171},
+    {"slantUp", 172}, {"slantDown", 173}, {"canUp", 174}, {"canDown", 175},
+};
+
 } // namespace
+
+int pubTextArtType(const QString &transform)
+{
+    for (const Pair &p : kTextArt)
+        if (transform == QLatin1String(p.preset)) return p.type;
+    return 136;
+}
+
+QString textArtTransformForPubType(int type)
+{
+    for (const Pair &p : kTextArt)
+        if (p.type == type) return QString::fromLatin1(p.preset);
+    return QString();
+}
 
 int pubShapeType(const QString &preset) { return byPreset().value(preset, -1); }
 

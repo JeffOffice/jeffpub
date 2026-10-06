@@ -239,3 +239,15 @@ merge on screen is written as its merged outline plus, when it has an
 outline, each part twice more (an even number of layers leaves the fill
 alone but draws the inner lines, like a smiley's eyes).
 
+### Text Art
+
+A Text Art shape uses the same chunk type as lines (0x20: `02, 03, 04:10 = 259,
+0c, 0d, b7 = 0`). Its `Sp` instance is the warp (136 plain, 144 arch up,
+146 circle, 156 wave, 160 inflate, 172 slant up, ... up to 175), and OPT
+holds `0xC0C0` = the words and `0xC0C5` = the font (UTF-16 with a closing
+zero), `0x00C2` alignment (0 stretch, 1 center (default), 2 left, 3 right,
+4 letter justify, 5 word justify), `0x00C3` size and `0x00C4` spacing
+(16.16; defaults 36 pt and 1.0), and `0x00FF` settings: the high half marks
+which are set, the low half has bit 4 italic, 5 bold, 7 even height, 8 best
+fit, 10 stretch, 12 kern, 13 vertical, 14 Text Art.
+

@@ -376,6 +376,70 @@ private Q_SLOTS:
         QVERIFY2(shapes >= 2, qPrintable(QString::number(shapes)));
     }
 
+    // Text Art saved as Publisher's own Text Art reads back with its words,
+    // warp and settings.
+    void pubWriterTextArt()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        struct Spec { const char *text, *transform; bool bold, italic; double spacing, rotation; QColor color; };
+        const Spec specs[] = {{"test19 Plain", "plain", true, false, 1.0, 0, QColor(200, 30, 30)},
+                              {"Arch Up", "archUp", false, false, 1.0, 0, QColor(30, 90, 200)},
+                              {"Around the circle", "circle", true, false, 1.2, 20, QColor(30, 150, 60)},
+                              {"Wave", "waveUp", false, true, 1.0, 0, QColor(150, 60, 160)},
+                              {"Inflate", "inflate", true, false, 0.9, 0, QColor(220, 140, 20)},
+                              {"Slant Up", "slantUp", false, false, 1.0, 0, QColor(20, 20, 20)}};
+        QVector<std::shared_ptr<jp::TextArtItem>> made;
+        for (int i = 0; i < 6; ++i) {
+            auto ta = std::make_shared<jp::TextArtItem>();
+            ta->text = QString::fromLatin1(specs[i].text);
+            ta->transform_ = QString::fromLatin1(specs[i].transform);
+            ta->font = QStringLiteral("Arimo");
+            ta->bold = specs[i].bold;
+            ta->italic = specs[i].italic;
+            ta->spacing = specs[i].spacing;
+            ta->rotation = specs[i].rotation;
+            ta->rect = QRectF(60 + (i % 2) * 260, 60 + (i / 2) * 230, 220, 150);
+            ta->fill = jp::Fill::solid(jp::ColorRef::rgb(specs[i].color));
+            ta->stroke = jp::Stroke::none();
+            doc->pages[0]->items.push_back(ta);
+            made << ta;
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("test19-textart.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        QVERIFY2(err.isEmpty(), qPrintable(err));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test19-textart";
+            QFile::remove(out + ".pub");
+            QFile::copy(path, out + ".pub");
+            QString e2;
+            jp::savePublication(*doc, out + ".jpub", QImage(), &e2);
+        }
+        QString e1;
+        auto back = jp::importPublisherFile(path, &e1);
+        QVERIFY2(back, qPrintable(e1));
+        QVector<const jp::TextArtItem *> got;
+        jp::walkItems(back->pages[0]->items, [&](const jp::ItemPtr &it) {
+            if (it->type() == jp::ItemType::TextArt) got << static_cast<const jp::TextArtItem *>(it.get());
+        });
+        QCOMPARE(got.size(), 6);
+        for (const auto &want : made) {
+            const jp::TextArtItem *g = nullptr;
+            for (const jp::TextArtItem *c : got)
+                if (c->text == want->text) g = c;
+            QVERIFY2(g, qPrintable(want->text));
+            QCOMPARE(g->transform_, want->transform_);
+            QCOMPARE(g->bold, want->bold);
+            QCOMPARE(g->italic, want->italic);
+            QCOMPARE(g->font, QStringLiteral("Arial"));
+            QVERIFY(std::abs(g->spacing - want->spacing) < 0.01);
+            QVERIFY2(std::abs(g->rotation - want->rotation) < 1, qPrintable(QString::number(g->rotation)));
+            QVERIFY(QLineF(g->rect.center(), want->rect.center()).length() < 1 && std::abs(g->rect.width() - want->rect.width()) < 1);
+            QCOMPARE(g->fill.color.resolve(back->colors), want->fill.color.resolve(doc->colors));
+        }
+    }
+
     // Shapes holding text keep their text, placed where JeffPub puts it.
     void pubWriterShapeText()
     {
