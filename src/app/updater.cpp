@@ -69,13 +69,15 @@ bool Updater::trustedInstaller(const QString &url, const QString &tag, const QSt
            sha.match(digest).hasMatch();
 }
 
+bool Updater::checksOnStartup()
+{
+    return Settings::get().value(QStringLiteral("updates/auto"), true).toBool();
+}
+
 void Updater::checkOnStartup()
 {
-    Settings &st = Settings::get();
-    if (!st.value(QStringLiteral("updates/auto"), true).toBool()) return;
-    const QDate last = st.value(QStringLiteral("updates/lastCheck")).toDate();
-    if (last.isValid() && last >= QDate::currentDate()) return;
-    QTimer::singleShot(4000, this, [this] { check(false); });
+    // Every launch, once the window is up (a skipped version stays quiet).
+    if (checksOnStartup()) QTimer::singleShot(1500, this, [this] { check(false); });
 }
 
 void Updater::check(bool interactive)

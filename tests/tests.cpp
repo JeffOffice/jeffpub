@@ -3672,6 +3672,21 @@ private Q_SLOTS:
     }
 
     // Update check compares versions numerically, previews before releases.
+    // Updates are looked for at every launch, even after a check earlier
+    // the same day, unless automatic checks are off.
+    void updateCheckEveryLaunch()
+    {
+        jp::Settings &st = jp::Settings::get();
+        const QVariant oldAuto = st.value(QStringLiteral("updates/auto")), oldLast = st.value(QStringLiteral("updates/lastCheck"));
+        st.setValue(QStringLiteral("updates/lastCheck"), QDate::currentDate());
+        st.setValue(QStringLiteral("updates/auto"), true);
+        QVERIFY(jp::Updater::checksOnStartup());
+        st.setValue(QStringLiteral("updates/auto"), false);
+        QVERIFY(!jp::Updater::checksOnStartup());
+        st.setValue(QStringLiteral("updates/auto"), oldAuto.isValid() ? oldAuto : QVariant(true));
+        st.setValue(QStringLiteral("updates/lastCheck"), oldLast);
+    }
+
     // The update offer shows what is new, formatted, without the install
     // steps or the preview notice the release page carries.
     void updateOfferNotes()

@@ -17,8 +17,9 @@ public:
     explicit Updater(QWidget *window);
     // interactive: also report "up to date" and errors (Check for Updates button).
     void check(bool interactive);
-    // Check at most once a day, if automatic checks are on.
+    // Check each time JeffPub 79 starts, if automatic checks are on.
     void checkOnStartup();
+    static bool checksOnStartup();
 
     // Version strings like "0.1.6" or tags like "v0.1.0-preview5", compared numerically.
     static bool isNewer(const QString &candidate, const QString &current);
