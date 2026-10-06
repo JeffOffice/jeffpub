@@ -1026,6 +1026,31 @@ private Q_SLOTS:
         QVERIFY(bt->cell(1, 0).border.left.isNone());
     }
 
+    // A right-to-left paragraph keeps its direction when saved and reopened.
+    void rightToLeftParagraph()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 300, 100);
+        t->storyId = doc->createStory(QString::fromUtf8("\xd7\xa9\xd7\x9c\xd7\x95\xd7\x9d"));
+        {
+            QTextCursor c(doc->storyDoc(t->storyId));
+            QTextBlockFormat f;
+            f.setLayoutDirection(Qt::RightToLeft);
+            f.setAlignment(Qt::AlignRight);
+            c.mergeBlockFormat(f);
+        }
+        doc->pages[0]->items.push_back(t);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("rtl.jpub"));
+        QString err;
+        QVERIFY2(jp::savePublication(*doc, path, QImage(), &err), qPrintable(err));
+        auto back = jp::loadPublication(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        const jp::TextItem *bt = static_cast<const jp::TextItem *>(back->pages[0]->items.front().get());
+        QCOMPARE(back->storyDoc(bt->storyId)->begin().blockFormat().layoutDirection(), Qt::RightToLeft);
+    }
+
     // Measurement boxes keep three decimal places in any unit, without rounding.
     void measurementsThreeDecimals()
     {

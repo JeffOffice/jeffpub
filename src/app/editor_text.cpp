@@ -345,6 +345,16 @@ void Editor::setAlignment(Qt::Alignment a)
     mergeBlockFormat(f, QStringLiteral("Alignment"));
 }
 
+void Editor::setDirection(Qt::LayoutDirection d)
+{
+    QTextBlockFormat f;
+    f.setLayoutDirection(d);
+    const Qt::Alignment al = currentBlockFormat().alignment() & Qt::AlignHorizontal_Mask;
+    if (d == Qt::RightToLeft && (al == 0 || al == Qt::AlignLeft || al == Qt::AlignLeading)) f.setAlignment(Qt::AlignRight);
+    if (d == Qt::LeftToRight && (al == Qt::AlignRight || al == Qt::AlignTrailing)) f.setAlignment(Qt::AlignLeft);
+    mergeBlockFormat(f, QStringLiteral("Text Direction"));
+}
+
 void Editor::setLineSpacing(int type, double value)
 {
     QTextBlockFormat f;

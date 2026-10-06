@@ -171,7 +171,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 - [x] Hyphenation and optional hyphens, nonbreaking spaces and hyphens
 - [x] Find and Replace across all stories
 - [x] AutoCorrect (replacement list, capitalization rules) and AutoFormat-as-you-type
-- [~] Right-to-left and complex script text via Qt's shaping engine *(partial: complex scripts shape correctly; no right-to-left paragraph direction setting)*
+- [x] Right-to-left and complex script text via Qt's shaping engine, with a right-to-left paragraph direction (Home tab and the Paragraph dialog)
 
 ## Color and graphics
 - [x] Color schemes with 8 slots (Main, Accents 1–5, Hyperlink, Followed Hyperlink) and tints and shades of every scheme color
@@ -182,7 +182,7 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 ## Platform and packaging
 - [x] Builds and runs on Linux (x86_64) and Windows 10/11 (x86_64)
 - [x] Windows installer and portable zip
-- [ ] Linux packages: `.deb` (Debian, Ubuntu) and AppImage
+- [x] Linux packages: `.deb` (Debian, Ubuntu) and AppImage
 - [ ] macOS app (Apple silicon and Intel) in a `.dmg`, signed and notarized so it opens without warnings
 - [x] File associations for `.jpub`
 - [x] Light and dark interface themes

@@ -286,6 +286,8 @@ void MainWindow::createActions()
     mk("para.bulletsDialog", QStringLiteral("Bullets and Numbering…"), "list-plus", QKeySequence(), [this] { bulletsDialog(this, m_ed, false); });
     mk("para.indentDec", QStringLiteral("Decrease Indent"), "indent-decrease", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M), [ed] { ed->changeIndent(-1); });
     mk("para.indentInc", QStringLiteral("Increase Indent"), "indent-increase", QKeySequence(Qt::CTRL | Qt::Key_M), [ed] { ed->changeIndent(1); });
+    mk("para.ltr", QStringLiteral("Left-to-Right Text Direction"), "pilcrow-right", QKeySequence(), [ed] { ed->setDirection(Qt::LeftToRight); }, true);
+    mk("para.rtl", QStringLiteral("Right-to-Left Text Direction"), "pilcrow-left", QKeySequence(), [ed] { ed->setDirection(Qt::RightToLeft); }, true);
     mk("para.special", QStringLiteral("Special Characters"), "pilcrow", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Y), [ed] {
         ed->setView([](ViewOptions &v) { v.special = !v.special; });
     }, true);

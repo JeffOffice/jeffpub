@@ -185,6 +185,8 @@ public:
     void setHighlight(const ColorRef &c);
     void changeCase(int mode);       // 0 sentence, 1 lower, 2 upper, 3 capitalize, 4 toggle
     void setAlignment(Qt::Alignment a);
+    // Reading direction; a paragraph aligned to its start moves to the new start.
+    void setDirection(Qt::LayoutDirection d);
     void setLineSpacing(int type, double value);
     void setParagraphSpacing(double before, double after);
     void changeIndent(int dir);

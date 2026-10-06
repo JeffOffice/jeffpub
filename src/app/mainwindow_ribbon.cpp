@@ -235,7 +235,7 @@ void MainWindow::buildRibbon()
         auto *lsA = menuAction(this, QStringLiteral("Line Spacing"), "list-chevrons-up-down");
         auto *psA = menuAction(this, QStringLiteral("Paragraph Spacing"), "arrow-up-down");
         g->addRow({iconOnly(act("para.left")), iconOnly(act("para.center")), iconOnly(act("para.right")), iconOnly(act("para.justify")), iconOnly(act("para.distribute")),
-                   withMenu(iconOnly(lsA), menuOf(this, ls), false),
+                   iconOnly(act("para.ltr")), iconOnly(act("para.rtl")), withMenu(iconOnly(lsA), menuOf(this, ls), false),
                    withMenu(iconOnly(psA), menuOf(this, {act("para.spaceBefore0"), act("para.spaceBefore6"), act("para.spaceBefore12"), nullptr, act("para.spaceAfter0"),
                                                          act("para.spaceAfter6"), act("para.spaceAfter12"), nullptr, act("para.dialog")}), false)});
         g->setLauncher([this] { paragraphDialog(this, m_ed, 0); }, QStringLiteral("Paragraph"));
@@ -1367,7 +1367,8 @@ void MainWindow::refreshUi()
     act("arr.group")->setText(kind == "group" ? QStringLiteral("Ungroup") : QStringLiteral("Group"));
     act("arr.ungroup")->setEnabled(kind == "group");
     for (const char *id : {"fmt.bold", "fmt.italic", "fmt.underline", "fmt.strike", "fmt.sub", "fmt.sup", "fmt.grow", "fmt.shrink", "fmt.clear", "para.bullets",
-                           "para.numbers", "para.left", "para.center", "para.right", "para.justify", "para.distribute", "para.indentDec", "para.indentInc"})
+                           "para.numbers", "para.left", "para.center", "para.right", "para.justify", "para.distribute", "para.indentDec", "para.indentInc",
+                           "para.ltr", "para.rtl"})
         act(id)->setEnabled(textish);
     act("fmt.bold")->setChecked(cf.fontWeight() >= QFont::DemiBold);
     act("fmt.italic")->setChecked(cf.fontItalic());
@@ -1382,6 +1383,8 @@ void MainWindow::refreshUi()
     act("para.right")->setChecked(al == Qt::AlignRight || al == Qt::AlignTrailing);
     act("para.justify")->setChecked(al == Qt::AlignJustify && !dist);
     act("para.distribute")->setChecked(dist);
+    act("para.rtl")->setChecked(textish && bf.layoutDirection() == Qt::RightToLeft);
+    act("para.ltr")->setChecked(textish && bf.layoutDirection() != Qt::RightToLeft);
     QTextList *list = editing ? ed->cursor().block().textList() : nullptr;
     act("para.bullets")->setChecked(list && list->format().style() < 0);
     act("para.numbers")->setChecked(list && list->format().style() > 0);

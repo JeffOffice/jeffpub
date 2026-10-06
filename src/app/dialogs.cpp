@@ -578,7 +578,11 @@ void paragraphDialog(QWidget *p, Editor *ed, int tab)
     }
     auto *baseline = new QCheckBox(QStringLiteral("Align text to baseline guides"), t1);
     baseline->setChecked(bf.boolProperty(tp::AlignToBaseline));
+    auto *direction = new QComboBox(t1);
+    direction->addItems({"Left to right", "Right to left"});
+    direction->setCurrentIndex(bf.layoutDirection() == Qt::RightToLeft ? 1 : 0);
     f1->addRow(QStringLiteral("Alignment:"), align);
+    f1->addRow(QStringLiteral("Direction:"), direction);
     f1->addRow(QStringLiteral("Left indent:"), left);
     f1->addRow(QStringLiteral("First line indent:"), first);
     f1->addRow(QStringLiteral("Right indent:"), right);
@@ -660,6 +664,7 @@ void paragraphDialog(QWidget *p, Editor *ed, int tab)
     case 3: f.setLineHeight(lineVal->value(), QTextBlockFormat::MinimumHeight); break;
     }
     f.setProperty(tp::AlignToBaseline, baseline->isChecked());
+    f.setLayoutDirection(direction->currentIndex() == 1 ? Qt::RightToLeft : Qt::LeftToRight);
     f.setProperty(tp::WidowControl, widow->isChecked());
     f.setProperty(tp::KeepWithNext, withNext->isChecked());
     f.setProperty(tp::KeepTogether, together->isChecked());
