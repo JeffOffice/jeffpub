@@ -323,6 +323,7 @@ static KnownMetrics knownMetrics(const QString &family)
     if (f == "lucida handwriting") return {(2098.0 + 727) / 2048, 727.0 / 2048};
     if (f == "juice itc") return {(1903.0 + 532) / 2048, 532.0 / 2048};
     if (f == "symbol") return {(2059.0 + 450) / 2048, 450.0 / 2048};                    // hhea
+    if (f == "ag_futura") return {(4051.0 + 1081) / 4096, 1081.0 / 4096};               // win
     return {};
 }
 static bool isSubstituted(const QString &family) { return !substituteFor(family).isEmpty() || substituteStretch(family) != 100; }
