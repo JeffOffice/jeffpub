@@ -58,7 +58,6 @@ void spellingDialog(QWidget *p, Editor *ed);
 void thesaurusDialog(QWidget *p, Editor *ed);
 void hyphenationDialog(QWidget *p, Editor *ed);
 void pasteSpecialDialog(QWidget *p, Editor *ed);
-void picturePlaceholderPrompt(QWidget *p, Editor *ed);
 void insertFileDialog(QWidget *p, Editor *ed);
 void recipientsDialog(QWidget *p, Editor *ed, bool typeNew);
 void mergeFieldDialog(QWidget *p, Editor *ed, int kind);   // 0 address block, 1 greeting line

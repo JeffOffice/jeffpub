@@ -2828,6 +2828,10 @@ void Ruler::mouseReleaseEvent(QMouseEvent *e)
     }
 }
 
-void Ruler::mouseDoubleClickEvent(QMouseEvent *) {}
+// Double-clicking the horizontal ruler while typing opens the Tabs settings.
+void Ruler::mouseDoubleClickEvent(QMouseEvent *)
+{
+    if (m_o == Qt::Horizontal && m_c->editor()->isEditingText()) Q_EMIT m_c->tabsDialogWanted();
+}
 
 } // namespace jp

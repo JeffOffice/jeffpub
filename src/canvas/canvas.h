@@ -76,6 +76,7 @@ Q_SIGNALS:
     void contextMenuWanted(const QPoint &globalPos);
     void insertPictureWanted(const QString &itemId);   // empty = new picture at the last drawn rect
     void editTextArtWanted(const QString &itemId);
+    void tabsDialogWanted();   // the horizontal ruler was double-clicked while typing
     void openFileWanted(const QString &path);
     void insertFilesWanted(const QStringList &paths, const QPointF &pagePos);
     void pictureTabWanted();

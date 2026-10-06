@@ -113,6 +113,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     connect(m_canvas, &Canvas::contextMenuWanted, this, &MainWindow::contextMenu);
     connect(m_canvas, &Canvas::insertPictureWanted, this, [this](const QString &id) { insertPictureFromFile(id); });
     connect(m_canvas, &Canvas::editTextArtWanted, this, &MainWindow::editTextArt);
+    connect(m_canvas, &Canvas::tabsDialogWanted, this, [this] { paragraphDialog(this, m_ed, 2); });
     connect(m_canvas, &Canvas::openFileWanted, this, [this](const QString &f) { if (maybeSave()) openFile(f); });
     connect(m_canvas, &Canvas::insertFilesWanted, this, &MainWindow::insertFiles);
     connect(m_canvas, &Canvas::pictureTabWanted, this, [this] { if (RibbonTab *t = m_ribbon->tab("Picture Format")) m_ribbon->showTab(t); });
@@ -762,7 +763,8 @@ void MainWindow::contextMenu(const QPoint &global)
         menu.addSeparator();
         menu.addAction(act("ins.link"));
         menu.addAction(act("rev.thesaurus"));
-        menu.addAction(act("tb.textFit"));
+        QMenu *fit = menu.addMenu(act("tb.textFit")->icon(), QStringLiteral("Text Fit"));
+        for (const char *id : {"fit.best", "fit.shrink", "fit.grow", "fit.none"}) fit->addAction(act(id));
         menu.addSeparator();
         menu.addAction(act("obj.format"));
     } else if (!kind.isEmpty()) {
@@ -792,7 +794,8 @@ void MainWindow::contextMenu(const QPoint &global)
             menu.addSeparator();
             menu.addAction(act("tb.link"));
             menu.addAction(act("tb.break"));
-            menu.addAction(act("tb.textFit"));
+            QMenu *fit = menu.addMenu(act("tb.textFit")->icon(), QStringLiteral("Text Fit"));
+            for (const char *id : {"fit.best", "fit.shrink", "fit.grow", "fit.none"}) fit->addAction(act(id));
         }
         if (kind == "shape") menu.addAction(act("shape.addText"));
         if (kind == "textart") menu.addAction(act("wa.edit"));

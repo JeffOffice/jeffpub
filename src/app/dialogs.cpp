@@ -2322,7 +2322,6 @@ void pasteSpecialDialog(QWidget *p, Editor *ed)
     ed->paste(false);
 }
 
-void picturePlaceholderPrompt(QWidget *, Editor *) {}
 
 void insertFileDialog(QWidget *p, Editor *ed)
 {
