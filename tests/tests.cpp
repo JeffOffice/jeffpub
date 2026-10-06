@@ -376,6 +376,46 @@ private Q_SLOTS:
         QVERIFY2(shapes >= 2, qPrintable(QString::number(shapes)));
     }
 
+    // Shapes holding text keep their text, placed where JeffPub puts it.
+    void pubWriterShapeText()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        const QStringList kinds = {QStringLiteral("rect"), QStringLiteral("star5"), QStringLiteral("wedgeRoundRectCallout")};
+        for (int i = 0; i < kinds.size(); ++i) {
+            auto sh = std::make_shared<jp::ShapeItem>();
+            sh->shape = kinds[i];
+            sh->rect = QRectF(72, 72 + i * 200, 250, 150);
+            sh->fill = jp::Fill::solid(jp::ColorRef::rgb(QColor(250, 220, 120)));
+            sh->stroke = jp::Stroke::line(jp::ColorRef::rgb(Qt::black), 1);
+            sh->storyId = doc->createStory(QStringLiteral("test18 text in a %1").arg(kinds[i]));
+            sh->valign = i == 0 ? jp::VAlign::Top : jp::VAlign::Middle;
+            doc->pages[0]->items.push_back(sh);
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("test18-shape-text.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        QVERIFY2(err.isEmpty(), qPrintable(err));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            const QString out = qEnvironmentVariable("JP_SHOT_DIR") + "/test18-shape-text";
+            QFile::remove(out + ".pub");
+            QFile::copy(path, out + ".pub");
+            QString e2;
+            jp::savePublication(*doc, out + ".jpub", QImage(), &e2);
+        }
+        QString e1;
+        auto back = jp::importPublisherFile(path, &e1);
+        QVERIFY2(back, qPrintable(e1));
+        QStringList texts;
+        jp::walkItems(back->pages[0]->items, [&](const jp::ItemPtr &it) {
+            QString sid;
+            if (it->type() == jp::ItemType::Text) sid = static_cast<const jp::TextItem *>(it.get())->storyId;
+            if (it->type() == jp::ItemType::Shape) sid = static_cast<const jp::ShapeItem *>(it.get())->storyId;
+            if (const QTextDocument *d = sid.isEmpty() ? nullptr : back->storyDoc(sid)) texts << d->toPlainText();
+        });
+        for (const QString &k : kinds) QVERIFY2(texts.contains(QStringLiteral("test18 text in a %1").arg(k)), qPrintable(texts.join(" | ")));
+    }
+
     // Preset shapes saved to .pub (Publisher's own where they match, freeforms
     // otherwise) read back with the same outline.
     void pubWriterShapes()

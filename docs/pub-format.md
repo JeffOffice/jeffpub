@@ -72,7 +72,9 @@ the file was last saved to. Not fully decoded yet.
 | 293… | 0x01 shape, 0x10 table, 0x63 cells | objects on pages |
 
 A shape chunk (rectangle): 04 = 259, 0c/0d = 8 zero bytes, aa = width,
-ab = height, b7 = 0; a text box adds 27 = its text id.
+ab = height, b7 = 0; a text box (or a shape holding text) adds 27 = its
+text id, and 35 = vertical alignment (1 middle, 2 bottom; left out for
+top). Publisher doesn't use the drawing property 0x0087 for this.
 
 ## Drawing records (EscherStm)
 

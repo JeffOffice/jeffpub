@@ -890,10 +890,22 @@ QByteArray PubWriter::write(QStringList *skipped)
     // Text boxes first: each chain of linked boxes is one story, numbered
     // in page order by its first box, with a frame per box in chain order.
     QHash<QString, QPair<int, int>> chainPos;   // box id -> text id, place in chain
+    QHash<QString, QPair<int, int>> shapeText;  // shape id -> text id, story index
     for (int pi = 0; pi < m_doc.pages.size(); ++pi) {
         std::function<void(const ItemPtr &)> find = [&](const ItemPtr &it) {
             if (it->type() == ItemType::Group) {
                 for (const ItemPtr &c : static_cast<const GroupItem *>(it.get())->children) find(c);
+                return;
+            }
+            if (it->type() == ItemType::Shape) {
+                // Text in a shape is a story too; its frame is set when the shape is written.
+                auto *sh = static_cast<const ShapeItem *>(it.get());
+                const QTextDocument *sd = sh->storyId.isEmpty() ? nullptr : m_doc.storyDoc(sh->storyId);
+                if (!sd) return;
+                const int tid = textId++;
+                addStory(tid, sd);
+                shapeText[sh->id] = qMakePair(tid, int(m_frames.size()));
+                m_frames << QVector<Frame>{Frame{sh->rect, QMarginsF(), false}};
                 return;
             }
             if (it->type() != ItemType::Text || m_doc.prevFrame(it->id)) return;
@@ -939,9 +951,10 @@ QByteArray PubWriter::write(QStringList *skipped)
                 const quint32 seq = next++;
                 const int tid = pos->first;
                 m_textShapes << TextShape{tid, pos->second, seq};
-                cw.put(seq, {0x01, pageSeq[pi], {flag(0x02), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
-                                                 u32(0x27, quint32(tid)), u32(0xaa, quint32(emu(r.width()))), u32(0xab, quint32(emu(r.height()))),
-                                                 u32(0xb7, 0)}});
+                QVector<B> body{flag(0x02), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}), u32(0x27, quint32(tid))};
+                if (t->valign != VAlign::Top) body << u32(0x35, t->valign == VAlign::Middle ? 1 : 2);   // vertical alignment
+                body << u32(0xaa, quint32(emu(r.width()))) << u32(0xab, quint32(emu(r.height()))) << u32(0xb7, 0);
+                cw.put(seq, {0x01, pageSeq[pi], body});
                 QVector<Prop> opt = {{0x0080, quint32(tid)}, {0x0081, quint32(emu(t->insets.left()))}, {0x0082, quint32(emu(t->insets.top()))},
                                      {0x0083, quint32(emu(t->insets.right()))}, {0x0084, quint32(emu(t->insets.bottom()))},
                                      {0x0181, 0x08000001}, {0x0183, 0x08000007}, {0x01bf, 0x00100000}, {0x01c0, 0x08000000}, {0x01c2, 0x08000007},
@@ -963,10 +976,8 @@ QByteArray PubWriter::write(QStringList *skipped)
             }
             if (it->type() == ItemType::Shape) {
                 auto *s = static_cast<const ShapeItem *>(it.get());
-                if (!s->storyId.isEmpty()) {
-                    ++skippedCount;
-                    return;
-                }
+                const auto stx = shapeText.constFind(s->id);
+                const bool hasText = stx != shapeText.cend();
                 // Publisher's own shape when it has one (at its standard
                 // handle settings); otherwise the exact outline as a freeform.
                 const ShapeDef *def = shapeDef(s->shape);
@@ -974,6 +985,10 @@ QByteArray PubWriter::write(QStringList *skipped)
                 bool atDefaults = def && adj.size() == def->defaults.size();
                 for (int k = 0; atDefaults && k < adj.size(); ++k) atDefaults = std::abs(adj[k] - def->defaults[k]) < 1e-6;
                 int st = s->customPath.isEmpty() && atDefaults ? pubShapeType(s->shape) : -1;
+                // Text sits in a rectangle's or a freeform's whole box, so other
+                // shapes holding text are written as freeforms with margins
+                // that put the text where JeffPub does.
+                if (hasText && st != 1) st = -1;
                 const bool open = s->customPath.isEmpty() && def && def->open;
                 QPainterPath outline;
                 if (st < 0) {
@@ -1003,18 +1018,22 @@ QByteArray PubWriter::write(QStringList *skipped)
                 // A freeform reaching outside its frame (a callout's pointer)
                 // gets a frame grown evenly to hold it, keeping the center.
                 QRectF frame = s->rect;
+                double gx = 0, gy = 0;
                 if (st == 0) {
                     const QRectF pb = outline.boundingRect();
-                    const double gx = std::max({0.0, -pb.left(), pb.right() - frame.width()});
-                    const double gy = std::max({0.0, -pb.top(), pb.bottom() - frame.height()});
+                    gx = std::max({0.0, -pb.left(), pb.right() - frame.width()});
+                    gy = std::max({0.0, -pb.top(), pb.bottom() - frame.height()});
                     outline.translate(gx, gy);
                     frame.adjust(-gx, -gy, gx, gy);
                 }
                 const QRectF box = turnedBox(frame, s->rotation);
                 const quint32 seq = next++;
-                cw.put(seq, {0x01, pageSeq[pi], {flag(0x02), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
-                                                 u32(0x34, 0), u32(0xaa, quint32(emu(box.width()))), u32(0xab, quint32(emu(box.height()))),
-                                                 u32(0xb7, 0)}});
+                QVector<B> body{flag(0x02), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {})};
+                if (hasText) body << u32(0x27, quint32(stx->first));
+                body << u32(0x34, 0);
+                if (hasText && s->valign != VAlign::Top) body << u32(0x35, s->valign == VAlign::Middle ? 1 : 2);
+                body << u32(0xaa, quint32(emu(box.width()))) << u32(0xab, quint32(emu(box.height()))) << u32(0xb7, 0);
+                cw.put(seq, {0x01, pageSeq[pi], body});
                 const bool filled = !open && s->fill.type == Fill::Solid;
                 QVector<Prop> opt = kInsets;
                 opt << Prop{0x0181, filled ? bgr(s->fill.color.resolve(m_doc.colors)) : 0x08000001} << Prop{0x0183, 0x08000007}
@@ -1023,10 +1042,25 @@ QByteArray PubWriter::write(QStringList *skipped)
                 opt << kTail;
                 rotationProp(opt, s);
                 if (st == 0) freeformProps(opt, outline, frame.size());
+                if (hasText) {
+                    // Margins from the frame to JeffPub's text area.
+                    QRectF tr = s->customPath.isEmpty() ? shapeTextRect(s->shape, s->rect.size(), s->adj) : QRectF(QPointF(), s->rect.size());
+                    tr.translate(gx, gy);
+                    const QMarginsF m(tr.left() + s->insets.left(), tr.top() + s->insets.top(), frame.width() - tr.right() + s->insets.right(),
+                                      frame.height() - tr.bottom() + s->insets.bottom());
+                    opt[0].value = quint32(emu(m.left()));
+                    opt[1].value = quint32(emu(m.top()));
+                    opt[2].value = quint32(emu(m.right()));
+                    opt[3].value = quint32(emu(m.bottom()));
+                    opt << Prop{0x0080, quint32(stx->first)};
+                    m_frames[stx->second][0] = Frame{frame, m, false};
+                    m_textShapes << TextShape{stx->first, 0, seq};
+                }
                 QVector<Prop> topt = {{0x01ff, 0x00400000}, {0x06ff, 0x00020002}};
                 topt << kSideLines << kShadowFlags;
                 QByteArray sp = spRecord(quint16(st), 0x0a00, s) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(box);
                 sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
+                if (hasText) sp += clientBlocks(0xf00d, {u32(0x01, quint32(stx->first))});
                 finish(seq, sp);
                 return;
             }
@@ -1258,7 +1292,7 @@ QByteArray PubWriter::write(QStringList *skipped)
             }
         }
     }
-    if (skipped && skippedCount) *skipped << QStringLiteral("%1 object(s) (text art and shapes holding text) aren't saved to .pub yet").arg(skippedCount);
+    if (skipped && skippedCount) *skipped << QStringLiteral("%1 object(s) (text art) aren't saved to .pub yet").arg(skippedCount);
     const quint32 fontSeq = m_fonts.isEmpty() && m_textIds.isEmpty() ? 0 : next++;
     if (m_fonts.isEmpty()) m_fonts << m_doc.fonts.body;
 
