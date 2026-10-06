@@ -1793,6 +1793,10 @@ librevenge::RVNGPropertyList MSPUBCollector::getParaStyleProps(const ParagraphSt
       tab.insert("style:position", double(style.m_tabStopsInEmu[i]) / EMUS_IN_INCH);
       const int a = i < style.m_tabAligns.size() ? style.m_tabAligns[i] : 0;
       tab.insert("style:type", a == 1 ? "right" : a == 2 ? "center" : a == 3 ? "char" : "left");
+      // The leader: Publisher's '.', '-', '_' or 0xB7 (a bullet).
+      const int leader = i < style.m_tabLeaders.size() ? style.m_tabLeaders[i] : 0;
+      if (leader > 0x20)
+        tab.insert("jp:leader", leader);
       tabs.append(tab);
     }
     ret.insert("style:tab-stops", tabs);

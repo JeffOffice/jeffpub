@@ -165,7 +165,9 @@ sepia setting, so a sepia picture is recolored to brown 0x704214 and read
 back as sepia. A picture cut to a shape is saved as that shape filled with
 the picture (0x0180 = 3); the fill always covers the shape's box, so a
 cropped or adjusted picture is saved as the part that shows, with the
-settings applied.
+settings applied. Publisher showed a picture saved with only the grayscale
+or black and white setting in its own colors, so such pictures are saved
+already converted, with the setting kept.
 
 ### Line spacing
 
@@ -359,8 +361,9 @@ their own (0.8×) size.
 
 Tab stops (FDPP `32:82`): `27:1a` count, then `28:8a` with a record per
 stop: `00:20` position (EMU), `01:10` alignment in the low byte (left left
-out, 1 right, 2 center, 3 decimal), `02:18 = 46`. Where the leader is kept
-is not known yet.
+out, 1 right, 2 center, 3 decimal), `02:18` the leader character, left out
+for none: 46 dots, 45 dashes, 95 a line, 183 bullets (from a sample made in
+Publisher with one of each).
 
 Lists (FDPP): `57:8a {00:22 kind, 01:22 bullet character, 02:22 0}` where
 kind 23 is a bulleted list (0xB7 = the Symbol font's round bullet) and

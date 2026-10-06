@@ -1561,10 +1561,11 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
             MSPUBBlockInfo tabEntryInfo = parseBlock(input, true);
             if (tabEntryInfo.type == GENERAL_CONTAINER)
             {
-              // JeffPub 79: 00 position, 01 alignment (low byte); read them all.
+              // JeffPub 79: 00 position, 01 alignment (low byte), 02 the
+              // leader character (absent for none); read them all.
               input->seek(tabEntryInfo.dataOffset + 4, librevenge::RVNG_SEEK_SET);
               unsigned position = 0;
-              int align = 0;
+              int align = 0, leader = 0;
               bool hasPosition = false;
               while (stillReading(input, tabEntryInfo.dataOffset + tabEntryInfo.dataLength))
               {
@@ -1577,11 +1578,14 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
                 }
                 else if (tabInfo.id == 0x01)
                   align = int(tabInfo.data & 0xff);
+                else if (tabInfo.id == 0x02)
+                  leader = int(tabInfo.data & 0xffff);
               }
               if (hasPosition)
               {
                 ret.m_tabStopsInEmu.push_back(position);
                 ret.m_tabAligns.push_back(align);
+                ret.m_tabLeaders.push_back(leader);
               }
               input->seek(tabEntryInfo.dataOffset + tabEntryInfo.dataLength, librevenge::RVNG_SEEK_SET);
             }

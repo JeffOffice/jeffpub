@@ -644,6 +644,7 @@ private:
     int patternBlip(const Fill &f);
     QString extraImage(const QByteArray &bytes, quint16 kind);
     QString shapedPictureImage(const PictureItem &pic);
+    QString recoloredPictureImage(const PictureItem &pic);
 
     // Tables: each table story's cell ends (by story index), the table
     // stories' text ids, and the cell fill and border records, which live in
@@ -755,16 +756,20 @@ QVector<B> PubWriter::paraBlocks(const QTextBlock &block)
         spacing = quint32(4 * std::llround(lines * 914400.0 * 96 / 72 / 4)) + 2;
     }
     p << u32(0x34, spacing, 0x22);
-    // Tab stops: a count, then each one's position and alignment (left left
-    // out, 1 right, 2 center, 3 decimal) with Publisher's 46 alongside.
+    // Tab stops: a count, then each one's position, alignment (left left
+    // out, 1 right, 2 center, 3 decimal) and leader character ('.', '-',
+    // '_' or 0xB7 for bullets; left out for none).
     const QList<QTextOption::Tab> tabs = f.tabPositions();
     if (!tabs.isEmpty()) {
+        const QString leaders = f.stringProperty(tp::TabLeaders);
         QVector<B> stops;
         for (int i = 0; i < tabs.size(); ++i) {
             QVector<B> t{u32(0x00, quint32(emu(tabs[i].position)), 0x20)};
             const int align = tabs[i].type == QTextOption::RightTab ? 1 : tabs[i].type == QTextOption::CenterTab ? 2 : tabs[i].type == QTextOption::DelimiterTab ? 3 : 0;
             if (align) t << u16(0x01, quint32(align), 0x10);
-            t << u16(0x02, 46);
+            const QChar leader = i < leaders.size() ? leaders.at(i) : QChar(' ');
+            const uint code = leader == QChar(0x2022) || leader == QChar(0x00B7) ? 0xB7 : leader.unicode();
+            if (code > 0x20 && code < 0x100) t << u16(0x02, code);
             stops << rec(quint8(i), t);
         }
         p << rec(0x32, {u16(0x27, quint32(tabs.size()), 0x1a), rec(0x28, stops, 0x8a)}, 0x82);
@@ -906,6 +911,36 @@ QString PubWriter::shapedPictureImage(const PictureItem &pic)
     QBuffer buf(&bytes);
     buf.open(QIODevice::WriteOnly);
     img.save(&buf, jpeg ? "JPEG" : "PNG", jpeg ? 92 : -1);
+    return extraImage(bytes, jpeg ? 5 : 6);
+}
+
+// Grayscale and black and white: the other program shows a saved picture in
+// its own colors even with these set (0x013F), so the picture is saved
+// already in gray or black and white, the setting kept alongside. Applying
+// either again changes nothing.
+QString PubWriter::recoloredPictureImage(const PictureItem &pic)
+{
+    if (pic.recolor != PictureItem::Grayscale && pic.recolor != PictureItem::BlackWhite) return pic.imageId;
+    QImage img = m_doc.image(pic.imageId);
+    if (img.isNull()) return pic.imageId;
+    img = img.convertToFormat(QImage::Format_ARGB32);
+    for (int y = 0; y < img.height(); ++y) {
+        QRgb *line = reinterpret_cast<QRgb *>(img.scanLine(y));
+        for (int x = 0; x < img.width(); ++x) {
+            const QRgb c = line[x];
+            const double lum = 0.299 * qRed(c) + 0.587 * qGreen(c) + 0.114 * qBlue(c);
+            const int v = pic.recolor == PictureItem::BlackWhite ? (lum >= 128 ? 255 : 0) : std::clamp(int(std::lround(lum)), 0, 255);
+            line[x] = qRgba(v, v, v, qAlpha(c));
+        }
+    }
+    const auto src = m_doc.images.constFind(pic.imageId);
+    const bool jpeg = src != m_doc.images.cend() && (src->format.toLower() == QLatin1String("jpg") || src->format.toLower() == QLatin1String("jpeg"))
+                      && !img.hasAlphaChannel();
+    QByteArray bytes;
+    QBuffer buf(&bytes);
+    buf.open(QIODevice::WriteOnly);
+    if (jpeg) img.convertToFormat(QImage::Format_RGB32).save(&buf, "JPEG", 92);
+    else img.save(&buf, "PNG");
     return extraImage(bytes, jpeg ? 5 : 6);
 }
 
@@ -1581,7 +1616,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                     visit(shaped);
                     return;
                 }
-                const int blip = blipIndex(pic->imageId);
+                const int blip = blipIndex(recoloredPictureImage(*pic));
                 if (blip < 0) {
                     ++skippedCount;
                     return;

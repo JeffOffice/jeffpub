@@ -423,6 +423,7 @@ public:
         }
         if (const RVNGPropertyListVector *tabs = p.child("style:tab-stops")) {
             QList<QTextOption::Tab> tl;
+            QString leaders;   // a character per tab stop, a space for none
             for (unsigned long i = 0; i < tabs->count(); ++i) {
                 const RVNGPropertyList &t = (*tabs)[i];
                 const QString type = str(t["style:type"]);
@@ -430,8 +431,11 @@ public:
                 tab.position = toPt(t["style:position"]);
                 tab.type = type == "right" ? QTextOption::RightTab : type == "center" ? QTextOption::CenterTab : type == "char" ? QTextOption::DelimiterTab : QTextOption::LeftTab;
                 tl << tab;
+                const int leader = t["jp:leader"] ? t["jp:leader"]->getInt() : 0;
+                leaders += leader == 0xB7 ? QChar(0x2022) : leader > 0x20 && leader < 0x10000 ? QChar(char16_t(leader)) : QChar(' ');
             }
             bf.setTabPositions(tl);
+            if (!leaders.trimmed().isEmpty()) bf.setProperty(tp::TabLeaders, leaders);
         }
         // A named style: the paragraph keeps its name, and the first
         // paragraph of each gives the style its settings.

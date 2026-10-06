@@ -186,6 +186,7 @@ struct ParagraphStyle
   // and the list as Publisher stores it: kind (23 bullet, else a numbering
   // style), bullet character, and number punctuation (high half of 0x58).
   std::vector<int> m_tabAligns;
+  std::vector<int> m_tabLeaders;   // each tab's leader character, 0 for none
   int m_listKind = -1;
   int m_listChar = 0;
   int m_listDelim = -1;

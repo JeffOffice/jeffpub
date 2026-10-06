@@ -1574,6 +1574,18 @@ private Q_SLOTS:
             QVERIFY2(std::abs(g->contrast - want->contrast) < 0.05, qPrintable(QStringLiteral("%1 %2").arg(cases[i].label).arg(g->contrast)));
             QCOMPARE(int(g->recolor), int(want->recolor));
             if (want->recolor == jp::PictureItem::ColorTint) QCOMPARE(g->recolorColor.resolve(back->colors), want->recolorColor.resolve(doc->colors));
+            // Gray and black and white pictures are saved already converted,
+            // since the other program shows the saved colors.
+            if (want->recolor == jp::PictureItem::Grayscale || want->recolor == jp::PictureItem::BlackWhite) {
+                const QImage saved = back->image(g->imageId);
+                QVERIFY(!saved.isNull());
+                for (int y = 0; y < saved.height(); y += 7)
+                    for (int x = 0; x < saved.width(); x += 7) {
+                        const QColor px = saved.pixelColor(x, y);
+                        QVERIFY2(std::abs(px.red() - px.green()) <= 2 && std::abs(px.green() - px.blue()) <= 2, qPrintable(cases[i].label));
+                        if (want->recolor == jp::PictureItem::BlackWhite) QVERIFY2(px.red() <= 2 || px.red() >= 253, qPrintable(cases[i].label));
+                    }
+            }
             QCOMPARE(g->hasTransparentColor, want->hasTransparentColor);
             if (want->hasTransparentColor) QCOMPARE(g->transparentColor, want->transparentColor);
         }
@@ -1784,6 +1796,7 @@ private Q_SLOTS:
             QList<QTextOption::Tab> tl;
             tl << QTextOption::Tab(72, QTextOption::LeftTab) << QTextOption::Tab(216, QTextOption::CenterTab) << QTextOption::Tab(360, QTextOption::RightTab);
             tabs.setTabPositions(tl);
+            tabs.setProperty(jp::tp::TabLeaders, QStringLiteral(" .-"));   // none, dots, dashes
             c.insertBlock(tabs, plain);
             c.insertText(QStringLiteral("\tleft\tcenter\tright"));
             QTextBlockFormat item;
@@ -1845,6 +1858,8 @@ private Q_SLOTS:
         const QList<QTextOption::Tab> got = d->begin().next().blockFormat().tabPositions();
         QCOMPARE(got.size(), 3);
         QVERIFY(std::abs(got[1].position - 216) < 0.5 && got[1].type == QTextOption::CenterTab);
+        // Leaders: none before the left stop, dots before center, dashes before right.
+        QCOMPARE(d->begin().next().blockFormat().stringProperty(jp::tp::TabLeaders), QStringLiteral(" .-"));
         QVERIFY(std::abs(got[2].position - 360) < 0.5 && got[2].type == QTextOption::RightTab);
         const QTextBlock b1 = d->begin().next().next(), b2 = b1.next(), n1 = b2.next(), n2 = n1.next();
         QVERIFY(b1.textList() && b1.textList() == b2.textList());
