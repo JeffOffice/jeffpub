@@ -113,6 +113,25 @@ static QLabel *mutedLabel(const QString &t, QWidget *parent, double alpha = 0.62
 }
 
 namespace {
+// Keeps a word-wrapped label as tall as its text at the width it gets. The
+// About cards are capped at 820 pixels, but Qt works out a card's height for
+// the page's full width, where text wraps less: in a wide window the cards
+// came out short and cut off their last lines.
+class FitHeight : public QObject {
+public:
+    using QObject::QObject;
+    bool eventFilter(QObject *o, QEvent *e) override
+    {
+        if (e->type() == QEvent::Resize)
+            if (auto *l = qobject_cast<QLabel *>(o)) {
+                const int h = l->heightForWidth(l->width());
+                if (h > 0 && h != l->minimumHeight()) l->setMinimumHeight(h);
+            }
+        return false;
+    }
+};
+void fitHeight(QLabel *l) { l->installEventFilter(new FitHeight(l)); }
+
 // Template cards: rounded hover and selection, picture above a two-line name.
 class CardDelegate : public QStyledItemDelegate {
 public:
@@ -1464,6 +1483,7 @@ QWidget *Backstage::buildAbout()
     iv->addWidget(mutedLabel(QStringLiteral("Version %1 · Built with Qt %2").arg(QStringLiteral(JP_VERSION), QString::fromLatin1(qVersion())), id));
     auto *tag = new QLabel(QStringLiteral("Free, open-source desktop publishing for Windows and Linux."), id);
     tag->setWordWrap(true);
+    fitHeight(tag);
     iv->addWidget(tag);
     auto *links = new QLabel(QStringLiteral("<a href=\"https://github.com/jeffsteinport/jeffpub79\">Source code</a> &nbsp;·&nbsp; "
                                             "<a href=\"https://github.com/jeffsteinport/jeffpub79/releases\">Downloads</a> &nbsp;·&nbsp; "
@@ -1528,6 +1548,7 @@ QWidget *Backstage::buildAbout()
                               "software company. Product names are trademarks of their owners."),
                           legal, 0.75);
     lt->setWordWrap(true);
+    fitHeight(lt);
     lt->setTextFormat(Qt::RichText);
     lt->setOpenExternalLinks(true);
     lv->addWidget(lt);
@@ -1585,6 +1606,10 @@ QWidget *Backstage::buildAbout()
     lv->addWidget(th);
     auto *table = mutedLabel(QStringLiteral("<table cellspacing=\"0\">%1</table>").arg(rows), legal, 0.75);
     table->setTextFormat(Qt::RichText);
+    // Wrapped at the card's width: unwrapped, a narrow window cut off the
+    // long names and the last rows.
+    table->setWordWrap(true);
+    fitHeight(table);
     table->setOpenExternalLinks(true);
     lv->addWidget(table);
     v->addWidget(legal);

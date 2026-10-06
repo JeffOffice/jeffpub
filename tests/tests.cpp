@@ -1484,6 +1484,39 @@ private Q_SLOTS:
         QCOMPARE(decoded, first->images.first().cache);
     }
 
+    // About: the third-party table fits its card at a modest window size
+    // (its last rows and long license names were cut off).
+    void aboutLicensesFit()
+    {
+        for (const QSize size : {QSize(1000, 700), QSize(1400, 900)}) {
+            jp::MainWindow w;
+            w.resize(size);
+            w.show();
+            w.showBackstage(QStringLiteral("about"));
+            QTest::qWait(100);   // the scroll area lays out in steps
+            QLabel *table = nullptr;
+            for (QLabel *l : w.findChildren<QLabel *>())
+                if (l->isVisibleTo(&w) && l->text().contains(QLatin1String("<table")) && l->text().contains(QLatin1String("ISBN range table"))) table = l;
+            QVERIFY(table);
+            QTextDocument doc;
+            doc.setDefaultFont(table->font());
+            doc.setDocumentMargin(0);   // as QLabel lays out its text
+            doc.setHtml(table->text());
+            doc.setTextWidth(table->contentsRect().width());
+            QVERIFY2(doc.idealWidth() <= table->contentsRect().width() + 1,
+                     qPrintable(QStringLiteral("%1 > %2").arg(doc.idealWidth()).arg(table->contentsRect().width())));
+            QVERIFY2(doc.size().height() <= table->contentsRect().height() + 1,
+                     qPrintable(QStringLiteral("%1 > %2 at %3").arg(doc.size().height()).arg(table->contentsRect().height()).arg(size.width())));
+            for (QLabel *l : table->window()->findChildren<QLabel *>())
+                if (l->isVisibleTo(&w) && l->wordWrap() && l->heightForWidth(l->width()) > 0)
+                    QVERIFY2(l->height() >= l->heightForWidth(l->width()), qPrintable(l->text().left(40)));
+            if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR") && size.width() == 1000) {
+                table->window()->grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/about.png");
+                table->parentWidget()->grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/about-licenses.png");
+            }
+        }
+    }
+
     // Hyphenation in each bundled language matches LibreOffice's (libhyphen
     // 2.8 with the same pattern files, at least two letters each side),
     // including German compounds split in two stages and words with
