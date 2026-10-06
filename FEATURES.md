@@ -122,8 +122,8 @@ Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missi
 ## Picture Tools Format tab
 - [x] Insert: Change Picture, Swap (between picture frames), Insert Pictures
 - [x] Adjust: Corrections (brightness and contrast presets), Recolor (presets, more variations, set transparent color), Compress Pictures, Reset Picture
-- [~] Picture Styles gallery, Picture Border, Picture Effects, Caption gallery, Picture Shape *(partial: Picture Shape is rectangle only)*
-- [~] Crop (handles, drag picture inside frame), Crop to Shape, Fit, Fill, Clear Crop, Pan picture *(partial: no Crop to Shape)*
+- [x] Picture Styles gallery, Picture Border, Picture Effects, Caption gallery, Picture Shape (any closed shape)
+- [x] Crop (handles, drag picture inside frame), Crop to Shape, Fit, Fill, Clear Crop, Pan picture
 - [x] Arrange and Size
 - [x] Picture placeholders with click-to-insert
 - [~] Scratch-area picture tray behavior (pictures parked on the scratch area) *(partial: pictures can sit on the scratch area; there is no automatic tray)*

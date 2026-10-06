@@ -1088,6 +1088,20 @@ void MainWindow::buildRibbon()
         g->addLarge(act("pic.crop"));
         g->addSmall(act("pic.fit"));
         g->addSmall(act("pic.fill"));
+        {
+            // Crop to Shape: trim the picture to any closed shape (the same
+            // setting as Picture Shape).
+            auto *cs = new GalleryButton(icon("crop"), QStringLiteral("Crop to Shape"), QSize(24, 24), 12, false);
+            cs->setItemsProvider([] {
+                QVector<GalleryItem> v;
+                for (const auto &s : shapeLibrary()) if (!s.open) v << GalleryItem{s.id, s.name, shapeIcon(s.id), s.category};
+                return v;
+            });
+            connect(cs, &GalleryButton::activated, this, [this](const QString &id) {
+                m_ed->forEachSelected(QStringLiteral("Crop to Shape"), [id](Item *it) { if (auto *p = dynamic_cast<PictureItem *>(it)) p->maskShape = id; });
+            });
+            g->addRow({cs});
+        }
         g->addSmall(act("pic.clearCrop"));
         sizeGroup(t);
         t->finish();
