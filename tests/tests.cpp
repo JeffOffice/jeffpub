@@ -1451,6 +1451,39 @@ private Q_SLOTS:
         QVERIFY2(warnings.isEmpty(), qPrintable(warnings.mid(0, 40).join('\n')));
     }
 
+    // The year calendar's twelve pictures: made in parallel, compressed (they
+    // were stored unpacked, 27 MB a calendar), and the same each time.
+    void calendarPictures()
+    {
+        const jp::TemplateInfo *info = jp::findTemplate(QStringLiteral("calendar-year"));
+        QVERIFY(info);
+        jp::TemplateOptions o;
+        o.colorScheme = QStringLiteral("Harbor");   // not the calendar's own colors, so likely made fresh here
+        auto first = info->build(o);
+        auto again = info->build(o);   // from the session's cache
+        qint64 total = 0;
+        QStringList a, b;
+        for (const auto &img : first->images) {
+            total += img.bytes.size();
+            a << QString::fromLatin1(QCryptographicHash::hash(img.bytes, QCryptographicHash::Sha1).toHex());
+            QVERIFY(!img.cache.isNull() && img.cache.size() == img.pixelSize);
+            QCOMPARE(img.cache, img.image());   // as decoded from the file
+        }
+        for (const auto &img : again->images) b << QString::fromLatin1(QCryptographicHash::hash(img.bytes, QCryptographicHash::Sha1).toHex());
+        QCOMPARE(int(first->images.size()), 12);
+        QVERIFY2(total < 4 * 1024 * 1024, qPrintable(QString::number(total)));
+        a.sort();
+        b.sort();
+        QCOMPARE(a, b);
+        QImage decoded;
+        {
+            jp::ImageData copy = first->images.first();
+            copy.cache = QImage();
+            decoded = copy.image();
+        }
+        QCOMPARE(decoded, first->images.first().cache);
+    }
+
     // Hyphenation in each bundled language matches LibreOffice's (libhyphen
     // 2.8 with the same pattern files, at least two letters each side),
     // including German compounds split in two stages and words with

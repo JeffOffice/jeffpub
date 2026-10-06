@@ -6,6 +6,7 @@
 
 #include <QBuffer>
 #include <QDate>
+#include <QImageReader>
 #include <QLocale>
 #include <QPainter>
 #include <QPainterPath>
@@ -14,7 +15,12 @@
 #include <QTextBlock>
 #include <QTextCursor>
 #include <QTextDocument>
+#include <QSet>
 #include <QtMath>
+
+#include <future>
+#include <thread>
+#include <vector>
 
 namespace jp {
 
@@ -24,9 +30,26 @@ constexpr double IN = 72.0;
 
 // ---------------- generated artwork ----------------
 // Abstract pictures painted in the scheme's colors stand in for photos.
-QString art(Document &d, const QString &kind, const QSize &px, quint32 seed = 1)
+
+// The same picture in the same colors is made once per session (the New page
+// builds every template to show it).
+QHash<QString, QByteArray> &artCache()
 {
-    const ColorScheme &s = d.colors;
+    static QHash<QString, QByteArray> done;
+    return done;
+}
+
+QString artKey(const ColorScheme &s, const QString &kind, const QSize &px, quint32 seed)
+{
+    QString key = kind + QLatin1Char('|') + QString::number(px.width()) + QLatin1Char('x') + QString::number(px.height()) + QLatin1Char('|') +
+                  QString::number(seed);
+    for (int i = 0; i < SlotCount; ++i) key += QLatin1Char('|') + s.c[i].name();
+    return key;
+}
+
+// One picture as PNG. Touches nothing shared, so several can be made at once.
+QByteArray paintArt(const ColorScheme &s, const QString &kind, const QSize &px, quint32 seed)
+{
     // Made at most 3,000 pixels on its longest side: decorative art on a
     // 5-foot banner needs no more (60 dpi there), and every pixel past that
     // cost time and file size. It is drawn in the size asked for and scaled
@@ -34,13 +57,6 @@ QString art(Document &d, const QString &kind, const QSize &px, quint32 seed = 1)
     const int longest = std::max(px.width(), px.height());
     const double fit = longest > 3000 ? 3000.0 / longest : 1.0;
     const QSize made = QSize(std::max(1, int(std::lround(px.width() * fit))), std::max(1, int(std::lround(px.height() * fit))));
-    // The same picture in the same colors is made once per session (the New
-    // page builds every template to show it).
-    static QHash<QString, QByteArray> done;
-    QString key = kind + QLatin1Char('|') + QString::number(px.width()) + QLatin1Char('x') + QString::number(px.height()) + QLatin1Char('|') +
-                  QString::number(seed);
-    for (int i = 0; i < SlotCount; ++i) key += QLatin1Char('|') + s.c[i].name();
-    if (const auto hit = done.constFind(key); hit != done.constEnd()) return d.addImage(*hit, "png", "art:" + kind);
     QImage img(made, QImage::Format_ARGB32_Premultiplied);
     QPainter p(&img);
     p.setRenderHint(QPainter::Antialiasing);
@@ -185,10 +201,83 @@ QString art(Document &d, const QString &kind, const QSize &px, quint32 seed = 1)
     QByteArray png;
     QBuffer b(&png);
     b.open(QIODevice::WriteOnly);
-    img.save(&b, "PNG", 90);   // light compression: quick to make, a little larger
+    // Qt's quality 80 is zlib's fastest compression, level 1: as quick to
+    // write as none (quality 90 and up), and 10 to 50 times smaller.
+    img.save(&b, "PNG", 80);
+    return png;
+}
+
+void keepArt(const QString &key, const QByteArray &png)
+{
+    QHash<QString, QByteArray> &done = artCache();
     if (done.size() > 64) done.clear();   // a session's worth; templates use a few dozen
     done.insert(key, png);
-    return d.addImage(png, "png", "art:" + kind);
+}
+
+// Pictures prepareArt() made or decoded ahead, by key, until art() takes them.
+QHash<QString, QImage> &decodedArt()
+{
+    static QHash<QString, QImage> ready;
+    return ready;
+}
+
+QImage decodePng(const QByteArray &png)
+{
+    QBuffer buf;
+    buf.setData(png);
+    QImageReader rd(&buf);
+    rd.setAutoTransform(true);   // as ImageData::image() reads it
+    return rd.read();
+}
+
+QString art(Document &d, const QString &kind, const QSize &px, quint32 seed = 1)
+{
+    const QString key = artKey(d.colors, kind, px, seed);
+    auto hit = artCache().constFind(key);
+    const QByteArray png = hit != artCache().constEnd() ? *hit : paintArt(d.colors, kind, px, seed);
+    if (hit == artCache().constEnd()) keepArt(key, png);
+    return d.addImage(png, "png", "art:" + kind, decodedArt().take(key));
+}
+
+// Makes and decodes several pictures at once, a processor core each, for the
+// art() calls that follow (the year calendar's twelve took a third of a
+// second one after another, and decoding them again most of a tenth).
+struct ArtRequest {
+    QString kind;
+    QSize px;
+    quint32 seed;
+};
+void prepareArt(const ColorScheme &s, const QVector<ArtRequest> &want)
+{
+    struct Job {
+        QString key;
+        ArtRequest a;
+        QByteArray png;   // empty: still to make
+    };
+    QVector<Job> todo;
+    QSet<QString> keys;
+    for (const ArtRequest &a : want) {
+        const QString key = artKey(s, a.kind, a.px, a.seed);
+        if (keys.contains(key)) continue;
+        keys.insert(key);
+        todo << Job{key, a, artCache().value(key)};
+    }
+    decodedArt().clear();
+    const int cores = std::max(1, int(std::thread::hardware_concurrency()));
+    for (int from = 0; from < todo.size(); from += cores) {
+        const int to = std::min(int(todo.size()), from + cores);
+        std::vector<std::future<std::pair<QByteArray, QImage>>> jobs;
+        for (int i = from; i < to; ++i)
+            jobs.push_back(std::async(std::launch::async, [s, job = todo[i]] {
+                const QByteArray png = job.png.isEmpty() ? paintArt(s, job.a.kind, job.a.px, job.a.seed) : job.png;
+                return std::make_pair(png, decodePng(png));
+            }));
+        for (int i = from; i < to; ++i) {
+            auto made = jobs[size_t(i - from)].get();
+            if (todo[i].png.isEmpty()) keepArt(todo[i].key, made.first);
+            decodedArt().insert(todo[i].key, made.second);
+        }
+    }
 }
 
 // ---------------- builder ----------------
@@ -814,6 +903,12 @@ std::unique_ptr<Document> calendarTemplate(const TemplateOptions &o)
     auto d = base(o, QSizeF(11 * IN, 8.5 * IN), 12, "Meadow", "Modern", "Letter Landscape");
     const int year = QDate::currentDate().year() + (QDate::currentDate().month() > 10 ? 1 : 0);
     const QStringList arts{"leaves", "bokeh", "waves", "hills", "sunburst", "confetti", "geo", "skyline", "leaves", "hills", "bokeh", "confetti"};
+    {
+        const QRectF c = content(*d);
+        QVector<ArtRequest> want;
+        for (int m = 1; m <= 12; ++m) want << ArtRequest{arts[m - 1], QSize(int(c.width() * 0.36 * 2), int(c.height() * 2)), quint32(100 + m)};
+        prepareArt(d->colors, want);
+    }
     for (int m = 1; m <= 12; ++m) {
         B b(*d, m - 1);
         const QSizeF ps = d->pageSize();

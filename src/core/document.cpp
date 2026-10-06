@@ -459,7 +459,7 @@ QString Document::copyStory(const QString &id)
 
 void Document::removeStory(const QString &id) { stories.remove(id); }
 
-QString Document::addImage(const QByteArray &bytes, const QString &format, const QString &sourcePath)
+QString Document::addImage(const QByteArray &bytes, const QString &format, const QString &sourcePath, const QImage &decoded)
 {
     for (auto it = images.cbegin(); it != images.cend(); ++it)
         if (it->bytes == bytes) return it.key();
@@ -467,6 +467,7 @@ QString Document::addImage(const QByteArray &bytes, const QString &format, const
     d.bytes = bytes;
     d.format = format.toLower();
     d.sourcePath = sourcePath;
+    d.cache = decoded;
     const QImage img = d.image();
     d.pixelSize = img.size();
     const QString id = newId("img");

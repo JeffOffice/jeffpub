@@ -205,7 +205,9 @@ public:
     void applyDefaultFont(QTextDocument *d) const;
 
     // pictures
-    QString addImage(const QByteArray &bytes, const QString &format, const QString &sourcePath = QString());
+    // `decoded`, when the caller has it, is the picture as image() would
+    // read it, saving the decoding.
+    QString addImage(const QByteArray &bytes, const QString &format, const QString &sourcePath = QString(), const QImage &decoded = QImage());
     QImage image(const QString &id) const;
     QSize imageSize(const QString &id) const;
 
