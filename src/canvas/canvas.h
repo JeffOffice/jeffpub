@@ -114,7 +114,7 @@ public:
     int textPosAt(const QString &itemId, const QPointF &page, int row = -1, int col = -1) const;
 
 private:
-    enum class Drag { None, Pending, Move, Resize, Rotate, LineEnd, Adjust, Marquee, Draw, TextSelect, Guide, Crop, CropMove, ColResize, RowResize, Pan, Point, WrapPoint };
+    enum class Drag { None, Pending, Move, Resize, Rotate, LineEnd, Adjust, Marquee, Draw, TextSelect, TextMove, Guide, Crop, CropMove, ColResize, RowResize, Pan, Point, WrapPoint };
 
     void updateScrollBars();
     void paintPageSlot(QPainter &p, const Slot &s, bool current);
@@ -125,7 +125,7 @@ private:
     QVector<QPointF> handlePoints(const Item *it) const;     // 8 resize handles in view coordinates
     QPointF rotateHandle(const Item *it) const;
     PaintContext paintContext() const;
-    bool caretInfo(QLineF *pageLine, QString *frameId) const;
+    bool caretInfo(QLineF *pageLine, QString *frameId, int atPos = -1) const;   // atPos: another place in the text
     QPointF snapPoint(const QPointF &page, QVector<QLineF> *lines, const QSet<QString> &exclude) const;
     QPointF snapMove(const QRectF &box, QVector<QLineF> *lines, const QSet<QString> &exclude) const;
     void collectSnapTargets(QVector<double> &xs, QVector<double> &ys, const QSet<QString> &exclude) const;
@@ -166,6 +166,9 @@ private:
     double m_guidePos = 0;
     bool m_guideOnMaster = false;
     int m_clicks = 0;
+    int m_textPress = -1;               // where a text selection drag started
+    int m_moveFrom = -1, m_moveTo = -1;  // the selected text being dragged
+    int m_movePos = -1;                  // where it would drop
     QElapsedTimer m_clickTimer;
     QPointF m_lastClickView;
     bool m_copyDrag = false;

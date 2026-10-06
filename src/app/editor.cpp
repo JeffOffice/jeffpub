@@ -1,4 +1,5 @@
 #include "app/editor.h"
+#include "app/settings.h"
 #include "app/appfuncs.h"
 
 #include <algorithm>
@@ -479,6 +480,8 @@ ItemPtr Editor::newTextBox(const QRectF &r, const QString &text)
     auto t = std::make_shared<TextItem>();
     t->rect = r;
     t->storyId = m_doc->createStory(text);
+    // Options > Advanced: hyphenate automatically in new text boxes.
+    t->hyphenate = Settings::get().value("edit/hyphenate", true).toBool();
     return t;
 }
 

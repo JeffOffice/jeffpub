@@ -1965,7 +1965,7 @@ void optionsDialog(QWidget *p, Editor *ed)
     auto *dragText = new QCheckBox(QStringLiteral("Allow text to be dragged and dropped"), adv);
     dragText->setChecked(st.value("edit/dragText", true).toBool());
     auto *hyphenate = new QCheckBox(QStringLiteral("Automatically hyphenate in new text boxes"), adv);
-    hyphenate->setChecked(st.value("edit/hyphenate", false).toBool());
+    hyphenate->setChecked(st.value("edit/hyphenate", true).toBool());
     af->addRow(QStringLiteral("Measurement units:"), units);
     af->addRow(QStringLiteral("Arrow keys nudge objects by:"), nudge);
     af->addRow(QStringLiteral("Show this number of Recent Publications:"), recent);

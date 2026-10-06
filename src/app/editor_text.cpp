@@ -3,6 +3,7 @@
 // edited they apply to all of their text.
 
 #include "app/editor.h"
+#include "app/settings.h"
 
 #include "text/textprops.h"
 
@@ -516,6 +517,101 @@ void Editor::insertText(const QString &t)
     textEdited();
 }
 
+// AutoCorrect: common typing slips and symbols, as most word processors
+// fix them by default.
+static const QHash<QString, QString> &autoCorrections()
+{
+    static const QHash<QString, QString> table = {
+        {"i", "I"}, {"teh", "the"}, {"adn", "and"}, {"nad", "and"}, {"taht", "that"}, {"thier", "their"}, {"recieve", "receive"},
+        {"recieved", "received"}, {"beleive", "believe"}, {"belive", "believe"}, {"wierd", "weird"}, {"freind", "friend"},
+        {"accomodate", "accommodate"}, {"acheive", "achieve"}, {"occured", "occurred"}, {"occurence", "occurrence"},
+        {"seperate", "separate"}, {"definately", "definitely"}, {"goverment", "government"}, {"untill", "until"},
+        {"wich", "which"}, {"whcih", "which"}, {"becuase", "because"}, {"becasue", "because"}, {"alot", "a lot"},
+        {"dont", "don't"}, {"doesnt", "doesn't"}, {"didnt", "didn't"}, {"cant", "can't"}, {"wont", "won't"},
+        {"isnt", "isn't"}, {"wasnt", "wasn't"}, {"arent", "aren't"}, {"couldnt", "couldn't"}, {"shouldnt", "shouldn't"},
+        {"wouldnt", "wouldn't"}, {"im", "I'm"}, {"ive", "I've"}, {"youre", "you're"}, {"theyre", "they're"},
+        {"tommorow", "tomorrow"}, {"tomorow", "tomorrow"}, {"calender", "calendar"}, {"neccessary", "necessary"},
+        {"neccesary", "necessary"}, {"publically", "publicly"}, {"existance", "existence"}, {"independant", "independent"},
+        {"embarass", "embarrass"}, {"enviroment", "environment"}, {"foriegn", "foreign"}, {"greatful", "grateful"},
+        {"harrass", "harass"}, {"knowlege", "knowledge"}, {"libary", "library"}, {"maintainance", "maintenance"},
+        {"millenium", "millennium"}, {"mispell", "misspell"}, {"noticable", "noticeable"}, {"posession", "possession"},
+        {"prefered", "preferred"}, {"recomend", "recommend"}, {"refered", "referred"}, {"relevent", "relevant"},
+        {"succesful", "successful"}, {"sucessful", "successful"}, {"supercede", "supersede"}, {"truely", "truly"},
+        {"wether", "whether"}, {"writting", "writing"}, {"yeild", "yield"}, {"hte", "the"}, {"tje", "the"}, {"fo", "of"},
+        {"(c)", QStringLiteral("©")}, {"(r)", QStringLiteral("®")}, {"(tm)", QStringLiteral("™")}};
+    return table;
+}
+
+void Editor::autoCorrectWord()
+{
+    if (!isEditingText() || m_cursor.hasSelection() || !Settings::get().value("proof/autocorrect", true).toBool()) return;
+    const QTextBlock b = m_cursor.block();
+    const QString text = b.text();
+    const int rel = m_cursor.position() - b.position();
+    int start = rel;
+    auto wordChar = [](QChar c) { return c.isLetterOrNumber() || c == QLatin1Char('\'') || c == QChar(0x2019) || c == QLatin1Char('(') || c == QLatin1Char(')'); };
+    while (start > 0 && wordChar(text[start - 1])) --start;
+    QString word = text.mid(start, rel - start);
+    if (word.isEmpty() || word.contains(QChar::ObjectReplacementCharacter)) return;
+    QString fixed;
+    const auto hit = autoCorrections().constFind(word.toLower());
+    if (hit != autoCorrections().cend() && *hit != word) {
+        fixed = *hit;
+        // Keep the typed capitals: "Teh" becomes "The", "TEH" becomes "THE".
+        if (word.size() > 1 && word == word.toUpper() && word != word.toLower()) fixed = fixed.toUpper();
+        else if (word[0].isUpper()) fixed[0] = fixed[0].toUpper();
+    } else if (word.size() > 2 && word[0].isUpper() && word[1].isUpper() && word.mid(2) == word.mid(2).toLower() && word.mid(2) != word.mid(2).toUpper()) {
+        // Two initial capitals: "THursday" becomes "Thursday".
+        fixed = word;
+        fixed[1] = fixed[1].toLower();
+    }
+    // A capital at the start of a sentence.
+    QString base = fixed.isEmpty() ? word : fixed;
+    if (!base.isEmpty() && base[0].isLower()) {
+        int k = start - 1;
+        while (k >= 0 && text[k].isSpace()) --k;
+        // The paragraph's first word, or one after a sentence's end and a space.
+        const bool sentenceStart = k < 0 || (k < start - 1 && (text[k] == '.' || text[k] == '!' || text[k] == '?'));
+        // Not after an abbreviation such as "e.g." or "a.m.".
+        const bool abbreviation = k >= 2 && text[k] == '.' && text[k - 2] == '.';
+        if (sentenceStart && !abbreviation && base[0].isLetter()) {
+            base[0] = base[0].toUpper();
+            fixed = base;
+        }
+    }
+    if (fixed.isEmpty() || fixed == word) return;
+    if (Settings::get().value("proof/smartQuotes", true).toBool()) fixed.replace(QLatin1Char('\''), QChar(0x2019));
+    if (!m_typing) {
+        beginChange(QStringLiteral("Typing"));
+        m_typing = true;
+    }
+    QTextCursor c = m_cursor;
+    c.setPosition(b.position() + start);
+    c.setPosition(b.position() + rel, QTextCursor::KeepAnchor);
+    c.insertText(fixed, c.charFormat());
+    m_cursor.setPosition(b.position() + start + int(fixed.size()));
+    textEdited();
+}
+
+void Editor::typeText(const QString &t)
+{
+    if (!isEditingText()) return;
+    QString s = t;
+    // Smart quotes: opening after a space, an opening bracket or the start
+    // of the paragraph; closing (and apostrophes) otherwise.
+    if ((s == QLatin1String("\"") || s == QLatin1String("'")) && Settings::get().value("proof/smartQuotes", true).toBool()) {
+        const QTextBlock b = m_cursor.block();
+        const int rel = m_cursor.selectionStart() - b.position();
+        const QChar before = rel > 0 ? b.text().at(rel - 1) : QChar();
+        const bool opening = before.isNull() || before.isSpace() || QStringLiteral("([{<—–“‘").contains(before);
+        if (s == QLatin1String("\"")) s = opening ? QStringLiteral("“") : QStringLiteral("”");
+        else s = opening ? QStringLiteral("‘") : QStringLiteral("’");
+    }
+    // A word ends: fix it before going on.
+    if (s.size() == 1 && (s[0].isSpace() || QStringLiteral(".,;:!?").contains(s[0]))) autoCorrectWord();
+    insertText(s);
+}
+
 void Editor::editText(const std::function<void(QTextCursor &)> &fn)
 {
     if (!isEditingText()) return;
@@ -544,6 +640,15 @@ void Editor::insertField(const QString &code)
     m_cursor.insertText(QString(QChar::ObjectReplacementCharacter), f);
     f.clearProperty(tp::Field);
     m_cursor.setCharFormat(f);
+    endChange();
+    textEdited();
+}
+
+void Editor::editTextAs(const QString &label, const std::function<void(QTextCursor &)> &fn)
+{
+    if (!isEditingText()) return;
+    beginChange(label);
+    fn(m_cursor);
     endChange();
     textEdited();
 }

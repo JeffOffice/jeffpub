@@ -27,6 +27,7 @@
 #include "app/settings.h"
 #include "canvas/canvas.h"
 #include <QTemporaryDir>
+#include <QSettings>
 #include <QLineEdit>
 #include <QLabel>
 #include <QDialogButtonBox>
@@ -50,9 +51,13 @@ using namespace jp;
 
 class Tests : public QObject {
     Q_OBJECT
+    QTemporaryDir m_settingsDir;   // tests never touch the user's own settings
+
 private Q_SLOTS:
     void initTestCase()
     {
+        QSettings::setPath(QSettings::NativeFormat, QSettings::UserScope, m_settingsDir.path());
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, m_settingsDir.path());
         initCore();
     }
     void publisherSamplesImport_data()
@@ -185,6 +190,103 @@ private Q_SLOTS:
         off.options["address"] = false;
         QCOMPARE(mergeBlocks(*pc->build(off)), 0);
         QCOMPARE(mergeBlocks(*pc->build(jp::TemplateOptions())), 1);
+    }
+
+    // Typing: AutoCorrect fixes a word when it ends, capitalizes sentences,
+    // and smart quotes curl; each can be turned off in Options.
+    void typingAutoCorrect()
+    {
+        jp::MainWindow w;
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        jp::Editor *ed = w.editor();
+        auto box = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 72, 400, 200)));
+        ed->addItem(box);
+        ed->beginTextEdit(box->id);
+        auto type = [&](const QString &s) { for (QChar c : s) ed->typeText(QString(c)); };
+        type(QStringLiteral("teh cat said \"hi\" and i didnt mind. it's THursday (c) "));
+        const QString got = ed->doc()->storyDoc(box->storyId)->toPlainText();
+        QCOMPARE(got, QStringLiteral("The cat said “hi” and I didn’t mind. It’s Thursday © "));
+        ed->endTextEdit();
+        jp::Settings::get().setValue("proof/autocorrect", false);
+        jp::Settings::get().setValue("proof/smartQuotes", false);
+        auto plain = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 300, 400, 200)));
+        ed->addItem(plain);
+        ed->beginTextEdit(plain->id);
+        type(QStringLiteral("teh \"x\" "));
+        QCOMPARE(ed->doc()->storyDoc(plain->storyId)->toPlainText(), QStringLiteral("teh \"x\" "));
+        ed->endTextEdit();
+        jp::Settings::get().setValue("proof/autocorrect", true);
+        jp::Settings::get().setValue("proof/smartQuotes", true);
+        // New text boxes follow "hyphenate automatically in new text boxes".
+        jp::Settings::get().setValue("edit/hyphenate", false);
+        QVERIFY(!std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(0, 0, 50, 50)))->hyphenate);
+        jp::Settings::get().setValue("edit/hyphenate", true);
+        QVERIFY(std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(0, 0, 50, 50)))->hyphenate);
+    }
+
+    // Dragging across words selects whole words; dragging selected text
+    // moves it (Options > Advanced).
+    void textMouseSelectAndDrag()
+    {
+        jp::MainWindow w;
+        w.resize(1200, 900);
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        jp::Editor *ed = w.editor();
+        auto box = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 72, 400, 100), QStringLiteral("alpha beta gamma delta")));
+        box->hyphenate = false;
+        ed->addItem(box);
+        ed->beginTextEdit(box->id);
+        jp::Canvas *cv = w.canvas();
+        QTest::qWait(50);
+        auto at = [&](int pos) {
+            QTextCursor c = ed->cursor();
+            c.setPosition(pos);
+            ed->setCursor(c);
+            return cv->caretViewRect().center().toPoint();
+        };
+        auto drag = [&](const QPoint &a, const QPoint &b) {
+            QTest::mousePress(cv->viewport(), Qt::LeftButton, Qt::NoModifier, a);
+            QMouseEvent mv(QEvent::MouseMove, QPointF(b), cv->viewport()->mapToGlobal(QPointF(b)), Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(cv->viewport(), &mv);
+            QTest::mouseRelease(cv->viewport(), Qt::LeftButton, Qt::NoModifier, b);
+        };
+        // Press in "beta", drag into "gamma": both words, whole.
+        const QPoint from = at(8), to = at(13);
+        drag(from, to);
+        QCOMPARE(ed->cursor().selectedText(), QStringLiteral("beta gamma"));
+        // Drag the selection to the end: it moves there.
+        QTest::qWait(QApplication::doubleClickInterval() + 100);   // not a double click
+        const QPoint grab = at(9), drop = at(22);
+        QTextCursor c = ed->cursor();
+        c.setPosition(6);
+        c.setPosition(16, QTextCursor::KeepAnchor);
+        ed->setCursor(c);
+        drag(grab, drop);
+        QCOMPARE(ed->doc()->storyDoc(box->storyId)->toPlainText(), QStringLiteral("alpha  deltabeta gamma"));
+        QVERIFY(ed->undoStack()->canUndo());
+    }
+
+    // "Always create backup copy" keeps the file as it was before saving.
+    void saveBackupCopy()
+    {
+        jp::MainWindow w;
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("letter.jpub"));
+        QVERIFY(w.saveTo(path));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QByteArray first = f.readAll();
+        f.close();
+        jp::Settings::get().setValue("save/backup", true);
+        w.editor()->doc()->props.title = QStringLiteral("changed");
+        QVERIFY(w.saveTo(path));
+        jp::Settings::get().setValue("save/backup", false);
+        QFile b(dir.filePath(QStringLiteral("Backup of letter.jpub")));
+        QVERIFY(b.open(QIODevice::ReadOnly));
+        QCOMPARE(b.readAll(), first);
     }
 
     // Inserting several pictures at once puts them in the picture tray: the

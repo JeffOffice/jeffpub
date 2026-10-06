@@ -15,6 +15,7 @@
 #include <QScrollBar>
 #include <QStyleHints>
 #include <QTextBlock>
+#include <QTextDocumentFragment>
 #include <QTextDocument>
 #include <QTextList>
 #include <QWheelEvent>
@@ -791,13 +792,13 @@ void Canvas::paintHandles(QPainter &p, Item *it)
     }
 }
 
-bool Canvas::caretInfo(QLineF *pageLine, QString *frameId) const
+bool Canvas::caretInfo(QLineF *pageLine, QString *frameId, int atPos) const
 {
     if (!m_ed->isEditingText()) return false;
     const auto &tt = m_ed->textTarget();
     Item *it = m_ed->doc()->item(tt.itemId);
     if (!it) return false;
-    const int pos = m_ed->cursor().position();
+    const int pos = atPos >= 0 ? atPos : m_ed->cursor().position();
     PaintContext ctx = paintContext();
     QRectF r;
     QTransform t;
@@ -907,6 +908,15 @@ void Canvas::paintOverlay(QPainter &p)
             const auto fl = m_ed->cache().textFrame(*d, *t, m_ed->surfacePageNumber(), m_ed->renderOptions());
             if (fl.layout && fl.layout->overflow())
                 box(pageToView(tr.map(QPointF(t->rect.width(), t->rect.height()))) + QPointF(-4, 12), QStringLiteral("A…"), QColor(210, 60, 40));
+        }
+    }
+    // Where dragged text would drop.
+    if (m_drag == Drag::TextMove && m_movePos >= 0 && !(m_movePos >= m_moveFrom && m_movePos <= m_moveTo)) {
+        QLineF l;
+        if (caretInfo(&l, nullptr, m_movePos)) {
+            QPen pen(QColor(30, 30, 30), std::max(1.5, ppp()), Qt::DotLine);
+            p.setPen(pen);
+            p.drawLine(pageToView(l.p1()), pageToView(l.p2()));
         }
     }
     // Caret.
@@ -1506,6 +1516,19 @@ void Canvas::mousePressEvent(QMouseEvent *e)
         if (m_ed->isEditingText() && m_ed->textTarget().itemId == h.id &&
             (h.textInterior || it->type() == ItemType::Shape) && (it->type() != ItemType::Table || (h.row == m_ed->textTarget().row && h.col == m_ed->textTarget().col))) {
             const int pos = textPosAt(h.id, m_pressPage, h.row, h.col);
+            // Pressing in selected text starts dragging it (Options >
+            // Advanced: drag and drop text).
+            const QTextCursor sel = m_ed->cursor();
+            if (pos >= 0 && m_clicks == 1 && sel.hasSelection() && pos >= sel.selectionStart() && pos < sel.selectionEnd() &&
+                !(e->modifiers() & Qt::ShiftModifier) && Settings::get().value("edit/dragText", true).toBool()) {
+                m_moveFrom = sel.selectionStart();
+                m_moveTo = sel.selectionEnd();
+                m_movePos = -1;
+                m_textPress = pos;
+                m_drag = Drag::TextMove;
+                return;
+            }
+            m_textPress = pos;
             if (pos >= 0) {
                 QTextCursor c = m_ed->cursor();
                 if (m_clicks == 2) { c.setPosition(pos); c.select(QTextCursor::WordUnderCursor); }
@@ -1869,7 +1892,8 @@ void Canvas::mouseMoveEvent(QMouseEvent *e)
         viewport()->update();
         return;
     }
-    case Drag::TextSelect: {
+    case Drag::TextSelect:
+    case Drag::TextMove: {
         const auto &tt = m_ed->textTarget();
         if (tt.itemId.isEmpty()) return;
         int pos = textPosAt(tt.itemId, page, tt.row, tt.col);
@@ -1883,9 +1907,30 @@ void Canvas::mouseMoveEvent(QMouseEvent *e)
                 }
             }
         }
-        if (pos >= 0) {
+        if (pos >= 0 && m_drag == Drag::TextMove) {
+            m_movePos = pos;
+            viewport()->update();
+        } else if (pos >= 0) {
             QTextCursor c = m_ed->cursor();
             c.setPosition(pos, QTextCursor::KeepAnchor);
+            // Options > Advanced: once a drag reaches past the first word,
+            // the selection takes whole words.
+            if (m_clicks == 1 && m_textPress >= 0 && Settings::get().value("edit/wholeWord", true).toBool()) {
+                QTextCursor w(c.document());
+                w.setPosition(m_textPress);
+                w.select(QTextCursor::WordUnderCursor);
+                const int ws = w.hasSelection() ? w.selectionStart() : m_textPress, we = w.hasSelection() ? w.selectionEnd() : m_textPress;
+                if (pos < ws || pos > we) {
+                    QTextCursor q(c.document());
+                    q.setPosition(pos);
+                    q.select(QTextCursor::WordUnderCursor);
+                    const bool forward = pos > m_textPress;
+                    int end = pos;
+                    if (q.hasSelection() && q.selectionStart() < pos && pos < q.selectionEnd()) end = forward ? q.selectionEnd() : q.selectionStart();
+                    c.setPosition(forward ? ws : we);
+                    c.setPosition(end, QTextCursor::KeepAnchor);
+                }
+            }
             m_ed->setCursor(c);
         }
         Q_UNUSED(prevPage);
@@ -1985,6 +2030,37 @@ void Canvas::mouseReleaseEvent(QMouseEvent *e)
         m_rubber = QRectF();
         const bool clicked = std::hypot(e->position().x() - m_pressView.x(), e->position().y() - m_pressView.y()) < 4;
         finishDraw(r, clicked);
+        break;
+    }
+    case Drag::TextMove: {
+        // Dropped outside the dragged text: move it there (Ctrl copies).
+        // Dropped inside it, or not moved: a click that places the caret.
+        const bool copy = e->modifiers() & Qt::ControlModifier;
+        if (m_movePos < 0 || (m_movePos >= m_moveFrom && m_movePos <= m_moveTo)) {
+            QTextCursor c = m_ed->cursor();
+            c.setPosition(m_textPress >= 0 ? m_textPress : m_moveFrom);
+            m_ed->setCursor(c);
+        } else {
+            const int from = m_moveFrom, to = m_moveTo, at = m_movePos;
+            m_ed->editTextAs(copy ? QStringLiteral("Copy Text") : QStringLiteral("Move Text"), [&](QTextCursor &cur) {
+                QTextDocument *doc = cur.document();
+                QTextCursor src(doc);
+                src.setPosition(from);
+                src.setPosition(to, QTextCursor::KeepAnchor);
+                const QTextDocumentFragment frag = src.selection();
+                int dst = at;
+                if (!copy) {
+                    src.removeSelectedText();
+                    if (dst > to) dst -= to - from;
+                }
+                QTextCursor ins(doc);
+                ins.setPosition(dst);
+                ins.insertFragment(frag);
+                cur.setPosition(dst);
+                cur.setPosition(dst + (to - from), QTextCursor::KeepAnchor);
+            });
+        }
+        m_movePos = m_moveFrom = m_moveTo = -1;
         break;
     }
     case Drag::TextSelect:
@@ -2263,6 +2339,7 @@ void Canvas::handleTextKey(QKeyEvent *e)
         return;
     case Qt::Key_Return:
     case Qt::Key_Enter:
+        m_ed->autoCorrectWord();   // a word ends here too
         m_ed->editText([&](QTextCursor &c) {
             if (shift) { c.insertText(QString(QChar::LineSeparator)); return; }
             // An empty list item ends the list.
@@ -2343,7 +2420,7 @@ void Canvas::handleTextKey(QKeyEvent *e)
     }
     const QString text = e->text();
     if (!text.isEmpty() && !ctrl && (text[0].isPrint() || text[0] == QChar(0x00A0))) {
-        m_ed->insertText(text);
+        m_ed->typeText(text);
         return;
     }
     e->ignore();
@@ -2413,7 +2490,7 @@ void Canvas::keyPressEvent(QKeyEvent *e)
     if (!ctrl && !text.isEmpty() && text[0].isPrint()) {
         if (Item *it = m_ed->single(); it && (it->type() == ItemType::Text || it->type() == ItemType::Shape)) {
             m_ed->beginTextEdit(it->id);
-            m_ed->insertText(text);
+            m_ed->typeText(text);
             return;
         }
     }
