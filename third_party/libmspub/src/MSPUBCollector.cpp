@@ -1804,6 +1804,12 @@ librevenge::RVNGPropertyList MSPUBCollector::getParaStyleProps(const ParagraphSt
     ret.insert("jp:list-delim", style.m_listDelim);
     if (style.m_listSizeEmu)
       ret.insert("jp:list-size", double(style.m_listSizeEmu) / 12700.0, librevenge::RVNG_GENERIC);   // points
+    if (style.m_listFontIndex >= 0 && unsigned(style.m_listFontIndex) < m_fonts.size())
+    {
+      librevenge::RVNGString font;
+      appendCharacters(font, m_fonts[style.m_listFontIndex], getCalculatedEncoding());
+      ret.insert("jp:list-font", font);
+    }
   }
   unsigned dropCapLines = style.m_dropCapLines.get_value_or(
                             defaultStyle.m_dropCapLines.get_value_or(0));

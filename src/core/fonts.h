@@ -20,6 +20,15 @@ QString interchangeFontName(const QString &family);  // horizontal scale (percen
 int substituteWeight(const QString &family);
 QStringList bundledFamilies();
 
+// Symbol fonts (Symbol, Wingdings) give their pictures their own character
+// codes, either 0x20-0xFF or 0xF020-0xF0FF. When such a font is missing,
+// this is the same picture as a Unicode character, or an empty string.
+bool isSymbolFont(const QString &family);
+QString symbolToUnicode(const QString &family, uint code);
+// The other way: the symbol font and code (0xF020-0xF0FF) for a Unicode
+// picture, or 0 when no symbol font has it.
+uint unicodeToSymbol(QChar c, QString *family);
+
 // Qt measures a QFont's point size at the platform's logical DPI (96 on most
 // systems), but publication geometry is in points. Multiply a document point
 // size by this before handing it to Qt so 1 layout unit = 1 point everywhere.

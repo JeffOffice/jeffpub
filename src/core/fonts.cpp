@@ -132,6 +132,41 @@ int substituteWeight(const QString &family)
     return w;
 }
 
+bool isSymbolFont(const QString &family)
+{
+    static const QStringList fonts = {QStringLiteral("Symbol"), QStringLiteral("Wingdings"), QStringLiteral("Wingdings 2"), QStringLiteral("Wingdings 3"),
+                                      QStringLiteral("Webdings")};
+    return fonts.contains(family, Qt::CaseInsensitive);
+}
+
+QString symbolToUnicode(const QString &family, uint code)
+{
+    if (code >= 0xF000 && code <= 0xF0FF) code -= 0xF000;
+    // The pictures most used as bullets and check boxes.
+    static const QHash<uint, uint> symbol = {
+        {0xB7, 0x2022}, {0xA7, 0x2663}, {0xA8, 0x2666}, {0xA9, 0x2665}, {0xAA, 0x2660}, {0xAE, 0x2192}, {0xDE, 0x21D2},
+        {0xB0, 0x00B0}, {0xD7, 0x22C5}, {0xE0, 0x25CA}, {0x2A, 0x2217}, {0xC4, 0x2297}, {0xC5, 0x2295}, {0x6F, 0x03BF}};
+    static const QHash<uint, uint> wingdings = {
+        {0x6C, 0x25CF}, {0x6E, 0x25A0}, {0x6F, 0x25A1}, {0x71, 0x2751}, {0x72, 0x2752}, {0x75, 0x25C6}, {0x76, 0x2756},
+        {0x77, 0x2B25}, {0x9F, 0x2022}, {0xA1, 0x25CB}, {0xA7, 0x25AA}, {0xA8, 0x25FB}, {0xAB, 0x2605}, {0xD8, 0x27A2},
+        {0xE8, 0x2794}, {0xF0, 0x21E8}, {0xFB, 0x2718}, {0xFC, 0x2714}, {0xFD, 0x2612}, {0xFE, 0x2611}};
+    const QString f = family.toLower();
+    const QHash<uint, uint> *map = f == QLatin1String("symbol") ? &symbol : f == QLatin1String("wingdings") ? &wingdings : nullptr;
+    if (!map || !map->contains(code)) return {};
+    return QString(QChar(char16_t(map->value(code))));
+}
+
+uint unicodeToSymbol(QChar c, QString *family)
+{
+    for (const QString &f : {QStringLiteral("Symbol"), QStringLiteral("Wingdings")})
+        for (uint code = 0x20; code <= 0xFF; ++code)
+            if (symbolToUnicode(f, code) == QString(c)) {
+                if (family) *family = f;
+                return 0xF000 + code;
+            }
+    return 0;
+}
+
 QString substituteFor(const QString &family)
 {
     if (QFontDatabase::hasFamily(family)) return {};

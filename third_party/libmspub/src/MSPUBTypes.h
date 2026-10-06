@@ -190,6 +190,7 @@ struct ParagraphStyle
   int m_listChar = 0;
   int m_listDelim = -1;
   unsigned m_listSizeEmu = 0;   // the bullet or number's size (0x02)
+  int m_listFontIndex = -1;     // the bullet's font in the font table (0x03)
   boost::optional<unsigned> m_dropCapLines;
   boost::optional<unsigned> m_dropCapLetters;
   ParagraphStyle() :

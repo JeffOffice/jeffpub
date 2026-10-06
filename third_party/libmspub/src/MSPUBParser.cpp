@@ -1343,6 +1343,12 @@ void MSPUBParser::parseFonts(librevenge::RVNGInputStream *input, const QuillChun
     {
       std::vector<unsigned char> name;
       readNBytes(input, nameLength * 2, name);
+      if (getenv("JP_PUB_TRACE"))
+      {
+        librevenge::RVNGString n;
+        appendCharacters(n, name, "UTF-16LE");
+        fprintf(stderr, "FONTNAME %u %s\n", i, n.cstr());
+      }
       m_collector->addFont(name);
     }
     readU32(input);
@@ -1612,6 +1618,10 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
       break;
     case PARAGRAPH_LIST_NUMBERING_DELIMITER:
       ret.m_listDelim = int(info.data >> 16);
+      break;
+    case 0x03:
+      // JeffPub 79: the bullet's font, an index into the font table.
+      ret.m_listFontIndex = int(info.data);
       break;
     case 0x02:
       // JeffPub 79: a list's bullet or number size (EMU).

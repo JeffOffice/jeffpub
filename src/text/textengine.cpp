@@ -5,6 +5,7 @@
 #include "text/hyphenation.h"
 #include "text/textprops.h"
 
+#include <QFontDatabase>
 #include <QFontMetricsF>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -324,6 +325,7 @@ static KnownMetrics knownMetrics(const QString &family)
     if (f == "juice itc") return {(1903.0 + 532) / 2048, 532.0 / 2048};
     if (f == "symbol") return {(2059.0 + 450) / 2048, 450.0 / 2048};                    // hhea
     if (f == "ag_futura") return {(4051.0 + 1081) / 4096, 1081.0 / 4096};               // win
+    if (f == "wingdings") return {(1841.0 + 432) / 2048, 432.0 / 2048};                 // hhea
     return {};
 }
 static bool isSubstituted(const QString &family) { return !substituteFor(family).isEmpty() || substituteStretch(family) != 100; }
@@ -628,7 +630,19 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
             if (lf.hasProperty(tp::BulletSize))
                 B->markerFont.setPointSizeF(std::max(1.0, lf.property(tp::BulletSize).toDouble() * env.fontScale) * fontPointFactor());
             const QString bfont = lf.stringProperty(tp::BulletFont);
-            if (!bfont.isEmpty() && !custom.isEmpty()) B->markerFont.setFamily(bfont);
+            if (!bfont.isEmpty() && !custom.isEmpty()) {
+                if (isSymbolFont(bfont) && !QFontDatabase::hasFamily(bfont)) {
+                    // A missing symbol font: the same picture from Unicode, in
+                    // the text's font (or a round bullet if it has none).
+                    const QString uni = symbolToUnicode(bfont, custom.at(0).unicode());
+                    B->marker = uni.isEmpty() ? QStringLiteral("•") : uni;
+                } else {
+                    B->markerFont.setFamily(bfont);
+                    // Symbol fonts find their pictures at 0xF020-0xF0FF.
+                    if (isSymbolFont(bfont) && custom.size() == 1 && custom.at(0).unicode() >= 0x20 && custom.at(0).unicode() <= 0xFF)
+                        B->marker = QString(QChar(char16_t(0xF000 + custom.at(0).unicode())));
+                }
+            }
             B->markerColor = mf.foreground().color();
             const QString bc = lf.stringProperty(tp::BulletColor);
             if (!bc.isEmpty()) B->markerColor = ColorRef::fromString(bc).resolve(env.colors);

@@ -377,6 +377,54 @@ private Q_SLOTS:
         QCOMPARE(jp::autoflowText(ed, box->id), 0);   // nothing more to do
     }
 
+    // Bullets in symbol fonts: a .pub file keeps the bullet's font with its
+    // character, and a missing symbol font's bullet shows as Unicode.
+    void symbolFontBullets()
+    {
+        QCOMPARE(jp::symbolToUnicode(QStringLiteral("Wingdings"), 0xF0E8), QStringLiteral("\u2794"));   // the arrow
+        QCOMPARE(jp::symbolToUnicode(QStringLiteral("Symbol"), 0xB7), QStringLiteral("\u2022"));
+        QVERIFY(jp::symbolToUnicode(QStringLiteral("Arial"), 0x41).isEmpty());
+        QString font;
+        QCOMPARE(jp::unicodeToSymbol(QChar(0x2714), &font), 0xF0FCu);
+        QCOMPARE(font, QStringLiteral("Wingdings"));
+
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TextItem>();
+        t->rect = QRectF(72, 72, 300, 200);
+        t->storyId = doc->createStory(QString());
+        doc->pages[0]->items.push_back(t);
+        QTextCursor c(doc->storyDoc(t->storyId));
+        auto addList = [&](const QString &bullet, const QString &bulletFont, const QString &text, bool first) {
+            if (!first) c.insertBlock();
+            c.insertText(text);
+            QTextListFormat lf;
+            lf.setStyle(QTextListFormat::ListDisc);
+            lf.setProperty(jp::tp::BulletChar, bullet);
+            if (!bulletFont.isEmpty()) lf.setProperty(jp::tp::BulletFont, bulletFont);
+            c.createList(lf);
+        };
+        addList(QString(QChar(0xF0E8)), QStringLiteral("Wingdings"), QStringLiteral("An arrow"), true);
+        addList(QString(QChar(0x2714)), QString(), QStringLiteral("A check mark"), false);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("bullets.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        auto back = jp::importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        const jp::TextItem *bt = nullptr;
+        jp::walkItems(back->pages[0]->items, [&](const jp::ItemPtr &it) {
+            if (it->type() == jp::ItemType::Text) bt = static_cast<const jp::TextItem *>(it.get());
+        });
+        QVERIFY(bt);
+        QTextBlock b = back->storyDoc(bt->storyId)->begin();
+        QVERIFY(b.textList() && b.next().textList());
+        QCOMPARE(b.textList()->format().stringProperty(jp::tp::BulletFont), QStringLiteral("Wingdings"));
+        QCOMPARE(b.textList()->format().stringProperty(jp::tp::BulletChar), QString(QChar(0xF0E8)));
+        // A Unicode check mark is saved as Wingdings' own.
+        QCOMPARE(b.next().textList()->format().stringProperty(jp::tp::BulletFont), QStringLiteral("Wingdings"));
+        QCOMPARE(b.next().textList()->format().stringProperty(jp::tp::BulletChar), QString(QChar(0xF0FC)));
+    }
+
     // A Symbol bullet (as .pub lists have) sets the height of its item's
     // first line when it is taller than the text's, at the bullet's own size.
     void listBulletLineHeight()

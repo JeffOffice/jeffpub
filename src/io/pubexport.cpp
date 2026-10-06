@@ -769,18 +769,26 @@ QVector<B> PubWriter::paraBlocks(const QTextBlock &block)
         }
         p << rec(0x32, {u16(0x27, quint32(tabs.size()), 0x1a), rec(0x28, stops, 0x8a)}, 0x82);
     }
-    // Lists: kind 23 bulleted (with the bullet's Symbol character) or a
+    // Lists: kind 23 bulleted (with the bullet's character in its font) or a
     // numbering style (0 1 2 3, 1 I, 2 i, 3 A, 4 a) with its punctuation in
-    // the high half of 0x58 (2 "1.", 0 "1)", 1 "(1)"); 02 and 03 as Publisher
-    // writes them (the text size, and 31).
+    // the high half of 0x58 (2 "1.", 0 "1)", 1 "(1)"); 02 the marker's size
+    // and 03 the bullet's font (its place in the font table).
     if (const QTextList *list = block.textList()) {
         const QTextListFormat lf = list->format();
         const QString custom = !f.stringProperty(tp::BulletChar).isEmpty() ? f.stringProperty(tp::BulletChar) : lf.stringProperty(tp::BulletChar);
         const bool bullet = lf.style() == QTextListFormat::ListDisc || lf.style() == QTextListFormat::ListCircle ||
                             lf.style() == QTextListFormat::ListSquare || !custom.isEmpty();
         quint32 kind = 23, ch = 0xB7, delim = 2;
+        QString bulletFont = lf.stringProperty(tp::BulletFont);
         if (bullet) {
-            if (custom.size() == 1 && custom[0].unicode() < 0x100) ch = custom[0].unicode();   // a Symbol character
+            const uint u = custom.size() == 1 ? custom[0].unicode() : 0;
+            if (u && (u < 0x100 || (u >= 0xF020 && u <= 0xF0FF))) ch = u;   // a character of the bullet's font
+            else if (u) {
+                // A Unicode picture: the symbol font that has it.
+                QString f;
+                if (const uint code = unicodeToSymbol(custom[0], &f)) { ch = code; bulletFont = f; }
+            } else if (lf.style() == QTextListFormat::ListSquare) { ch = 0xF0A7; bulletFont = QStringLiteral("Wingdings"); }
+            if (ch == 0xB7 && !u) bulletFont = QStringLiteral("Symbol");
         } else {
             switch (lf.style()) {
             case QTextListFormat::ListUpperRoman: kind = 1; break;
@@ -797,7 +805,8 @@ QVector<B> PubWriter::paraBlocks(const QTextBlock &block)
         for (auto it = block.begin(); size <= 0 && !it.atEnd(); ++it)
             if (it.fragment().charFormat().hasProperty(QTextFormat::FontPointSize)) size = it.fragment().charFormat().fontPointSize();
         if (size <= 0) size = 10;
-        p << u32(0x02, quint32(emu(size)), 0x22) << u16(0x03, 31, 0x1a)
+        if (bulletFont.isEmpty()) bulletFont = QStringLiteral("Symbol");
+        p << u32(0x02, quint32(emu(size)), 0x22) << u16(0x03, quint32(fontIndex(bulletFont)), 0x1a)
           << rec(0x57, {u32(0x00, kind, 0x22), u32(0x01, ch, 0x22), u32(0x02, 0, 0x22)}, 0x8a);
         if (!bullet) p << u32(0x58, delim << 16, 0x22);
     }
@@ -1643,6 +1652,14 @@ QByteArray PubWriter::write(QStringList *skipped)
     }
     if (skipped && skippedCount) *skipped << QStringLiteral("%1 object(s) couldn't be saved to .pub").arg(skippedCount);
     const quint32 fontSeq = m_fonts.isEmpty() && m_textIds.isEmpty() ? 0 : next++;
+    // Fonts the style sheet names, so the font table, written first, has them.
+    for (const QString &name : styleNames())
+        if (const TextStyle *st = m_doc.style(name)) {
+            charBlocks(st->chr);
+            QTextDocument tmp;
+            QTextCursor(&tmp).setBlockFormat(st->blk);
+            paraBlocks(tmp.begin());
+        }
     if (m_fonts.isEmpty()) m_fonts << m_doc.fonts.body;
 
     // ---- the fixed chunks
