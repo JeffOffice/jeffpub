@@ -328,6 +328,19 @@ merge on screen is written as its merged outline plus, when it has an
 outline, each part twice more (an even number of layers leaves the fill
 alone but draws the inner lines, like a smiley's eyes).
 
+### Spot colors
+
+A fill printed as a spot ink keeps, beside its process inks (`0x019E` shown
+color, `0x019F`/`0x01A6` the ink's CMYK stand-in), a complex property in the
+same extra-properties record (`0xF122`): `0x01A1` = UTF-16 text
+`P2,#003d007e00db0000,PANTONE 2727 C` (the shown color as four 16-bit hex
+values, then the ink's name). Ten book covers carry it, and each of their
+PDFs prints that color as a Separation of the named ink with the CMYK
+stand-in as its alternate; no file names a color without it being a spot
+ink. Other tags than `P2`, and where line and text colors keep a spot name,
+are not known yet. JeffPub reads it (the publication opens with spot colors
+and the ink in its list); it does not write it yet.
+
 ### Text Art
 
 A Text Art shape uses the same chunk type as lines (0x20: `02, 03, 04:10 = 259,

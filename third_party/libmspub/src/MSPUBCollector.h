@@ -124,6 +124,7 @@ public:
     m_shapeInfosBySeqNum[seqNum].m_fillInksColor = shownColor;
     m_shapeInfosBySeqNum[seqNum].m_fillInks = std::vector<double> {c, m, y, k};
   }
+  void setShapeFillSpot(unsigned seqNum, const std::string &ink) { m_shapeInfosBySeqNum[seqNum].m_fillSpot = ink; }
   void setTextNotHyphenated(unsigned textId) { m_notHyphenated.insert(textId); }
   void setShapePictureFlags(unsigned seqNum, unsigned flags);
   void setShapePictureTransparent(unsigned seqNum, ColorReference color);

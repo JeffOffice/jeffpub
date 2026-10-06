@@ -13,6 +13,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <boost/optional.hpp>
@@ -68,6 +69,7 @@ struct ShapeInfo
   boost::optional<double> m_pictureFillOpacity; // JeffPub patch: 0x0182 with a picture fill
   boost::optional<std::vector<double> > m_fillInks; // JeffPub patch: the fill's process inks (0x019F, 0x01A6)
   unsigned m_fillInksColor = 0;                     // ...for this fill color as shown (0x019E)
+  std::string m_fillSpot;                           // JeffPub patch: the spot ink the fill is (0x01A1), or empty
   boost::optional<VerticalAlign> m_verticalAlign;
   boost::optional<ColorReference> m_pictureRecolor;
   boost::optional<Shadow> m_shadow;

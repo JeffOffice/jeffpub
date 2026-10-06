@@ -804,11 +804,25 @@ private:
         m_cursor.insertText(t, cf);
     }
 
-    // A fill given as process inks means the publication was set up for
-    // process-color printing; its PDFs are CMYK.
+    // A fill given as inks means the publication was set up for commercial
+    // printing: a spot ink (named) joins its spot colors, process inks make
+    // its PDFs CMYK.
     void noteInks(const Fill &f)
     {
-        if (f.type == Fill::Solid && f.color.shownValue().isValid() && m_doc.print.model == PrintInfo::RGB) m_doc.print.model = PrintInfo::ProcessCMYK;
+        if (f.type != Fill::Solid || !f.color.shownValue().isValid()) return;
+        PrintInfo &pi = m_doc.print;
+        const QString spot = m_style["jp:ink-spot"] ? str(m_style["jp:ink-spot"]).trimmed() : QString();
+        if (!spot.isEmpty()) {
+            if (!pi.spotNames.contains(spot)) {
+                pi.spotColors << f.color.rgbValue();
+                pi.spotNames << spot;
+            }
+            pi.model = pi.model == PrintInfo::ProcessCMYK || pi.model == PrintInfo::ProcessPlusSpot ? PrintInfo::ProcessPlusSpot : PrintInfo::SpotColors;
+        } else if (pi.model == PrintInfo::RGB) {
+            pi.model = PrintInfo::ProcessCMYK;
+        } else if (pi.model == PrintInfo::SpotColors) {
+            pi.model = PrintInfo::ProcessPlusSpot;
+        }
     }
 
     Fill fillFromStyle(QByteArray *bitmap, QString *mime) const

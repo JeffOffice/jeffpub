@@ -52,6 +52,37 @@ namespace libmspub
 
 namespace
 {
+// JeffPub 79: UTF-16 text from a drawing property, up to its closing zero.
+static librevenge::RVNGString utf8(const std::vector<unsigned char> &d)
+{
+  librevenge::RVNGString out;
+  for (size_t i = 0; i + 1 < d.size(); i += 2)
+  {
+    unsigned c = d[i] | (d[i + 1] << 8);
+    if (!c)
+      break;
+    if (c >= 0xD800 && c < 0xE000)
+    {
+      // A surrogate pair; a lone half (a damaged file) becomes U+FFFD.
+      const unsigned lo = i + 3 < d.size() ? unsigned(d[i + 2] | (d[i + 3] << 8)) : 0u;
+      if (c < 0xDC00 && lo >= 0xDC00 && lo < 0xE000)
+      {
+        c = 0x10000 + ((c - 0xD800) << 10) + (lo - 0xDC00);
+        i += 2;
+      }
+      else
+        c = 0xFFFD;
+    }
+    char buf[5] = {0, 0, 0, 0, 0};
+    if (c < 0x80) buf[0] = char(c);
+    else if (c < 0x800) { buf[0] = char(0xC0 | (c >> 6)); buf[1] = char(0x80 | (c & 0x3F)); }
+    else if (c < 0x10000) { buf[0] = char(0xE0 | (c >> 12)); buf[1] = char(0x80 | ((c >> 6) & 0x3F)); buf[2] = char(0x80 | (c & 0x3F)); }
+    else { buf[0] = char(0xF0 | (c >> 18)); buf[1] = char(0x80 | ((c >> 12) & 0x3F)); buf[2] = char(0x80 | ((c >> 6) & 0x3F)); buf[3] = char(0x80 | (c & 0x3F)); }
+    out.append(buf);
+  }
+  return out;
+}
+
 // JeffPub 79: JP_PUB_TRACE, read once (it is checked inside loops).
 bool jpTraceOn()
 {
@@ -2041,6 +2072,20 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
               }
             const double c = inks[0], m = inks[1], y = inks[2], k = inks[3];
             m_collector->setShapeFillInks(*shapeSeqNum, *ptr_extColor, c, m, y, k);
+            // JeffPub patch: a spot color names its ink (0x01A1, UTF-16):
+            // "P2,#" + the shown color in four 16-bit hex values + "," + the
+            // ink's name, as in "P2,#003d007e00db0000,PANTONE 2727 C" (the
+            // only kind seen: every file that has it prints the color as a
+            // spot ink in Publisher's PDF of it).
+            const FOPTValues tertiary = extractFOPTValues(input, cTertiaryFopt);
+            const auto spot = tertiary.m_complexValues.find(0xC1A1);
+            if (spot != tertiary.m_complexValues.end() && !spot->second.empty())
+            {
+              const std::string text = utf8(spot->second).cstr();
+              const size_t comma1 = text.find(','), comma2 = comma1 == std::string::npos ? comma1 : text.find(',', comma1 + 1);
+              if (comma2 != std::string::npos && text.compare(0, comma1, "P2") == 0 && comma2 + 1 < text.size())
+                m_collector->setShapeFillSpot(*shapeSeqNum, text.substr(comma2 + 1));
+            }
           }
         }
         input->seek(sp.contentsOffset, librevenge::RVNG_SEEK_SET);
@@ -2050,29 +2095,6 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
           // JeffPub 79: Text Art's words and settings.
           if (st >= TEXT_PLAIN_TEXT && st <= TEXT_CAN_DOWN && !foptValues.m_complexValues[0xC0C0].empty())
           {
-            auto utf8 = [](const std::vector<unsigned char> &d)
-            {
-              librevenge::RVNGString out;
-              for (size_t i = 0; i + 1 < d.size(); i += 2)
-              {
-                unsigned c = d[i] | (d[i + 1] << 8);
-                if (!c)
-                  break;
-                if (c >= 0xD800 && c < 0xDC00 && i + 3 < d.size())
-                {
-                  const unsigned lo = d[i + 2] | (d[i + 3] << 8);
-                  c = 0x10000 + ((c - 0xD800) << 10) + (lo - 0xDC00);
-                  i += 2;
-                }
-                char buf[5] = {0, 0, 0, 0, 0};
-                if (c < 0x80) buf[0] = char(c);
-                else if (c < 0x800) { buf[0] = char(0xC0 | (c >> 6)); buf[1] = char(0x80 | (c & 0x3F)); }
-                else if (c < 0x10000) { buf[0] = char(0xE0 | (c >> 12)); buf[1] = char(0x80 | ((c >> 6) & 0x3F)); buf[2] = char(0x80 | (c & 0x3F)); }
-                else { buf[0] = char(0xF0 | (c >> 18)); buf[1] = char(0x80 | ((c >> 12) & 0x3F)); buf[2] = char(0x80 | ((c >> 6) & 0x3F)); buf[3] = char(0x80 | (c & 0x3F)); }
-                out.append(buf);
-              }
-              return out;
-            };
             librevenge::RVNGPropertyList ta;
             ta.insert("jp:textart-text", utf8(foptValues.m_complexValues[0xC0C0]));
             if (!foptValues.m_complexValues[0xC0C5].empty())
@@ -2886,7 +2908,7 @@ FOPTValues MSPUBParser::extractFOPTValues(librevenge::RVNGInputStream *input, co
     // names) are plain bytes of the stated length, not arrays.
     switch (id & 0x3FFF)
     {
-    case 0x00C0: case 0x00C1: case 0x00C5: case 0x0105: case 0x0107: case 0x0380: case 0x0381: case 0x0382: case 0x038D:
+    case 0x00C0: case 0x00C1: case 0x00C5: case 0x0105: case 0x0107: case 0x01A1: case 0x0380: case 0x0381: case 0x0382: case 0x038D:
       readNBytes(input, length, ret.m_complexValues[id]);
       continue;
     default:

@@ -781,6 +781,8 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
       const char *names[4] = {"jp:ink-c", "jp:ink-m", "jp:ink-y", "jp:ink-k"};
       for (unsigned i = 0; i < 4; ++i)
         graphicsProps.insert(names[i], int(std::lround(std::min(1.0, std::max(0.0, k[i])) * 255)));
+      if (!info.m_fillSpot.empty())
+        graphicsProps.insert("jp:ink-spot", info.m_fillSpot.c_str());
     }
   }
   // JeffPub 79: Text Art goes to the application as its words and settings
@@ -2063,6 +2065,7 @@ void MSPUBCollector::writePageBackground(unsigned pageSeqNum) const
       bg.m_pictureFillOpacity = ptr_info->m_pictureFillOpacity;
       bg.m_fillInks = ptr_info->m_fillInks;
       bg.m_fillInksColor = ptr_info->m_fillInksColor;
+      bg.m_fillSpot = ptr_info->m_fillSpot;
       paintShape(bg, Coordinate(), VectorTransformation2D(), false, VectorTransformation2D());
     }
   }
