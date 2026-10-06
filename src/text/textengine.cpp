@@ -456,6 +456,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                         const auto m = it.next();
                         const QString w = m.captured();
                         if (w == w.toUpper()) continue;   // leave all-caps words whole
+                        if (!hyphenationKnows(w)) continue;   // names and coined words stay whole
                         for (int pt : hyphenationPoints(w)) {
                             const int cut = int(m.capturedStart()) + pt;
                             const int n = cut - piece;

@@ -6,6 +6,8 @@
 #include <QMutex>
 #include <QStringList>
 #include <algorithm>
+#include <hunspell/hunspell.hxx>
+#include <memory>
 
 namespace jp {
 
@@ -81,6 +83,28 @@ QVector<int> hyphenationPoints(const QString &word)
     if (p.cache.size() > 50000) p.cache.clear();
     p.cache.insert(lower, out);
     return out;
+}
+
+bool hyphenationKnows(const QString &word)
+{
+    static QMutex mutex;
+    QMutexLocker lock(&mutex);
+    static std::unique_ptr<Hunspell> dict;
+    static bool tried = false;
+    static QHash<QString, bool> cache;
+    if (!tried) {
+        tried = true;
+        const QString hyph = dictFile();
+        const QString dir = hyph.isEmpty() ? QString() : hyph.left(hyph.lastIndexOf('/'));
+        if (!dir.isEmpty() && QFile::exists(dir + "/en_US.dic"))
+            dict = std::make_unique<Hunspell>(QFile::encodeName(dir + "/en_US.aff").constData(), QFile::encodeName(dir + "/en_US.dic").constData());
+    }
+    if (!dict) return true;
+    auto it = cache.constFind(word);
+    if (it != cache.constEnd()) return *it;
+    const bool known = dict->spell(word.toStdString());
+    cache.insert(word, known);
+    return known;
 }
 
 } // namespace jp
