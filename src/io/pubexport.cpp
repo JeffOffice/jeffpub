@@ -312,8 +312,9 @@ QByteArray escherProps(quint16 type, QVector<Prop> props)
     }
     return escherRecord(0x3, quint16(props.size()), type, body + extra);
 }
-// Client data and anchors carry blocks after a u32 length.
-QByteArray clientBlocks(quint16 type, const QVector<B> &blocks) { return escherRecord(0x0, 0x1a, type, lengthPrefixed(blocks)); }
+// Client data and anchors carry blocks after a u32 length (version 0xA, as
+// Publisher writes them).
+QByteArray clientBlocks(quint16 type, const QVector<B> &blocks) { return escherRecord(0xa, 0x1a, type, lengthPrefixed(blocks)); }
 
 const QVector<Prop> kSideLines = {{0x0540, 0x08000000}, {0x0542, 0x08000007}, {0x0580, 0x08000000}, {0x0582, 0x08000007},
                                   {0x05c0, 0x08000000}, {0x05c2, 0x08000007}, {0x0600, 0x08000000}, {0x0602, 0x08000007},
@@ -1707,7 +1708,7 @@ QByteArray PubWriter::write(QStringList *skipped)
             QVector<Prop> t1 = {{0x01bf, 0x00600000}, {0x01ff, 0x00400000}};
             t1 << kShadowFlags << kSideLines;
             QByteArray s1 = escherRecord(0x2, 1, 0xf00a, sp1) + escherProps(0xf00b, o1) + escherProps(0xf122, t1) +
-                            escherRecord(0x0, 0x1a, 0xf010, lengthPrefixed({}));
+                            escherRecord(0xa, 0x1a, 0xf010, lengthPrefixed({}));
             QByteArray sp2;
             putU32(sp2, 0x0c02);
             putU32(sp2, 0x0a00);
