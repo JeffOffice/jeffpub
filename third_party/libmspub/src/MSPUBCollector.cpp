@@ -1473,13 +1473,18 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
           props.insert("jp:autofit", (int)fit->second);
       }
       m_painter->startTextObject(props);
-      // JeffPub patch: the story's objects set in text, by character position.
+      // JeffPub patch: the story's objects set in text, and its dates and
+      // hyperlinks, by character position.
       const std::vector<std::pair<unsigned, unsigned> > *objects = nullptr;
-      if (bool(info.m_textId))
+      const std::vector<TextToken> *tokens = nullptr;
+      if (bool(info.m_textId) && !strcmp(getCalculatedEncoding(), "UTF-16LE"))
       {
         const auto o = m_inlineObjects.find(get(info.m_textId));
-        if (o != m_inlineObjects.end() && !strcmp(getCalculatedEncoding(), "UTF-16LE"))
+        if (o != m_inlineObjects.end())
           objects = &o->second;
+        const auto t = m_textTokens.find(get(info.m_textId));
+        if (t != m_textTokens.end())
+          tokens = &t->second;
       }
       unsigned storyPos = 0;
       for (const auto &line : text)
@@ -1496,41 +1501,77 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
         {
           const std::vector<unsigned char> &chars = line.spans[i_spans].chars;
           librevenge::RVNGPropertyList charProps = getCharStyleProps(line.spans[i_spans].style, line.style.m_defaultCharStyleIndex);
-          auto emit = [&](size_t from, size_t to, int num)
+          auto emit = [&](size_t from, size_t to, const librevenge::RVNGPropertyList &spanProps)
           {
             if (from >= to)
               return;
             librevenge::RVNGString textString;
             appendCharacters(textString, std::vector<unsigned char>(chars.begin() + from, chars.begin() + to), getCalculatedEncoding());
-            librevenge::RVNGPropertyList spanProps = charProps;
-            if (num >= 0)
-              spanProps.insert("jp:inline-num", num);
             m_painter->openSpan(spanProps);
             separateSpacesAndInsertText(m_painter, textString);
             m_painter->closeSpan();
           };
-          size_t from = 0;
-          if (objects)
+          if (!objects && !tokens)
           {
-            // A U+FFFC at a listed position is that object; it gets a span
-            // of its own.
-            for (size_t k = 0; k + 1 < chars.size(); k += 2)
-            {
-              if (chars[k] != 0xfc || chars[k + 1] != 0xff)
-                continue;
-              const unsigned at = storyPos + unsigned(k / 2);
+            emit(0, chars.size(), charProps);
+            continue;
+          }
+          // The span is cut where an object, a date or a hyperlink starts or
+          // ends; each piece says what it is.
+          const unsigned first = storyPos, count = unsigned(chars.size() / 2);
+          storyPos += count;
+          std::set<unsigned> cuts{0, count};
+          if (objects)
+            for (const auto &o : *objects)
+              if (o.first >= first && o.first < first + count)
+              {
+                cuts.insert(o.first - first);
+                cuts.insert(o.first - first + 1);
+              }
+          if (tokens)
+            for (const auto &t : *tokens)
+              if ((t.type == 1 || t.type == 6) && t.pos < first + count && t.pos + t.len > first)
+              {
+                if (t.pos > first)
+                  cuts.insert(t.pos - first);
+                if (t.pos + t.len < first + count)
+                  cuts.insert(t.pos + t.len - first);
+              }
+          for (auto c = cuts.begin(); std::next(c) != cuts.end(); ++c)
+          {
+            const unsigned a = *c, b = *std::next(c), at = first + a;
+            librevenge::RVNGPropertyList props = charProps;
+            if (objects && b == a + 1 && chars[2 * a] == 0xfc && chars[2 * a + 1] == 0xff)
               for (const auto &o : *objects)
                 if (o.first == at)
+                  props.insert("jp:inline-num", int(o.second));
+            const TextToken *link = nullptr;
+            if (tokens)
+              for (const auto &t : *tokens)
+                if (at >= t.pos && at < t.pos + t.len)
                 {
-                  emit(from, k, -1);
-                  emit(k, k + 2, int(o.second));
-                  from = k + 2;
-                  break;
+                  if (t.type == 1)
+                    link = &t;
+                  // A date: its first piece is the field, any others its text.
+                  else if (t.type == 6 && at == t.pos)
+                  {
+                    librevenge::RVNGString code("pubdate:");
+                    code.append(t.text);
+                    props.insert("jp:field", code);
+                  }
+                  else if (t.type == 6)
+                    props.insert("jp:field-cont", true);
                 }
+            if (link)
+            {
+              librevenge::RVNGPropertyList linkProps;
+              linkProps.insert("xlink:href", link->text);
+              m_painter->openLink(linkProps);
             }
-            storyPos += unsigned(chars.size() / 2);
+            emit(2 * a, 2 * b, props);
+            if (link)
+              m_painter->closeLink();
           }
-          emit(from, chars.size(), -1);
         }
         m_painter->closeParagraph();
       }
@@ -2045,7 +2086,12 @@ librevenge::RVNGPropertyList MSPUBCollector::getCharStyleProps(const CharacterSt
   if (style.trackingPerMille && style.trackingPerMille != 1000)
     ret.insert("jp:tracking", style.trackingPerMille / 10.0);
   // JeffPub patch: the run is the page number field.
-  if ((style.jpField & 0xff) == 5 && style.jpFieldArg == -1)
+  // A page number: this page (22 = -1), the next box's (-7) or the previous one's (-6).
+  if ((style.jpField & 0xff) == 5 && style.jpFieldArg == -7)
+    ret.insert("jp:field", "page:next");
+  else if ((style.jpField & 0xff) == 5 && style.jpFieldArg == -6)
+    ret.insert("jp:field", "page:prev");
+  else if ((style.jpField & 0xff) == 5 && style.jpFieldArg == -1)
     ret.insert("jp:field", "page");
   switch (style.superSubType)
   {

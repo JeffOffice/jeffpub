@@ -178,6 +178,15 @@ FrameSpec Renderer::frameSpec(const Document &doc, const TextItem &t, int pageNu
     s.ctx.pageNumber = loc.page >= 0 ? loc.page + 1 : pageNumber;
     s.ctx.pageCount = doc.pages.size();
     s.ctx.mergeRecord = opt.mergeRecord;
+    // For "next page" and "previous page" numbers: the linked boxes' pages.
+    if (!t.nextId.isEmpty()) {
+        const auto nl = doc.find(t.nextId);
+        if (nl.page >= 0) s.ctx.nextPage = nl.page + 1;
+    }
+    if (TextItem *pf = doc.prevFrame(t.id)) {
+        const auto pl = doc.find(pf->id);
+        if (pl.page >= 0) s.ctx.prevPage = pl.page + 1;
+    }
     if (t.continuedOn && !t.nextId.isEmpty()) {
         const auto nl = doc.find(t.nextId);
         s.ctx.continuedOnPage = nl.page + 1;

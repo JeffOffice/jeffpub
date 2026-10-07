@@ -481,18 +481,40 @@ letters end shows it: 2019 cover 45°, 2026 cover 68°, both as computed). The
 path runs about 0.31 cap heights above the baseline (0.305 and 0.32), so the
 letters reach past the frame.
 
-### Fields
+### Fields and hyperlinks
 
 A page number is a "#" in the story text whose character run has `00:12`
 with low byte 5 and `22:22` saying which page: -1 the current page, -7 the
-next, -6 the previous (Publisher's fields.pub, Oct 7, made with
-`InsertPageNumber` 1-3). Older files store `00:12` as 0xFF05 rather than
-0x0005 (a 2006 newsletter), so only the low byte counts. JeffPub reads the
-current page number and writes it the same way; Publisher showed "Page 2"
-on page 2 of a newsletter saved by JeffPub (Oct 7). Next and previous page
-numbers aren't read yet (they show "#"). Dates and times live in TOKN
-sections of the text stream; JeffPub writes its date, time and page-count
-fields as their text.
+next linked box's, -6 the previous box's ("#" shows when there's no such
+box). Older files store `00:12` as 0xFF05 rather than 0x0005 (a 2006
+newsletter), so only the low byte counts. A date or time keeps the text it
+last showed, in plain runs.
+
+Each story with fields or hyperlinks has a TOKN section (kind "PLC "),
+worked out from Publisher's own files (Oct 7):
+
+- a count n, 0x0C, 0x0001FFFF, n character positions and the story's end;
+- n property lists (each a length, then blocks), each holding only what
+  differs from the entry before: `00:22` flags (0x8C0 for a hyperlink in
+  2021, 0xC0 in 2006, else 0), `01:22` the length in characters, `02:22`
+  the kind: -5 page number, 1 hyperlink, 6 date or time;
+- n more lists, encoded the same way: `00:22` the entry's payload (-1 none);
+- the payloads: their length (from the offsets on), their count, 12 bytes
+  (0x0E 0xCA 0x59 0xD6, four zeros, then four bytes that differ from file
+  to file but are shared by its fields), an offset for each from the start
+  of the offsets, then each payload: a count of 16-bit units and the units.
+  A hyperlink's is its address. A date's is its kind (1 date, 11 date and
+  time, 12 time), Publisher's format number (1-17, its Date and Time list in
+  order: M/d/yyyy, dddd MMMM d yyyy, ... HH:mm:ss), the language (0x0409),
+  then the format in Windows' letters after a space (" M/d/yyyy h:mm am/pm").
+  With no payloads (page numbers only) the header is still written, empty
+  (length 0, count 0, the 12 bytes), just past the section and outside its
+  stated length: without it Publisher refuses the file.
+
+JeffPub reads all three, and writes them the same way: its TOKN sections
+for Publisher's samples were byte for byte Publisher's (but for the 12
+bytes), Publisher counted the same fields and hyperlinks in JeffPub's copies
+as in its own files, and pictured them the same.
 
 ### Objects in text
 

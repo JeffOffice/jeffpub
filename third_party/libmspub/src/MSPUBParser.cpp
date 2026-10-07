@@ -1246,6 +1246,7 @@ bool MSPUBParser::parseQuill(librevenge::RVNGInputStream *input)
   std::vector<unsigned> textOffsets;
   std::map<unsigned, std::vector<unsigned> > tableCellTextEnds;
   std::map<unsigned, std::vector<std::pair<unsigned, unsigned> > > inlineObjects;   // JeffPub patch: by story index
+  std::map<unsigned, std::vector<MSPUBCollector::TextToken> > textTokens;            // JeffPub patch: by story index
   unsigned textOffsetAccum = 0;
   std::vector<TextSpanReference> spans;
   std::vector<TextParagraphReference> paras;
@@ -1337,6 +1338,102 @@ bool MSPUBParser::parseQuill(librevenge::RVNGInputStream *input)
     {
       input->seek(i->offset, librevenge::RVNG_SEEK_SET);
       tableCellTextEnds[i->id] = parseTableCellDefinitions(input, *i);
+    }
+    else if (i->name == "TOKN")
+    {
+      // JeffPub patch: the fields and hyperlinks in story i->id's text (read
+      // from Publisher's own files, Oct 7): a count n, 0x0C, 0x0001FFFF, n
+      // character positions and the story's end. Then two property lists per
+      // entry, each giving only what differs from the entry before: first 01
+      // its length and 02 its kind (-5 page number, 1 hyperlink, 6 date or
+      // time), then 00 its payload (-1 none). Then the payloads: a length, a
+      // count, 12 bytes, an offset for each from the offsets' start, and each
+      // a count of 16-bit units and the units (a hyperlink's address; a
+      // date's kind, format number and language, then its format).
+      // Optional: a damaged section loses its fields, never the text.
+      try
+      {
+        const unsigned long end = i->offset + i->length;
+        input->seek(i->offset, librevenge::RVNG_SEEK_SET);
+        const unsigned n = readU32(input);
+        readU32(input);
+        readU32(input);
+        if (n > 0 && n < 100000 && 12ull + 4ull * (n + 1ull) <= i->length)
+        {
+          std::vector<MSPUBCollector::TextToken> tokens(n);
+          for (unsigned k = 0; k < n; ++k)
+            tokens[k].pos = readU32(input);
+          readU32(input);
+          auto propList = [&](std::map<unsigned, unsigned> &props)
+          {
+            const unsigned long start = input->tell();
+            const unsigned len = readU32(input);
+            if (len < 4 || start + len > end)
+              return false;
+            while (stillReading(input, start + len))
+            {
+              const MSPUBBlockInfo b = parseBlock(input, true);
+              props[b.id] = b.data;
+            }
+            input->seek(start + len, librevenge::RVNG_SEEK_SET);
+            return true;
+          };
+          bool ok = true;
+          std::map<unsigned, unsigned> first, second;
+          std::vector<int> payloadOf(n, -1);
+          for (unsigned k = 0; k < n && ok; ++k)
+          {
+            ok = propList(first);
+            tokens[k].len = first[1];
+            tokens[k].type = int(first[2]);
+          }
+          bool anyPayload = false;
+          for (unsigned k = 0; k < n && ok; ++k)
+          {
+            ok = propList(second);
+            payloadOf[k] = second.count(0) ? int(second[0]) : -1;
+            anyPayload = anyPayload || payloadOf[k] >= 0;
+          }
+          if (ok && anyPayload && input->tell() + 20 <= end)
+          {
+            const unsigned len = readU32(input);
+            const unsigned m = readU32(input);
+            input->seek(12, librevenge::RVNG_SEEK_CUR);
+            const unsigned long base = input->tell();
+            if (m > 0 && m <= 10000 && 4ull * m <= len && base + len <= end)
+            {
+              std::vector<unsigned> offsets(m);
+              for (unsigned p = 0; p < m; ++p)
+                offsets[p] = readU32(input);
+              for (unsigned k = 0; k < n; ++k)
+              {
+                const int p = payloadOf[k];
+                if (p < 0 || unsigned(p) >= m || offsets[p] + 2ull > len)
+                  continue;
+                input->seek(base + offsets[p], librevenge::RVNG_SEEK_SET);
+                unsigned units = readU16(input);
+                if (offsets[p] + 2ull + 2ull * units > len)
+                  continue;
+                if (tokens[k].type == 6)
+                {
+                  if (units < 3)
+                    continue;
+                  input->seek(6, librevenge::RVNG_SEEK_CUR);
+                  units -= 3;
+                }
+                std::vector<unsigned char> chars;
+                readNBytes(input, 2 * units, chars);
+                appendCharacters(tokens[k].text, chars, "UTF-16LE");
+              }
+            }
+          }
+          if (ok)
+            textTokens[i->id] = tokens;
+        }
+      }
+      catch (const EndOfStreamException &)
+      {
+      }
     }
     else if (i->name == "EOBJ")
     {
@@ -1437,6 +1534,9 @@ bool MSPUBParser::parseQuill(librevenge::RVNGInputStream *input)
       const auto objects = inlineObjects.find(j);
       if (objects != inlineObjects.end())
         m_collector->setInlineObjects(textIDs[j], objects->second);
+      const auto tokens = textTokens.find(j);
+      if (tokens != textTokens.end())
+        m_collector->setTextTokens(textIDs[j], tokens->second);
     }
     textChunkReference = chunkReferences.end();
   }

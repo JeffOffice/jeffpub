@@ -7,6 +7,7 @@
 #include "text/textprops.h"
 
 #include <QJsonDocument>
+#include <QRegularExpression>
 #include <QFile>
 #include <QHash>
 #include <QPainter>
@@ -27,6 +28,20 @@
 #include <librevenge/librevenge.h>
 
 namespace jp {
+
+// A Publisher date and time format ("dddd, MMMM d, yyyy", "M/d/yyyy h:mm:ss
+// am/pm", in Windows' letters) as Qt writes it: the same letters, except
+// AM/PM, a lone "y" and "yyy".
+QString pubDateFormat(QString f)
+{
+    f = f.trimmed();
+    static const QRegularExpression ampm(QStringLiteral("am/pm|a/p|tt"), QRegularExpression::CaseInsensitiveOption);
+    f.replace(ampm, QStringLiteral("AP"));
+    static const QRegularExpression y3(QStringLiteral("(?<!y)yyy(?!y)")), y1(QStringLiteral("(?<!y)y(?!y)"));
+    f.replace(y3, QStringLiteral("yyyy"));
+    f.replace(y1, QStringLiteral("yy"));
+    return f;
+}
 
 namespace {
 
@@ -570,8 +585,13 @@ public:
         const QString lang = str(p["fo:language"]), country = str(p["fo:country"]);
         if (!lang.isEmpty()) cf.setProperty(tp::Language, country.isEmpty() ? lang : lang + '-' + country);
         m_span = cf;
-        // A field: the page number Publisher shows in place of the run's "#".
+        // A field: the page number Publisher shows in place of the run's "#",
+        // or a date (Publisher's format: "pubdate:dddd, MMMM d, yyyy"),
+        // whose text is what it showed last; a date over several runs has
+        // its later runs marked to be left out.
         m_spanField = str(p["jp:field"]);
+        if (m_spanField.startsWith(QLatin1String("pubdate:"))) m_spanField = QStringLiteral("datetime:") + pubDateFormat(m_spanField.mid(8));
+        m_spanFieldCont = p["jp:field-cont"] && p["jp:field-cont"]->getInt();
         // An object set in the text: the span is its U+FFFC.
         m_spanInline = p["jp:inline-num"] ? p["jp:inline-num"]->getInt() : -1;
         if (!m_styleFromSpan.isEmpty()) {
@@ -588,6 +608,7 @@ public:
     {
         m_span = QTextCharFormat();
         m_spanField.clear();
+        m_spanFieldCont = false;
         m_spanInline = -1;
     }
     void openLink(const RVNGPropertyList &p) override { m_link = str(p["xlink:href"]); }
@@ -914,6 +935,14 @@ private:
         if (t.isEmpty()) {
             // A bare paragraph mark still sizes an empty paragraph.
             if (m_cursor.block().length() <= 1) m_cursor.setBlockCharFormat(cf);
+            return;
+        }
+        if (m_spanFieldCont) return;
+        // A date or time: one field for its text.
+        if (m_spanField.startsWith(QLatin1String("datetime:"))) {
+            QTextCharFormat ff = cf;
+            ff.setProperty(tp::Field, m_spanField);
+            m_cursor.insertText(QString(QChar::ObjectReplacementCharacter), ff);
             return;
         }
         // A page number field: its "#" becomes JeffPub's field.
@@ -1310,6 +1339,7 @@ private:
     QTextCharFormat m_span;
     QString m_spanField;   // the open span is this field ("page")
     int m_spanInline = -1; // the open span is the object set in text with this number
+    bool m_spanFieldCont = false;   // the open span is a later run of a date field
     ItemList m_inlineList;                   // objects set in text, as read
     std::map<int, ItemPtr> m_inlineItems;    // and by Publisher's number
     std::map<const GroupItem *, int> m_inlineGroups;   // open groups that are such objects

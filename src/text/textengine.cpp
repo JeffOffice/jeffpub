@@ -61,6 +61,9 @@ QString FieldContext::resolve(const QString &code) const
     const QString arg = code.section(':', 1);
     if (kind == QLatin1String("footnote") || kind == QLatin1String("endnote")) return noteNumber(doc, kind, arg);
     if (kind == "page") {
+        // The next or previous linked box's page; "#" without one, as in Publisher.
+        if (arg == "next") return nextPage > 0 ? QString::number(nextPage) : QStringLiteral("#");
+        if (arg == "prev") return prevPage > 0 ? QString::number(prevPage) : QStringLiteral("#");
         if (arg == "roman") return toRoman(pageNumber).toLower();
         if (arg == "ROMAN") return toRoman(pageNumber);
         if (arg == "alpha") return QString(QChar('a' + (pageNumber - 1) % 26));
@@ -122,10 +125,18 @@ QString FieldContext::resolve(const QString &code) const
     return QStringLiteral("[%1]").arg(code);
 }
 
+const QStringList &dateTimeFormats()
+{
+    static const QStringList formats{"M/d/yyyy", "dddd, MMMM d, yyyy", "MMMM d, yyyy", "M/d/yy", "yyyy-MM-dd", "d-MMM-yy", "M.d.yyyy", "MMM. d, yy",
+                                     "d MMMM yyyy", "MMMM yy", "MMM-yy", "M/d/yyyy h:mm AP", "M/d/yyyy h:mm:ss AP", "h:mm AP", "h:mm:ss AP", "HH:mm",
+                                     "HH:mm:ss"};
+    return formats;
+}
+
 QString FieldContext::key() const
 {
-    return QStringLiteral("%1/%2/%3/%4/%5/%6").arg(pageNumber).arg(pageCount).arg(mergeRecord).arg(continuedOnPage).arg(continuedFromPage)
-        .arg(now.toString("yyyyMMddhhmm"));
+    return QStringLiteral("%1/%2/%3/%4/%5/%6/%7/%8").arg(pageNumber).arg(pageCount).arg(mergeRecord).arg(continuedOnPage).arg(continuedFromPage)
+        .arg(nextPage).arg(prevPage).arg(now.toString("yyyyMMddhhmm"));
 }
 
 QString LayoutEnv::key() const

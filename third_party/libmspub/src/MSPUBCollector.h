@@ -129,6 +129,16 @@ public:
   void setTextNotHyphenated(unsigned textId) { m_notHyphenated.insert(textId); }
   void setTextAutofit(unsigned textId, unsigned kind) { m_autofit[textId] = kind; }
   void setShapeInlineNum(unsigned seqNum, unsigned num) { m_shapeInfosBySeqNum[seqNum].m_inlineNum = num; }
+  // JeffPub patch: a field or hyperlink in a story (its TOKN entry): where it
+  // is, its kind (-5 page number, 1 hyperlink, 6 date or time) and, for a
+  // hyperlink its address, for a date its format.
+  struct TextToken
+  {
+    unsigned pos = 0, len = 0;
+    int type = 0;
+    librevenge::RVNGString text;
+  };
+  void setTextTokens(unsigned textId, const std::vector<TextToken> &tokens) { m_textTokens[textId] = tokens; }
   void setInlineObjects(unsigned textId, const std::vector<std::pair<unsigned, unsigned> > &objects)
   {
     m_inlineObjects[textId] = objects;
@@ -196,6 +206,7 @@ private:
   // whether they've been written (once, with the first page).
   std::map<unsigned, std::vector<std::pair<unsigned, unsigned> > > m_inlineObjects;
   std::set<unsigned> m_inlineNums;
+  std::map<unsigned, std::vector<TextToken> > m_textTokens;   // JeffPub patch: by text id
   mutable bool m_inlineWritten = false;
   bool isInlineShape(unsigned seqNum) const;
   void writeInlineShapes() const;

@@ -20,5 +20,8 @@ struct PubImportReport {
 bool isPublisherFile(const QByteArray &head);
 std::unique_ptr<Document> importPublisher(const QByteArray &data, QString *error, PubImportReport *report = nullptr);
 std::unique_ptr<Document> importPublisherFile(const QString &path, QString *error, PubImportReport *report = nullptr);
+// A Publisher date and time format (Windows' letters) as Qt's QDateTime
+// writes it, for a "datetime:" field.
+QString pubDateFormat(QString f);
 
 } // namespace jp

@@ -3309,6 +3309,145 @@ private Q_SLOTS:
         QVERIFY2(exportPublisher(*doc, dir.filePath(QStringLiteral("self.pub")), &err), qPrintable(err));
     }
 
+    // Fields and hyperlinks are saved as Publisher saves them: each story's
+    // TOKN section lists them (page numbers, dates and times in Publisher's
+    // 17 formats, hyperlinks with their address) and they come back as
+    // fields and links. Publisher counted the same fields in JeffPub's copies
+    // of its samples as in its own files, and pictured them the same (Oct 7).
+    void pubFieldsAndLinksRoundTrip()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto box = [&](const QString &text, const QString &field, double y) {
+            auto t = std::make_shared<TextItem>();
+            t->rect = QRectF(72, y, 300, 30);
+            t->storyId = doc->createStory(text);
+            if (!field.isEmpty()) {
+                QTextCursor c(doc->storyDoc(t->storyId));
+                c.movePosition(QTextCursor::End);
+                QTextCharFormat ff;
+                ff.setProperty(tp::Field, field);
+                c.insertText(QString(QChar::ObjectReplacementCharacter), ff);
+            }
+            doc->pages[0]->items.push_back(t);
+            return t;
+        };
+        box(QStringLiteral("f0 X"), QStringLiteral("page"), 72);
+        box(QStringLiteral("Next "), QStringLiteral("page:next"), 112);
+        box(QStringLiteral("Prev "), QStringLiteral("page:prev"), 152);
+        box(QStringLiteral("Day "), QStringLiteral("datetime:MMMM d, yyyy"), 192);
+        box(QStringLiteral("Clock "), QStringLiteral("datetime:h:mm:ss AP"), 232);
+        auto linked = box(QStringLiteral("Visit "), QString(), 272);
+        {
+            QTextCursor c(doc->storyDoc(linked->storyId));
+            c.movePosition(QTextCursor::End);
+            QTextCharFormat lf;
+            lf.setAnchor(true);
+            lf.setAnchorHref(QStringLiteral("https://example.com/page"));
+            c.insertText(QStringLiteral("example site"), lf);
+            c.insertText(QStringLiteral(" now"), QTextCharFormat());
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("fields.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        const QByteArray q = cfb::readStream(path, QStringLiteral("Quill/QuillSub/CONTENTS"));
+        // A page number's section, byte for byte as Publisher wrote one for
+        // "f0 X#", then the empty payload header just past it (without it
+        // Publisher refused the file).
+        const QByteArray page = QByteArray::fromHex("010000000c000000ffff01000400000006000000160000000022000000000122010000000222fbffffff0a0000000022ffffffff"
+                                                    "00000000000000000eca59d6");
+        QVERIFY(q.contains(page));
+        // A date: its kind (1), format number (3), language and format.
+        QVERIFY(q.contains(QByteArray::fromHex("10000100030009042000") + QByteArray(reinterpret_cast<const char *>(u"MMMM d, yyyy"), 24)));
+        // A time: kind 12, number 15, "am/pm" for AP.
+        QVERIFY(q.contains(QByteArray::fromHex("11000c000f0009042000") + QByteArray(reinterpret_cast<const char *>(u"h:mm:ss am/pm"), 26)));
+        // The hyperlink: flags 0x8C0, its 12 letters, kind 1; its address.
+        QVERIFY(q.contains(QByteArray::fromHex("160000000022c00800000122") + QByteArray::fromHex("0c0000000222") + QByteArray::fromHex("01000000")));
+        QVERIFY(q.contains(QByteArray::fromHex("1800") + QByteArray(reinterpret_cast<const char *>(u"https://example.com/page"), 48)));
+        auto back = importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QStringList fields, links;
+        for (const auto &it : back->pages[0]->items) {
+            auto *t = dynamic_cast<TextItem *>(it.get());
+            QVERIFY(t);
+            for (QTextBlock b = back->storyDoc(t->storyId)->begin(); b.isValid(); b = b.next())
+                for (auto f = b.begin(); !f.atEnd(); ++f) {
+                    const QTextCharFormat cf = f.fragment().charFormat();
+                    if (!cf.stringProperty(tp::Field).isEmpty()) fields << cf.stringProperty(tp::Field);
+                    if (cf.isAnchor()) links << cf.anchorHref() + QLatin1Char('=') + f.fragment().text();
+                }
+        }
+        QCOMPARE(fields, (QStringList{"page", "page:next", "page:prev", "datetime:MMMM d, yyyy", "datetime:h:mm:ss AP"}));
+        QCOMPARE(links, QStringList{QStringLiteral("https://example.com/page=example site")});
+
+        // A damaged TOKN section (its entry and count claim more than the
+        // stream holds) loses its fields, never the publication's text.
+        QFile in(path);
+        QVERIFY(in.open(QIODevice::ReadOnly));
+        cfb::File file;
+        QVERIFY(cfb::read(in.readAll(), &file));
+        in.close();
+        QByteArray quill = file.stream(QStringLiteral("Quill/QuillSub/CONTENTS"));
+        for (qsizetype entry = quill.indexOf("TOKN") - 2; entry > 0 && entry < 512; entry = quill.indexOf("TOKN", entry + 3) - 2) {
+            const quint32 at = qFromLittleEndian<quint32>(quill.constData() + entry + 16);
+            qToLittleEndian<quint32>(0x00ffffff, quill.data() + entry + 20);
+            qToLittleEndian<quint32>(50000, quill.data() + at);
+        }
+        QVERIFY(file.setStream(QStringLiteral("Quill/QuillSub/CONTENTS"), quill));
+        const QString damaged = dir.filePath(QStringLiteral("damaged.pub"));
+        QFile out(damaged);
+        QVERIFY(out.open(QIODevice::WriteOnly));
+        out.write(cfb::write(file));
+        out.close();
+        auto rescued = importPublisherFile(damaged, &err);
+        QVERIFY2(rescued, qPrintable(err));
+        QCOMPARE(int(rescued->pages[0]->items.size()), 6);
+    }
+
+    // Publisher's date formats are Windows' letters; Qt's differ only in
+    // AM/PM and the one- and three-letter years.
+    void pubDateFormats()
+    {
+        QCOMPARE(jp::pubDateFormat(QStringLiteral(" dddd, MMMM d, yyyy")), QStringLiteral("dddd, MMMM d, yyyy"));
+        QCOMPARE(jp::pubDateFormat(QStringLiteral(" M/d/yyyy h:mm:ss am/pm")), QStringLiteral("M/d/yyyy h:mm:ss AP"));
+        QCOMPARE(jp::pubDateFormat(QStringLiteral("h:mm tt")), QStringLiteral("h:mm AP"));
+        QCOMPARE(jp::pubDateFormat(QStringLiteral("d-MMM-y")), QStringLiteral("d-MMM-yy"));
+        QCOMPARE(jp::pubDateFormat(QStringLiteral("yyy")), QStringLiteral("yyyy"));
+        // Every one of Publisher's own formats is in JeffPub's Date and Time list.
+        for (const char *f : {" M/d/yyyy", " dddd, MMMM d, yyyy", " MMMM d, yyyy", " M/d/yy", " yyyy-MM-dd", " d-MMM-yy", " M.d.yyyy", " MMM. d, yy",
+                              " d MMMM yyyy", " MMMM yy", " MMM-yy", " M/d/yyyy h:mm am/pm", " M/d/yyyy h:mm:ss am/pm", " h:mm am/pm", " h:mm:ss am/pm",
+                              " HH:mm", " HH:mm:ss"})
+            QVERIFY2(jp::dateTimeFormats().contains(jp::pubDateFormat(QString::fromLatin1(f))), f);
+    }
+
+    // "Next page" and "previous page" numbers show the page of the next or
+    // previous box of a linked chain, and "#" in a box without one, as in
+    // Publisher.
+    void nextAndPreviousPageNumbers()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        doc->addPage();
+        doc->addPage();
+        auto a = std::make_shared<TextItem>();
+        a->rect = QRectF(72, 72, 300, 100);
+        a->storyId = doc->createStory(QStringLiteral("Story"));
+        auto b = std::make_shared<TextItem>();
+        b->rect = QRectF(72, 72, 300, 100);
+        b->storyId = a->storyId;
+        a->nextId = b->id;
+        doc->pages[0]->items.push_back(a);
+        doc->pages[2]->items.push_back(b);
+        LayoutCache cache;
+        FrameSpec sa = Renderer::frameSpec(*doc, *a, 1, RenderOptions()), sb = Renderer::frameSpec(*doc, *b, 3, RenderOptions());
+        QCOMPARE(sa.ctx.resolve(QStringLiteral("page:next")), QStringLiteral("3"));
+        QCOMPARE(sb.ctx.resolve(QStringLiteral("page:prev")), QStringLiteral("1"));
+        QCOMPARE(sa.ctx.resolve(QStringLiteral("page:prev")), QStringLiteral("#"));
+        QCOMPARE(sb.ctx.resolve(QStringLiteral("page:next")), QStringLiteral("#"));
+        QCOMPARE(sb.ctx.resolve(QStringLiteral("page")), QStringLiteral("3"));
+    }
+
     // A .pub page number field is a "#" whose character run has 00 = 5 (low
     // byte) and 22 = -1, as Publisher writes it; JeffPub showed the "#".
     void pubPageNumberField()

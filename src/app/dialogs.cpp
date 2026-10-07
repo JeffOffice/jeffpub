@@ -1407,8 +1407,7 @@ void dateTimeDialog(QWidget *p, Editor *ed)
     }
     Dlg dlg(p, QStringLiteral("Date and Time"));
     auto *list = new QListWidget(&dlg.d);
-    const QStringList formats{"M/d/yyyy", "dddd, MMMM d, yyyy", "MMMM d, yyyy", "M/d/yy", "yyyy-MM-dd", "d-MMM-yy", "M.d.yyyy", "MMM. d, yy", "d MMMM yyyy",
-                              "MMMM yy", "MMM-yy", "M/d/yyyy h:mm AP", "M/d/yyyy h:mm:ss AP", "h:mm AP", "h:mm:ss AP", "HH:mm", "HH:mm:ss"};
+    const QStringList &formats = dateTimeFormats();
     const QDateTime now = QDateTime::currentDateTime();
     for (const QString &f : formats) {
         auto *it = new QListWidgetItem(now.toString(f));

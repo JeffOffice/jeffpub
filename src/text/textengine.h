@@ -30,6 +30,7 @@ struct FieldContext {
     int pageCount = 1;
     int mergeRecord = -1;         // -1 shows «Field» codes
     int continuedOnPage = 0, continuedFromPage = 0;
+    int nextPage = 0, prevPage = 0;   // pages of the next and previous boxes of a linked chain (0: none)
     QDateTime now = QDateTime::currentDateTime();
     QString resolve(const QString &code) const;
     QString key() const;
@@ -169,6 +170,10 @@ void drawPlainText(QPainter *p, const QPointF &baseline, const QFont &font, cons
 double naturalLineEm(const QFont &f, const QString &requestedFamily);
 
 QTextCharFormat resolveCharFormat(const QTextCharFormat &f, const LayoutEnv &env);
+
+// The date and time formats Publisher offers (US English), in its order and
+// in Qt's letters: a .pub date field's format number is the place here plus 1.
+const QStringList &dateTimeFormats();
 QFont baseFontFor(const QTextBlock &b, const LayoutEnv &env);
 
 } // namespace jp

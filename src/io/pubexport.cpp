@@ -459,7 +459,9 @@ void freeformProps(QVector<Prop> &opt, const QPainterPath &path, const QSizeF &s
 }
 
 // ---------------------------------------------------------------- Quill
-struct Section { QByteArray name, kind; quint16 id = 0; QByteArray data; bool align = false; };
+// after: bytes written just past the section, outside its stated length (a
+// TOKN section without payloads is followed by an empty payload header).
+struct Section { QByteArray name, kind; quint16 id = 0; QByteArray data; bool align = false; QByteArray after = {}; };
 
 QByteArray quillStream(QVector<Section> secs)
 {
@@ -477,6 +479,7 @@ QByteArray quillStream(QVector<Section> secs)
         if (s.align) while ((at + body.size()) % 512) body.append('\0');
         places << qMakePair(at + int(body.size()), int(s.data.size()));
         body.append(s.data);
+        body.append(s.after);
     }
     out.append(body);
     while (out.size() % 512) out.append('\0');
@@ -851,6 +854,11 @@ private:
     // item, and the chunk it's written as.
     struct InlineObj { int story; int tid; quint32 pos; QString json; QString itemId; quint32 seq = 0; };
     QVector<InlineObj> m_inline;
+    // Fields and hyperlinks in the text, for each story's TOKN section: kind
+    // -5 a page number, 1 a hyperlink (payload its address), 6 a date or time
+    // (payload its date kind, format number, language and format).
+    struct Token { int story; quint32 pos, len; int kind; QByteArray payload; };
+    QVector<Token> m_tokens;
     QHash<int, int> m_chainLength;   // text id -> boxes in its chain
 };
 
@@ -1038,12 +1046,33 @@ void PubWriter::addStory(int textId, const QVector<const QTextDocument *> &docs,
             t.replace(QChar::LineSeparator, QChar(0x0b));
             t.replace(QChar(0x2029), QChar('\r'));
             const QString field = fr.charFormat().stringProperty(tp::Field);
+            const int story = int(m_storyLengths.size());
+            const quint32 here = quint32((512 + m_text.size() - start) / 2);
+            // A hyperlink: one entry over its text, however many runs it takes.
+            const QString href = fr.charFormat().isAnchor() ? fr.charFormat().anchorHref() : QString();
+            auto noteLink = [&](int chars) {
+                if (href.isEmpty() || chars <= 0) return;
+                QByteArray payload;
+                putU16(payload, quint32(href.size()));
+                for (QChar c : href) putU16(payload, c.unicode());
+                if (!m_tokens.isEmpty() && m_tokens.last().story == story && m_tokens.last().kind == 1 && m_tokens.last().payload == payload &&
+                    m_tokens.last().pos + m_tokens.last().len == here)
+                    m_tokens.last().len += quint32(chars);
+                else
+                    m_tokens << Token{story, here, quint32(chars), 1, payload};
+            };
             if (field == QLatin1String("page") || field.startsWith(QLatin1String("page:"))) {
                 // The page number: a "#" whose run is the field (00 = 5, 22 =
-                // -1), as Publisher writes it.
-                for (int k = 0; k < t.size(); ++k) putU16(m_text, '#');
+                // -1 this page, -7 the next box's, -6 the previous box's), as
+                // Publisher writes it, with an entry in the story's TOKN.
+                const quint32 which = field == QLatin1String("page:next") ? 0xfffffff9u : field == QLatin1String("page:prev") ? 0xfffffffau : 0xffffffffu;
+                for (int k = 0; k < t.size(); ++k) {
+                    m_tokens << Token{story, here + quint32(k), 1, -5, {}};
+                    putU16(m_text, '#');
+                }
+                noteLink(int(t.size()));
                 QVector<B> blocks = charBlocks(fr.charFormat(), styleChr);
-                blocks << u16(0x00, 5, 0x12) << u32(0x22, 0xffffffffu, 0x22);
+                blocks << u16(0x00, 5, 0x12) << u32(0x22, which, 0x22);
                 std::sort(blocks.begin(), blocks.end(), [](const B &a, const B &b) { return a.id < b.id; });
                 m_charRuns << Run{quint32(512 + m_text.size()), lengthPrefixed(blocks)};
                 last = fr.charFormat();
@@ -1051,11 +1080,36 @@ void PubWriter::addStory(int textId, const QVector<const QTextDocument *> &docs,
             }
             if (!field.isEmpty()) {
                 // Other fields as the text they show now (a date, a business
-                // detail, a note's number).
+                // detail, a note's number); a date or time in one of
+                // Publisher's formats stays a field there too.
                 FieldContext fc;
                 fc.doc = &m_doc;
+                const QString kind = field.section(QLatin1Char(':'), 0, 0);
+                QString format = field.section(QLatin1Char(':'), 1);
+                if (format.isEmpty())
+                    format = kind == QLatin1String("date") ? QStringLiteral("MMMM d, yyyy") : kind == QLatin1String("time") ? QStringLiteral("h:mm AP")
+                                                                                                                          : QStringLiteral("M/d/yyyy h:mm AP");
+                const int number = kind == QLatin1String("date") || kind == QLatin1String("time") || kind == QLatin1String("datetime")
+                                       ? int(dateTimeFormats().indexOf(format)) : -1;
                 t = QString();
-                for (int k = 0; k < fr.text().size(); ++k) t += fc.resolve(field);
+                for (int k = 0; k < fr.text().size(); ++k) {
+                    const QString v = fc.resolve(field);
+                    if (number >= 0) {
+                        // Its kind (1 a date, 11 a date and time, 12 a time),
+                        // format number, language (US English) and format in
+                        // Windows' letters after a space.
+                        QString pub = QLatin1Char(' ') + format;
+                        pub.replace(QLatin1String("AP"), QLatin1String("am/pm")).replace(QLatin1String("ap"), QLatin1String("am/pm"));
+                        QByteArray payload;
+                        putU16(payload, quint32(3 + pub.size()));
+                        putU16(payload, number <= 10 ? 1 : number <= 12 ? 11 : 12);
+                        putU16(payload, quint32(number + 1));
+                        putU16(payload, 0x0409);
+                        for (QChar c : pub) putU16(payload, c.unicode());
+                        m_tokens << Token{story, here + quint32(t.size()), quint32(v.size()), 6, payload};
+                    }
+                    t += v;
+                }
             }
             const QString object = fr.charFormat().stringProperty(tp::InlineObject);
             if (!object.isEmpty()) {
@@ -1073,6 +1127,7 @@ void PubWriter::addStory(int textId, const QVector<const QTextDocument *> &docs,
                 last = fr.charFormat();
                 continue;
             }
+            noteLink(int(t.size()));
             for (QChar c : t) putU16(m_text, c.unicode());
             m_charRuns << Run{quint32(512 + m_text.size()), charProps(fr.charFormat(), styleChr)};
             last = fr.charFormat();
@@ -2368,6 +2423,63 @@ QByteArray PubWriter::write(QStringList *skipped)
         putU32(tcd, 0xff00);
         for (quint32 e : ce.second) putU32(tcd, e);
         secs << Section{"TCD ", "PLC ", quint16(ce.first), tcd, false};
+    }
+    // Fields and hyperlinks in each story's text (TOKN), as Publisher writes
+    // them (Oct 7): count n, 0x0C, 0x0001FFFF, the positions and the story's
+    // end; two property lists per entry, each holding only what differs from
+    // the entry before (00 flags, 0x8C0 for a hyperlink, 01 length, 02 kind;
+    // then 00 its payload, -1 none); then the payloads: their length, count,
+    // 12 bytes, each one's offset from the offsets' start, and the payloads.
+    {
+        QMap<int, QVector<int>> byStory;
+        for (int k = 0; k < m_tokens.size(); ++k) byStory[m_tokens[k].story] << k;
+        static const QByteArray kStamp = QByteArray::fromHex("0eca59d6000000000060e674");   // as in Publisher's own files
+        for (auto it = byStory.cbegin(); it != byStory.cend(); ++it) {
+            const QVector<int> &toks = it.value();
+            QByteArray d;
+            putU32(d, quint32(toks.size()));
+            putU32(d, 0x0c);
+            putU32(d, 0x0001ffff);
+            for (int k : toks) putU32(d, m_tokens[k].pos);
+            putU32(d, it.key() < m_storyLengths.size() ? m_storyLengths[it.key()] : 0);
+            auto deltaList = [](const QVector<quint32> &vals, QVector<quint32> &prev) {
+                QVector<B> bl;
+                for (int p = 0; p < vals.size(); ++p)
+                    if (prev.size() != vals.size() || prev[p] != vals[p]) bl << u32(quint8(p), vals[p], 0x22);
+                prev = vals;
+                return lengthPrefixed(bl);
+            };
+            QVector<quint32> prev;
+            for (int k : toks) {
+                const Token &tk = m_tokens[k];
+                d += deltaList({tk.kind == 1 ? 0x8c0u : 0u, tk.len, quint32(tk.kind)}, prev);
+            }
+            prev.clear();
+            QByteArray table, body;
+            int payloads = 0;
+            for (int k : toks) payloads += m_tokens[k].payload.isEmpty() ? 0 : 1;
+            int next = 0;
+            for (int k : toks) {
+                const Token &tk = m_tokens[k];
+                if (tk.payload.isEmpty()) {
+                    d += deltaList({0xffffffffu}, prev);
+                    continue;
+                }
+                d += deltaList({quint32(next++)}, prev);
+                putU32(table, quint32(4 * payloads + body.size()));
+                body += tk.payload;
+            }
+            // The payloads' header comes either way: without payloads (page
+            // numbers only) it's empty and lies just past the section, outside
+            // its length, as Publisher writes it (Oct 7: without it Publisher
+            // refused the file).
+            QByteArray head;
+            putU32(head, quint32(table.size() + body.size()));
+            putU32(head, quint32(payloads));
+            head += kStamp;
+            if (payloads) secs << Section{"TOKN", "PLC ", quint16(it.key()), d + head + table + body, false};
+            else secs << Section{"TOKN", "PLC ", quint16(it.key()), d, false, head};
+        }
     }
     // Objects set in each story's text: count, entry size (4), 0xff00, the
     // positions, the story's length, then each one's number.
