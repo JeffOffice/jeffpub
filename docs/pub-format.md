@@ -366,13 +366,29 @@ Publisher.
 Page Setup's layout type is the DOCUMENT chunk's field `11` (u32): 1 for a
 booklet, 3 for a folded card, 7 for an envelope; one page per sheet and
 multiple pages per sheet leave it out. Found by choosing each in
-Publisher's Page Setup dialog and saving. A booklet (and a folded card)
-also sets flags `06` and `0b`, and keeps its pages as two-page spreads:
-the master is split into a right-hand part (`10` = 1) and a left-hand one
-(`10` = 0), each page's canvas (`05`, `11`) is widened toward its partner,
-and a field `46` appears for a folded card or envelope. Writing `11` with
-`06` and `0b` alone, without the spreads, doesn't make Publisher print a
-booklet, so JeffPub reads the layout type but doesn't save it yet.
+Publisher's Page Setup dialog and saving.
+
+A booklet (Publisher 2021, Oct 7) also sets DOCUMENT flags `06` and `0b`
+and keeps its pages as two-page spreads. Each master is two page chunks
+with the same name, a right-hand part (`10` = 1) and a left-hand one
+(`10` = 0), each with its own margin guides, the left listed first in the
+DOCUMENT page list; `2d` counts both. Page 1 and every odd page use the
+right part, even pages the left. Canvases (`05`, and `11` = `05` +
+87325200) are 25 inches around the page, a right-hand page's or part's
+widened and a left-hand one's narrowed by half a page width; the first
+special page is half a page shorter (one page per sheet: also half a page
+narrower), the others a left-hand page's width. Only the first page's
+field `06` starts with 2; the others are all zero (one page per sheet
+numbers them 2 and their index), so a reader that takes a zero there for a
+special page loses every page after the first. Objects keep their own
+page's coordinates. The print settings (0x8A) add two pages to a sheet
+(`09` = 2), the sheet turned to hold them, folded at the page width
+(`0a`), and `15` = 4. JeffPub reads and writes all of this: Publisher read
+JeffPub's copy of its booklet as its own (booklet layout, spreads, two-page
+masters, the same left and right pages) and pictured it the same, and
+showed a booklet made in JeffPub with its master's objects on every page.
+JeffPub keeps a booklet's master as one two-page master (the right part a
+page width over); a single master in a booklet is written to both parts.
 
 ### Text wrapping
 

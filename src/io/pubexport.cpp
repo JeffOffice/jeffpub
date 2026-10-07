@@ -1323,17 +1323,31 @@ QByteArray PubWriter::write(QStringList *skipped)
         next += 3;
     }
     // Master pages: the first is the fixed one; each other has its own
-    // chunk, two sub-chunks and margin guides.
-    struct MasterSeqs { quint32 seq, sub60, sub77, guides; };
+    // chunk, two sub-chunks and margin guides. A booklet keeps its pages as
+    // two-page spreads (Publisher 2021, Oct 7): each master is a right-hand
+    // part (field 10 = 1) and a left-hand one (10 = 0), page 1 and every odd
+    // page use the right part and even pages the left, and each canvas is
+    // widened (right) or narrowed (left) by half a page toward its partner.
+    const bool booklet = m_doc.setup.layout == PageSetup::Booklet;
+    struct MasterSeqs { quint32 seq, sub60, sub77, guides; quint32 left = 0, leftSub60 = 0, leftSub77 = 0, leftGuides = 0; };
     QVector<MasterSeqs> masterSeqs{{kMaster, 264, 265, 289}};
     for (int k = 1; k < m_doc.masters.size(); ++k) {
         masterSeqs << MasterSeqs{next, next + 1, next + 2, next + 3};
         next += 4;
     }
-    auto masterFor = [&](const Page &pg) {
+    if (booklet)
+        for (MasterSeqs &m : masterSeqs) {
+            m.left = next;
+            m.leftSub60 = next + 1;
+            m.leftSub77 = next + 2;
+            m.leftGuides = next + 3;
+            next += 4;
+        }
+    auto masterFor = [&](const Page &pg, int index) {
+        const bool left = booklet && index % 2 == 1;
         for (int k = 0; k < m_doc.masters.size(); ++k)
-            if (m_doc.masters[k]->abbr == pg.masterId) return masterSeqs[k].seq;
-        return kMaster;
+            if (m_doc.masters[k]->abbr == pg.masterId) return left ? masterSeqs[k].left : masterSeqs[k].seq;
+        return left ? masterSeqs[0].left : kMaster;
     };
 
     auto webForm = [] {
@@ -1343,7 +1357,7 @@ QByteArray PubWriter::write(QStringList *skipped)
     };
     auto pageBody = [&](const QVector<quint32> &shapes, quint32 sub60, quint32 sub77, bool master, bool special, QSizeF scratch, QSizeF ext,
                         int index = 0, quint32 masterRef = 263, quint32 guidesRef = 289, const QString &abbr = QStringLiteral("A"),
-                        const QString &desc = QStringLiteral("Master Page A")) {
+                        const QString &desc = QStringLiteral("Master Page A"), quint32 side = 3) {
         QVector<B> b;
         if (!shapes.isEmpty()) {
             QVector<B> refs;
@@ -1360,7 +1374,7 @@ QByteArray PubWriter::write(QStringList *skipped)
         b << ref(0x09, sub60) << ref(0x0b, sub77);
         if (!master) b << ref(0x0d, masterRef, 0x68);
         b << str(0x0e, master ? abbr : QString()) << str(0x0f, master ? desc : QString());
-        b << u32(0x10, master ? 3 : 5);
+        b << u32(0x10, master ? side : 5);
         b << rec(0x11, {u32(0x01, quint32(ext.width())), u32(0x02, quint32(ext.height()))});
         return b;
     };
@@ -1375,9 +1389,55 @@ QByteArray PubWriter::write(QStringList *skipped)
         surfaces << m_doc.pages[i].get();
         surfaceSeq << pageSeq[i];
     }
+    // A booklet's master parts: a two-page master's halves (the right one a
+    // page width back), or a single master's objects on both, the left
+    // part's as copies whose stories are written again.
+    std::vector<std::unique_ptr<PageBase>> masterParts;
+    QVector<int> masterSurface, masterLeftSurface;
+    QSet<QString> copies;
+    auto copyOf = [&](const ItemPtr &it) {
+        ItemPtr c = Item::fromJsonAny(it->toJson());
+        std::function<void(Item *)> renumber = [&](Item *x) {
+            x->id = newId();
+            copies.insert(x->id);
+            if (x->type() == ItemType::Text) static_cast<TextItem *>(x)->nextId.clear();
+            if (x->type() == ItemType::Group)
+                for (const ItemPtr &k : static_cast<GroupItem *>(x)->children) renumber(k.get());
+        };
+        if (c) renumber(c.get());
+        return c;
+    };
     for (int k = 0; k < m_doc.masters.size(); ++k) {
-        surfaces << m_doc.masters[k].get();
+        const MasterPage &mp = *m_doc.masters[k];
+        if (!booklet) {
+            surfaces << &mp;
+            surfaceSeq << masterSeqs[k].seq;
+            masterSurface << int(surfaces.size()) - 1;
+            masterLeftSurface << -1;
+            continue;
+        }
+        auto right = std::make_unique<PageBase>(), left = std::make_unique<PageBase>();
+        for (const ItemPtr &it : mp.items) {
+            if (mp.twoPage && it->rect.center().x() >= ps.width()) {
+                if (ItemPtr c = copyOf(it)) {
+                    c->moveBy(-ps.width(), 0);
+                    right->items.push_back(c);
+                }
+            } else if (mp.twoPage) {
+                left->items.push_back(it);
+            } else {
+                right->items.push_back(it);
+                if (ItemPtr c = copyOf(it)) left->items.push_back(c);
+            }
+        }
+        surfaces << right.get();
         surfaceSeq << masterSeqs[k].seq;
+        masterSurface << int(surfaces.size()) - 1;
+        surfaces << left.get();
+        surfaceSeq << masterSeqs[k].left;
+        masterLeftSurface << int(surfaces.size()) - 1;
+        masterParts.push_back(std::move(right));
+        masterParts.push_back(std::move(left));
     }
     QVector<QVector<quint32>> pageShapes(surfaces.size());
     int textId = 2;
@@ -1548,7 +1608,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 // Text in a shape is a story too; its frame is set when the shape is written.
                 auto *sh = static_cast<const ShapeItem *>(it.get());
                 const QTextDocument *sd = sh->storyId.isEmpty() ? nullptr : m_doc.storyDoc(sh->storyId);
-                if (!sd || storiesAdded.contains(sh->storyId)) return;
+                if (!sd || (storiesAdded.contains(sh->storyId) && !copies.contains(sh->id))) return;
                 storiesAdded.insert(sh->storyId);
                 const int tid = textId++;
                 addStory(tid, sd);
@@ -1559,7 +1619,7 @@ QByteArray PubWriter::write(QStringList *skipped)
             if (it->type() != ItemType::Text || m_doc.prevFrame(it->id)) return;
             auto *t = static_cast<const TextItem *>(it.get());
             const QTextDocument *sd = m_doc.storyDoc(t->storyId);
-            if (!sd || storiesAdded.contains(t->storyId)) return;
+            if (!sd || (storiesAdded.contains(t->storyId) && !copies.contains(t->id))) return;
             storiesAdded.insert(t->storyId);
             const int tid = textId++;
             addStory(tid, sd);
@@ -2133,38 +2193,65 @@ QByteArray PubWriter::write(QStringList *skipped)
     if (m_fonts.isEmpty()) m_fonts << m_doc.fonts.body;
 
     // ---- the fixed chunks
+    // The page list: masters (a booklet's left part before its right), the
+    // pages, then the special pages. A booklet also sets 06, 0b and the
+    // layout (11 = 1), and counts both parts of each master (2d).
     QVector<B> pageList;
-    for (const MasterSeqs &m : masterSeqs) pageList << ref(0x00, m.seq);
+    for (const MasterSeqs &m : masterSeqs) {
+        if (booklet) pageList << ref(0x00, m.left);
+        pageList << ref(0x00, m.seq);
+    }
     for (quint32 s : pageSeq) pageList << ref(0x00, s);
     for (quint32 s : kSpecial) pageList << ref(0x00, s);
-    cw.put(256, {0x44, 0, {u32(0x01, quint32(pageList.size())), list(0x02, pageList), ref(0x03, 287), ref(0x04, 291), flag(0x08),
-                           rec(0x12, {u32(0x01, quint32(pw)), u32(0x02, quint32(ph))}), ref(0x18, 259), ref(0x19, 261), ref(0x1a, 257),
-                           ref(0x20, 282), ref(0x21, 262), ref(0x22, 285), u32(0x23, quint32(pageSeq.size())), bytesB(0x2a, 0x38, {}), u16(0x2c, 5),
-                           u16(0x2d, quint32(masterSeqs.size())),
-                           ref(0x31, 278, 0x68), flag(0x39, 0x00), u32(0x3c, 1), u32(0x41, 0), ref(0x44, 292), flag(0x4d)}});
+    QVector<B> docBody{u32(0x01, quint32(pageList.size())), list(0x02, pageList), ref(0x03, 287), ref(0x04, 291)};
+    if (booklet) docBody << flag(0x06);
+    docBody << flag(0x08);
+    if (booklet) docBody << flag(0x0b) << u32(0x11, 1);
+    docBody << rec(0x12, {u32(0x01, quint32(pw)), u32(0x02, quint32(ph))}) << ref(0x18, 259) << ref(0x19, 261) << ref(0x1a, 257) << ref(0x20, 282)
+            << ref(0x21, 262) << ref(0x22, 285) << u32(0x23, quint32(pageSeq.size())) << bytesB(0x2a, 0x38, {}) << u16(0x2c, 5)
+            << u16(0x2d, quint32(masterSeqs.size() * (booklet ? 2 : 1))) << ref(0x31, 278, 0x68) << flag(0x39, 0x00) << u32(0x3c, 1) << u32(0x41, 0)
+            << ref(0x44, 292) << flag(0x4d);
+    cw.put(256, {0x44, 0, docBody});
     cw.put(257, {0x72, 256, {}});
     cw.put(259, {0x73, 256, {}});
     cw.put(261, {0x46, 256, {}});
     cw.put(262, {0x54, 256, {}});
-    const QSizeF scratch(22860000, 22860000), ext(110185200, 110185200);
+    // Canvases: 25 inches around the page (11: the same plus 87325200), a
+    // booklet's widened or narrowed by half a page toward the facing page.
+    const qint64 halfW = emu(ps.width() / 2), halfH = emu(ps.height() / 2);
+    auto canvas = [](qint64 dw, qint64 dh) { return QSizeF(double(22860000 + dw), double(22860000 + dh)); };
+    auto extent = [](qint64 dw, qint64 dh) { return QSizeF(double(110185200 + dw), double(110185200 + dh)); };
+    const QSizeF scratch = canvas(booklet ? halfW : 0, 0), ext = extent(booklet ? halfW : 0, 0);
+    const QSizeF leftScratch = canvas(-halfW, 0), leftExt = extent(-halfW, 0);
     for (int k = 0; k < masterSeqs.size(); ++k) {
         const MasterSeqs &m = masterSeqs[k];
         const MasterPage *mp = k < m_doc.masters.size() ? m_doc.masters[k].get() : nullptr;
         const QString abbr = mp && !mp->abbr.isEmpty() ? mp->abbr : QStringLiteral("A");
         const QString desc = mp && !mp->name.isEmpty() && mp->name != QLatin1String("Master Page") ? mp->name : QStringLiteral("Master Page ") + abbr;
-        cw.put(m.seq, {0x43, 256, pageBody(mp ? pageShapes[m_doc.pages.size() + k] : QVector<quint32>{}, m.sub60, m.sub77, true, false, scratch, ext, 0,
-                                           kMaster, m.guides, abbr, desc)});
+        cw.put(m.seq, {0x43, 256, pageBody(mp ? pageShapes[masterSurface[k]] : QVector<quint32>{}, m.sub60, m.sub77, true, false, scratch, ext, 0,
+                                           kMaster, m.guides, abbr, desc, booklet ? 1 : 3)});
         cw.put(m.sub60, {0x60, m.seq, {u32(0x05, 1)}});
         cw.put(m.sub77, {0x77, m.seq, webForm()});
+        if (!booklet) continue;
+        cw.put(m.left, {0x43, 256, pageBody(mp ? pageShapes[masterLeftSurface[k]] : QVector<quint32>{}, m.leftSub60, m.leftSub77, true, false,
+                                            leftScratch, leftExt, 0, kMaster, m.leftGuides, abbr, desc, 0)});
+        cw.put(m.leftSub60, {0x60, m.left, {u32(0x05, 1)}});
+        cw.put(m.leftSub77, {0x77, m.left, webForm()});
     }
     for (int i = 0; i < pageSeq.size(); ++i) {
-        cw.put(pageSeq[i], {0x43, 256, pageBody(pageShapes[i], pageSub[i].first, pageSub[i].second, false, false, scratch, ext, i,
-                                                masterFor(*m_doc.pages[i]))});
+        // A booklet marks only its first page as a page (06 = 2).
+        const bool leftPage = booklet && i % 2 == 1;
+        cw.put(pageSeq[i], {0x43, 256, pageBody(pageShapes[i], pageSub[i].first, pageSub[i].second, false, booklet && i > 0,
+                                                leftPage ? leftScratch : scratch, leftPage ? leftExt : ext, i, masterFor(*m_doc.pages[i], i))});
         cw.put(pageSub[i].first, {0x60, pageSeq[i], {}});
         cw.put(pageSub[i].second, {0x77, pageSeq[i], webForm()});
     }
-    const QSizeF specScratch[4] = {QSizeF(18973800, 17830800), scratch, scratch, scratch};
-    const QSizeF specExt[4] = {QSizeF(106299000, 105156000), ext, ext, ext};
+    // The special pages: the first half a page smaller each way (in a
+    // booklet only in height), the others a booklet's left-hand size.
+    const QSizeF specScratch[4] = {canvas(booklet ? 0 : -halfW, -halfH), booklet ? leftScratch : canvas(0, 0), booklet ? leftScratch : canvas(0, 0),
+                                   booklet ? leftScratch : canvas(0, 0)};
+    const QSizeF specExt[4] = {extent(booklet ? 0 : -halfW, -halfH), booklet ? leftExt : extent(0, 0), booklet ? leftExt : extent(0, 0),
+                               booklet ? leftExt : extent(0, 0)};
     for (int k = 0; k < 4; ++k) {
         const quint32 s = kSpecial[k];
         // The last holds the objects set in text.
@@ -2236,11 +2323,16 @@ QByteArray PubWriter::write(QStringList *skipped)
     // Margin guides on the master page.
     {
         auto guide = [](qint64 pos, quint8 sideFlag) { return rec(0x00, {u32(0x01, quint32(pos)), flag(sideFlag), flag(0x04)}); };
-        for (const MasterSeqs &m : masterSeqs)
-            cw.put(m.guides, {0x4c, m.seq, {u32(0x01, 4), list(0x02, {guide(emu(mg.left()), 0x03), guide(pw - emu(mg.right()), 0x02),
-                                                                     guide(emu(mg.top()), 0x03), guide(ph - emu(mg.bottom()), 0x02)}),
-                                           rec(0x03, {u32(0x01, quint32(pw)), u32(0x02, quint32(ph))}), u32(0x04, 45720), u32(0x05, 45720),
-                                           u16(0x06, 2), u16(0x07, 2), u32(0x08, 152400), u32(0x09, 152400), u32(0x0a, 152400), u32(0x0b, 152400)}});
+        auto guides = [&] {
+            return QVector<B>{u32(0x01, 4), list(0x02, {guide(emu(mg.left()), 0x03), guide(pw - emu(mg.right()), 0x02),
+                                                        guide(emu(mg.top()), 0x03), guide(ph - emu(mg.bottom()), 0x02)}),
+                              rec(0x03, {u32(0x01, quint32(pw)), u32(0x02, quint32(ph))}), u32(0x04, 45720), u32(0x05, 45720),
+                              u16(0x06, 2), u16(0x07, 2), u32(0x08, 152400), u32(0x09, 152400), u32(0x0a, 152400), u32(0x0b, 152400)};
+        };
+        for (const MasterSeqs &m : masterSeqs) {
+            cw.put(m.guides, {0x4c, m.seq, guides()});
+            if (booklet) cw.put(m.leftGuides, {0x4c, m.left, guides()});   // the same on a booklet's left-hand part
+        }
     }
     // Bullet characters (Symbol font).
     {
@@ -2263,14 +2355,25 @@ QByteArray PubWriter::write(QStringList *skipped)
                 if ((std::abs(ps.width() - n.w) < 1 && std::abs(ps.height() - n.h) < 1) || (std::abs(ps.width() - n.h) < 1 && std::abs(ps.height() - n.w) < 1))
                     paper = QString::fromLatin1(n.name);
         }
-        cw.put(292, {0x8a, 256, {rec(0x04, {u32(0x02, 104), u32(0x03, 109), u32(0x04, 0x80010000u), str(0x06, paper), u32(0x07, 16937216),
-                                            u32(0x0a, 0), u32(0x11, 1),
-                                            list(0x12, {rec(0x00, {u32(0x03, quint32(pw)), u32(0x04, quint32(ph)), u32(0x06, quint32(emu(mg.left()))),
-                                                                   u32(0x07, quint32(emu(mg.top()))), u32(0x08, quint32(emu(mg.right()))),
-                                                                   u32(0x09, quint32(emu(mg.bottom())))})}, 0x90),
-                                            u32(0x13, 1),
-                                            list(0x14, {rec(0x00, {u32(0x01, quint32(pw)), u32(0x02, quint32(ph)),
-                                                                   rec(0x08, {u32(0x02, 0), u32(0x03, 0)})})}, 0x90)})}});
+        // A booklet prints two pages to a sheet (09 = 2), the sheet turned
+        // to hold them, folded at the page width (0a), as Publisher writes it.
+        const QSizeF sheet = booklet ? QSizeF(2 * ps.width(), ps.height()) : ps;
+        const quint32 sw = quint32(emu(sheet.width())), sh = quint32(emu(sheet.height()));
+        QVector<B> sheetRec{u32(0x01, sw), u32(0x02, sh)};
+        if (booklet)
+            sheetRec << flag(0x04) << rec(0x08, {u32(0x02, 0), u32(0x03, 0), u32(0x08, sw), u32(0x09, sh)}) << u32(0x09, 2)
+                     << list(0x0a, {flag(0x00, 0x78), rec(0x00, {u32(0x03, quint32(pw))})}, 0x90);
+        else
+            sheetRec << rec(0x08, {u32(0x02, 0), u32(0x03, 0)});
+        QVector<B> print{u32(0x02, 104), u32(0x03, 109), u32(0x04, 0x80010000u), str(0x06, paper), u32(0x07, 16937216)};
+        if (booklet) print << flag(0x09);
+        print << u32(0x0a, 0) << u32(0x11, 1)
+              << list(0x12, {rec(0x00, {u32(0x03, quint32(pw)), u32(0x04, quint32(ph)), u32(0x06, quint32(emu(mg.left()))),
+                                        u32(0x07, quint32(emu(mg.top()))), u32(0x08, quint32(emu(mg.right()))), u32(0x09, quint32(emu(mg.bottom())))})},
+                      0x90)
+              << u32(0x13, 1) << list(0x14, {rec(0x00, sheetRec)}, 0x90);
+        if (booklet) print << u32(0x15, 4);
+        cw.put(292, {0x8a, 256, {rec(0x04, print)}});
     }
     // Fonts used by the text.
     if (fontSeq) {

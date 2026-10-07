@@ -3448,6 +3448,54 @@ private Q_SLOTS:
         QCOMPARE(sb.ctx.resolve(QStringLiteral("page")), QStringLiteral("3"));
     }
 
+    // A booklet is saved as Publisher saves one: each master in a right-hand
+    // and a left-hand part, odd pages on the right part and even ones on the
+    // left, pages after the first marked 0. Publisher read JeffPub's copy of
+    // its booklet as its own (layout, spreads, masters) and pictured it the
+    // same (Oct 7). On opening, the parts make one two-page master, and every
+    // page comes back (pages marked 0 counted as special: one page did).
+    void pubBookletRoundTrip()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(396, 612));
+        doc->setup.layout = PageSetup::Booklet;
+        doc->setup.sheet = QSizeF(792, 612);
+        for (int i = 1; i < 4; ++i) doc->addPage();
+        auto mark = std::make_shared<ShapeItem>();
+        mark->rect = QRectF(36, 36, 50, 50);
+        mark->fill = Fill::solid(ColorRef::rgb(Qt::blue));
+        doc->masters[0]->items.push_back(mark);
+        for (int i = 0; i < 4; ++i) {
+            auto t = std::make_shared<TextItem>();
+            t->rect = QRectF(72, 300, 200, 40);
+            t->storyId = doc->createStory(QStringLiteral("Page %1").arg(i + 1));
+            doc->pages[i]->items.push_back(t);
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("booklet.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        auto back = importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(int(back->setup.layout), int(PageSetup::Booklet));
+        QCOMPARE(int(back->pages.size()), 4);
+        QCOMPARE(int(back->masters.size()), 1);
+        QVERIFY(back->masters[0]->twoPage);
+        for (const auto &pg : back->pages) QCOMPARE(pg->masterId, back->masters[0]->id);
+        // The master's mark on both halves of the spread.
+        QCOMPARE(int(back->masters[0]->items.size()), 2);
+        QList<double> xs;
+        for (const auto &it : back->masters[0]->items) xs << it->rect.left();
+        std::sort(xs.begin(), xs.end());
+        QVERIFY2(std::abs(xs[0] - 36) < 0.5 && std::abs(xs[1] - (396 + 36)) < 0.5, qPrintable(QStringLiteral("%1 %2").arg(xs[0]).arg(xs[1])));
+        // Each page keeps its own text.
+        for (int i = 0; i < 4; ++i) {
+            auto *t = dynamic_cast<TextItem *>(back->pages[i]->items.front().get());
+            QVERIFY(t);
+            QCOMPARE(back->storyDoc(t->storyId)->toPlainText(), QStringLiteral("Page %1").arg(i + 1));
+        }
+    }
+
     // A .pub page number field is a "#" whose character run has 00 = 5 (low
     // byte) and 22 = -1, as Publisher writes it; JeffPub showed the "#".
     void pubPageNumberField()

@@ -86,6 +86,12 @@ public:
   void setShapeFlip(unsigned, bool, bool);
   void setShapeTextArt(unsigned seqNum, const librevenge::RVNGPropertyList &props);
   void setPageKind(unsigned seqNum, int kind);
+  // JeffPub patch: a master page's side (field 10: 3 a single master, 1 the
+  // right-hand and 0 the left-hand part of a two-page one) and its name.
+  void setMasterSide(unsigned seqNum, unsigned side, const librevenge::RVNGString &name)
+  {
+    m_masterSides[seqNum] = std::make_pair(side, name);
+  }
   void setShapeMargins(unsigned seqNum, unsigned left, unsigned top, unsigned right, unsigned bottom);
   void setShapeBorderPosition(unsigned seqNum, BorderPosition pos);
   void setShapeCoordinatesRotated90(unsigned seqNum);
@@ -207,6 +213,7 @@ private:
   std::map<unsigned, std::vector<std::pair<unsigned, unsigned> > > m_inlineObjects;
   std::set<unsigned> m_inlineNums;
   std::map<unsigned, std::vector<TextToken> > m_textTokens;   // JeffPub patch: by text id
+  std::map<unsigned, std::pair<unsigned, librevenge::RVNGString> > m_masterSides;   // JeffPub patch
   mutable bool m_inlineWritten = false;
   bool isInlineShape(unsigned seqNum) const;
   void writeInlineShapes() const;

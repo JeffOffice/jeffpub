@@ -813,9 +813,14 @@ bool MSPUBParser::parsePageChunk(librevenge::RVNGInputStream *input, const Conte
   // fixed list above misses some in older files.
   int kindByte = -1;
   bool isMaster = false;
+  unsigned side = 3;
+  librevenge::RVNGString masterName;
   while (stillReading(input, chunk.offset + length))
   {
     MSPUBBlockInfo info = parseBlock(input);
+    // JeffPub patch: a master's side (3 single, 1 right-hand, 0 left-hand part).
+    if (info.id == 0x10 && info.type == 0x20)
+      side = info.data;
     if (info.id == 0x06 && info.type == 0x28)
     {
       const unsigned long here = input->tell();
@@ -841,6 +846,8 @@ bool MSPUBParser::parsePageChunk(librevenge::RVNGInputStream *input, const Conte
           isMaster = true;
         }
       }
+      if (isMaster)
+        appendCharacters(masterName, info.stringData, "UTF-16LE");
     }
     else if (info.id == APPLIED_MASTER_NAME)
     {
@@ -853,6 +860,8 @@ bool MSPUBParser::parsePageChunk(librevenge::RVNGInputStream *input, const Conte
   }
   if (type == NORMAL && !isMaster && kindByte >= 0)
     m_collector->setPageKind(chunk.seqNum, kindByte);
+  if (isMaster)
+    m_collector->setMasterSide(chunk.seqNum, side, masterName);
   return true;
 }
 

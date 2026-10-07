@@ -190,9 +190,32 @@ public:
     // Master pages arrive first, each once: A, B, C... in order.
     void startMasterPage(const RVNGPropertyList &p) override
     {
-        const int n = int(m_masterIds.size());
+        // A two-page master (a booklet's, for one) comes as a right-hand and
+        // a left-hand part with the same name: they become one two-page
+        // master, its right half the right-hand part, a page width over.
+        const int side = p["jp:master-side"] ? p["jp:master-side"]->getInt() : 3;
+        const QString name = str(p["jp:master-name"]);
+        m_masterShift = 0;
+        if ((side == 0 || side == 1) && !name.isEmpty() && m_masterHalves.contains(name)) {
+            MasterPage *pair = m_doc.master(m_masterHalves.value(name));
+            if (pair) {
+                if (p["jp:master-seq"]) m_masterIds.insert(p["jp:master-seq"]->getInt(), pair->id);
+                pair->twoPage = true;
+                if (side == 1) m_masterShift = masterWidth(p);
+                m_master = pair;
+                m_stack.clear();
+                m_lastList = nullptr;
+                return;
+            }
+        }
+        const QList<QString> ids = m_masterIds.values();
+        const int n = int(QSet<QString>(ids.begin(), ids.end()).size());
         const QString id = n < 26 ? QString(QChar('A' + n)) : QStringLiteral("M%1").arg(n + 1);
         if (p["jp:master-seq"]) m_masterIds.insert(p["jp:master-seq"]->getInt(), id);
+        if ((side == 0 || side == 1) && !name.isEmpty()) {
+            m_masterHalves.insert(name, id);
+            if (side == 1) m_masterShift = masterWidth(p);
+        }
         MasterPage *m = m_doc.master(id);
         if (!m) {
             auto mp = std::make_shared<MasterPage>();
@@ -206,7 +229,13 @@ public:
         m_stack.clear();
         m_lastList = nullptr;
     }
-    void endMasterPage() override { m_master = nullptr; }
+    // A master's page width (masters come before the pages that set the size).
+    double masterWidth(const RVNGPropertyList &p) const { return p["svg:width"] ? toPt(p["svg:width"]) : m_doc.pageSize().width(); }
+    void endMasterPage() override
+    {
+        m_master = nullptr;
+        m_masterShift = 0;
+    }
 
     void setStyle(const RVNGPropertyList &p) override { m_style = p; }
 
@@ -843,6 +872,8 @@ private:
         const ItemType ty = it->type();
         if (ty == ItemType::Picture || ty == ItemType::Shape || ty == ItemType::Line || ty == ItemType::TextArt) applyWrap(*it, m_style);
         if (inlineNum == -2) inlineNum = m_stack.empty() && m_style["jp:inline-num"] ? m_style["jp:inline-num"]->getInt() : -1;
+        // A two-page master's right-hand part: its right half.
+        if (m_master && m_masterShift != 0 && m_stack.empty() && inlineNum < 0) it->moveBy(m_masterShift, 0);
         if (inlineNum >= 0) {
             m_inlineList.push_back(it);
             m_inlineItems[inlineNum] = it;
@@ -1340,6 +1371,8 @@ private:
     QString m_spanField;   // the open span is this field ("page")
     int m_spanInline = -1; // the open span is the object set in text with this number
     bool m_spanFieldCont = false;   // the open span is a later run of a date field
+    QHash<QString, QString> m_masterHalves;   // a two-page master's name in the file -> JeffPub's master
+    double m_masterShift = 0;                 // how far the open master part's objects move
     ItemList m_inlineList;                   // objects set in text, as read
     std::map<int, ItemPtr> m_inlineItems;    // and by Publisher's number
     std::map<const GroupItem *, int> m_inlineGroups;   // open groups that are such objects

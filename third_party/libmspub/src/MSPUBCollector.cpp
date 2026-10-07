@@ -2285,6 +2285,12 @@ bool MSPUBCollector::go()
       continue;
     librevenge::RVNGPropertyList masterProps;
     masterProps.insert("jp:master-seq", int(masterSeq));
+    const auto side = m_masterSides.find(masterSeq);
+    if (side != m_masterSides.end())
+    {
+      masterProps.insert("jp:master-side", int(side->second.first));
+      masterProps.insert("jp:master-name", side->second.second);
+    }
     if (m_widthSet)
       masterProps.insert("svg:width", m_width);
     if (m_heightSet)
@@ -2331,8 +2337,11 @@ bool MSPUBCollector::go()
       break;
     special.insert(seq);
   }
+  // In a booklet or folded card every page after the first is marked 0
+  // (Publisher 2021, Oct 7); elsewhere a page marked 0 is a special one.
+  const bool spreads = m_publicationLayout == 1 || m_publicationLayout == 3;
   for (unsigned seq : listed)
-    if (m_pagesBySeqNum.find(seq) != m_pagesBySeqNum.end() && !special.count(seq) && kindOf(seq) != 0)
+    if (m_pagesBySeqNum.find(seq) != m_pagesBySeqNum.end() && !special.count(seq) && (kindOf(seq) != 0 || spreads))
       writePage(seq);
   m_painter->endDocument();
   return true;
