@@ -3141,8 +3141,11 @@ PageType MSPUBParser::getPageTypeBySeqNum(unsigned seqNum)
   }
 }
 
-// JeffPub patch: each story's record: 01 = text id, and a 04 flag when the
-// story is not hyphenated automatically.
+// JeffPub patch: each story's record: 01 = text id, a 04 flag when the
+// story is not hyphenated automatically, its AutoFit Text setting in 05
+// (low bits 1 = best fit, 3 = shrink text on overflow; 08 then holds the
+// size before shrinking) and a 0c flag for grow text box to fit. Checked by
+// choosing each setting in Publisher and saving.
 void MSPUBParser::parseStoryListChunk(librevenge::RVNGInputStream *input, const ContentChunkReference &chunk)
 {
   unsigned length = readU32(input);
@@ -3158,6 +3161,8 @@ void MSPUBParser::parseStoryListChunk(librevenge::RVNGInputStream *input, const 
         {
           unsigned textId = 0;
           bool noHyphens = false;
+          unsigned fit = 0;
+          bool grow = false;
           while (stillReading(input, subInfo.dataOffset + subInfo.dataLength))
           {
             MSPUBBlockInfo field = parseBlock(input, true);
@@ -3165,9 +3170,20 @@ void MSPUBParser::parseStoryListChunk(librevenge::RVNGInputStream *input, const 
               textId = field.data;
             else if (field.id == 0x04)
               noHyphens = true;
+            else if (field.id == 0x05)
+              fit = field.data & 3;
+            else if (field.id == 0x0c)
+              grow = true;
           }
           if (noHyphens)
             m_collector->setTextNotHyphenated(textId);
+          // JeffPub's kinds: 1 best fit, 2 shrink on overflow, 3 grow the box.
+          if (fit == 1)
+            m_collector->setTextAutofit(textId, 1);
+          else if (fit == 3)
+            m_collector->setTextAutofit(textId, 2);
+          else if (grow)
+            m_collector->setTextAutofit(textId, 3);
         }
         skipBlock(input, subInfo);
       }

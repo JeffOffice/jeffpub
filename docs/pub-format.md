@@ -138,8 +138,20 @@ file name.
 
 Chunk 0x65 lists the stories: each record has `01` = the text id, `02` =
 the number of boxes in a linked chain, `03` = 0 for a table, `04` (a flag
-of type 0x00) when the story isn't hyphenated automatically, `07` = its
-entry in the frame layout section (MCLD), and `08`/`09`.
+of type 0x00) when the story isn't hyphenated automatically, `05` (u16,
+type 0x10) for AutoFit Text, `07` = its entry in the frame layout section
+(MCLD), `08`/`09` (floats, -9999996 when unset) and a `0c` flag (type 0x08)
+for Grow Text Box to Fit.
+
+`05` is 1 for Best Fit and 3 for Shrink Text On Overflow; older files set
+higher bits too (0x103, 0x203, 0x3003), so only the low two bits count.
+With Shrink, Publisher also records the font size before shrinking in
+`08`, and in both cases it writes the fitted size into the text's runs.
+Do Not Autofit leaves `05` and `0c` out. Found by choosing each setting
+through Publisher's AutoFit Text menu and saving. JeffPub writes `05` (or
+`0c`) and its unfitted sizes: Publisher fits the text again when it opens
+the file (10-point text in a box set to shrink opened at 5.3 points, and a
+box set to grow opened 204 points tall instead of 60).
 
 ### Master pages
 

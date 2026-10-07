@@ -127,6 +127,7 @@ public:
   }
   void setShapeFillSpot(unsigned seqNum, const std::string &ink) { m_shapeInfosBySeqNum[seqNum].m_fillSpot = ink; }
   void setTextNotHyphenated(unsigned textId) { m_notHyphenated.insert(textId); }
+  void setTextAutofit(unsigned textId, unsigned kind) { m_autofit[textId] = kind; }
   void setShapePictureFlags(unsigned seqNum, unsigned flags);
   void setShapePictureTransparent(unsigned seqNum, ColorReference color);
 
@@ -174,6 +175,7 @@ private:
   std::vector<librevenge::RVNGString> m_styleNames;   // JeffPub 79: by style index
   std::map<unsigned, unsigned> m_shapeTypesBySeqNum;
   std::set<unsigned> m_notHyphenated; // JeffPub patch: text ids of stories without automatic hyphenation
+  std::map<unsigned, unsigned> m_autofit; // JeffPub patch: text id -> AutoFit Text (1 best fit, 2 shrink, 3 grow)
   std::vector<Color> m_paletteColors;
   std::vector<unsigned> m_shapeSeqNumsOrdered;
   std::map<unsigned, unsigned> m_pageSeqNumsByShapeSeqNum;

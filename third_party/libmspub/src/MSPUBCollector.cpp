@@ -1419,6 +1419,9 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
         props.insert("jp:text-chain-index", (int)info.m_textChainIndex);
         if (m_notHyphenated.count(get(info.m_textId)))
           props.insert("jp:no-hyphenation", true);
+        const auto fit = m_autofit.find(get(info.m_textId));
+        if (fit != m_autofit.end())
+          props.insert("jp:autofit", (int)fit->second);
       }
       m_painter->startTextObject(props);
       for (const auto &line : text)

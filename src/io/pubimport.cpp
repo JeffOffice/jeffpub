@@ -305,6 +305,11 @@ public:
         t->wrap.mode = Wrap::None;
         // Stories marked in the file as not hyphenated (others are).
         if (p["jp:no-hyphenation"] && p["jp:no-hyphenation"]->getInt()) t->hyphenate = false;
+        // AutoFit Text: 1 best fit, 2 shrink on overflow, 3 grow the box.
+        if (p["jp:autofit"]) {
+            const int fit = p["jp:autofit"]->getInt();
+            if (fit >= TextItem::BestFit && fit <= TextItem::GrowBox) t->autofit = TextItem::Autofit(fit);
+        }
         m_skipText = false;
         // Boxes sharing a story become a linked chain.
         if (p["jp:text-id"]) {
@@ -1194,28 +1199,6 @@ std::unique_ptr<Document> importPublisher(const QByteArray &data, QString *error
         return nullptr;
     }
     doc->props.created = QDateTime::currentDateTime();
-    // The .pub "shrink text on overflow" setting is not exposed by libmspub.
-    // Finished publications don't hide text, so a lone box whose text overflows
-    // with our fonts is set to shrink to fit.
-    LayoutCache cache;
-    RenderOptions opt;
-    QVector<TextItem *> boxes;
-    doc->forEachItem([&](Item *it, int, const QString &) {
-        if (it->type() == ItemType::Text) boxes << static_cast<TextItem *>(it);
-    });
-    int fitted = 0;
-    for (TextItem *t : boxes) {
-        if (!t->nextId.isEmpty() || doc->prevFrame(t->id)) continue;
-        const auto fl = cache.textFrame(*doc, *t, 1, opt);
-        if (fl.layout && fl.layout->overflow() && !qEnvironmentVariableIsSet("JP_NO_SHRINK")) {
-            t->autofit = TextItem::ShrinkOnOverflow;
-            const auto fit = cache.textFrame(*doc, *t, 1, opt);
-            // Heavy shrinking means the author left text hidden on purpose.
-            if (fit.fitScale < 0.6) t->autofit = TextItem::NoAutofit;
-            else ++fitted;
-        }
-    }
-    if (fitted) rep.warnings << QStringLiteral("%1 text box(es) set to shrink text slightly so it fits.").arg(fitted);
     return doc;
 }
 

@@ -776,6 +776,7 @@ private:
     QVector<QVector<Frame>> m_frames;
     QVector<int> m_tableTextIds;
     QSet<int> m_notHyphenated;   // stories without automatic hyphenation
+    QHash<int, int> m_autofit;    // story -> AutoFit Text (TextItem::Autofit) of a lone box
     QVector<QByteArray> m_cellFormats;
 
     // Pictures: one drawing-store entry per image (numbered from 1), its
@@ -1405,6 +1406,7 @@ QByteArray PubWriter::write(QStringList *skipped)
             const int tid = textId++;
             addStory(tid, sd);
             if (!t->hyphenate) m_notHyphenated << tid;
+            if (t->autofit != TextItem::NoAutofit && t->nextId.isEmpty()) m_autofit[tid] = t->autofit;
             QVector<Frame> frames;
             QSet<QString> seen;
             for (const TextItem *box = t; box && !seen.contains(box->id);) {
@@ -1940,8 +1942,13 @@ QByteArray PubWriter::write(QStringList *skipped)
             if (m_chainLength.value(id, 1) > 1) f << u16(0x02, quint32(m_chainLength.value(id)));   // boxes in the chain
             if (m_tableTextIds.contains(id)) f << u16(0x03, 0, 0x10);
             if (m_notHyphenated.contains(id)) f << flag(0x04, 0x00);   // not hyphenated automatically
+            // AutoFit Text: 05 = 1 for best fit, 3 for shrink on overflow.
+            const int fit = m_autofit.value(id, TextItem::NoAutofit);
+            if (fit == TextItem::BestFit) f << u16(0x05, 1, 0x10);
+            else if (fit == TextItem::ShrinkOnOverflow) f << u16(0x05, 3, 0x10);
             // 07: the story's entry in the frame layout section.
             f << u32(0x07, quint32(i + 1)) << u32(0x08, 0xcb18967cu, 0x58) << u32(0x09, 0xcb18967cu, 0x58);
+            if (fit == TextItem::GrowBox) f << flag(0x0c, 0x08);   // grow text box to fit
             stories << rec(0x00, f);
         }
         cw.put(283, {0x61, 282, map.isEmpty() ? QVector<B>{} : QVector<B>{u32(0x01, quint32(map.size())), list(0x02, map)}});

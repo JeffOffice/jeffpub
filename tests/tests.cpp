@@ -2557,6 +2557,38 @@ private Q_SLOTS:
         QVERIFY(cfb::readStream(path, QStringLiteral("Contents")).contains(QByteArray("\x34\x20\x02\x00\x00\x00", 6)));
     }
 
+    // AutoFit Text in .pub lives in the story's record: 05 = 1 for best fit,
+    // 3 for shrink text on overflow, and a 0c flag for grow the box, as
+    // Publisher writes them when each setting is chosen. A box without one
+    // keeps its overflowing text hidden, as Publisher shows it.
+    void pubAutofitSetting()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        const TextItem::Autofit fits[] = {TextItem::NoAutofit, TextItem::BestFit, TextItem::ShrinkOnOverflow, TextItem::GrowBox};
+        for (int i = 0; i < 4; ++i) {
+            auto t = std::make_shared<TextItem>();
+            t->rect = QRectF(72, 72 + 150 * i, 200, 60);
+            t->storyId = doc->createStory(QStringLiteral("The quick brown fox jumps over the lazy dog. ").repeated(12));
+            t->autofit = fits[i];
+            doc->pages[0]->items.push_back(t);
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("fit.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        const QByteArray contents = cfb::readStream(path, QStringLiteral("Contents"));
+        QVERIFY(contents.contains(QByteArray("\x05\x10\x01\x00\x07\x20", 6)));
+        QVERIFY(contents.contains(QByteArray("\x05\x10\x03\x00\x07\x20", 6)));
+        auto back = importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QMap<int, int> got;
+        for (const auto &it : back->pages[0]->items)
+            if (auto *t = dynamic_cast<TextItem *>(it.get())) got[qRound(t->rect.top())] = t->autofit;
+        QCOMPARE(got.size(), 4);
+        for (int i = 0; i < 4; ++i) QCOMPARE(got.value(72 + 150 * i, -1), int(fits[i]));
+    }
+
     // Fonts in .pub: JeffPub's look-alikes (Tinos) go under the standard
     // font's name (Times New Roman), unless the publication came from a .pub
     // that named the look-alike itself; then the name it had is kept.
