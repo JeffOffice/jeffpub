@@ -120,14 +120,21 @@ def dump_contents(b, show_hex):
 
 def dump_quill(b):
     print(f"Quill CONTENTS: {len(b)} bytes, header {b[:32].hex()}")
-    # CHNKINK index: at 0x18 the count, then 24-byte entries from 0x20.
-    count = struct.unpack_from("<H", b, 0x1A)[0]
-    for i in range(count):
-        e = 0x20 + i * 24
-        name = b[e + 2:e + 6].decode("latin-1")
-        sec_id = struct.unpack_from("<H", b, e + 10)[0]
-        off, ln = struct.unpack_from("<II", b, e + 16)
-        print(f"  {name} id={sec_id} offset={off} length={ln}")
+    # CHNKINK index: blocks chained from 0x18, each with its count (+2), the
+    # next block's offset (+4, 0xFFFFFFFF at the end) and 24-byte entries (+8).
+    at, seen = 0x18, set()
+    while at != 0xFFFFFFFF and at not in seen and at + 8 <= len(b):
+        seen.add(at)
+        count, nxt = struct.unpack_from("<HI", b, at + 2)
+        for i in range(count):
+            e = at + 8 + i * 24
+            if e + 24 > len(b):
+                break
+            name = b[e + 2:e + 6].decode("latin-1")
+            sec_id = struct.unpack_from("<H", b, e + 6)[0]
+            off, ln = struct.unpack_from("<II", b, e + 16)
+            print(f"  {name} id={sec_id} offset={off} length={ln}")
+        at = nxt
 
 
 def dump_escher(b):
