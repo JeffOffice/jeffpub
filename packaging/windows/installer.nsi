@@ -157,7 +157,7 @@ FunctionEnd
 
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
   !insertmacro MUI_DESCRIPTION_TEXT ${SecMain} "The program, its fonts and its spelling dictionaries."
-  !insertmacro MUI_DESCRIPTION_TEXT ${SecStats} "Once a day, ${APP} sends its version, your operating system and language, and how often each of its commands is used. Never your files, their names, or anything in them. You can change this later in File > Options."
+  !insertmacro MUI_DESCRIPTION_TEXT ${SecStats} "Once a day (and when updated), ${APP} sends its version, your operating system and language, and how often each of its commands is used. Never your files, their names, or anything in them. You can change this later in File > Options."
   !insertmacro MUI_DESCRIPTION_TEXT ${SecDesktop} "Adds a shortcut to your desktop."
   !insertmacro MUI_DESCRIPTION_TEXT ${SecJpub} "Double-clicking a .jpub file opens it in ${APP}."
   !insertmacro MUI_DESCRIPTION_TEXT ${SecPub} "Double-clicking a .pub file opens it in ${APP} instead of the program that opens it now. Leave this off to keep that program as the default; ${APP} is always available under Open with."

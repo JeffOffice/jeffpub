@@ -1518,7 +1518,7 @@ QWidget *Backstage::buildAbout()
     iv->addLayout(uh);
     // Anonymous usage statistics.
     auto *statsBox = new QCheckBox(QStringLiteral("Send anonymous usage statistics"), id);
-    statsBox->setToolTip(QStringLiteral("Once a day: JeffPub 79's version, your operating system and language, and how often each command is used. "
+    statsBox->setToolTip(QStringLiteral("Once a day, and the day it's updated: JeffPub 79's version, your operating system and language, and how often each command is used. "
                                         "Never your files, their names, or anything in them."));
     statsBox->setChecked(telemetry::enabled());
     connect(statsBox, &QCheckBox::toggled, this, [](bool on) { telemetry::setEnabled(on); });

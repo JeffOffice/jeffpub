@@ -28,6 +28,7 @@ const char *kAbout = "https://telemetry-production-9964.up.railway.app/";
 const QString kEnabled = QStringLiteral("telemetry/enabled");
 const QString kInstall = QStringLiteral("telemetry/install");
 const QString kLastSent = QStringLiteral("telemetry/lastSent");
+const QString kLastVersion = QStringLiteral("telemetry/lastVersion");
 const QString kLaunches = QStringLiteral("telemetry/launches");
 const QString kCounts = QStringLiteral("telemetry/counts");
 constexpr int kMaxFeatures = 400;   // the collector takes no more
@@ -51,9 +52,8 @@ QString clean(QString s, const QString &bad, int max)
 
 void send(QNetworkAccessManager *net)
 {
-    if (!enabled() || qEnvironmentVariableIsSet("JP_NO_TELEMETRY")) return;
+    if (!due()) return;
     const QDate today = QDate::currentDate();
-    if (Settings::get().value(kLastSent).toDate() == today) return;
     QNetworkRequest req{QUrl(QString::fromLatin1(kUrl))};
     req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("JeffPub79/%1").arg(QStringLiteral(JP_VERSION)));
@@ -75,6 +75,7 @@ void send(QNetworkAccessManager *net)
         Settings::get().setValue(kCounts, counts);
         Settings::get().setValue(kLaunches, std::max(0, Settings::get().value(kLaunches).toInt() - sent.value(QStringLiteral("launches")).toInt()));
         Settings::get().setValue(kLastSent, today);
+        Settings::get().setValue(kLastVersion, QStringLiteral(JP_VERSION));
     });
 }
 
@@ -85,7 +86,7 @@ void ask(QWidget *window)
     d.setWindowTitle(QStringLiteral("Help improve JeffPub 79"));
     auto *v = new QVBoxLayout(&d);
     auto *text = new QLabel(QStringLiteral(
-        "JeffPub 79 can send anonymous usage statistics once a day: its version, your operating system and language, "
+        "JeffPub 79 can send anonymous usage statistics once a day (and when it's updated): its version, your operating system and language, "
         "and how often each of its commands is used. That shows how many people use it and which parts matter most.<br><br>"
         "It never sends your files, their names, or anything in them. <a href=\"%1\">What's sent</a><br><br>"
         "You can change this anytime in File &gt; Options.").arg(QString::fromLatin1(kAbout)), &d);
@@ -115,7 +116,17 @@ void setEnabled(bool on)
     Settings::get().setValue(kEnabled, on);
     if (on) return;
     // Turned off: nothing kept to send, and a new id if it's turned on again.
-    for (const QString &k : {kInstall, kLaunches, kCounts, kLastSent}) Settings::get().setValue(k, QVariant());
+    for (const QString &k : {kInstall, kLaunches, kCounts, kLastSent, kLastVersion}) Settings::get().setValue(k, QVariant());
+}
+
+bool due()
+{
+    if (!enabled() || qEnvironmentVariableIsSet("JP_NO_TELEMETRY")) return false;
+    // A new version reports at once, even on a day that already had a ping
+    // (the collector adds it to the day's), so an update shows up the day
+    // it's installed.
+    return Settings::get().value(kLastSent).toDate() != QDate::currentDate() ||
+           Settings::get().value(kLastVersion).toString() != QStringLiteral(JP_VERSION);
 }
 
 void count(const QString &feature)

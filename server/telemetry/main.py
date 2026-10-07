@@ -121,7 +121,7 @@ ABOUT = """<!doctype html><meta charset="utf-8"><title>JeffPub 79 usage statisti
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:40em;margin:2em auto;padding:0 1em}</style>
 <h1>JeffPub 79 usage statistics</h1>
 <p>Unless you turn it off (in setup, when JeffPub 79 first starts, or under File &gt; Options),
-JeffPub 79 sends this once a day while it's in use:</p>
+JeffPub 79 sends this once a day while it's in use, and once more the day it's updated:</p>
 <ul><li>a random number made up when it was installed, which says nothing about you or your computer;</li>
 <li>JeffPub 79's version, your operating system and its version, and the language it's set to;</li>
 <li>how many times it was started, and how many times each of its commands was used

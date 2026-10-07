@@ -2815,7 +2815,20 @@ private Q_SLOTS:
         QVERIFY(QRegularExpression(QStringLiteral("^[0-9A-Za-z.+-]{1,20}$")).match(p[QStringLiteral("version")].toString()).hasMatch());
         for (const QString &k : counts.keys()) QVERIFY(QRegularExpression(QStringLiteral("^[a-z0-9][a-z0-9._-]{0,47}$")).match(k).hasMatch());
         QCOMPARE(telemetry::payload()[QStringLiteral("install")].toString(), id);   // the same install each time
+        // Once a day, and again the day an update is installed (0.1.37 had
+        // pinged that day, so 0.1.38 waited until the next).
+        Settings::get().setValue(QStringLiteral("telemetry/lastSent"), QDate::currentDate());
+        Settings::get().setValue(QStringLiteral("telemetry/lastVersion"), QStringLiteral(JP_VERSION));
+        QVERIFY(!telemetry::due());
+        Settings::get().setValue(QStringLiteral("telemetry/lastVersion"), QVariant());   // before 0.1.39 none was kept
+        QVERIFY(telemetry::due());
+        Settings::get().setValue(QStringLiteral("telemetry/lastVersion"), QStringLiteral("0.1.1"));
+        QVERIFY(telemetry::due());
+        Settings::get().setValue(QStringLiteral("telemetry/lastVersion"), QStringLiteral(JP_VERSION));
+        Settings::get().setValue(QStringLiteral("telemetry/lastSent"), QDate::currentDate().addDays(-1));
+        QVERIFY(telemetry::due());
         telemetry::setEnabled(false);
+        QVERIFY(!telemetry::due());
         QVERIFY(telemetry::payload()[QStringLiteral("counts")].toObject().isEmpty());
         QVERIFY(telemetry::payload()[QStringLiteral("install")].toString() != id);
         telemetry::setEnabled(false);
