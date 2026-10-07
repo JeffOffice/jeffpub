@@ -2670,6 +2670,82 @@ private Q_SLOTS:
         QCOMPARE(line->start.id, a->id);
     }
 
+    // Shapes > Lines: Curve (clicks, a smooth line through them, double-click
+    // to end), Freeform (clicks joined straight; clicking the first point
+    // closes it) and Scribble (one stroke by hand).
+    void freehandDrawingTools()
+    {
+        jp::MainWindow w;
+        w.resize(1200, 900);
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        jp::Editor *ed = w.editor();
+        jp::Canvas *c = w.canvas();
+        QWidget *vp = c->viewport();
+        auto view = [&](QPointF page) { return c->pageToView(page).toPoint(); };
+        auto click = [&](QPointF page) {
+            QTest::qWait(QApplication::doubleClickInterval() + 50);
+            QTest::mouseClick(vp, Qt::LeftButton, Qt::NoModifier, view(page));
+        };
+        auto move = [&](QPointF page, Qt::MouseButtons held) {
+            const QPointF v = view(page);
+            QMouseEvent mv(QEvent::MouseMove, v, vp->mapToGlobal(v), Qt::NoButton, held, Qt::NoModifier);
+            QApplication::sendEvent(vp, &mv);
+        };
+        const auto &items = ed->doc()->pages[0]->items;
+        auto last = [&] { return std::dynamic_pointer_cast<jp::ShapeItem>(items.back()); };
+        auto passesNear = [](const QPainterPath &path, QPointF pt) {
+            for (double t = 0; t <= 1.0; t += 0.002)
+                if (QLineF(path.pointAtPercent(t), pt).length() < 1.5) return true;
+            return false;
+        };
+        // A curve through three points, ended with a double click on the third.
+        ed->setTool(jp::Tool::Freeform, QStringLiteral("curve"));
+        click(QPointF(100, 100));
+        click(QPointF(200, 160));
+        click(QPointF(300, 100));
+        QTest::mouseDClick(vp, Qt::LeftButton, Qt::NoModifier, view(QPointF(300, 100)));
+        QCOMPARE(int(items.size()), 1);
+        auto curve = last();
+        QVERIFY(curve && curve->fill.isNone());
+        QCOMPARE(ed->tool(), jp::Tool::Select);
+        const QPainterPath cp = curve->customPath.translated(curve->rect.topLeft());
+        QVERIFY(cp.elementAt(1).type == QPainterPath::CurveToElement);
+        for (QPointF pt : {QPointF(100, 100), QPointF(200, 160), QPointF(300, 100)}) QVERIFY(passesNear(cp, pt));
+        // A freeform triangle closed on its first point: filled.
+        ed->setTool(jp::Tool::Freeform, QStringLiteral("freeform"));
+        click(QPointF(100, 300));
+        click(QPointF(250, 300));
+        click(QPointF(175, 400));
+        click(QPointF(100.5, 300.5));
+        QCOMPARE(int(items.size()), 2);
+        auto tri = last();
+        QVERIFY(!tri->fill.isNone());
+        QVERIFY(std::abs(tri->rect.width() - 150) < 1.5 && std::abs(tri->rect.height() - 100) < 1.5);
+        // A scribble: one stroke.
+        ed->setTool(jp::Tool::Freeform, QStringLiteral("scribble"));
+        QTest::mousePress(vp, Qt::LeftButton, Qt::NoModifier, view(QPointF(100, 500)));
+        for (int i = 1; i <= 20; ++i) move(QPointF(100 + i * 10, 500 + (i % 2 ? 15 : -15)), Qt::LeftButton);
+        QTest::mouseRelease(vp, Qt::LeftButton, Qt::NoModifier, view(QPointF(300, 485)));
+        QCOMPARE(int(items.size()), 3);
+        auto scribble = last();
+        QVERIFY(scribble->fill.isNone());
+        QVERIFY(scribble->customPath.elementCount() >= 15);
+        // Saved to .pub and opened again: the open lines stay open and unfilled.
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("free.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*ed->doc(), path, &err), qPrintable(err));
+        auto back = jp::importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(int(back->pages[0]->items.size()), 3);
+        auto *bc = dynamic_cast<jp::ShapeItem *>(back->pages[0]->items[0].get());
+        QVERIFY(bc && bc->fill.isNone());
+        QVERIFY(passesNear(bc->customPath.translated(bc->rect.topLeft()), QPointF(200, 160)));
+        QVERIFY(!static_cast<jp::ShapeItem *>(back->pages[0]->items[1].get())->fill.isNone());
+    }
+
     // Connectors in .pub: elbow and curved routes are Publisher's connector
     // shapes, turned and flipped so they start at the line's start, and the
     // drawing's connector rules keep them attached (checked by opening the

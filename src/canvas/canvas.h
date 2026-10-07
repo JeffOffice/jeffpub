@@ -116,7 +116,7 @@ public:
     int textPosAt(const QString &itemId, const QPointF &page, int row = -1, int col = -1) const;
 
 private:
-    enum class Drag { None, Pending, Move, Resize, Rotate, LineEnd, LineBend, Adjust, Marquee, Draw, TextSelect, TextMove, Guide, Crop, CropMove, ColResize, RowResize, Pan, Point, WrapPoint };
+    enum class Drag { None, Pending, Move, Resize, Rotate, LineEnd, LineBend, Free, Adjust, Marquee, Draw, TextSelect, TextMove, Guide, Crop, CropMove, ColResize, RowResize, Pan, Point, WrapPoint };
 
     void updateScrollBars();
     void paintPageSlot(QPainter &p, const Slot &s, bool current);
@@ -132,6 +132,7 @@ private:
     QPointF snapMove(const QRectF &box, QVector<QLineF> *lines, const QSet<QString> &exclude) const;
     void collectSnapTargets(QVector<double> &xs, QVector<double> &ys, const QSet<QString> &exclude) const;
     void finishDraw(const QRectF &r, bool clicked);
+    void finishFreeform(bool closed);
     void handleTextKey(QKeyEvent *e);
     void moveCaret(QTextCursor::MoveOperation op, bool select, int n = 1);
     void verticalCaret(int dir, bool select);
@@ -170,6 +171,7 @@ private:
     QRectF m_rubber;
     QVector<QLineF> m_snapLines;
     SiteHit m_siteStart, m_siteHover;   // connection sites while drawing or dragging a line's end
+    QVector<QPointF> m_freePts;          // a curve, freeform or scribble being drawn
     double m_rotStart = 0;
     QString m_tip;
     QPointF m_tipPos;

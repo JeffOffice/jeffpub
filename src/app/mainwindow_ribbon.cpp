@@ -186,6 +186,8 @@ void MainWindow::buildRibbon()
               << GalleryItem{"tool:" + r + "Arrow", QStringLiteral("Connector: %1 Arrow").arg(name), lineToolIcon(r + "Arrow"), "Lines"}
               << GalleryItem{"tool:" + r + "Double", QStringLiteral("Connector: %1 Double-Arrow").arg(name), lineToolIcon(r + "Double"), "Lines"};
         }
+        v << GalleryItem{"tool:curve", "Curve", lineToolIcon("curve"), "Lines"} << GalleryItem{"tool:freeform", "Freeform: Shape", lineToolIcon("freeform"), "Lines"}
+          << GalleryItem{"tool:scribble", "Freeform: Scribble", lineToolIcon("scribble"), "Lines"};
         for (const auto &s : shapeLibrary()) v << GalleryItem{s.id, s.name, shapeIcon(s.id), s.category};
         return v;
     };
@@ -201,6 +203,8 @@ void MainWindow::buildRibbon()
                 // Connectors: the line tools with an elbow or curved route.
                 const QString route = id.startsWith(QLatin1String("tool:elbow")) ? QStringLiteral("elbow") : QStringLiteral("curved");
                 m_ed->setTool(id.endsWith(QLatin1String("Double")) ? Tool::DoubleArrow : id.endsWith(QLatin1String("Arrow")) ? Tool::Arrow : Tool::Line, route);
+            } else if (id == "tool:curve" || id == "tool:freeform" || id == "tool:scribble") {
+                m_ed->setTool(Tool::Freeform, id.mid(5));
             } else m_ed->setTool(Tool::Shape, id);
         });
         return b;

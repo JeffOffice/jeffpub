@@ -473,6 +473,52 @@ void Canvas::paintGuides(QPainter &p, const Slot &s)
     if (s.page >= 0) drawRulerGuides(d->pages[s.page]->guides);
 }
 
+// The drawing tools' paths: a curve passes smoothly through its points; a
+// freeform or scribble joins them with straight lines, thinned where a
+// hand-drawn stroke sampled more points than it needs.
+static void thinPoints(const QVector<QPointF> &in, int a, int b, double tol, QVector<bool> &keep)
+{
+    if (b <= a + 1) return;
+    const QLineF chord(in[a], in[b]);
+    double far = -1;
+    int at = -1;
+    for (int i = a + 1; i < b; ++i) {
+        const QPointF d = in[i] - in[a], u = chord.length() > 1e-9 ? (in[b] - in[a]) / chord.length() : QPointF(0, 0);
+        const double dist = chord.length() > 1e-9 ? std::abs(d.x() * u.y() - d.y() * u.x()) : std::hypot(d.x(), d.y());
+        if (dist > far) { far = dist; at = i; }
+    }
+    if (far <= tol) return;
+    keep[at] = true;
+    thinPoints(in, a, at, tol, keep);
+    thinPoints(in, at, b, tol, keep);
+}
+
+static QPainterPath freeformPath(QVector<QPointF> p, const QString &kind, bool closed)
+{
+    if (kind == QLatin1String("scribble") && p.size() > 2) {
+        QVector<bool> keep(p.size(), false);
+        keep.first() = keep.last() = true;
+        thinPoints(p, 0, int(p.size()) - 1, 0.4, keep);
+        QVector<QPointF> t;
+        for (int i = 0; i < p.size(); ++i)
+            if (keep[i]) t << p[i];
+        p = t;
+    }
+    QPainterPath path(p.first());
+    const int n = int(p.size());
+    if (kind == QLatin1String("curve") && n > 2) {
+        auto at = [&](int i) { return closed ? p[((i % n) + n) % n] : p[std::clamp(i, 0, n - 1)]; };
+        for (int i = 0; i < (closed ? n : n - 1); ++i) {
+            const QPointF p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+            path.cubicTo(p1 + (p2 - p0) / 6, p2 - (p3 - p1) / 6, p2);
+        }
+    } else {
+        for (int i = 1; i < n; ++i) path.lineTo(p[i]);
+    }
+    if (closed) path.closeSubpath();
+    return path;
+}
+
 // The yellow handle that moves the middle of an elbow or curved line
 // (shown when both ends leave level, or both upright).
 static bool lineBendHandle(const LineItem &l, QPointF *at)
@@ -951,6 +997,26 @@ void Canvas::paintOverlay(QPainter &p)
             p.setPen(QPen(darkUi() ? Qt::black : Qt::black, std::max(1.0, ppp() * 0.6)));
             p.drawLine(QPointF(cr.center().x(), cr.top()), QPointF(cr.center().x(), cr.bottom()));
         }
+    }
+    // The curve, freeform or scribble being drawn, up to the pointer.
+    if (m_ed->tool() == Tool::Freeform && !m_freePts.isEmpty()) {
+        QVector<QPointF> pts = m_freePts;
+        if (m_ed->toolShape() != QLatin1String("scribble") && m_drag != Drag::Free) pts << m_lastPage;
+        else if (m_ed->toolShape() == QLatin1String("curve")) pts << m_lastPage;
+        QPainterPath vp;
+        if (pts.size() >= 2) {
+            const QPainterPath pp = freeformPath(pts, m_ed->toolShape(), false);
+            QTransform tf;
+            tf.translate(pageToView(QPointF(0, 0)).x(), pageToView(QPointF(0, 0)).y());
+            tf.scale(ppp(), ppp());
+            vp = tf.map(pp);
+        }
+        p.setPen(QPen(QColor(30, 30, 30), 1));
+        p.setBrush(Qt::NoBrush);
+        p.drawPath(vp);
+        p.setPen(QPen(QColor(70, 120, 200), 1));
+        p.setBrush(Qt::white);
+        if (m_ed->toolShape() != QLatin1String("scribble")) p.drawRect(QRectF(pageToView(m_freePts.first()) - QPointF(3, 3), QSizeF(6, 6)));
     }
     // Connection sites of the object a line is being drawn or dragged to.
     if (!m_siteHover.over.isEmpty() && (m_drag == Drag::None || m_drag == Drag::Draw || m_drag == Drag::LineEnd))
@@ -1452,6 +1518,22 @@ void Canvas::mousePressEvent(QMouseEvent *e)
     m_lastClickView = e->position();
 
     const Tool tool = m_ed->tool();
+    if (tool != Tool::Freeform) m_freePts.clear();
+    if (tool == Tool::Freeform) {
+        // Curve and Freeform: each click adds a point (Freeform also draws
+        // by hand while the button is down); clicking the first point again
+        // closes the shape. Scribble: one stroke while the button is down.
+        m_ed->endTextEdit();
+        if (m_freePts.size() >= 3 && QLineF(pageToView(m_freePts.first()), e->position()).length() < 7) {
+            finishFreeform(true);
+            return;
+        }
+        if (m_ed->toolShape() == QLatin1String("scribble")) m_freePts.clear();
+        m_freePts << m_pressPage;
+        m_drag = Drag::Free;
+        viewport()->update();
+        return;
+    }
     if (tool == Tool::Text || tool == Tool::Table || tool == Tool::Picture || tool == Tool::Shape || tool == Tool::Line ||
         tool == Tool::Arrow || tool == Tool::DoubleArrow || tool == Tool::TextArt) {
         m_ed->endTextEdit();
@@ -1703,7 +1785,13 @@ void Canvas::mouseMoveEvent(QMouseEvent *e)
         const QString was = m_siteHover.over;
         const int wasSite = m_siteHover.site;
         m_siteHover = (t == Tool::Line || t == Tool::Arrow || t == Tool::DoubleArrow) ? siteNear(page, {}) : SiteHit();
-        if (m_siteHover.over != was || m_siteHover.site != wasSite) viewport()->update();
+        if (m_siteHover.over != was || m_siteHover.site != wasSite || (t == Tool::Freeform && !m_freePts.isEmpty())) viewport()->update();
+        return;
+    }
+    case Drag::Free: {
+        // Drawing by hand: a point every couple of pixels the pointer moves.
+        if (m_ed->toolShape() != QLatin1String("curve") && QLineF(pageToView(m_freePts.last()), e->position()).length() >= 2) m_freePts << page;
+        viewport()->update();
         return;
     }
     case Drag::Pan: {
@@ -2107,6 +2195,9 @@ void Canvas::mouseReleaseEvent(QMouseEvent *e)
         m_siteHover = SiteHit();
         m_ed->endChange();
         break;
+    case Drag::Free:
+        if (m_ed->toolShape() == QLatin1String("scribble")) finishFreeform(false);
+        break;
     case Drag::WrapPoint:
     case Drag::Rotate:
     case Drag::LineBend:
@@ -2195,6 +2286,29 @@ void Canvas::mouseReleaseEvent(QMouseEvent *e)
     }
     m_orig.clear();
     viewport()->update();
+}
+
+void Canvas::finishFreeform(bool closed)
+{
+    QVector<QPointF> pts;
+    // A double click lands the last point twice.
+    for (const QPointF &pt : std::as_const(m_freePts))
+        if (pts.isEmpty() || QLineF(pageToView(pts.last()), pageToView(pt)).length() >= 2) pts << pt;
+    const QString kind = m_ed->toolShape();
+    m_freePts.clear();
+    m_drag = Drag::None;
+    m_ed->setTool(Tool::Select);
+    viewport()->update();
+    if (pts.size() < 2) return;
+    const QPainterPath path = freeformPath(pts, kind, closed);
+    QRectF b = path.boundingRect();
+    if (b.width() < 1) b.adjust(-0.5, 0, 0.5, 0);
+    if (b.height() < 1) b.adjust(0, -0.5, 0, 0.5);
+    auto s = std::make_shared<ShapeItem>();
+    s->rect = b;
+    s->customPath = path.translated(-b.topLeft());
+    if (!closed) s->fill = Fill::none();
+    m_ed->addItem(s);
 }
 
 Canvas::SiteHit Canvas::siteNear(const QPointF &page, const QSet<QString> &exclude) const
@@ -2310,6 +2424,12 @@ void Canvas::finishDraw(const QRectF &rIn, bool clicked)
 
 void Canvas::mouseDoubleClickEvent(QMouseEvent *e)
 {
+    // A double click ends a curve or freeform where it is.
+    if (m_ed->tool() == Tool::Freeform) {
+        if (!m_freePts.isEmpty() && m_ed->toolShape() != QLatin1String("scribble")) finishFreeform(false);
+        else mousePressEvent(e);
+        return;
+    }
     const Hit h = hitTest(e->position());
     if (h.kind != HitKind::Item) {
         QAbstractScrollArea::mouseDoubleClickEvent(e);
@@ -2604,6 +2724,11 @@ void Canvas::keyPressEvent(QKeyEvent *e)
     const bool ctrl = e->modifiers() & Qt::ControlModifier;
     const bool alt = e->modifiers() & Qt::AltModifier;
     const double step = alt ? 1.0 / ppp() : Settings::get().nudge();
+    // Esc or Enter ends a curve or freeform, keeping what's drawn.
+    if (m_ed->tool() == Tool::Freeform && !m_freePts.isEmpty() && (e->key() == Qt::Key_Escape || e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter)) {
+        finishFreeform(false);
+        return;
+    }
     switch (e->key()) {
     case Qt::Key_Escape:
         if (m_ed->tool() != Tool::Select) { m_ed->setTool(Tool::Select); return; }
