@@ -151,6 +151,10 @@ private:
 // QPainter::drawText, the size does not depend on the paint device's DPI, so a
 // PDF at 1200 dpi matches the screen. Fonts must already be in layout units.
 void drawPlainText(QPainter *p, const QPointF &baseline, const QFont &font, const QString &text);
+// A font's single line spacing in ems as Publisher spaces it: the known
+// metrics of common proprietary fonts (measured from Publisher's PDFs) when
+// there are any, else the font's own tables.
+double naturalLineEm(const QFont &f, const QString &requestedFamily);
 
 QTextCharFormat resolveCharFormat(const QTextCharFormat &f, const LayoutEnv &env);
 QFont baseFontFor(const QTextBlock &b, const LayoutEnv &env);

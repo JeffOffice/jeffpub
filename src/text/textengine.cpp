@@ -522,12 +522,13 @@ static double trackingSpace(const QTextCharFormat &f, const QFont &resolved)
     return (t - 100) / 100 * averageCharEm(resolved, requestedFamily(resolved)) * resolved.pointSizeF() / fontPointFactor();
 }
 
-double naturalLineEm(const QFont &f, const QString &requestedFamily)
+double lineEmOf(const QFont &f, const QString &requestedFamily)
 {
-    if (isSubstituted(requestedFamily)) {
-        const double known = knownMetrics(requestedFamily, f.weight() >= QFont::DemiBold).line;
-        if (known > 0) return known;
-    }
+    // The known metrics are Publisher's own spacing for the font, so they
+    // hold whether or not it's installed: the real Gill Sans MT's tables
+    // give lines 8% tighter than Publisher's.
+    const double known = knownMetrics(requestedFamily, f.weight() >= QFont::DemiBold).line;
+    if (known > 0) return known;
     static QHash<QString, double> cache;
     const bool typo = usesTypoMetrics(requestedFamily);
     const QString key = emKey(f) + (typo ? QStringLiteral("|t") : QStringLiteral("|h"));
@@ -553,7 +554,7 @@ double singleSpacing(const QVector<QTextLayout::FormatRange> &ranges, int from, 
 {
     auto lineOf = [](const QFont &f, double size) {
         const QString fam = f.families().isEmpty() ? f.family() : f.families().first();
-        return size / fontPointFactor() * naturalLineEm(f, fam);
+        return size / fontPointFactor() * lineEmOf(f, fam);
     };
     double m = 0;
     for (const auto &r : ranges)
@@ -565,8 +566,8 @@ double singleSpacing(const QVector<QTextLayout::FormatRange> &ranges, int from, 
     return m;
 }
 
-// Descent (document points) of the substituted proprietary fonts on a line, or 0
-// when none is known; the baseline sits this far above the line's bottom.
+// Descent (document points) of the proprietary fonts with known metrics on a
+// line (installed or not), or 0 when none is known; the baseline sits this far above the line's bottom.
 double knownDescent(const QVector<QTextLayout::FormatRange> &ranges, int from, int len, bool fullSize)
 {
     double d = 0;
@@ -574,7 +575,6 @@ double knownDescent(const QVector<QTextLayout::FormatRange> &ranges, int from, i
         if (r.start < from + len && r.start + r.length > from) {
             const QFont f = r.format.font();
             const QString fam = requestedFamily(f);
-            if (!isSubstituted(fam)) continue;
             const double kd = knownMetrics(fam, f.weight() >= QFont::DemiBold).descent;
             const double size = fullSize && r.format.hasProperty(tp::LineSize) ? r.format.property(tp::LineSize).toDouble() : f.pointSizeF();
             if (kd > 0) d = std::max(d, size / fontPointFactor() * kd);
@@ -615,6 +615,8 @@ double lineHeightFor(const QTextBlockFormat &bf, double scale, double single)
     }
 }
 } // namespace
+
+double naturalLineEm(const QFont &f, const QString &requestedFamily) { return lineEmOf(f, requestedFamily); }
 
 void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &frames, const LayoutEnv &env)
 {
@@ -913,7 +915,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
             // Symbol bullet (as .pub lists have) is taller than most text.
             const QString mfam = bfont.isEmpty() ? requestedFamily(B->markerFont) : bfont;
             const double known = knownMetrics(mfam, B->markerFont.weight() >= QFont::DemiBold).line;
-            markerSingle = B->markerFont.pointSizeF() / fontPointFactor() * (known > 0 ? known : naturalLineEm(B->markerFont, mfam));
+            markerSingle = B->markerFont.pointSizeF() / fontPointFactor() * (known > 0 ? known : lineEmOf(B->markerFont, mfam));
         }
 
         // Drop cap metrics: cap height spans dropLines lines.

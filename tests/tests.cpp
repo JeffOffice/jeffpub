@@ -2602,6 +2602,31 @@ private Q_SLOTS:
         QVERIFY(reloaded && reloaded->pubFonts == opened->pubFonts);
     }
 
+    // Line spacing of the fonts JeffPub knows Publisher's metrics for doesn't
+    // depend on whether the font is installed: with the real Gill Sans MT on
+    // Windows, lines came out 8% tighter than Publisher's. Here a bundled
+    // font renamed "Arial" stands in for an installed Arial.
+    void knownLineMetricsWhenInstalled()
+    {
+        using namespace jp;
+        const double notInstalled = naturalLineEm(QFont(QStringLiteral("Arial")), QStringLiteral("Arial"));
+        QFile f(QStringLiteral(JP_TEST_DATA "/../../resources/fonts/Arimo-Regular.ttf"));
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QByteArray font = f.readAll();
+        // Same length, so the font's tables stay where they are.
+        font.replace(QByteArray("\x00" "A\x00r\x00i\x00m\x00o", 10), QByteArray("\x00" "A\x00r\x00i\x00" "a\x00l", 10));
+        font.replace(QByteArray("Arimo"), QByteArray("Arial"));
+        const int id = QFontDatabase::addApplicationFontFromData(font);
+        QVERIFY(id >= 0);
+        QVERIFY(QFontDatabase::applicationFontFamilies(id).contains(QStringLiteral("Arial")));
+        QFont arial(QStringLiteral("Arial"));
+        arial.setPointSizeF(10);
+        const double installed = naturalLineEm(arial, QStringLiteral("Arial"));
+        QFontDatabase::removeApplicationFont(id);
+        QVERIFY2(std::abs(installed - notInstalled) < 1e-6, qPrintable(QStringLiteral("%1 vs %2").arg(installed).arg(notInstalled)));
+        QVERIFY(std::abs(notInstalled - (1491.0 + 431 + 307) / 2048) < 1e-6);
+    }
+
     // Footnotes at the bottom of the column their reference lands in (under
     // a rule, numbered in order, the text kept above them); a line whose
     // note won't fit moves on with it; endnotes under "Notes" after the
