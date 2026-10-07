@@ -443,16 +443,20 @@ QVector<Iv> freeIntervals(const QVector<QPolygonF> &obstacles, double x0, double
 static bool usesTypoMetrics(const QString &family)
 {
     static const QStringList core = {
-        "Arial", "Arial Black", "Arial Narrow", "Times New Roman", "Georgia", "Verdana", "Tahoma", "Trebuchet MS",
+        "Arial", "Arial Black", "Times New Roman", "Georgia", "Verdana", "Tahoma", "Trebuchet MS",
         "Courier New", "Calibri", "Cambria", "Candara", "Consolas", "Constantia", "Corbel", "Segoe UI", "Garamond",
-        "Book Antiqua", "Bookman Old Style", "Century Gothic", "Franklin Gothic Medium", "Gill Sans MT", "Palatino Linotype",
+        "Book Antiqua", "Century Gothic", "Franklin Gothic Medium", "Gill Sans MT", "Palatino Linotype",
         "Lucida Sans Unicode", "Comic Sans MS", "Impact"};
     return core.contains(family, Qt::CaseInsensitive);
 }
 
 // Line height and descent (ems) of common proprietary fonts, read from the
 // fonts embedded in reference PDFs of .pub files. When such a font is missing and a
-// substitute is drawn, lines keep the original's spacing and baseline.
+// substitute is drawn, lines keep the original's spacing and baseline. Which
+// of a font's metrics Publisher spaces lines by (OS/2 typo or hhea) goes by
+// the font, not by any flag in it: checked line by line against the
+// baselines in its PDFs of 284 publications (Oct 7; Arial Narrow and
+// Bookman Old Style use hhea, Times New Roman Bold its own typo ascender).
 struct KnownMetrics { double line = 0, descent = 0; };
 static KnownMetrics knownMetrics(const QString &family, bool bold = false)
 {
@@ -460,12 +464,12 @@ static KnownMetrics knownMetrics(const QString &family, bool bold = false)
     // OS/2 typographic metrics of the core fonts, which their stand-ins
     // (Arimo, Tinos...) don't share: theirs give 1.15 em lines.
     if (f == "arial") return {(1491.0 + 431 + 307) / 2048, 431.0 / 2048};
-    if (f == "arial narrow") return {(1491.0 + 431 + 269) / 2048, 431.0 / 2048};
-    if (f == "times new roman") return {(1420.0 + 442 + 307) / 2048, 442.0 / 2048};
+    if (f == "arial narrow") return {(1916.0 + 434) / 2048, 434.0 / 2048};                  // hhea
+    if (f == "times new roman") return {((bold ? 1387.0 : 1420.0) + 442 + 307) / 2048, 442.0 / 2048};
     if (f == "tahoma") return {(1566.0 + 423 + 59) / 2048, 423.0 / 2048};
     if (f == "garamond") return {(1339.0 + 539 + 313) / 2048, 539.0 / 2048};
     if (f == "book antiqua") return {(1489.0 + 578 + 124) / 2048, 578.0 / 2048};
-    if (f == "bookman old style") return {(1467.0 + 461 + 263) / 2048, 461.0 / 2048};
+    if (f == "bookman old style") return {(1929.0 + 475) / 2048, 475.0 / 2048};             // hhea
     if (f == "century gothic") return {(1536.0 + 426 + 229) / 2048, 426.0 / 2048};
     if (f.startsWith("franklin gothic")) return {(1877.0 + 445) / 2048, 445.0 / 2048};   // hhea
     if (f == "georgia") return {(1549.0 + 444 + 198) / 2048, 444.0 / 2048};              // OS/2 typo
@@ -479,6 +483,14 @@ static KnownMetrics knownMetrics(const QString &family, bool bold = false)
     if (f == "ag_futura") return bold ? KnownMetrics{(4264.0 + 1049) / 4096, 1049.0 / 4096}   // win, bold
                                       : KnownMetrics{(4051.0 + 1081) / 4096, 1081.0 / 4096};  // win
     if (f == "wingdings") return {(1841.0 + 432) / 2048, 432.0 / 2048};                 // hhea
+    if (f == "arial rounded mt bold") return {(1938.0 + 432) / 2048, 432.0 / 2048};     // hhea
+    if (f == "verdana") return {(1566.0 + 423 + 202) / 2048, 423.0 / 2048};              // OS/2 typo
+    if (f == "comic sans ms") return {(1638.0 + 564) / 2048, 564.0 / 2048};              // OS/2 typo
+    if (f == "agency fb") return {((bold ? 2042.0 : 2015.0) + 410) / 2048, 410.0 / 2048}; // hhea
+    if (f == "ocr a extended") return {(1757.0 + 362) / 2048, 362.0 / 2048};             // hhea
+    if (f == "castellar") return {(1878.0 + 571) / 2048, 571.0 / 2048};                  // hhea
+    if (f == "imprint mt shadow") return {(1903.0 + 510) / 2048, 510.0 / 2048};          // hhea
+    if (f == "abadi") return {(1817.0 + 504) / 2048, 504.0 / 2048};                      // hhea
     return {};
 }
 static bool isSubstituted(const QString &family) { return !substituteFor(family).isEmpty() || substituteStretch(family) != 100; }

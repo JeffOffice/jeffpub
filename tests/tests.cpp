@@ -4103,6 +4103,35 @@ private Q_SLOTS:
         QVERIFY(reloaded && reloaded->pubFonts == opened->pubFonts);
     }
 
+    // Publisher's single line height for fonts JeffPub draws with stand-ins,
+    // in ems: each checked line by line against Publisher's own PDFs of 284
+    // publications (Oct 7). The stand-ins' own tables were up to 0.4 em off
+    // (Agency FB), and Arial Narrow and Bookman Old Style were read with
+    // the wrong set of metrics.
+    void publisherLineHeights()
+    {
+        using namespace jp;
+        struct Case { const char *family; bool bold; double em; };
+        const Case cases[] = {
+            {"Arial Rounded MT Bold", true, (1938.0 + 432) / 2048},   // its 26 pt lines 30.06 pt apart
+            {"Verdana", false, (1566.0 + 423 + 202) / 2048},
+            {"Comic Sans MS", false, (1638.0 + 564) / 2048},
+            {"Bookman Old Style", false, (1929.0 + 475) / 2048},
+            {"Arial Narrow", false, (1916.0 + 434) / 2048},
+            {"Times New Roman", true, (1387.0 + 442 + 307) / 2048},
+            {"Times New Roman", false, (1420.0 + 442 + 307) / 2048},
+            {"Agency FB", true, (2042.0 + 410) / 2048},
+        };
+        for (const Case &c : cases) {
+            QFont f(QString::fromLatin1(c.family));
+            f.setFamilies({QString::fromLatin1(c.family)});
+            f.setBold(c.bold);
+            f.setPointSizeF(12);
+            const double em = naturalLineEm(f, QString::fromLatin1(c.family));
+            QVERIFY2(std::abs(em - c.em) < 1e-6, qPrintable(QStringLiteral("%1: %2, not %3").arg(QLatin1String(c.family)).arg(em).arg(c.em)));
+        }
+    }
+
     // Line spacing of the fonts JeffPub knows Publisher's metrics for doesn't
     // depend on whether the font is installed: with the real Gill Sans MT on
     // Windows, lines came out 8% tighter than Publisher's. Here a bundled

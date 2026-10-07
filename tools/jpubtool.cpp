@@ -14,6 +14,7 @@
 #include "render/pdfpage.h"
 #include "render/renderer.h"
 #include "templates/templates.h"
+#include "text/textengine.h"
 #include "text/textprops.h"
 #include "io/pubshapes.h"
 #include "render/shapes.h"
@@ -27,6 +28,7 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QFontInfo>
 #include <QGuiApplication>
 #include <QTextStream>
 
@@ -43,6 +45,20 @@ int main(int argc, char **argv)
         return 2;
     }
     const QString cmd = args[1], in = args[2];
+    if (cmd == "lineem") {
+        // lineem <family>[,<family>...] x: the single line height (ems) and
+        // the font drawn, regular and bold, for each family.
+        for (const QString &fam : in.split(QLatin1Char(','))) {
+            for (bool bold : {false, true}) {
+                QFont f(fam);
+                f.setFamilies({fam});
+                f.setBold(bold);
+                f.setPointSizeF(100);
+                out << fam << (bold ? " bold" : "") << "\t" << naturalLineEm(f, fam) << "\t" << QFontInfo(f).family() << "\n";
+            }
+        }
+        return 0;
+    }
     if (cmd == "pdfcheck") {
         QFile f(in);
         if (!f.open(QIODevice::ReadOnly)) return 1;
