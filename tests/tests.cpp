@@ -2340,7 +2340,8 @@ private Q_SLOTS:
         using namespace jp;
         QFile f(QStringLiteral(JP_TEST_DATA "/../../docs/jpub-format.md"));
         QVERIFY(f.open(QIODevice::ReadOnly));
-        const QString spec = QString::fromUtf8(f.readAll());
+        // Git on Windows checks text out with CR LF line ends.
+        const QString spec = QString::fromUtf8(f.readAll()).replace(QLatin1String("\r\n"), QLatin1String("\n"));
         const qsizetype a = spec.indexOf(QStringLiteral("```json\n")), b = spec.indexOf(QStringLiteral("```"), a + 8);
         QVERIFY(a > 0 && b > a);
         ZipWriter z;
