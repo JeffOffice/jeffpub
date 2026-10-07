@@ -2307,6 +2307,49 @@ private Q_SLOTS:
         }
     }
 
+    // docs/jpub-format.md stays true: its example opens as a publication,
+    // and the property numbers it lists are the ones the code uses.
+    void jpubSpecExample()
+    {
+        using namespace jp;
+        QFile f(QStringLiteral(JP_TEST_DATA "/../../docs/jpub-format.md"));
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QString spec = QString::fromUtf8(f.readAll());
+        const qsizetype a = spec.indexOf(QStringLiteral("```json\n")), b = spec.indexOf(QStringLiteral("```"), a + 8);
+        QVERIFY(a > 0 && b > a);
+        ZipWriter z;
+        z.add(QStringLiteral("mimetype"), "application/x-jeffpub");
+        z.add(QStringLiteral("document.json"), spec.mid(a + 8, b - a - 8).toUtf8());
+        QString err;
+        auto doc = publicationFromBytes(z.finish(), &err);
+        QVERIFY2(doc, qPrintable(err));
+        QCOMPARE(doc->pages.size(), 1);
+        QCOMPARE(doc->pageSize(), QSizeF(612, 792));
+        QCOMPARE(doc->pages[0]->items.size(), size_t(1));
+        auto *t = dynamic_cast<TextItem *>(doc->pages[0]->items[0].get());
+        QVERIFY(t);
+        QCOMPARE(t->rect, QRectF(72, 72, 468, 100));
+        const QTextDocument *sd = doc->storyDoc(t->storyId);
+        QVERIFY(sd);
+        QCOMPARE(sd->toPlainText(), QStringLiteral("Hello, world"));
+        QTextCursor c(const_cast<QTextDocument *>(sd));
+        c.setPosition(9);
+        QCOMPARE(c.charFormat().fontWeight(), 700);
+        QCOMPARE(doc->colors.c[1], QColor(0x1F, 0x4E, 0x79));
+
+        const int qt[] = {QTextFormat::BlockAlignment, QTextFormat::LayoutDirection, QTextFormat::BlockTopMargin, QTextFormat::BlockBottomMargin,
+                          QTextFormat::BlockLeftMargin, QTextFormat::BlockRightMargin, QTextFormat::TextIndent, QTextFormat::TabPositions,
+                          QTextFormat::LineHeight, QTextFormat::LineHeightType, QTextFormat::PageBreakPolicy, QTextFormat::FontCapitalization,
+                          QTextFormat::FontLetterSpacing, QTextFormat::FontKerning, QTextFormat::FontFamilies, QTextFormat::FontPointSize,
+                          QTextFormat::FontWeight, QTextFormat::FontItalic, QTextFormat::FontUnderline, QTextFormat::FontOverline,
+                          QTextFormat::FontStrikeOut, QTextFormat::TextUnderlineStyle, QTextFormat::TextUnderlineColor,
+                          QTextFormat::TextVerticalAlignment, QTextFormat::IsAnchor, QTextFormat::AnchorHref, QTextFormat::ForegroundBrush,
+                          QTextFormat::BackgroundBrush, QTextFormat::TextOutline, QTextFormat::ListStyle, QTextFormat::ListIndent, QTextFormat::ListStart};
+        for (int n : qt) QVERIFY2(spec.contains(QRegularExpression(QStringLiteral("\\| (\\d+, )*%1(, \\d+)* \\|").arg(n))), qPrintable(QString::number(n)));
+        for (int n = tp::ColorRefP; n <= tp::Tracking; ++n) QVERIFY2(spec.contains(QString::number(n)), qPrintable(QString::number(n)));
+        for (int n = tp::StyleName; n <= tp::TocLevel; ++n) QVERIFY2(spec.contains(QString::number(n)), qPrintable(QString::number(n)));
+    }
+
     // Footnotes at the bottom of the column their reference lands in (under
     // a rule, numbered in order, the text kept above them); a line whose
     // note won't fit moves on with it; endnotes under "Notes" after the

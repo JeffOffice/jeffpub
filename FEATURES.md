@@ -11,7 +11,7 @@ Features JeffPub 79 has that Publisher never did, then the ones planned before v
 - [x] Runs on Linux as well as Windows; Publisher only ever ran on Windows
 - [x] Free and open source (GPL-3.0): no license fee, subscription or account
 - [x] Installs without administrator rights, or runs with no installation at all (the Windows `.zip` and the Linux AppImage)
-- [x] An open file format: a `.jpub` publication is a ZIP of readable JSON and the original pictures, alongside opening and saving `.pub`
+- [x] An open file format: a `.jpub` publication is a ZIP of readable JSON and the original pictures, [fully documented](docs/jpub-format.md), alongside opening and saving `.pub`
 - [x] Barcodes: book ISBNs with or without a price add-on (hyphenated as the ISBN agency assigns them, for every country), EAN-13, UPC-A and EAN-8 with add-ons, Code 128 and Code 39, drawn as vector bars and editable after placing
 - [x] WebP and SVG pictures
 - [~] macOS app (Apple silicon and Intel) *(test builds; not yet signed, so macOS asks before opening it the first time)*
@@ -22,7 +22,7 @@ Features JeffPub 79 has that Publisher never did, then the ones planned before v
 - [x] SVG: pages saved as SVG drawings (Save as Picture), with letters as outlines so they look the same without the fonts; SVG pictures print and export to PDF as sharp vectors; and Convert to Shapes (Picture Format, or right-click) turns an SVG picture into editable shapes *(text and pictures inside the drawing are left out, with a note saying so; clipping inside SVG pictures isn't shown on screen, a limit of the Qt version JeffPub uses)*
 - [x] EPUB export for e-book readers and stores (File > Export > Save as E-book): text that reflows to any screen, chapters at each Heading 1, contents from Heading 1-3, pictures and tables in place, footnotes that pop up and endnotes at the back, the first page as the cover *(not yet: a fixed-layout, page-for-page version)*
 - [ ] PDF pages placed as sharp vector graphics
-- [ ] A published specification of the `.jpub` format
+- [x] A published specification of the `.jpub` format ([docs/jpub-format.md](docs/jpub-format.md)), kept true by a test that opens its example
 
 ## File (backstage)
 
