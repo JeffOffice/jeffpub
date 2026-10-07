@@ -4055,10 +4055,15 @@ private Q_SLOTS:
             for (QLabel *l : w.findChildren<QLabel *>())
                 if (l->isVisibleTo(&w) && l->text().contains(QLatin1String("<table")) && l->text().contains(QLatin1String("ISBN range table"))) table = l;
             QVERIFY(table);
-            QTextDocument doc;
-            doc.setDefaultFont(table->font());
-            doc.setDocumentMargin(0);   // as QLabel lays out its text
-            doc.setHtml(table->text());
+            // A copy of the label's own document (its wrapping and margin),
+            // laid out at the label's width.
+            QTextDocument *own = table->findChild<QTextDocument *>();
+            QVERIFY(own);
+            std::unique_ptr<QTextDocument> copy(own->clone());
+            QTextDocument &doc = *copy;
+            doc.setDefaultFont(own->defaultFont());
+            doc.setDefaultTextOption(own->defaultTextOption());
+            doc.setDocumentMargin(own->documentMargin());
             doc.setTextWidth(table->contentsRect().width());
             QVERIFY2(doc.idealWidth() <= table->contentsRect().width() + 1,
                      qPrintable(QStringLiteral("%1 > %2").arg(doc.idealWidth()).arg(table->contentsRect().width())));
