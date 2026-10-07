@@ -156,8 +156,8 @@ bell-minus	alarm,notification,silent,reminder,delete,remove,erase
 bell-off	alarm,notification,silent,reminder
 bell-plus	notification,silent,reminder,add,create,new
 bell-ring	alarm,notification,sound,reminder
-between-horizontal-end	insert,add,left,slot,squeeze,space,vertical,grid,table,rows,cells,excel,spreadsheet,accountancy,data,enter,entry,entries,blocks,rectangles,chevron
-between-horizontal-start	insert,add,right,slot,squeeze,space,vertical,grid,table,rows,cells,excel,spreadsheet,accountancy,data,enter,entry,entries,blocks,rectangles,chevron
+between-horizontal-end	insert,add,left,slot,squeeze,space,vertical,grid,table,rows,cells,spreadsheet,accountancy,data,enter,entry,entries,blocks,rectangles,chevron
+between-horizontal-start	insert,add,right,slot,squeeze,space,vertical,grid,table,rows,cells,spreadsheet,accountancy,data,enter,entry,entries,blocks,rectangles,chevron
 between-vertical-end	insert,add,top,slot,squeeze,space,vertical,grid,table,columns,cells,data,enter,entry,entries,blocks,rectangles,chevron
 between-vertical-start	insert,add,bottom,slot,squeeze,space,vertical,grid,table,columns,cells,data,enter,entry,entries,blocks,rectangles,chevron
 biceps-flexed	arm,muscle,strong,working out,athletic,toned,muscular,forelimb,curled
@@ -1205,7 +1205,7 @@ settings-2	cog,edit,gear,preferences
 shapes	triangle,equilateral,square,circle,classification,different,collection,toy,blocks,learning
 share	network,connections
 share-2	network,connections
-sheet	spreadsheets,table,excel
+sheet	spreadsheets,table
 shell	beach,sand,holiday,sealife,fossil,ammonite,biology,ocean,terminal,command line,session,bash,zsh,roll,wrap,chewing gum,bubble gum,sweet,sugar,hosepipe,carpet,string,spiral,spinner,hypnotise,hypnosis
 shield	cybersecurity,secure,safety,protection,guardian,armored,armoured,defense,defence,defender,block,threat,prevention,antivirus,vigilance,vigilant,detection,scan,find,strength,strong,tough,invincible,invincibility,invulnerable,undamaged,audit,admin,verification,crest,bravery,knight,foot soldier,infantry,trooper,pawn,battle,war,military,army,cadet,scout
 shield-alert	unshielded,cybersecurity,insecure,unsecured,safety,unsafe,protection,unprotected,guardian,unguarded,unarmored,unarmoured,defenseless,defenceless,undefended,defender,blocked,stopped,intercepted,interception,saved,thwarted,threat,prevention,unprevented,antivirus,vigilance,vigilant,detection,detected,scanned,found,exploit,vulnerability,vulnerable,weakness,infection,infected,comprimised,data leak,audited,admin,verification,unverified,uncertified,warning,emergency,attention,urgent,alarm,crest,bravery,strength,tough,attacked,damaged,injured,hit,expired,disabled,inactive,error,exclamation mark,!
