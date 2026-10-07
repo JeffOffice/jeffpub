@@ -487,6 +487,7 @@ void MainWindow::createActions()
         if (ed->selectionKind() == "group") ed->ungroupSelection(); else ed->groupSelection();
     });
     mk("arr.ungroup", QStringLiteral("Ungroup"), "ungroup", QKeySequence(), [ed] { ed->ungroupSelection(); });
+    mk("arr.regroup", QStringLiteral("Regroup"), "group", QKeySequence(), [ed] { ed->regroup(); });
     mk("arr.relMargins", QStringLiteral("Relative to Margin Guides"), "", QKeySequence(), [] {}, true);
     auto toMargins = [this] { return act("arr.relMargins")->isChecked(); };
     mk("arr.alignLeft", QStringLiteral("Align Left"), "align-start-vertical", QKeySequence(), [ed, toMargins] { ed->align(Editor::Align::Left, toMargins()); });

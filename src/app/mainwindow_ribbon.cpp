@@ -135,7 +135,7 @@ void MainWindow::buildRibbon()
         auto *alignA = menuAction(this, QStringLiteral("Align"), "align-horizontal-justify-center");
         g->addSmall(alignA, menuOf(this, {act("arr.alignLeft"), act("arr.alignCenter"), act("arr.alignRight"), nullptr, act("arr.alignTop"), act("arr.alignMiddle"),
                                           act("arr.alignBottom"), nullptr, act("arr.distH"), act("arr.distV"), nullptr, act("arr.relMargins")}));
-        g->addSmall(act("arr.ungroup"));
+        g->addSmall(act("arr.ungroup"), menuOf(this, {act("arr.ungroup"), act("arr.regroup")}), true);
         auto *rotA = menuAction(this, QStringLiteral("Rotate"), "rotate-cw");
         g->addSmall(rotA, menuOf(this, {act("arr.rotR"), act("arr.rotL"), act("arr.flipV"), act("arr.flipH"), nullptr, act("arr.freeRotate")}));
         return g;
@@ -1443,7 +1443,8 @@ void MainWindow::refreshUi()
         act(id)->setEnabled(sel);
     act("arr.group")->setEnabled(kind == "multi" || kind == "group");
     act("arr.group")->setText(kind == "group" ? QStringLiteral("Ungroup") : QStringLiteral("Group"));
-    act("arr.ungroup")->setEnabled(kind == "group");
+    act("arr.ungroup")->setEnabled(kind == "group" || m_ed->canRegroup());
+    act("arr.regroup")->setEnabled(m_ed->canRegroup());
     for (const char *id : {"fmt.bold", "fmt.italic", "fmt.underline", "fmt.strike", "fmt.sub", "fmt.sup", "fmt.grow", "fmt.shrink", "fmt.clear", "para.bullets",
                            "para.numbers", "para.left", "para.center", "para.right", "para.justify", "para.distribute", "para.indentDec", "para.indentInc",
                            "para.ltr", "para.rtl"})

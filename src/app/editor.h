@@ -135,6 +135,9 @@ public:
     void moveSelectionBy(double dx, double dy, const QString &label = QStringLiteral("Move"));
     void forEachSelected(const QString &label, const std::function<void(Item *)> &fn);
     void groupSelection();
+    // Regroup: the objects of the group last ungrouped, grouped again.
+    bool canRegroup() const;
+    void regroup();
     void ungroupSelection();
     enum class Order { Forward, Backward, Front, Back };
     void arrange(Order o);
@@ -241,6 +244,7 @@ private:
     TextTarget m_text;
     QTextCursor m_cursor;
     Tool m_tool = Tool::Select;
+    QStringList m_regroup;   // the objects of the group last ungrouped
     QString m_toolShape;
 
     int m_changeDepth = 0;

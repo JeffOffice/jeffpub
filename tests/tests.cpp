@@ -2670,6 +2670,36 @@ private Q_SLOTS:
         QCOMPARE(line->start.id, a->id);
     }
 
+    // Regroup puts the objects of the group last ungrouped back together.
+    void regroupAfterUngroup()
+    {
+        using namespace jp;
+        Editor ed;
+        ed.setDocument(Document::blank(QSizeF(612, 792)));
+        QStringList ids;
+        for (int i = 0; i < 3; ++i) {
+            auto s = std::make_shared<ShapeItem>();
+            s->rect = QRectF(72 + 100 * i, 72, 72, 72);
+            ed.addItem(s);
+            ids << s->id;
+        }
+        QVERIFY(!ed.canRegroup());
+        ed.select(ids);
+        ed.groupSelection();
+        QCOMPARE(int(ed.doc()->pages[0]->items.size()), 1);
+        ed.ungroupSelection();
+        QCOMPARE(int(ed.doc()->pages[0]->items.size()), 3);
+        ed.clearSelection();
+        QVERIFY(ed.canRegroup());
+        ed.regroup();
+        QCOMPARE(int(ed.doc()->pages[0]->items.size()), 1);
+        auto *g = dynamic_cast<GroupItem *>(ed.doc()->pages[0]->items[0].get());
+        QVERIFY(g && g->children.size() == 3);
+        QCOMPARE(ed.selection(), QStringList{g->id});
+        ed.undo();
+        QCOMPARE(int(ed.doc()->pages[0]->items.size()), 3);
+    }
+
     // Shapes > Lines: Curve (clicks, a smooth line through them, double-click
     // to end), Freeform (clicks joined straight; clicking the first point
     // closes it) and Scribble (one stroke by hand).

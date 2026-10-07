@@ -650,14 +650,34 @@ void Editor::ungroupSelection()
         auto *g = static_cast<GroupItem *>(keep.get());
         loc.list->erase(loc.list->begin() + loc.index);
         int at = loc.index;
+        m_regroup.clear();
         for (auto &c : g->children) {
             loc.list->insert(loc.list->begin() + at++, c);
             newSel << c->id;
+            m_regroup << c->id;
         }
     }
     m_sel = newSel;
     endChange();
     Q_EMIT selectionChanged();
+}
+
+bool Editor::canRegroup() const
+{
+    if (m_regroup.size() < 2) return false;
+    int found = 0;
+    for (const ItemPtr &it : surfaceItems()) found += m_regroup.contains(it->id);
+    return found >= 2;
+}
+
+void Editor::regroup()
+{
+    if (!canRegroup()) return;
+    QStringList ids;
+    for (const ItemPtr &it : surfaceItems())
+        if (m_regroup.contains(it->id)) ids << it->id;
+    m_sel = ids;
+    groupSelection();
 }
 
 void Editor::arrange(Order o)

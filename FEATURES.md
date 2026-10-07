@@ -72,7 +72,7 @@ Features JeffPub 79 has that Publisher never did, then the ones planned before v
 - [x] Paragraph: Bullets (gallery and custom bullet character), Numbering (formats and starting number), Decrease and Increase Indent, Special Characters (show ¶), Align Left, Center, Right, Justify, and Distribute, Line Spacing, Paragraph Spacing, and the Paragraph dialog (indents, spacing, line breaks, tabs, baseline alignment)
 - [x] Styles: gallery, New Style, Modify Style, Import Styles (from a publication), and Styles by example
 - [x] Objects: Draw Text Box, Table, Pictures, Shapes
-- [x] Arrange: Wrap Text, Bring Forward or to Front, Send Backward or to Back, Group, Ungroup, Align and Distribute (relative to margin guides or objects), Rotate and Flip
+- [x] Arrange: Wrap Text, Bring Forward or to Front, Send Backward or to Back, Group, Ungroup, Regroup, Align and Distribute (relative to margin guides or objects), Rotate and Flip
 - [x] Editing: Find, Replace (match case, whole word, search direction), Select (Select All Text in Text Box, Select All, Select Objects, Select Object by Type)
 
 ## Insert tab

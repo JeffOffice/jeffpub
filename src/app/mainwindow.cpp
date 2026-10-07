@@ -1065,6 +1065,7 @@ void MainWindow::contextMenu(const QPoint &global)
         menu.addSeparator();
         if (kind == "multi") menu.addAction(act("arr.group"));
         if (kind == "group") menu.addAction(act("arr.ungroup"));
+        if (m_ed->canRegroup()) menu.addAction(act("arr.regroup"));
         QMenu *order = menu.addMenu(icon("layers"), QStringLiteral("Order"));
         order->addAction(act("arr.front"));
         order->addAction(act("arr.forward"));
