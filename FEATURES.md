@@ -17,7 +17,7 @@ Features JeffPub 79 has that Publisher never did, then the ones planned before v
 - [ ] macOS app (Apple silicon and Intel)
 - [~] PDF/X export for commercial printers, with a print check before export *(PDF/X-1a:2001 for U.S. web coated (SWOP) or European coated (FOGRA39) printing, checked for low-resolution pictures and missing fonts first; not yet: PDF/X-4, which needs a color profile JeffPub may bundle, and overprint settings)*
 - [x] Automatic table of contents from the Heading 1-3 styles, with page numbers taken from the layout and dot leaders, updated with one click (Insert > References)
-- [ ] Footnotes and endnotes
+- [x] Footnotes and endnotes: numbered references (Insert > References), footnotes at the bottom of the column their number lands in under a short rule (a line moves on with its note when both don't fit), endnotes under "Notes" after the story *(note text is edited in a dialog; a note too tall for a whole column isn't split)*
 - [ ] Insert > Icons: a gallery of recolorable vector icons
 - [ ] SVG export, and SVG pictures converted to editable shapes
 - [ ] EPUB export for e-book readers and stores

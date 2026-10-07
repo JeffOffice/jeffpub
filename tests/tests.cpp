@@ -29,6 +29,7 @@
 #include "app/ribbon.h"
 #include "app/updater.h"
 #include "app/toc.h"
+#include "app/notes.h"
 #include "app/widgets.h"
 #include "app/settings.h"
 #include "canvas/canvas.h"
@@ -1704,6 +1705,154 @@ private Q_SLOTS:
             w.show();
             QTest::qWait(100);
             w.grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/toc.png");
+        }
+    }
+
+    // A story through three linked boxes of the same height is drawn in
+    // all three (paint clipped each paragraph in frame-local units while its
+    // lines sit below the earlier boxes: the third box drew nothing).
+    void linkedBoxesAllDrawn()
+    {
+        jp::MainWindow w;
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        QVector<std::shared_ptr<jp::TextItem>> boxes;
+        const QString story = doc->createStory(QStringLiteral("A line of text to fill the boxes.\n").repeated(24).trimmed());
+        for (int i = 0; i < 3; ++i) {
+            auto t = std::make_shared<jp::TextItem>();
+            t->rect = QRectF(72, 72 + i * 220, 300, 160);
+            t->storyId = story;
+            if (i) boxes.last()->nextId = t->id;
+            boxes << t;
+            doc->pages[0]->items.push_back(t);
+        }
+        w.editor()->setDocument(std::move(doc));
+        const QImage img = w.pageThumbnail(0, 792);
+        jp::LayoutCache cache;
+        for (int i = 0; i < 3; ++i) {
+            const auto fl = cache.textFrame(*w.editor()->doc(), *boxes[i], 1, jp::RenderOptions());
+            const auto lines = fl.layout->lineRects(i);
+            QVERIFY(lines.size() >= 5);
+            for (const QRectF &r : lines) {
+                int ink = 0;
+                for (int y = int(boxes[i]->rect.top() + r.top()); y < int(boxes[i]->rect.top() + r.bottom()); ++y)
+                    for (int x = 75; x < 372; ++x) ink += qGray(img.pixel(x, y)) < 128;
+                QVERIFY2(ink > 50, qPrintable(QStringLiteral("box %1, line at %2: no text drawn").arg(i + 1).arg(r.top())));
+            }
+        }
+    }
+
+    // Footnotes at the bottom of the column their reference lands in (under
+    // a rule, numbered in order, the text kept above them); a line whose
+    // note won't fit moves on with it; endnotes under "Notes" after the
+    // story; editing, undo, numbers outside layout, and saving.
+    void footnotesAndEndnotes()
+    {
+        jp::MainWindow w;
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto a = std::make_shared<jp::TextItem>();
+        a->rect = QRectF(72, 72, 300, 200);
+        a->storyId = doc->createStory();
+        auto b2 = std::make_shared<jp::TextItem>();
+        b2->rect = QRectF(72, 400, 300, 300);
+        b2->storyId = a->storyId;
+        a->nextId = b2->id;
+        doc->pages[0]->items.push_back(a);
+        doc->pages[0]->items.push_back(b2);
+        QTextDocument *sd = doc->storyDoc(a->storyId);
+        {
+            QTextCursor c(sd);
+            for (int i = 0; i < 12; ++i) {
+                if (i) c.insertBlock();
+                c.insertText(QStringLiteral("Paragraph %1 with enough words to fill a line of the box.").arg(i + 1));
+            }
+        }
+        w.editor()->setDocument(std::move(doc));
+        jp::Editor *ed = w.editor();
+        auto at = [&](int block, bool end) {
+            ed->beginTextEdit(a->id);
+            QTextCursor c(sd->findBlockByNumber(block));
+            c.movePosition(QTextCursor::EndOfBlock);
+            ed->setCursor(c);
+            return end;
+        };
+        at(0, false);
+        const QString n1 = jp::addNote(ed, false, QStringLiteral("The first note."));
+        at(1, false);
+        const QString n2 = jp::addNote(ed, false, QStringLiteral("The second note, long enough to take two lines in a box of this width."));
+        at(11, true);
+        const QString e1 = jp::addNote(ed, true, QStringLiteral("An endnote."));
+        QVERIFY(!n1.isEmpty() && !n2.isEmpty() && !e1.isEmpty());
+        // The reference is the number, superscript.
+        QCOMPARE(sd->findBlockByNumber(0).text().right(1), QString(QChar::ObjectReplacementCharacter));
+        jp::LayoutCache cache;
+        jp::RenderOptions opt;
+        auto lay = [&] { return cache.textFrame(*ed->doc(), *a, 1, opt); };
+        auto fl = lay();
+        QVERIFY(fl.layout);
+        const auto &notes = fl.layout->notes();
+        QCOMPARE(notes.size(), 3);
+        QCOMPARE(notes[0].number, 1);
+        QCOMPARE(notes[1].number, 2);
+        QVERIFY(!notes[0].endnote && notes[2].endnote && notes[2].number == 1);
+        // Both footnotes at the bottom of the first box, in order; no line
+        // of text runs into them.
+        QCOMPARE(notes[0].frame, 0);
+        QCOMPARE(notes[1].frame, 0);
+        QVERIFY(notes[0].rect.bottom() <= notes[1].rect.top() + 0.01);
+        QVERIFY2(std::abs(notes[1].rect.bottom() + 2 - (200 - a->insets.bottom())) < 1.5, qPrintable(QString::number(notes[1].rect.bottom())));
+        for (const QRectF &r : fl.layout->lineRects(0)) QVERIFY(r.bottom() <= notes[0].rect.top());
+        QVERIFY(fl.layout->lineInfo(0).first().text.contains(QLatin1Char('1')));
+        // The endnote after the story, in the second box.
+        QCOMPARE(notes[2].frame, 1);
+        double lastLine = 0;
+        for (const QRectF &r : fl.layout->lineRects(1)) lastLine = std::max(lastLine, r.bottom());
+        QVERIFY(notes[2].rect.top() > lastLine);
+        // Numbers outside layout (exports).
+        jp::FieldContext ctx;
+        ctx.doc = ed->doc();
+        QCOMPARE(ctx.resolve(QStringLiteral("footnote:") + n2), QStringLiteral("2"));
+        QCOMPARE(ctx.resolve(QStringLiteral("endnote:") + e1), QStringLiteral("1"));
+        // A long note that can't fit with its line: both move to the next box.
+        at(5, false);
+        const QString big = jp::addNote(ed, false, QStringLiteral("A very long note. ").repeated(30));
+        fl = lay();
+        int bigIdx = -1;
+        for (int i = 0; i < fl.layout->notes().size(); ++i)
+            if (fl.layout->notes()[i].storyId == big) bigIdx = i;
+        QVERIFY(bigIdx >= 0);
+        QCOMPARE(fl.layout->notes()[bigIdx].frame, 1);
+
+        // The line with its number went too (the paragraph's earlier lines stay).
+        bool refInSecond = false;
+        const int para6 = sd->findBlockByNumber(5).position();
+        for (const auto &li : fl.layout->lineInfo(1)) refInSecond |= li.docStart == para6 && li.text.contains(QLatin1Char('3'));
+        QVERIFY(refInSecond);
+        // Editing: at the reference, the note's own text.
+        at(0, false);
+        bool isEnd = true;
+        QCOMPARE(jp::noteAtCursor(ed, &isEnd), n1);
+        QVERIFY(!isEnd);
+        jp::setNoteText(ed, n1, QStringLiteral("Changed."));
+        QCOMPARE(ed->doc()->storyDoc(n1)->toPlainText(), QStringLiteral("Changed."));
+        ed->undo();
+        QCOMPARE(ed->doc()->storyDoc(n1)->toPlainText(), QStringLiteral("The first note."));
+        // Saved and opened again: the same notes.
+        QString err;
+        auto back = jp::publicationFromBytes(jp::publicationBytes(*ed->doc(), QImage()), &err);
+        QVERIFY2(back, qPrintable(err));
+        jp::TextItem *ba = nullptr;
+        for (const auto &it : back->pages[0]->items)
+            if (it->id == a->id) ba = static_cast<jp::TextItem *>(it.get());
+        QVERIFY(ba);
+        jp::LayoutCache cache2;
+        const auto fl2 = cache2.textFrame(*back, *ba, 1, opt);
+        QCOMPARE(fl2.layout->notes().size(), 4);
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            ed->endTextEdit();
+            w.resize(1200, 900);
+            w.show();
+            QTest::qWait(100);
+            w.grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/notes.png");
         }
     }
 

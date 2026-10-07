@@ -504,6 +504,8 @@ void MainWindow::buildRibbon()
         g = t->addGroup(QStringLiteral("References"));
         g->addLarge(act("ins.toc"));
         g->addSmall(act("ins.updateToc"));
+        g->addSmall(act("ins.footnote"));
+        g->addSmall(act("ins.endnote"));
 
         g = t->addGroup(QStringLiteral("Header & Footer"));
         g->addLarge(act("ins.header"));

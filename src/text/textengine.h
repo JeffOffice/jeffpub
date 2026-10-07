@@ -10,6 +10,7 @@
 
 #include <QDateTime>
 #include <QFont>
+#include <QLineF>
 #include <QPolygonF>
 #include <QSizeF>
 #include <QTextBlock>
@@ -105,9 +106,29 @@ public:
         QVector<QTextLayout::FormatRange> effects;   // ranges with shadow/emboss/engrave/glow
         QVector<QPair<int, int>> fieldRanges;        // display ranges of fields
         QString leaders;                             // a leader character per tab stop (space = none)
+        QVector<QPair<int, int>> noteRefs;           // a note reference's display position, and its index in notes()
         int dispFromDoc(int rel) const;
         int docFromDisp(int d) const;
     };
+
+    // Footnotes and endnotes. A note is the field "footnote:<story>" or
+    // "endnote:<story>" in the text, shown as its number (footnotes and
+    // endnotes counted apart, in order within the story); its text is that
+    // story, laid out at the bottom of the column the reference lands in
+    // (footnotes, under a short rule) or after the story's last line, under
+    // a "Notes" heading (endnotes).
+    struct Note {
+        QString storyId;
+        bool endnote = false;
+        int number = 0;
+        int frame = -1, column = 0;    // where it's drawn (-1: not, as overflow)
+        QRectF rect;                   // frame-local
+        double width = -1, height = 0, numberWidth = 0, firstBaseline = 0;
+        QFont numberFont;
+        QColor numberColor;
+        std::shared_ptr<StoryLayout> layout;
+    };
+    const QVector<Note> &notes() const { return m_notes; }
 
 private:
     const Block *blockAt(int pos, int *rel) const;
@@ -118,6 +139,11 @@ private:
     QVector<double> m_used;
     bool m_overflow = false;
     LayoutEnv m_env;
+    QVector<Note> m_notes;
+    struct Rule { int frame; QLineF line; };
+    QVector<Rule> m_noteRules;         // above each column's footnotes
+    struct Heading { int frame = -1; QPointF baseline; QFont font; QColor color; };
+    Heading m_notesHeading;            // above the endnotes
 };
 
 // Resolve a character format for display: scheme colors, scheme fonts, scaling.

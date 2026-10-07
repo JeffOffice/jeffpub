@@ -32,10 +32,34 @@ static QString toRoman(int n)
     return s;
 }
 
+// A note's number outside layout (exports): its place among the story's
+// notes of the same kind.
+static QString noteNumber(const Document *doc, const QString &kind, const QString &storyId)
+{
+    if (!doc) return QStringLiteral("*");
+    const QString prefix = kind + QLatin1Char(':');
+    for (auto it = doc->stories.cbegin(); it != doc->stories.cend(); ++it) {
+        const QTextDocument *sd = it.value() ? it.value()->doc.get() : nullptr;
+        if (!sd) continue;
+        int n = 0;
+        for (QTextBlock b = sd->begin(); b.isValid(); b = b.next())
+            for (auto f = b.begin(); !f.atEnd(); ++f) {
+                const QString code = f.fragment().charFormat().stringProperty(tp::Field);
+                if (!code.startsWith(prefix)) continue;
+                for (int i = 0; i < f.fragment().length(); ++i) {
+                    ++n;
+                    if (code.mid(prefix.size()) == storyId) return QString::number(n);
+                }
+            }
+    }
+    return QStringLiteral("*");
+}
+
 QString FieldContext::resolve(const QString &code) const
 {
     const QString kind = code.section(':', 0, 0);
     const QString arg = code.section(':', 1);
+    if (kind == QLatin1String("footnote") || kind == QLatin1String("endnote")) return noteNumber(doc, kind, arg);
     if (kind == "page") {
         if (arg == "roman") return toRoman(pageNumber).toLower();
         if (arg == "ROMAN") return toRoman(pageNumber);
@@ -634,6 +658,52 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
         if (f < nF && ++c >= std::max(1, frames[f].columns)) { c = 0; ++f; }
     };
 
+    // Notes. A note's own text is laid out without notes of its own.
+    m_notes.clear();
+    m_noteRules.clear();
+    m_notesHeading = Heading();
+    static thread_local int noteDepth = 0;
+    const bool withNotes = noteDepth == 0 && nF > 0;
+    const Document *notesDoc = nF > 0 ? frames.first().ctx.doc : nullptr;
+    int footCount = 0, endCount = 0;
+    QHash<int, double> reserve;   // a column's room for footnotes, by frame * 64 + column
+    auto rkey = [](int fi, int ci) { return fi * 64 + ci; };
+    const double ruleGap = 9 * scale, noteGap = 2 * scale;
+    auto measureNote = [&](Note &n, double width) {
+        if (n.layout && std::abs(n.width - width) < 0.01) return n.height;
+        n.width = width;
+        n.layout = std::make_shared<StoryLayout>();
+        const QTextDocument *nd = notesDoc ? notesDoc->storyDoc(n.storyId) : nullptr;
+        QTextCharFormat first;
+        if (nd) {
+            const QTextBlock b0 = nd->begin();
+            first = b0.begin().atEnd() ? b0.charFormat() : b0.begin().fragment().charFormat();
+        }
+        const QTextCharFormat rf = resolveCharFormat(first, env);
+        n.numberFont = rf.font();
+        n.numberColor = rf.foreground().color();
+        n.numberWidth = advanceOf(n.numberFont, QStringLiteral("00.")) + 3 * scale;
+        FrameSpec fs = frames.first();
+        fs.size = QSizeF(width, 100000);
+        fs.insets = QMarginsF(n.numberWidth, 0, 0, 0);
+        fs.columns = 1;
+        fs.valign = VAlign::Top;
+        fs.obstacles.clear();
+        fs.baselineGrid = 0;
+        if (nd) {
+            ++noteDepth;
+            n.layout->build(nd, {fs}, env);
+            --noteDepth;
+            const auto li = n.layout->lineInfo(0);
+            n.firstBaseline = li.isEmpty() ? heightOf(n.numberFont) * 0.8 : li.first().baseline;
+            n.height = std::max(heightOf(n.numberFont), n.layout->usedHeight(0));
+        } else {
+            n.height = heightOf(n.numberFont);
+            n.firstBaseline = n.height * 0.8;
+        }
+        return n.height;
+    };
+
     for (QTextBlock b = doc->begin(); b.isValid(); b = b.next()) {
         auto B = std::make_unique<Block>();
         B->docStart = b.position();
@@ -655,7 +725,26 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
             QTextCharFormat rf = resolveCharFormat(cf, env);
             const QString field = cf.stringProperty(tp::Field);
             if (!field.isEmpty()) {
+                const bool isNote = field.startsWith(QLatin1String("footnote:")) || field.startsWith(QLatin1String("endnote:"));
                 for (int i = 0; i < text.size(); ++i) {
+                    // A note shows its number, counted here in the story's order.
+                    if (isNote) {
+                        QString v;
+                        if (withNotes) {
+                            Note n;
+                            n.storyId = field.section(QLatin1Char(':'), 1);
+                            n.endnote = field.startsWith(QLatin1String("endnote:"));
+                            n.number = n.endnote ? ++endCount : ++footCount;
+                            v = QString::number(n.number);
+                            B->noteRefs << qMakePair(int(B->disp.size()), int(m_notes.size()));
+                            m_notes << n;
+                        }
+                        B->map << Seg{rel + i, 1, int(B->disp.size()), int(v.size())};
+                        ranges << QTextLayout::FormatRange{int(B->disp.size()), int(v.size()), rf};
+                        B->fieldRanges << qMakePair(int(B->disp.size()), int(v.size()));
+                        B->disp += v;
+                        continue;
+                    }
                     // Multi-line values (an address) break lines inside the paragraph.
                     QString v = ctx.resolve(field);
                     v.replace(QLatin1String("\r\n"), QString(QChar::LineSeparator)).replace(QLatin1Char('\n'), QChar::LineSeparator);
@@ -849,8 +938,17 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
 
         // Placing the paragraph's lines can be redone from the same spot:
         // starting in the next column, or breaking a line early.
-        struct Spot { int f, c; double y, overflowY, rowH; QVector<Iv> row; int rowIdx; bool rowActive, columnEmpty, overflow; QVector<double> used; };
-        const Spot startSpot{f, c, y, overflowY, rowH, row, rowIdx, rowActive, columnEmpty, m_overflow, m_used};
+        struct Spot {
+            int f, c;
+            double y, overflowY, rowH;
+            QVector<Iv> row;
+            int rowIdx;
+            bool rowActive, columnEmpty, overflow;
+            QVector<double> used;
+            QHash<int, double> reserve;
+            QVector<Note> notes;
+        };
+        const Spot startSpot{f, c, y, overflowY, rowH, row, rowIdx, rowActive, columnEmpty, m_overflow, m_used, reserve, m_notes};
         auto placeLines = [&](bool startNext, int breakAfter) {
             // Start in next text box.
             if (bf.boolProperty(tp::StartInNextBox) && f < nF && (y > 0 || c > 0)) {
@@ -903,7 +1001,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                             if (iv.x1 - iv.x0 >= std::min(minW, x1 - x0)) ok << iv;
                         if (ok.isEmpty()) {
                             y += 2;
-                            if (y + estH > col.height() + 0.01) advance();
+                            if (y + estH > col.height() - reserve.value(rkey(f, c)) + 0.01) advance();
                             continue;
                         }
                         row = ok; rowIdx = 0; rowH = 0; rowActive = true;
@@ -932,7 +1030,19 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                     const double below = h > single && bf.lineHeightType() == QTextBlockFormat::ProportionalHeight ? h - single : 0;
                     const double textH = h - below;
                     const bool firstInColumn = (y <= 0.001) && rowIdx == 0;
-                    if (col.top() + y + textH > col.bottom() + 0.01 && !firstInColumn) {
+                    // Footnotes referred to on this line go at the bottom of
+                    // its column, with it: both fit, or both move on.
+                    QVector<int> lineNotes;
+                    double pending = 0;
+                    for (const auto &ref : B->noteRefs)
+                        if (!m_notes[ref.second].endnote && ref.first >= line.textStart() && ref.first < line.textStart() + std::max(1, line.textLength()))
+                            lineNotes << ref.second;
+                    if (!lineNotes.isEmpty()) {
+                        if (!reserve.contains(rkey(f, c))) pending += ruleGap;
+                        for (int ni : lineNotes) pending += measureNote(m_notes[ni], col.width()) + noteGap;
+                    }
+                    const double bottom = col.bottom() - reserve.value(rkey(f, c)) - pending;
+                    if (col.top() + y + textH > bottom + 0.01 && !firstInColumn) {
                         advance();
                         continue;
                     }
@@ -942,7 +1052,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                         if (recheck.size() != 1 || recheck[0].x0 > iv.x0 + 0.5 || recheck[0].x1 < iv.x1 - 0.5) {
                             y += 2;
                             rowActive = false;
-                            if (y + h > col.height() + 0.01) advance();
+                            if (y + h > col.height() - reserve.value(rkey(f, c)) + 0.01) advance();
                             continue;
                         }
                     }
@@ -964,12 +1074,22 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                         const double snapped = origin + std::ceil((base - origin) / grid - 1e-6) * grid;
                         if (snapped > base) y += snapped - base;
                     }
-                    if (col.top() + y + textH > col.bottom() + 0.01 && !firstInColumn) {   // snapped past the bottom
+                    if (col.top() + y + textH > bottom + 0.01 && !firstInColumn) {   // snapped past the bottom
                         advance();
                         continue;
                     }
                     line.setPosition(QPointF(iv.x0, m_frameY[f] + col.top() + y + lead));
                     B->lines << Line{f, c, QRectF(iv.x0, col.top() + y, iv.x1 - iv.x0, h), below};
+                    if (!lineNotes.isEmpty()) {
+                        const bool firstNotes = !reserve.contains(rkey(f, c));
+                        double &room = reserve[rkey(f, c)];
+                        if (firstNotes) room += ruleGap;
+                        for (int ni : lineNotes) {
+                            m_notes[ni].frame = f;
+                            m_notes[ni].column = c;
+                            room += m_notes[ni].height + noteGap;
+                        }
+                    }
                     m_used[f] = std::max(m_used[f], col.top() + y + textH);
                     columnEmpty = false;
                     rowH = std::max(rowH, h);
@@ -994,6 +1114,8 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
         auto redo = [&](bool startNext, int breakAfter) {
             f = startSpot.f; c = startSpot.c; y = startSpot.y; overflowY = startSpot.overflowY; rowH = startSpot.rowH; row = startSpot.row;
             rowIdx = startSpot.rowIdx; rowActive = startSpot.rowActive; columnEmpty = startSpot.columnEmpty; m_overflow = startSpot.overflow; m_used = startSpot.used;
+            reserve = startSpot.reserve;
+            m_notes = startSpot.notes;
             B->lines.clear();
             placeLines(startNext, breakAfter);
         };
@@ -1049,6 +1171,69 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
         m_blocks.push_back(std::move(B));
     }
 
+    // Endnotes: after the story's last line, under a heading, in order;
+    // each one whole in a column (a note too tall for an empty column
+    // starts there anyway).
+    if (withNotes && endCount > 0) {
+        auto place = [&](double h, double gapBefore, int *frameOut) -> QRectF {
+            while (f < nF) {
+                const QRectF col = colRect(f, c);
+                const double top = y > 0.001 ? y + gapBefore : 0;
+                if (col.top() + top + h <= col.bottom() - reserve.value(rkey(f, c)) + 0.01 || y <= 0.001) {
+                    *frameOut = f;
+                    const QRectF r(col.left(), col.top() + top, col.width(), h);
+                    y = top + h;
+                    columnEmpty = false;
+                    m_used[f] = std::max(m_used[f], r.bottom());
+                    return r;
+                }
+                advance();
+            }
+            *frameOut = -1;
+            m_overflow = true;
+            return {};
+        };
+        const QFont lastFont = baseFontFor(doc->lastBlock(), env);
+        QFont headFont = resolveCharFormat(QTextCharFormat(), env).font();
+        headFont.setPointSizeF(lastFont.pointSizeF());
+        headFont.setFamilies(lastFont.families());
+        headFont.setBold(true);
+        const double headH = heightOf(headFont) * 1.4;
+        int hf = -1;
+        const QRectF hr = place(headH, 12 * scale, &hf);
+        if (hf >= 0) {
+            m_notesHeading.frame = hf;
+            m_notesHeading.font = headFont;
+            m_notesHeading.color = resolveCharFormat(QTextCharFormat(), env).foreground().color();
+            m_notesHeading.baseline = QPointF(hr.left(), hr.top() + QFontMetricsF(fineFont(headFont)).ascent() / kFine);
+        }
+        for (Note &n : m_notes) {
+            if (!n.endnote) continue;
+            const double h = measureNote(n, f < nF ? colRect(f, c).width() : 300);
+            int nf2 = -1;
+            const QRectF r = place(h, noteGap * 2, &nf2);
+            // A narrower column than measured for: measured again there.
+            if (nf2 >= 0 && std::abs(r.width() - n.width) > 0.01) measureNote(n, r.width());
+            n.frame = nf2;
+            n.rect = nf2 >= 0 ? QRectF(r.topLeft(), QSizeF(r.width(), n.height)) : QRectF();
+        }
+    }
+    // Footnotes: stacked at the bottom of their column, under a short rule.
+    for (auto it = reserve.cbegin(); it != reserve.cend(); ++it) {
+        const int fi = it.key() / 64, ci = it.key() % 64;
+        if (fi < 0 || fi >= nF) continue;
+        const QRectF col = colRect(fi, ci);
+        const double areaTop = col.bottom() - it.value();
+        m_noteRules << Rule{fi, QLineF(col.left(), areaTop + ruleGap * 0.45, col.left() + col.width() / 3, areaTop + ruleGap * 0.45)};
+        double ny = areaTop + ruleGap;
+        for (Note &n : m_notes) {
+            if (n.endnote || n.frame != fi || n.column != ci) continue;
+            n.rect = QRectF(col.left(), ny, col.width(), n.height);
+            ny += n.height + noteGap;
+        }
+        m_used[fi] = std::max(m_used[fi], col.bottom());
+    }
+
     // Marker x for hanging lists: the line's left edge minus the hang.
     for (auto &B : m_blocks) {
         if (B->marker.isEmpty() || B->lines.isEmpty()) continue;
@@ -1072,9 +1257,14 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
             for (const Line &l : B->lines)
                 if (l.frame == fi) { top = std::min(top, l.rect.top()); bottom = std::max(bottom, l.rect.bottom() - l.below); }
         if (bottom < top) continue;
+        for (const Note &n : m_notes)
+            if (n.endnote && n.frame == fi) bottom = std::max(bottom, n.rect.bottom());
         const double usedH = bottom - col.top();
-        const double shift = (col.height() - usedH) * (fs.valign == VAlign::Middle ? 0.5 : 1.0);
+        const double shift = (col.height() - reserve.value(rkey(fi, 0)) - usedH) * (fs.valign == VAlign::Middle ? 0.5 : 1.0);
         if (shift <= 0) continue;
+        for (Note &n : m_notes)
+            if (n.endnote && n.frame == fi) n.rect.translate(0, shift);
+        if (m_notesHeading.frame == fi) m_notesHeading.baseline += QPointF(0, shift);
         for (auto &B : m_blocks)
             for (int i = 0; i < B->lines.size(); ++i)
                 if (B->lines[i].frame == fi) {
@@ -1304,7 +1494,9 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
     if (frame < 0 || frame >= m_frames.size()) return;
     const FrameSpec &fs = m_frames[frame];
     const QPointF off(0, -frameY(frame));
-    const QRectF clip(-1e5, -1e3, 2e5, fs.size.height() + 2e3);
+    // In the paragraph layouts' own units, where this frame's lines sit
+    // below the frames before it (frameY), not from the frame's top.
+    const QRectF clip(-1e5, frameY(frame) - 1e3, 2e5, fs.size.height() + 2e3);
     p->save();
     for (const auto &B : m_blocks) {
         bool any = false;
@@ -1449,6 +1641,25 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
                 if (i == B->lines.size() - 1) drawPlainText(p, QPointF(l.cursorToX(l.textStart() + l.textLength()) + 1, base), sf, QStringLiteral("¶"));
             }
         }
+    }
+    // Notes: their rules, the endnotes' heading, each number and text.
+    for (const Rule &r : m_noteRules)
+        if (r.frame == frame) {
+            p->setPen(QPen(QColor(0, 0, 0), 0.5 * m_env.fontScale));
+            p->drawLine(r.line);
+        }
+    if (m_notesHeading.frame == frame) {
+        p->setPen(m_notesHeading.color);
+        drawPlainText(p, m_notesHeading.baseline, m_notesHeading.font, QStringLiteral("Notes"));
+    }
+    for (const Note &n : m_notes) {
+        if (n.frame != frame || !n.layout) continue;
+        p->setPen(n.numberColor);
+        drawPlainText(p, QPointF(n.rect.left(), n.rect.top() + n.firstBaseline), n.numberFont, QString::number(n.number) + (n.endnote ? QStringLiteral(".") : QString()));
+        p->save();
+        p->translate(n.rect.topLeft());
+        n.layout->paint(p, 0, PaintOptions());
+        p->restore();
     }
     if (o.selFrom >= 0 && o.selTo > o.selFrom)
         for (const QRectF &r : rangeRects(frame, o.selFrom, o.selTo)) p->fillRect(r, o.selColor);

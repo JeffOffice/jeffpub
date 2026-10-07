@@ -9,6 +9,7 @@
 #include "app/mainwindow.h"
 #include "render/renderer.h"
 #include "app/pagespane.h"
+#include "app/notes.h"
 #include "app/toc.h"
 
 #include "app/dialogs.h"
@@ -372,6 +373,14 @@ void MainWindow::createActions()
     mk("ins.symbol", QStringLiteral("Symbol"), "omega", QKeySequence(), [this] { symbolDialog(this, m_ed); });
     mk("ins.barcode", QStringLiteral("Barcode"), "barcode", QKeySequence(), [this] { barcodeDialog(this, m_ed); });
     mk("ins.toc", QStringLiteral("Table of Contents"), "table-of-contents", QKeySequence(), [this] { insertTableOfContents(m_ed); });
+    mk("ins.footnote", QStringLiteral("Footnote"), "superscript", QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_F), [this] {
+        if (m_ed->isEditingText()) noteDialog(this, m_ed, false);
+        else statusBar()->showMessage(QStringLiteral("Click in text where the footnote's number goes, then choose Footnote."), 6000);
+    });
+    mk("ins.endnote", QStringLiteral("Endnote"), "notebook-text", QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_D), [this] {
+        if (m_ed->isEditingText()) noteDialog(this, m_ed, true);
+        else statusBar()->showMessage(QStringLiteral("Click in text where the endnote's number goes, then choose Endnote."), 6000);
+    });
     mk("ins.updateToc", QStringLiteral("Update Table"), "refresh-cw", QKeySequence(), [this] {
         if (!updateTablesOfContents(m_ed))
             statusBar()->showMessage(QStringLiteral("This publication has no table of contents yet: Insert > Table of Contents adds one."), 6000);
