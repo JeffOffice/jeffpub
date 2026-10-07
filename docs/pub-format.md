@@ -228,6 +228,26 @@ an offset and a length:
 
 A blank file has no TEXT, FDPC, FDPP, BTEC, BTEP, STRS or MCLD sections.
 
+**The index's blocks.** The header gives the total number of sections at
+0x0C, the total size of the index's blocks at 0x10 (512 per block) and the
+stream's size at 0x14. The index itself is a chain of blocks: each starts
+with `0x01F8`, its count of entries (u16) and the next block's offset (u32,
+`FFFFFFFF` on the last), then 24-byte entries. The first block is at 0x18
+and holds 19 entries, ending before the text at 512; the others are 512-byte
+blocks of 20 entries at the end of the stream (Publisher's 93-section
+newsletter: 19 + 20 + 20 + 20 + 14). Publisher refuses a file whose
+first block runs past 512 into the text: JeffPub wrote the whole index in
+one block until October 2026, so its .pub files with more than 21 sections
+(any story long enough to need three paragraph pages, about 170 paragraphs)
+didn't open. Confirmed by opening the saved files in Publisher.
+
+**Formatting pages.** Each 512-byte FDPC or FDPP page starts with its run
+count (u16), 1 (u16), and where its text starts (u32): the last end on the
+page before it, 0 on the first page. Then the runs' end offsets (u32, in
+the stream), their property offsets in the page (u16), and the property
+blocks packed from the page's end. BTEC/BTEP hold the page count, 4, 0, 0,
+each page's last end and each page's offset.
+
 ### Style sheets
 
 Three STSH sections, each an offset table (u32 total, u32 count, three u32s,

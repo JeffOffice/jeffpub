@@ -415,7 +415,12 @@ struct Section { QByteArray name, kind; quint16 id = 0; QByteArray data; bool al
 
 QByteArray quillStream(QVector<Section> secs)
 {
-    // Index of up to 20 sections, then sections from offset 512.
+    // The index of sections, then the sections from offset 512. The index
+    // starts in the first block (19 entries, clear of the text at 512) and
+    // goes on in 512-byte blocks of 20 at the end of the stream, each naming
+    // the next, as Publisher writes it. Publisher refuses an index that runs
+    // past its block.
+    constexpr int kFirst = 19, kPerBlock = 20;
     QByteArray out(512, '\0');
     int at = 512;
     QVector<QPair<int, int>> places;
@@ -427,25 +432,37 @@ QByteArray quillStream(QVector<Section> secs)
     }
     out.append(body);
     while (out.size() % 512) out.append('\0');
+    const int n = int(secs.size());
+    const int extra = n > kFirst ? (n - kFirst + kPerBlock - 1) / kPerBlock : 0;
+    const int firstExtra = int(out.size());
+    out.append(QByteArray(512 * extra, '\0'));
+    auto block = [&](int base, int from, int count, quint32 next) {
+        setU16(out, base, 0x01f8);
+        setU16(out, base + 2, quint32(count));
+        setU32(out, base + 4, next);
+        for (int k = 0; k < count; ++k) {
+            const int i = from + k;
+            const int e = base + 8 + 24 * k;
+            setU16(out, e, 0x18);
+            memcpy(out.data() + e + 2, secs[i].name.constData(), 4);
+            setU16(out, e + 6, secs[i].id);
+            setU16(out, e + 8, 1);
+            memcpy(out.data() + e + 12, secs[i].kind.constData(), 4);
+            setU32(out, e + 16, quint32(places[i].first));
+            setU32(out, e + 20, quint32(places[i].second));
+        }
+    };
     memcpy(out.data(), "CHNKINK ", 8);
     setU16(out, 0x08, 4);
     setU16(out, 0x0a, 7);
-    setU16(out, 0x0c, quint32(secs.size()));
+    setU16(out, 0x0c, quint32(n));
     setU16(out, 0x0e, 0x0300);
-    setU32(out, 0x10, 0x200);
+    setU32(out, 0x10, quint32(512 * (1 + extra)));   // the index's blocks, all told
     setU32(out, 0x14, quint32(out.size()));
-    setU16(out, 0x18, 0x01f8);
-    setU16(out, 0x1a, quint32(secs.size()));
-    setU32(out, 0x1c, 0xffffffffu);
-    for (int i = 0; i < secs.size(); ++i) {
-        const int e = 0x20 + 24 * i;
-        setU16(out, e, 0x18);
-        memcpy(out.data() + e + 2, secs[i].name.constData(), 4);
-        setU16(out, e + 6, secs[i].id);
-        setU16(out, e + 8, 1);
-        memcpy(out.data() + e + 12, secs[i].kind.constData(), 4);
-        setU32(out, e + 16, quint32(places[i].first));
-        setU32(out, e + 20, quint32(places[i].second));
+    block(0x18, 0, std::min(n, kFirst), extra ? quint32(firstExtra) : 0xffffffffu);
+    for (int b = 0; b < extra; ++b) {
+        const int from = kFirst + b * kPerBlock;
+        block(firstExtra + 512 * b, from, std::min(kPerBlock, n - from), b + 1 < extra ? quint32(firstExtra + 512 * (b + 1)) : 0xffffffffu);
     }
     return out;
 }
@@ -486,8 +503,10 @@ QByteArray styleEntry(const QVector<B> &props)
     return out;
 }
 
-// Formatting pages (FDPC/FDPP): 512 bytes each; a header, the text end
-// offsets, the property offsets, and property blocks packed from the end.
+// Formatting pages (FDPC/FDPP): 512 bytes each; a header (the run count,
+// 1, and where the page's text starts: the last page's end, 0 on the
+// first, as Publisher writes it), the text end offsets, the property
+// offsets, and property blocks packed from the end.
 struct Run { quint32 end; QByteArray props; };
 QVector<QByteArray> formattingPages(const QVector<Run> &runs, QVector<quint32> *pageEnds)
 {
@@ -517,6 +536,8 @@ QVector<QByteArray> formattingPages(const QVector<Run> &runs, QVector<quint32> *
         }
         setU16(pg, 0, quint32(ends.size()));
         setU16(pg, 2, 1);
+        // Publisher won't open a file whose later pages start at 0.
+        setU32(pg, 4, pageEnds->isEmpty() ? 0 : pageEnds->last());
         for (int k = 0; k < ends.size(); ++k) setU32(pg, 8 + 4 * k, ends[k]);
         for (int k = 0; k < offs.size(); ++k) setU16(pg, 8 + 4 * ends.size() + 2 * k, offs[k]);
         pages << pg;

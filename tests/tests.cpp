@@ -2457,6 +2457,71 @@ private Q_SLOTS:
         QVERIFY(lines.first().text.startsWith(QStringLiteral("START")));
     }
 
+    // A .pub with many formatting pages: the text stream's index of
+    // sections goes on in chained 512-byte blocks, as Publisher writes it
+    // (19 entries in the first, 20 in each after). Written in one block, a
+    // long index ran into the text and Publisher refused the file.
+    void pubTextIndexChains()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<TextItem>();
+        t->rect = QRectF(36, 36, 540, 720);
+        QStringList paras;
+        for (int i = 0; i < 400; ++i) paras << QStringLiteral("Paragraph %1 of a long story.").arg(i + 1);
+        t->storyId = doc->createStory(paras.join(QChar('\n')));
+        doc->pages[0]->items.push_back(t);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("many.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        const QByteArray q = cfb::readStream(path, QStringLiteral("Quill/QuillSub/CONTENTS"));
+        QVERIFY(q.size() > 1024);
+        auto u16 = [&](qsizetype at) { return qFromLittleEndian<quint16>(q.constData() + at); };
+        auto u32 = [&](qsizetype at) { return qFromLittleEndian<quint32>(q.constData() + at); };
+        const int total = u16(0x0c);
+        QVERIFY(total > 21);
+        QCOMPARE(u32(0x14), quint32(q.size()));
+        int seen = 0, blocks = 0;
+        QStringList names;
+        for (quint32 at = 0x18; at != 0xffffffffu; ++blocks) {
+            QVERIFY(at + 8 <= quint32(q.size()) && blocks < 50);
+            const int count = u16(at + 2);
+            QVERIFY(count <= (at == 0x18 ? 19 : 20));
+            // A block's entries stay in its own 512 bytes, clear of the text at 512.
+            QVERIFY(at == 0x18 ? 0x20 + 24 * count <= 0x200 : at % 512 == 0 && 8 + 24 * count <= 512);
+            for (int k = 0; k < count; ++k) names << QString::fromLatin1(q.mid(at + 8 + 24 * k + 2, 4));
+            seen += count;
+            at = u32(at + 4);
+        }
+        QCOMPARE(seen, total);
+        QCOMPARE(u32(0x10), quint32(512 * blocks));
+        QCOMPARE(names.first(), QStringLiteral("TEXT"));
+        QVERIFY(names.contains(QStringLiteral("PL  ")) && names.count(QStringLiteral("FDPP")) >= 3);
+        // Each formatting page names where its text starts: the page before's
+        // last end (0 on the first), as Publisher writes it.
+        for (const char *kind : {"FDPP", "FDPC"}) {
+            quint32 prevEnd = 0;
+            int pages = 0;
+            for (quint32 at = 0x18; at != 0xffffffffu; at = u32(at + 4))
+                for (int k = 0; k < u16(at + 2); ++k) {
+                    const qsizetype e = at + 8 + 24 * k;
+                    if (q.mid(e + 2, 4) != kind) continue;
+                    const quint32 pg = u32(e + 16);
+                    QCOMPARE(u32(pg + 4), prevEnd);
+                    prevEnd = u32(pg + 8 + 4 * (u16(pg) - 1));
+                    ++pages;
+                }
+            QVERIFY(pages >= 2);
+        }
+        // And it reads back whole.
+        auto back = importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        const QString text = back->storyDoc(static_cast<TextItem *>(back->pages[0]->items[0].get())->storyId)->toPlainText();
+        QVERIFY(text.startsWith(QStringLiteral("Paragraph 1 of")));
+        QVERIFY(text.contains(QStringLiteral("Paragraph 400 of a long story.")));
+    }
+
     // Footnotes at the bottom of the column their reference lands in (under
     // a rule, numbered in order, the text kept above them); a line whose
     // note won't fit moves on with it; endnotes under "Notes" after the
