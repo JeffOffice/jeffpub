@@ -16,7 +16,7 @@ Features JeffPub 79 has that Publisher never did, then the ones planned before v
 - [x] WebP and SVG pictures
 - [ ] macOS app (Apple silicon and Intel)
 - [~] PDF/X export for commercial printers, with a print check before export *(PDF/X-1a:2001 for U.S. web coated (SWOP) or European coated (FOGRA39) printing, checked for low-resolution pictures and missing fonts first; not yet: PDF/X-4, which needs a color profile JeffPub may bundle, and overprint settings)*
-- [ ] Automatic table of contents from heading styles, updated with one click
+- [x] Automatic table of contents from the Heading 1-3 styles, with page numbers taken from the layout and dot leaders, updated with one click (Insert > References)
 - [ ] Footnotes and endnotes
 - [ ] Insert > Icons: a gallery of recolorable vector icons
 - [ ] SVG export, and SVG pictures converted to editable shapes

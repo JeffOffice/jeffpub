@@ -9,6 +9,7 @@
 #include "app/mainwindow.h"
 #include "render/renderer.h"
 #include "app/pagespane.h"
+#include "app/toc.h"
 
 #include "app/dialogs.h"
 #include "app/icons.h"
@@ -370,6 +371,11 @@ void MainWindow::createActions()
     mk("ins.file", QStringLiteral("Insert File"), "file-input", QKeySequence(), [this] { insertFileDialog(this, m_ed); });
     mk("ins.symbol", QStringLiteral("Symbol"), "omega", QKeySequence(), [this] { symbolDialog(this, m_ed); });
     mk("ins.barcode", QStringLiteral("Barcode"), "barcode", QKeySequence(), [this] { barcodeDialog(this, m_ed); });
+    mk("ins.toc", QStringLiteral("Table of Contents"), "table-of-contents", QKeySequence(), [this] { insertTableOfContents(m_ed); });
+    mk("ins.updateToc", QStringLiteral("Update Table"), "refresh-cw", QKeySequence(), [this] {
+        if (!updateTablesOfContents(m_ed))
+            statusBar()->showMessage(QStringLiteral("This publication has no table of contents yet: Insert > Table of Contents adds one."), 6000);
+    });
     mk("ins.datetime", QStringLiteral("Date & Time"), "calendar-clock", QKeySequence(), [this] { dateTimeDialog(this, m_ed); });
     mk("ins.object", QStringLiteral("Object"), "paperclip", QKeySequence(), [this] {
         // Embedded objects become pictures of their content where JeffPub can render it.

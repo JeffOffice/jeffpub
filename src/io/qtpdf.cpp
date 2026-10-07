@@ -4,18 +4,34 @@
 #include <QHash>
 #include <QRegularExpression>
 #include <QSaveFile>
-#include <QtEndian>
 #include <algorithm>
+#include <zlib.h>
 
 namespace jp {
 
-// PDF streams are zlib data; Qt's (un)compress add a 4-byte length.
+// PDF streams are zlib data, of a size the dictionary doesn't give.
 QByteArray QtPdf::inflate(const QByteArray &in, bool *ok)
 {
-    QByteArray sized(4, '\0');
-    qToBigEndian<quint32>(quint32(std::min<qsizetype>(qsizetype(in.size()) * 4 + 4096, 64 * 1024 * 1024)), sized.data());   // grows if short
-    const QByteArray out = qUncompress(sized + in);
-    *ok = !out.isEmpty() || in.isEmpty();
+    *ok = false;
+    z_stream zs{};
+    if (inflateInit(&zs) != Z_OK) return {};
+    zs.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(in.constData()));
+    zs.avail_in = uInt(in.size());
+    QByteArray out;
+    char buf[65536];
+    int r = Z_OK;
+    while (r == Z_OK) {
+        zs.next_out = reinterpret_cast<Bytef *>(buf);
+        zs.avail_out = sizeof buf;
+        r = ::inflate(&zs, Z_NO_FLUSH);
+        if (r != Z_OK && r != Z_STREAM_END) break;
+        out.append(buf, qsizetype(sizeof buf - zs.avail_out));
+        // No picture or page this program writes is this big: a bomb.
+        if (out.size() > (qsizetype(1) << 30)) break;
+        if (r == Z_OK && zs.avail_in == 0 && zs.avail_out != 0) break;   // truncated
+    }
+    inflateEnd(&zs);
+    *ok = r == Z_STREAM_END;
     return out;
 }
 

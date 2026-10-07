@@ -501,6 +501,10 @@ void MainWindow::buildRibbon()
         g->addLarge(act("ins.link"));
         g->addLarge(act("ins.bookmark"));
 
+        g = t->addGroup(QStringLiteral("References"));
+        g->addLarge(act("ins.toc"));
+        g->addSmall(act("ins.updateToc"));
+
         g = t->addGroup(QStringLiteral("Header & Footer"));
         g->addLarge(act("ins.header"));
         g->addLarge(act("ins.footer"));

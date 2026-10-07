@@ -460,7 +460,7 @@ void Editor::applyStyle(const QString &name)
         for (QTextBlock b = d->findBlock(c.selectionStart()); b.isValid() && b.position() <= c.selectionEnd(); b = b.next()) {
             QTextCursor bc(b);
             QTextBlockFormat bf = b.blockFormat();
-            for (auto it = s->blk.properties().cbegin(); it != s->blk.properties().cend(); ++it) bf.setProperty(it.key(), it.value());
+            tp::setProperties(bf, s->blk);
             bf.setProperty(tp::StyleName, name);
             bc.setBlockFormat(bf);
             bc.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);

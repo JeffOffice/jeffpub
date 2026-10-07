@@ -2036,7 +2036,7 @@ void styleDialog(QWidget *p, Editor *ed, const QString &styleName)
                     if (b.blockFormat().stringProperty(tp::StyleName) != styleName) continue;
                     QTextCursor c(b);
                     QTextBlockFormat bf = b.blockFormat();
-                    for (auto pi = s.blk.properties().cbegin(); pi != s.blk.properties().cend(); ++pi) bf.setProperty(pi.key(), pi.value());
+                    tp::setProperties(bf, s.blk);
                     c.setBlockFormat(bf);
                     c.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
                     c.mergeCharFormat(s.chr);

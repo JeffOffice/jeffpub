@@ -2374,7 +2374,7 @@ void Canvas::handleTextKey(QKeyEvent *e)
             QTextCharFormat ncf = c.charFormat();
             if (ts && atEnd && !ts->next.isEmpty() && ts->next != style) {
                 if (const TextStyle *nx = m_ed->doc()->style(ts->next)) {
-                    for (auto i = nx->blk.properties().cbegin(); i != nx->blk.properties().cend(); ++i) nbf.setProperty(i.key(), i.value());
+                    tp::setProperties(nbf, nx->blk);
                     nbf.setProperty(tp::StyleName, nx->name);
                     ncf = nx->chr;
                 }

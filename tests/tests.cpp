@@ -28,6 +28,7 @@
 #include "app/mainwindow.h"
 #include "app/ribbon.h"
 #include "app/updater.h"
+#include "app/toc.h"
 #include "app/widgets.h"
 #include "app/settings.h"
 #include "canvas/canvas.h"
@@ -1606,6 +1607,104 @@ private Q_SLOTS:
         problems = jp::pressProblems(*w.editor()->doc());
         QCOMPARE(problems.size(), 2);
         QVERIFY(problems.last().contains(QLatin1String("No Such Font Anywhere")));
+    }
+
+    // Insert > Table of Contents: the Heading 1-3 paragraphs in reading
+    // order with the page each starts on (one pushed to page 2 by the text
+    // before it), entries indented by level with a dot leader to the page
+    // number; Update follows renamed headings; one undo takes it all back.
+    void tableOfContents()
+    {
+        jp::MainWindow w;
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        doc->addPage(1, doc->pages[0]->masterId);
+        auto head = [&](QTextDocument *sd, const QString &styleName, const QString &text) {
+            QTextCursor c(sd);
+            c.movePosition(QTextCursor::End);
+            if (!sd->toPlainText().isEmpty()) c.insertBlock();
+            QTextBlockFormat bf;
+            bf.setProperty(jp::tp::StyleName, styleName);
+            c.setBlockFormat(bf);
+            c.insertText(text);
+        };
+        // Page 1: a box linked to one on page 2; enough text to push the
+        // last heading over.
+        auto a = std::make_shared<jp::TextItem>();
+        a->rect = QRectF(72, 360, 468, 200);
+        a->storyId = doc->createStory();
+        auto b2 = std::make_shared<jp::TextItem>();
+        b2->rect = QRectF(72, 72, 468, 600);
+        b2->storyId = a->storyId;
+        a->nextId = b2->id;
+        doc->pages[0]->items.push_back(a);
+        doc->pages[1]->items.push_back(b2);
+        QTextDocument *sd = doc->storyDoc(a->storyId);
+        head(sd, QStringLiteral("Heading 1"), QStringLiteral("Introduction"));
+        for (int i = 0; i < 14; ++i) head(sd, QStringLiteral("Normal"), QStringLiteral("Body text that fills the first box. ").repeated(3));
+        head(sd, QStringLiteral("Heading 2"), QStringLiteral("Background"));
+        head(sd, QStringLiteral("Heading 3"), QStringLiteral("Earlier work"));
+        head(sd, QStringLiteral("Heading 1"), QStringLiteral("Results"));
+        w.editor()->setDocument(std::move(doc));
+        jp::Editor *ed = w.editor();
+        const QVector<jp::TocEntry> entries = jp::tableOfContentsEntries(*ed->doc());
+        QCOMPARE(entries.size(), 4);
+        QCOMPARE(entries[0].text, QStringLiteral("Introduction"));
+        QCOMPARE(entries[0].page, 1);
+        QCOMPARE(entries[1].level, 2);
+        QCOMPARE(entries[3].text, QStringLiteral("Results"));
+        QCOMPARE(entries[3].page, 2);
+        // Insert from page 1, which has text: on a new page 2, so the
+        // later headings move to page 3.
+        ed->setCurrentPage(0);
+        jp::insertTableOfContents(ed);
+        QCOMPARE(int(ed->doc()->pages.size()), 3);
+        QCOMPARE(ed->currentPage(), 1);
+        QCOMPARE(int(ed->doc()->pages[1]->items.size()), 1);
+        auto *toc = dynamic_cast<jp::TextItem *>(ed->doc()->pages[1]->items.front().get());
+        QVERIFY(toc);
+        QTextDocument *td = ed->doc()->storyDoc(toc->storyId);
+        const QStringList lines = td->toPlainText().split(QChar::ParagraphSeparator).join('\n').split('\n');
+        QCOMPARE(lines.value(0), QStringLiteral("Contents"));
+        QCOMPARE(lines.value(1), QStringLiteral("Introduction\t1"));
+        QCOMPARE(lines.value(4), QStringLiteral("Results\t3"));
+        const QTextBlock second = td->begin().next().next();   // Background, level 2
+        QCOMPARE(second.blockFormat().intProperty(jp::tp::TocLevel), 2);
+        QCOMPARE(second.blockFormat().leftMargin(), 18.0);
+        QCOMPARE(second.blockFormat().stringProperty(jp::tp::TabLeaders), QStringLiteral("."));
+        QCOMPARE(second.blockFormat().tabPositions().value(0).type, QTextOption::RightTab);
+        // Renamed, then updated.
+        {
+            QTextCursor c(sd->findBlockByNumber(17));
+            c.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+            c.insertText(QStringLiteral("Findings"));
+        }
+        QCOMPARE(jp::updateTablesOfContents(ed), 1);
+        QVERIFY(td->toPlainText().contains(QStringLiteral("Findings\t3")));
+        QVERIFY(!td->toPlainText().contains(QStringLiteral("Results")));
+        // One undo per command: the update, then the whole insert.
+        ed->undo();
+        ed->undo();
+        QCOMPARE(int(ed->doc()->pages.size()), 2);
+        // At the cursor, before the text there: the table on its own
+        // paragraphs, the text after it.
+        ed->beginTextEdit(a->id, 0);
+        jp::insertTableOfContents(ed);
+        QTextDocument *story = ed->doc()->storyDoc(a->storyId);
+        QCOMPARE(story->begin().text(), QStringLiteral("Contents"));
+        bool introAfter = false;
+        for (QTextBlock b = story->begin(); b.isValid(); b = b.next())
+            if (!b.blockFormat().hasProperty(jp::tp::TocLevel)) {
+                introAfter = b.text() == QStringLiteral("Introduction");
+                break;
+            }
+        QVERIFY(introAfter);
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            ed->endTextEdit();
+            w.resize(1200, 900);
+            w.show();
+            QTest::qWait(100);
+            w.grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/toc.png");
+        }
     }
 
     // About: the third-party table fits its card at a modest window size
@@ -3364,9 +3463,8 @@ private Q_SLOTS:
             QByteArray text;
             for (qsizetype at = 0; (at = bytes.indexOf(">>\nstream\n", at)) >= 0; at += 10) {
                 const qsizetype st = at + 10, en = bytes.indexOf("\nendstream", st);
-                QByteArray sized(4, 0);
-                qToBigEndian<quint32>(quint32(16 * 1024 * 1024), sized.data());
-                text += qUncompress(sized + bytes.mid(st, en - st));
+                bool ok = false;
+                text += jp::QtPdf::inflate(bytes.mid(st, en - st), &ok);   // pictures aren't zlib: nothing
             }
             QVERIFY2(text.contains("/CSspot0 cs 1 scn"), text.left(300).constData());
             QVERIFY(text.contains("/CSspot0 cs 0.5 scn") || text.contains("/CSspot0 cs 0.4"));
@@ -4385,10 +4483,8 @@ private Q_SLOTS:
             if (pdf.mid(start, 1) == "\n") ++start;
             const qsizetype end = pdf.indexOf("endstream", start);
             if (end < 0) break;
-            QByteArray sized(4, 0);
-            qToBigEndian<quint32>(quint32(16 * 1024 * 1024), sized.data());
-            const QByteArray plain = qUncompress(sized + pdf.mid(start, end - start));
-            text += plain;
+            bool ok = false;
+            text += jp::QtPdf::inflate(pdf.mid(start, end - start), &ok);
         }
         bool found = false;
         for (const QByteArray &l : text.split('\n')) {
@@ -4468,10 +4564,9 @@ private Q_SLOTS:
             const qsizetype end = pdf.indexOf("endstream", start);
             if (end < 0) break;
             QByteArray z = pdf.mid(start, end - start);
-            QByteArray sized(4, 0);
-            qToBigEndian<quint32>(quint32(16 * 1024 * 1024), sized.data());
-            const QByteArray plain = qUncompress(sized + z);
-            text += plain.isEmpty() ? z : plain;
+            bool ok = false;
+            const QByteArray plain = jp::QtPdf::inflate(z, &ok);
+            text += ok ? plain : z;
         }
         // Qt sets a CMYK color space and gives the inks with "scn".
         QVERIFY(text.contains("cmyk cs"));
@@ -4779,12 +4874,14 @@ private Q_SLOTS:
         c.setPosition(0);
         c.setPosition(5, QTextCursor::KeepAnchor);
         ed->setCursor(c);
-        QTest::qWait(80);
+        // The ribbon catches up after a moment (longer on a slow machine).
         jp::SizeCombo *box = nullptr;
-        for (jp::SizeCombo *s : w.findChildren<jp::SizeCombo *>())
-            if (s->isVisible()) { box = s; break; }
-        QVERIFY(box);
-        QCOMPARE(box->currentText(), QStringLiteral("24"));
+        auto shown = [&] {
+            for (jp::SizeCombo *s : w.findChildren<jp::SizeCombo *>())
+                if (s->isVisible()) { box = s; break; }
+            return box && box->currentText() == QStringLiteral("24");
+        };
+        QTRY_VERIFY_WITH_TIMEOUT(shown(), 3000);
         QLineEdit *le = box->lineEdit();
         // Room for the widest size even with Windows' larger UI fonts (125%).
         QFont big = le->font();

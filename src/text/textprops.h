@@ -63,7 +63,18 @@ enum : int {
     ListId,                                      // QString: blocks with the same id share numbering
     TabLeaders,                                  // QString per-tab leader characters
     BulletSize,                                  // double points: a list marker's own size (list format)
+    TocLevel,                                    // int: a table of contents' paragraph (0 its title, 1-3 an entry), rebuilt by Update
 };
+
+// Copies every property of `from` onto `to`. QTextFormat::properties()
+// builds a new map on each call, so a loop must walk one copy of it: begin()
+// of one call and end() of another belong to two maps (and the first is
+// gone by then).
+inline void setProperties(QTextFormat &to, const QTextFormat &from)
+{
+    const QMap<int, QVariant> props = from.properties();
+    for (auto it = props.cbegin(); it != props.cend(); ++it) to.setProperty(it.key(), it.value());
+}
 
 // Publisher's two kinds of letter spacing. Tracking is a percentage (100
 // normal); older files kept it as Qt percentage spacing. Kerning is space in
