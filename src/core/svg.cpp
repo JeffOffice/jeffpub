@@ -713,4 +713,32 @@ ItemPtr shapes(const Drawing &d, const QRectF &frame, bool merge, const QColor &
     return group;
 }
 
+ItemPtr pictureShapes(const QByteArray &bytes, const PictureItem &pic, bool *partial)
+{
+    Drawing d = read(bytes);
+    if (partial) *partial = d.skipped;
+    if (!d.isValid()) return {};
+    // Flips mirror the drawing inside its own box.
+    if (pic.flipH || pic.flipV) {
+        const QRectF &vb = d.viewBox;
+        const QTransform m(pic.flipH ? -1 : 1, 0, 0, pic.flipV ? -1 : 1, pic.flipH ? vb.left() + vb.right() : 0, pic.flipV ? vb.top() + vb.bottom() : 0);
+        for (Element &e : d.elements) e.path = m.map(e.path);
+    }
+    ItemPtr it = shapes(d, pic.imgRect.translated(pic.rect.topLeft()), false);
+    if (!it) return {};
+    std::function<void(Item *)> fade = [&](Item *x) {
+        if (auto *g = dynamic_cast<GroupItem *>(x)) {
+            for (auto &c : g->children) fade(c.get());
+        } else if (auto *s = dynamic_cast<ShapeItem *>(x)) {
+            s->fill.transparency = 1 - (1 - s->fill.transparency) * (1 - pic.transparency);
+            s->stroke.transparency = 1 - (1 - s->stroke.transparency) * (1 - pic.transparency);
+        }
+    };
+    if (pic.transparency > 0) fade(it.get());
+    if (pic.rotation != 0) it->rotateAround(pic.rotation, pic.rect.center());
+    it->name = pic.name;
+    it->altText = pic.altText;
+    return it;
+}
+
 } // namespace jp::svg

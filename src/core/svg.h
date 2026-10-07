@@ -42,6 +42,10 @@ QPainterPath pathData(const QString &d);
 // group. Colors equal to `current` become `currentRef`, so an icon drawn in
 // a scheme color follows the color scheme. Null when nothing is drawn.
 ItemPtr shapes(const Drawing &d, const QRectF &frame, bool merge, const QColor &current = QColor(), const ColorRef &currentRef = ColorRef());
+// An SVG picture as artwork shapes in the picture's place, turned and
+// flipped as it is (its crop, border and effects are left behind).
+// `partial` tells whether text or pictures inside it were left out.
+ItemPtr pictureShapes(const QByteArray &svg, const PictureItem &pic, bool *partial);
 // An SVG elliptical arc from p0 to p1, as cubic Béziers.
 void arcTo(QPainterPath &path, QPointF p0, double rx, double ry, double phiDeg, bool large, bool sweep, QPointF p1);
 

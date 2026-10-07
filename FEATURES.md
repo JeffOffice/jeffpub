@@ -19,7 +19,7 @@ Features JeffPub 79 has that Publisher never did, then the ones planned before v
 - [x] Automatic table of contents from the Heading 1-3 styles, with page numbers taken from the layout and dot leaders, updated with one click (Insert > References)
 - [x] Footnotes and endnotes: numbered references (Insert > References), footnotes at the bottom of the column their number lands in under a short rule (a line moves on with its note when both don't fit), endnotes under "Notes" after the story *(note text is edited in a dialog; a note too tall for a whole column isn't split)*
 - [x] Insert > Icons: 1,539 vector icons from the open-source Lucide set, searched by name or keyword; each becomes an editable shape in the color scheme's main color (Line Color recolors it, Edit Points reshapes it) whose line weight grows and shrinks with it, sharp in print and PDF, and saved to `.pub` as a drawn shape
-- [ ] SVG export, and SVG pictures converted to editable shapes
+- [~] SVG pictures print and export to PDF as sharp vectors, and Convert to Shapes (Picture Format, or right-click) turns one into editable shapes *(text and pictures inside the drawing are left out, with a note saying so)*; not yet: SVG export
 - [ ] EPUB export for e-book readers and stores
 - [ ] PDF pages placed as sharp vector graphics
 - [ ] A published specification of the `.jpub` format

@@ -1978,6 +1978,78 @@ private Q_SLOTS:
         QVERIFY(std::abs(pubHeart->customPath.boundingRect().width() - heart->customPath.boundingRect().width()) < 0.5);
     }
 
+    // An SVG picture prints and exports to PDF as vectors, and Convert to
+    // Shapes turns it into artwork shapes in its place: flipped, turned and
+    // faded as the picture was, text left out (and said so), one undo step.
+    void svgPictureToShapes()
+    {
+        using namespace jp;
+        const QByteArray art =
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 20 10\">"
+            "<rect width=\"10\" height=\"10\" fill=\"#ff0000\"/>"
+            "<circle cx=\"15\" cy=\"5\" r=\"4\" fill=\"none\" stroke=\"#0000ff\" stroke-width=\"1\"/></svg>";
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto pic = std::make_shared<PictureItem>();
+        pic->imageId = doc->addImage(art, QStringLiteral("svg"));
+        pic->rect = QRectF(100, 100, 200, 100);
+        pic->imgRect = QRectF(0, 0, 200, 100);
+        pic->flipH = true;
+        pic->transparency = 0.5;
+
+        // Straight conversion: the red half lands on the right when flipped.
+        bool partial = true;
+        ItemPtr made = svg::pictureShapes(art, *pic, &partial);
+        QVERIFY(made && made->type() == ItemType::Group);
+        QVERIFY(!partial);
+        auto *g = static_cast<GroupItem *>(made.get());
+        QCOMPARE(g->children.size(), size_t(2));
+        auto *red = static_cast<ShapeItem *>(g->children[0].get());
+        QVERIFY(red->isArt());
+        QCOMPARE(red->rect, QRectF(200, 100, 100, 100));
+        QCOMPARE(red->fill.color, ColorRef::rgb(QColor(255, 0, 0)));
+        QCOMPARE(red->fill.transparency, 0.5);
+        auto *ring = static_cast<ShapeItem *>(g->children[1].get());
+        QCOMPARE(ring->stroke.width, 10.0);                       // 1 unit at 10 points a unit
+        QVERIFY(ring->rect.right() < 200);
+        QVERIFY(svg::pictureShapes(QByteArray(art).replace("</svg>", "<text>hi</text></svg>"), *pic, &partial));
+        QVERIFY(partial);
+        pic->rotation = 90;
+        made = svg::pictureShapes(art, *pic, &partial);
+        // A quarter turn about the picture's center takes the red square
+        // (flipped to 50 points right of it) to 50 points below it.
+        const Item *turned = static_cast<GroupItem *>(made.get())->children[0].get();
+        QCOMPARE(turned->rotation, 90.0);
+        QVERIFY(QLineF(turned->rect.center(), QPointF(200, 200)).length() < 1e-9);
+        pic->rotation = 0;
+        pic->flipH = false;
+        pic->transparency = 0;
+        doc->pages[0]->items.push_back(pic);
+
+        MainWindow w;
+        w.editor()->setDocument(std::move(doc));
+        Editor *ed = w.editor();
+        // Print and PDF draw it as lines and areas, not as a picture.
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("svg.pdf"));
+        MainWindow::PdfSettings ps;
+        ps.preset = MainWindow::PdfSettings::HighQuality;
+        QVERIFY(w.exportPdfTo(path, ps));
+        QtPdf parsed;
+        QVERIFY(parsed.load(path));
+        for (const auto &o : parsed.objects) QVERIFY(!QtPdf::dictOf(o.body).contains("/Subtype /Image"));
+
+        ed->select(pic->id);
+        QTRY_VERIFY(w.act(QStringLiteral("pic.toShapes"))->isEnabled());
+        w.act(QStringLiteral("pic.toShapes"))->trigger();
+        QCOMPARE(ed->doc()->pages[0]->items.size(), size_t(1));
+        QCOMPARE(ed->doc()->pages[0]->items[0]->type(), ItemType::Group);
+        QCOMPARE(ed->selectedItems().size(), 1);
+        ed->undo();
+        QCOMPARE(ed->doc()->pages[0]->items[0]->type(), ItemType::Picture);
+        ed->clearSelection();
+        QTRY_VERIFY(!w.act(QStringLiteral("pic.toShapes"))->isEnabled());
+    }
+
     // Footnotes at the bottom of the column their reference lands in (under
     // a rule, numbered in order, the text kept above them); a line whose
     // note won't fit moves on with it; endnotes under "Notes" after the

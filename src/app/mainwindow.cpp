@@ -972,6 +972,7 @@ void MainWindow::contextMenu(const QPoint &global)
             menu.addAction(act("pic.crop"));
             menu.addAction(act("pic.saveAs"));
             menu.addAction(act("pic.caption"));
+            if (act("pic.toShapes")->isEnabled()) menu.addAction(act("pic.toShapes"));
         }
         if (kind == "text") {
             menu.addSeparator();

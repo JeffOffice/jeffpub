@@ -11,6 +11,7 @@
 #include "app/pagespane.h"
 #include "app/notes.h"
 #include "app/iconpicker.h"
+#include "core/svg.h"
 #include "app/toc.h"
 
 #include "app/dialogs.h"
@@ -1151,6 +1152,28 @@ void MainWindow::createActions()
                 p->fitImage(ed->doc()->imageSize(p->imageId), true);
             }
         });
+    });
+    mk("pic.toShapes", QStringLiteral("Convert to Shapes"), "shapes", QKeySequence(), [this, ed] {
+        // An SVG picture becomes editable artwork shapes in its place.
+        auto *pic = dynamic_cast<PictureItem *>(ed->single());
+        if (!pic) return;
+        const ImageData data = ed->doc()->images.value(pic->imageId);
+        if (data.format != QLatin1String("svg")) return;
+        ItemList &items = ed->surfaceItems();
+        const auto at = std::find_if(items.begin(), items.end(), [pic](const ItemPtr &x) { return x.get() == pic; });
+        if (at == items.end()) return;
+        bool partial = false;
+        const ItemPtr made = svg::pictureShapes(data.bytes, *pic, &partial);
+        if (!made) {
+            QMessageBox::information(this, QStringLiteral("Convert to Shapes"), QStringLiteral("This picture has no lines or areas to turn into shapes."));
+            return;
+        }
+        const qsizetype index = at - items.begin();
+        ed->change(QStringLiteral("Convert to Shapes"), [&] { items[index] = made; });
+        ed->select(made->id);
+        if (partial)
+            QMessageBox::information(this, QStringLiteral("Convert to Shapes"),
+                                     QStringLiteral("Text and pictures inside this drawing can't become shapes, so they were left out. Undo brings the picture back."));
     });
     mk("pic.crop", QStringLiteral("Crop"), "crop", QKeySequence(), [ed] {
         Item *it = ed->single();

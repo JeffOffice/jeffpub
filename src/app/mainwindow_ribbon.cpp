@@ -1014,6 +1014,7 @@ void MainWindow::buildRibbon()
         g->addLarge(menuAction(this, QStringLiteral("Recolor"), "palette"), menuOf(this, rec));
         g->addSmall(act("pic.compress"));
         g->addSmall(act("pic.reset"));
+        g->addSmall(act("pic.toShapes"));
         g->addSmall(act("obj.transparency"));
         g = t->addGroup(QStringLiteral("Picture Styles"));
         {
@@ -1497,6 +1498,10 @@ void MainWindow::refreshUi()
         for (int k = 0; k < 3; ++k) act(QStringLiteral("valign.%1").arg(k))->setChecked(int(t->valign) == k);
     }
     if (auto *p = dynamic_cast<PictureItem *>(one)) act("pic.crop")->setChecked(ed->cropItem == p->id);
+    {
+        const auto *p = editing ? nullptr : dynamic_cast<PictureItem *>(one);
+        act("pic.toShapes")->setEnabled(p && d->images.value(p->imageId).format == QLatin1String("svg"));
+    }
     if (auto *w = dynamic_cast<TextArtItem *>(one)) {
         act("wa.even")->setChecked(w->evenHeight);
         act("wa.vertical")->setChecked(w->vertical);

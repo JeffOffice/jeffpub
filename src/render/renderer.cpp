@@ -9,6 +9,7 @@
 #include <QFontMetricsF>
 #include <QJsonDocument>
 #include <QPainter>
+#include <QSvgRenderer>
 #include <QPainterPathStroker>
 #include <QTextDocument>
 #include <QtMath>
@@ -583,8 +584,11 @@ static void paintPicture(QPainter *p, const PaintContext &ctx, const PictureItem
         const ImageData data = ctx.doc->images.value(pic.imageId);
         const bool plain = !pic.brightness && !pic.contrast && !pic.recolor && !pic.hasTransparentColor;
         Metafile mf;
+        QSvgRenderer svg;
         if (ctx.opt.output && plain && (data.format == QLatin1String("wmf") || data.format == QLatin1String("emf")) && mf.load(data.bytes)) {
             mf.play(p, pic.imgRect);
+        } else if (ctx.opt.output && plain && data.format == QLatin1String("svg") && svg.load(data.bytes)) {
+            svg.render(p, pic.imgRect);
         } else {
             p->drawImage(pic.imgRect, Renderer::processedImage(*ctx.doc, pic, dev));
         }
