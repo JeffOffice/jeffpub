@@ -222,8 +222,16 @@ public:
     ItemPtr itemPtr(const QString &itemId) const;
     QVector<TextItem *> chainOf(const QString &frameId) const;   // whole linked chain in order
     TextItem *prevFrame(const QString &frameId) const;
-    ItemPtr cloneItem(const Item &it);    // deep copy incl. stories
+    // Deep copy incl. stories. A copied connector comes loose from its
+    // objects unless `ids` collects old -> new ids for remapGlue.
+    ItemPtr cloneItem(const Item &it, QHash<QString, QString> *ids = nullptr);
+    // Copies of several objects; connectors among them stay attached.
+    ItemList cloneItems(const ItemList &items);
     void forEachItem(const std::function<void(Item *, int page, const QString &master)> &fn) const;
+    // Moves connector ends to the connection sites they're attached to (after
+    // those objects moved); ends whose object is gone come loose. Returns
+    // whether any line changed.
+    bool routeConnectors();
 
     // styles and info
     const TextStyle *style(const QString &name) const;

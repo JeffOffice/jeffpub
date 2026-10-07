@@ -2557,6 +2557,172 @@ private Q_SLOTS:
         QVERIFY(cfb::readStream(path, QStringLiteral("Contents")).contains(QByteArray("\x34\x20\x02\x00\x00\x00", 6)));
     }
 
+    // Connectors: a line's ends attach to connection sites (the middle of
+    // each side: 0 top, 1 left, 2 bottom, 3 right) and follow the objects;
+    // an elbow runs level or upright from each end as the site faces.
+    void connectorsFollowObjects()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto a = std::make_shared<ShapeItem>(), b = std::make_shared<ShapeItem>();
+        a->rect = QRectF(72, 72, 100, 60);
+        b->rect = QRectF(300, 250, 100, 60);
+        auto l = std::make_shared<LineItem>();
+        l->route = LineItem::Elbow;
+        l->start = LineItem::Glue{a->id, 3};
+        l->end = LineItem::Glue{b->id, 0};
+        doc->pages[0]->items = {a, b, l};
+        QVERIFY(doc->routeConnectors());
+        QCOMPARE(l->p1, QPointF(172, 102));
+        QCOMPARE(l->p2, QPointF(350, 250));
+        QVERIFY(!l->startVertical && l->endVertical);
+        // Right side to top: out level, one corner, down into the top.
+        QCOMPARE(l->routePoints(), (QVector<QPointF>{{172, 102}, {350, 102}, {350, 250}}));
+        // The objects move and turn; the ends go with them.
+        b->moveBy(40, 100);
+        a->rotation = 90;
+        QVERIFY(doc->routeConnectors());
+        QCOMPARE(l->p2, QPointF(390, 350));
+        QVERIFY(std::abs(l->p1.x() - 122) < 1e-9 && std::abs(l->p1.y() - 152) < 1e-9);
+        QVERIFY(l->startVertical);   // the right side now faces down
+        QVERIFY(!doc->routeConnectors());
+        // Saved and opened again.
+        LineItem back;
+        back.fromJson(l->toJson());
+        QCOMPARE(back.route, LineItem::Elbow);
+        QVERIFY(back.start == l->start && back.end == l->end);
+        // Copies of both objects and the line stay attached to each other; a
+        // copy of the line alone comes loose.
+        const ItemList copies = doc->cloneItems(doc->pages[0]->items);
+        auto *cl = static_cast<LineItem *>(copies[2].get());
+        QCOMPARE(cl->start.id, copies[0]->id);
+        QCOMPARE(cl->end.id, copies[1]->id);
+        QVERIFY(static_cast<LineItem *>(doc->cloneItem(*l).get())->start.id.isEmpty());
+        // An object deleted: its end comes loose and stays where it was.
+        doc->pages[0]->items = {a, l};
+        QVERIFY(doc->routeConnectors());
+        QVERIFY(l->end.id.isEmpty());
+        QCOMPARE(l->p2, QPointF(390, 350));
+    }
+
+    // Drawing a connector from one shape's side to another's attaches it;
+    // moving a shape takes the connector's end along; dragging the connector
+    // away on its own detaches it.
+    void connectorDrawnBetweenShapes()
+    {
+        jp::MainWindow w;
+        w.resize(1200, 900);
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        jp::Editor *ed = w.editor();
+        auto a = std::make_shared<jp::ShapeItem>(), b = std::make_shared<jp::ShapeItem>();
+        a->rect = QRectF(72, 72, 100, 60);
+        b->rect = QRectF(300, 250, 100, 60);
+        ed->addItem(a);
+        ed->addItem(b);
+        jp::Canvas *c = w.canvas();
+        QWidget *vp = c->viewport();
+        auto view = [&](QPointF page) { return c->pageToView(page).toPoint(); };
+        auto move = [&](QPointF page) {
+            const QPointF v = view(page);
+            QMouseEvent mv(QEvent::MouseMove, v, vp->mapToGlobal(v), Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(vp, &mv);
+        };
+        auto drag = [&](QPointF from, QPointF to) {
+            QTest::qWait(QApplication::doubleClickInterval() + 50);
+            QTest::mousePress(vp, Qt::LeftButton, Qt::NoModifier, view(from));
+            move((from + to) / 2);
+            move(to);
+            QTest::mouseRelease(vp, Qt::LeftButton, Qt::NoModifier, view(to));
+        };
+        // Drawn from near A's right side to near B's left: the ends snap there.
+        ed->setTool(jp::Tool::Arrow, QStringLiteral("elbow"));
+        drag(QPointF(174, 104), QPointF(298, 278));
+        const auto &items = ed->doc()->pages[0]->items;
+        QCOMPARE(int(items.size()), 3);
+        auto line = std::dynamic_pointer_cast<jp::LineItem>(items[2]);
+        QVERIFY(line);
+        QCOMPARE(line->route, jp::LineItem::Elbow);
+        QCOMPARE(line->start, (jp::LineItem::Glue{a->id, 3}));
+        QCOMPARE(line->end, (jp::LineItem::Glue{b->id, 1}));
+        QCOMPARE(line->p1, QPointF(172, 102));
+        QCOMPARE(line->p2, QPointF(300, 280));
+        QCOMPARE(line->stroke.endArrow, jp::Arrow::Triangle);
+        // B dragged down: the line's end goes with it.
+        ed->setTool(jp::Tool::Select);
+        drag(QPointF(370, 290), QPointF(370, 326));
+        jp::Item *bNow = ed->doc()->item(b->id);
+        QVERIFY(bNow && bNow->rect.top() > 270);
+        line = std::dynamic_pointer_cast<jp::LineItem>(ed->doc()->itemPtr(line->id));
+        QCOMPARE(line->p2, jp::connectionSite(*bNow, 1));
+        QCOMPARE(line->p1, QPointF(172, 102));
+        // The line dragged by its middle on its own: it comes loose.
+        const QVector<QPointF> rp = line->routePoints();
+        const QPointF mid = (rp[1] + rp[2]) / 2 + QPointF(0, 10);
+        drag(mid, mid + QPointF(30, 0));
+        line = std::dynamic_pointer_cast<jp::LineItem>(ed->doc()->itemPtr(line->id));
+        QVERIFY(line->start.id.isEmpty() && line->end.id.isEmpty());
+        QVERIFY(std::abs(line->p1.x() - 202) < 1.5 && std::abs(line->p1.y() - 102) < 1e-9);
+        // Undo puts it back, attached.
+        ed->undo();
+        line = std::dynamic_pointer_cast<jp::LineItem>(ed->doc()->itemPtr(line->id));
+        QCOMPARE(line->start.id, a->id);
+    }
+
+    // Connectors in .pub: elbow and curved routes are Publisher's connector
+    // shapes, turned and flipped so they start at the line's start, and the
+    // drawing's connector rules keep them attached (checked by opening the
+    // file in Publisher and moving a shape: the connectors followed it).
+    void connectorsSaveToPub()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto a = std::make_shared<ShapeItem>(), b = std::make_shared<ShapeItem>();
+        a->rect = QRectF(72, 72, 100, 60);
+        b->rect = QRectF(300, 250, 100, 60);
+        doc->pages[0]->items = {a, b};
+        const struct { LineItem::Route route; int from, to; } specs[] = {
+            {LineItem::Elbow, 3, 1}, {LineItem::Elbow, 2, 0}, {LineItem::Curved, 3, 1}, {LineItem::Curved, 2, 1}, {LineItem::Straight, 3, 1}};
+        for (const auto &sp : specs) {
+            auto l = std::make_shared<LineItem>();
+            l->route = sp.route;
+            l->start = LineItem::Glue{a->id, sp.from};
+            l->end = LineItem::Glue{b->id, sp.to};
+            l->stroke.endArrow = Arrow::Triangle;
+            doc->pages[0]->items.push_back(l);
+        }
+        static_cast<LineItem *>(doc->pages[0]->items[2].get())->bend = 0.25;
+        doc->routeConnectors();
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("conn.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        const QByteArray escher = cfb::readStream(path, QStringLiteral("Escher/EscherStm"));
+        // Five rules in a solver container; the bend as 5400 of 21600.
+        QVERIFY(escher.contains(QByteArray("\x5f\x00\x05\xf0", 4)));
+        QVERIFY(escher.contains(QByteArray("\x47\x01\x18\x15\x00\x00", 6)));
+        auto back = importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QVector<LineItem *> lines;
+        QString aId, bId;
+        for (const auto &it : back->pages[0]->items) {
+            if (auto *l = dynamic_cast<LineItem *>(it.get())) lines << l;
+            else if (it->rect.left() < 100) aId = it->id;
+            else bId = it->id;
+        }
+        QCOMPARE(lines.size(), 5);
+        for (int i = 0; i < 5; ++i) {
+            QCOMPARE(lines[i]->route, specs[i].route);
+            QCOMPARE(lines[i]->start, (LineItem::Glue{aId, specs[i].from}));
+            QCOMPARE(lines[i]->end, (LineItem::Glue{bId, specs[i].to}));
+            QCOMPARE(lines[i]->stroke.endArrow, Arrow::Triangle);
+        }
+        QCOMPARE(lines[0]->bend, 0.25);
+        QVERIFY(lines[1]->startVertical && lines[1]->endVertical);
+        QVERIFY(lines[3]->startVertical && !lines[3]->endVertical);
+    }
+
     // AutoFit Text in .pub lives in the story's record: 05 = 1 for best fit,
     // 3 for shrink text on overflow, and a 0c flag for grow the box, as
     // Publisher writes them when each setting is chosen. A box without one

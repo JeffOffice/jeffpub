@@ -180,6 +180,12 @@ void MainWindow::buildRibbon()
         QVector<GalleryItem> v;
         v << GalleryItem{"tool:line", "Line", icon("minus"), "Lines"} << GalleryItem{"tool:arrow", "Arrow", icon("move-right"), "Lines"}
           << GalleryItem{"tool:double", "Double Arrow", icon("move-horizontal"), "Lines"};
+        for (const char *route : {"elbow", "curved"}) {
+            const QString r = QLatin1String(route), name = r == QLatin1String("elbow") ? QStringLiteral("Elbow") : QStringLiteral("Curved");
+            v << GalleryItem{"tool:" + r, QStringLiteral("Connector: %1").arg(name), lineToolIcon(r), "Lines"}
+              << GalleryItem{"tool:" + r + "Arrow", QStringLiteral("Connector: %1 Arrow").arg(name), lineToolIcon(r + "Arrow"), "Lines"}
+              << GalleryItem{"tool:" + r + "Double", QStringLiteral("Connector: %1 Double-Arrow").arg(name), lineToolIcon(r + "Double"), "Lines"};
+        }
         for (const auto &s : shapeLibrary()) v << GalleryItem{s.id, s.name, shapeIcon(s.id), s.category};
         return v;
     };
@@ -191,7 +197,11 @@ void MainWindow::buildRibbon()
             if (id == "tool:line") m_ed->setTool(Tool::Line);
             else if (id == "tool:arrow") m_ed->setTool(Tool::Arrow);
             else if (id == "tool:double") m_ed->setTool(Tool::DoubleArrow);
-            else m_ed->setTool(Tool::Shape, id);
+            else if (id.startsWith(QLatin1String("tool:elbow")) || id.startsWith(QLatin1String("tool:curved"))) {
+                // Connectors: the line tools with an elbow or curved route.
+                const QString route = id.startsWith(QLatin1String("tool:elbow")) ? QStringLiteral("elbow") : QStringLiteral("curved");
+                m_ed->setTool(id.endsWith(QLatin1String("Double")) ? Tool::DoubleArrow : id.endsWith(QLatin1String("Arrow")) ? Tool::Arrow : Tool::Line, route);
+            } else m_ed->setTool(Tool::Shape, id);
         });
         return b;
     };

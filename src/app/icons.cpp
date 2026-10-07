@@ -216,6 +216,61 @@ QIcon shapeIcon(const QString &shapeId)
     });
 }
 
+QIcon lineToolIcon(const QString &kind)
+{
+    return drawnIcon([kind](QPainter *p, const QRectF &r) {
+        const QRectF b = r.adjusted(r.width() * 0.16, r.height() * 0.2, -r.width() * 0.16, -r.height() * 0.2);
+        const double w = std::max(1.0, r.width() / 22);
+        p->setRenderHint(QPainter::Antialiasing);
+        p->setPen(QPen(uiText(), w, Qt::SolidLine, Qt::FlatCap, Qt::MiterJoin));
+        p->setBrush(Qt::NoBrush);
+        QPainterPath path;
+        const QPointF a = b.bottomLeft(), z = b.topRight();
+        const double mx = b.center().x();
+        if (kind.startsWith(QLatin1String("elbow"))) {
+            path.moveTo(a);
+            path.lineTo(mx, a.y());
+            path.lineTo(mx, z.y());
+            path.lineTo(z);
+        } else if (kind.startsWith(QLatin1String("curved"))) {
+            path.moveTo(a);
+            path.cubicTo(QPointF(mx, a.y()), QPointF(mx, z.y()), z);
+        } else if (kind == QLatin1String("curve")) {
+            path.moveTo(b.left(), b.center().y());
+            path.cubicTo(QPointF(b.left() + b.width() * 0.3, b.top() - b.height() * 0.4), QPointF(b.left() + b.width() * 0.7, b.bottom() + b.height() * 0.4),
+                         QPointF(b.right(), b.center().y()));
+        } else if (kind == QLatin1String("freeform")) {
+            path.moveTo(b.left(), b.bottom());
+            path.lineTo(b.left() + b.width() * 0.25, b.top());
+            path.lineTo(b.left() + b.width() * 0.55, b.top() + b.height() * 0.6);
+            path.lineTo(b.right(), b.top() + b.height() * 0.15);
+            path.lineTo(b.right() - b.width() * 0.1, b.bottom());
+            path.closeSubpath();
+        } else {
+            path.moveTo(b.left(), b.center().y());
+            const int n = 5;
+            for (int i = 0; i < n; ++i) {
+                const double x0 = b.left() + b.width() * i / n, x1 = b.left() + b.width() * (i + 1) / n;
+                path.cubicTo(QPointF(x0 + (x1 - x0) * 0.3, b.top()), QPointF(x0 + (x1 - x0) * 0.7, b.bottom()), QPointF(x1, b.center().y() + (i % 2 ? -1 : 1) * b.height() * 0.15));
+            }
+        }
+        p->drawPath(path);
+        // Arrowheads: at the end, and at the start too for a double arrow.
+        auto head = [&](const QPointF &tip, const QPointF &from) {
+            const QPointF d = tip - from;
+            const double L = std::hypot(d.x(), d.y());
+            if (L < 0.01) return;
+            const QPointF u = d / L, n(-u.y(), u.x());
+            const double len = r.width() * 0.2;
+            p->setBrush(uiText());
+            p->drawPolygon(QPolygonF({tip, tip - u * len + n * len * 0.45, tip - u * len - n * len * 0.45}));
+        };
+        const bool arrow = kind.endsWith(QLatin1String("Arrow")), dbl = kind.endsWith(QLatin1String("Double"));
+        if (arrow || dbl) head(z, QPointF(mx, z.y()));
+        if (dbl) head(a, QPointF(mx, a.y()));
+    });
+}
+
 namespace {
 // Dialog tabs never scroll: a tab bar asks for room for every tab, so the
 // dialog opens wide enough to show them all instead of adding side arrows.

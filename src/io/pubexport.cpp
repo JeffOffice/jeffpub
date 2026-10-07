@@ -1238,6 +1238,7 @@ QByteArray PubWriter::write(QStringList *skipped)
     QVector<QVector<quint32>> pageShapes(surfaces.size());
     int textId = 2;
     int spid = 0x401;
+    QHash<QString, quint32> spidOf;   // item -> its drawing shape id, for connector rules
     int skippedCount = 0;
     const double cx = ps.width() / 2, cy = ps.height() / 2;
     auto anchor = [&](const QRectF &r) {
@@ -1431,6 +1432,7 @@ QByteArray PubWriter::write(QStringList *skipped)
             auto finish = [&](quint32 seq, QByteArray sp) {
                 objs << Obj{seq, pi, escherContainer(0xf004, sp)};
                 pageShapes[pi] << seq;
+                spidOf.insert(it->id, quint32(spid));
                 ++spid;
             };
             if (it->type() == ItemType::Text) {
@@ -1565,23 +1567,46 @@ QByteArray PubWriter::write(QStringList *skipped)
                 return;
             }
             if (it->type() == ItemType::Line) {
-                // A straight connector: the anchor is the box the line spans,
-                // and flips say which corner it starts from.
+                // A connector: the anchor is the box the line spans. Its shape
+                // runs from the box's top left, level first; flips and a turn
+                // put its start at the line's start (as Publisher writes them
+                // for connectors attached each way).
                 auto *l = static_cast<const LineItem *>(it.get());
                 const quint32 seq = next++;
                 cw.put(seq, {0x20, surfaceSeq[pi], {flag(0x02), flag(0x03), u16(0x04, 256, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
                                                  u32(0xb7, 0)}});
+                const double dx = l->p2.x() - l->p1.x(), dy = l->p2.y() - l->p1.y();
+                const bool twoBends = l->startVertical == l->endVertical;
+                quint16 kind = 32;
+                if (l->route == LineItem::Elbow) kind = twoBends ? 34 : 33;
+                else if (l->route == LineItem::Curved) kind = twoBends ? 38 : 37;
+                bool flipH = dx < 0, flipV = dy < 0;
+                int turn = 0;
+                if (l->route != LineItem::Straight) {
+                    if (l->startVertical) {
+                        turn = dy > 0 ? 90 : 270;
+                        flipH = (dx > 0) == (dy > 0);
+                        flipV = false;
+                    } else if (flipH && flipV) {
+                        turn = 180;
+                        flipH = flipV = false;
+                    }
+                }
                 QVector<Prop> opt = kInsets;
+                if (turn) opt << Prop{0x0004, quint32(turn) << 16};
+                // Where the middle of a two-bend route sits, in 21600ths of the way.
+                if (twoBends && l->route != LineItem::Straight && (l->route == LineItem::Curved || std::abs(l->bend - 0.5) > 1e-6))
+                    opt << Prop{0x0147, quint32(qint32(std::lround(l->bend * 21600)))};
                 opt << Prop{0x01bf, 0x00100000};
                 strokeProps(opt, l->stroke);
-                opt << kTail << Prop{0x0303, 0};
+                opt << kTail << Prop{0x0303, quint32(l->route == LineItem::Elbow ? 1 : l->route == LineItem::Curved ? 2 : 0)};
                 QVector<Prop> topt = kShadowFlags;
                 topt << kSideLines;
                 QByteArray d;
                 putU32(d, quint32(spid));
-                putU32(d, 0x0b00 | (l->p1.x() > l->p2.x() ? 0x40 : 0) | (l->p1.y() > l->p2.y() ? 0x80 : 0));
+                putU32(d, 0x0b00 | (flipH ? 0x40 : 0) | (flipV ? 0x80 : 0));
                 const QRectF box = QRectF(l->p1, l->p2).normalized();
-                QByteArray sp = escherRecord(0x2, 32, 0xf00a, d) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(box);
+                QByteArray sp = escherRecord(0x2, kind, 0xf00a, d) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(box);
                 sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
                 finish(seq, sp);
                 return;
@@ -2346,8 +2371,24 @@ QByteArray PubWriter::write(QStringList *skipped)
         {
             QByteArray shapes;
             for (const Obj &o : objs) shapes += o.escher;
+            // Connector rules, one per line as Publisher writes them: its
+            // start attaches to a site of shape A, its end to one of shape B
+            // (shape 0 and site -1 for a loose end).
+            QByteArray rules;
+            quint32 ruleCount = 0;
+            for (const auto *list : surfaces)
+                walkItems(list->items, [&](const ItemPtr &it) {
+                    if (it->type() != ItemType::Line || !spidOf.contains(it->id)) return;
+                    const auto *l = static_cast<const LineItem *>(it.get());
+                    const quint32 a = l->start.id.isEmpty() ? 0 : spidOf.value(l->start.id), b = l->end.id.isEmpty() ? 0 : spidOf.value(l->end.id);
+                    QByteArray r;
+                    for (quint32 v : {++ruleCount, a, b, spidOf.value(it->id), a ? quint32(l->start.site) : 0xffffffffu, b ? quint32(l->end.site) : 0xffffffffu})
+                        putU32(r, v);
+                    rules += escherRecord(0x1, 0, 0xf012, r);
+                });
             QByteArray dg = dgRecord(1, quint32(1 + pageShapesCount), quint32(0x400 + pageShapesCount)) +
                             escherContainer(0xf003, spgrHead(0x0400) + shapes);
+            if (ruleCount) dg += escherRecord(0xf, quint16(ruleCount), 0xf005, rules);
             putU32(escher, 0);
             escher += escherContainer(0xf002, dg);
         }

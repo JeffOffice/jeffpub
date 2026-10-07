@@ -103,7 +103,7 @@ protected:
     bool viewportEvent(QEvent *e) override;
 
 public:
-    enum class HitKind { None, Item, Handle, Rotate, LineEnd, Adjust, Crop, Overflow, LinkPrev, LinkNext, ColBorder, RowBorder, Guide, Point, PointEdge, WrapPoint, WrapEdge };
+    enum class HitKind { None, Item, Handle, Rotate, LineEnd, LineBend, Adjust, Crop, Overflow, LinkPrev, LinkNext, ColBorder, RowBorder, Guide, Point, PointEdge, WrapPoint, WrapEdge };
     struct Hit {
         HitKind kind = HitKind::None;
         QString id;
@@ -116,7 +116,7 @@ public:
     int textPosAt(const QString &itemId, const QPointF &page, int row = -1, int col = -1) const;
 
 private:
-    enum class Drag { None, Pending, Move, Resize, Rotate, LineEnd, Adjust, Marquee, Draw, TextSelect, TextMove, Guide, Crop, CropMove, ColResize, RowResize, Pan, Point, WrapPoint };
+    enum class Drag { None, Pending, Move, Resize, Rotate, LineEnd, LineBend, Adjust, Marquee, Draw, TextSelect, TextMove, Guide, Crop, CropMove, ColResize, RowResize, Pan, Point, WrapPoint };
 
     void updateScrollBars();
     void paintPageSlot(QPainter &p, const Slot &s, bool current);
@@ -139,6 +139,15 @@ private:
     void updateCursorShape(const QPointF &view);
     void applyFormatPainter(const QString &id);
     QStringList moveSet() const;
+    // A connection site near a point: the object under it (or whose frame
+    // it's near) and, when close enough to snap, its nearest site.
+    struct SiteHit {
+        QString over;      // the object whose sites to show
+        QString id;        // the object snapped to, or empty
+        int site = -1;
+        QPointF at;
+    };
+    SiteHit siteNear(const QPointF &page, const QSet<QString> &exclude) const;
 
     Editor *m_ed;
     double m_zoom = 1.0;
@@ -160,6 +169,7 @@ private:
     QRectF m_origBox;
     QRectF m_rubber;
     QVector<QLineF> m_snapLines;
+    SiteHit m_siteStart, m_siteHover;   // connection sites while drawing or dragging a line's end
     double m_rotStart = 0;
     QString m_tip;
     QPointF m_tipPos;

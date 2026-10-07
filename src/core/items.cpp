@@ -1,5 +1,6 @@
 #include "core/items.h"
 
+#include <algorithm>
 #include <cmath>
 
 #include <QJsonArray>
@@ -390,11 +391,44 @@ ItemPtr LineItem::clone() const
 
 void LineItem::syncRect()
 {
-    rect = QRectF(p1, p2).normalized();
+    rect = bounds();
     rotation = 0;
 }
 
-QRectF LineItem::bounds() const { return QRectF(p1, p2).normalized(); }
+QVector<QPointF> LineItem::routePoints() const
+{
+    if (route == Straight) return {p1, p2};
+    const QPointF d = p2 - p1;
+    // Both ends level: out, across at the bend, and in (an S for a curve).
+    if (!startVertical && !endVertical) {
+        const double x = p1.x() + bend * d.x();
+        return {p1, {x, p1.y()}, {x, p2.y()}, p2};
+    }
+    if (startVertical && endVertical) {
+        const double y = p1.y() + bend * d.y();
+        return {p1, {p1.x(), y}, {p2.x(), y}, p2};
+    }
+    // One end level, the other upright: a single corner (a quarter curve).
+    const QPointF corner = startVertical ? QPointF(p1.x(), p2.y()) : QPointF(p2.x(), p1.y());
+    if (route == Elbow) return {p1, corner, p2};
+    const double k = 0.5523;
+    return {p1, p1 + (corner - p1) * k, p2 + (corner - p2) * k, p2};
+}
+
+QPainterPath LineItem::path() const
+{
+    const QVector<QPointF> pts = routePoints();
+    QPainterPath p(pts.first());
+    if (route == Curved && pts.size() == 4) p.cubicTo(pts[1], pts[2], pts[3]);
+    else for (int i = 1; i < pts.size(); ++i) p.lineTo(pts[i]);
+    return p;
+}
+
+QRectF LineItem::bounds() const
+{
+    if (route == Straight) return QRectF(p1, p2).normalized();
+    return path().boundingRect().united(QRectF(p1, p2).normalized());
+}
 void LineItem::moveBy(double dx, double dy) { p1 += QPointF(dx, dy); p2 += QPointF(dx, dy); syncRect(); }
 
 void LineItem::scaleInto(const QRectF &from, const QRectF &to)
@@ -414,6 +448,11 @@ void LineItem::rotateAround(double deg, const QPointF &c)
     t.rotate(deg);
     t.translate(-c.x(), -c.y());
     p1 = t.map(p1); p2 = t.map(p2);
+    // A quarter turn makes level ends upright and upright ends level.
+    if (std::abs(std::remainder(deg, 180.0)) > 45) {
+        startVertical = !startVertical;
+        endVertical = !endVertical;
+    }
     syncRect();
 }
 
@@ -422,6 +461,17 @@ QJsonObject LineItem::toJson() const
     QJsonObject o = Item::toJson();
     o["p1"] = QJsonArray{p1.x(), p1.y()};
     o["p2"] = QJsonArray{p2.x(), p2.y()};
+    if (route != Straight) {
+        o["route"] = route == Elbow ? QStringLiteral("elbow") : QStringLiteral("curved");
+        if (bend != 0.5) o["bend"] = bend;
+    }
+    if (startVertical) o["startVertical"] = true;
+    if (endVertical) o["endVertical"] = true;
+    auto glue = [&](const char *key, const Glue &g) {
+        if (!g.id.isEmpty()) o[QLatin1String(key)] = QJsonObject{{"id", g.id}, {"site", g.site}};
+    };
+    glue("startGlue", start);
+    glue("endGlue", end);
     return o;
 }
 
@@ -431,6 +481,17 @@ void LineItem::fromJson(const QJsonObject &o)
     const auto a = o["p1"].toArray(), b = o["p2"].toArray();
     p1 = QPointF(a[0].toDouble(), a[1].toDouble());
     p2 = QPointF(b[0].toDouble(), b[1].toDouble());
+    const QString r = o["route"].toString();
+    route = r == QLatin1String("elbow") ? Elbow : r == QLatin1String("curved") ? Curved : Straight;
+    bend = o["bend"].toDouble(0.5);
+    startVertical = o["startVertical"].toBool();
+    endVertical = o["endVertical"].toBool();
+    auto glue = [&](const char *key) {
+        const QJsonObject g = o[QLatin1String(key)].toObject();
+        return Glue{g["id"].toString(), g["site"].toInt(-1)};
+    };
+    start = glue("startGlue");
+    end = glue("endGlue");
     syncRect();
 }
 
@@ -653,6 +714,33 @@ void GroupItem::fromJson(const QJsonObject &o)
         if (auto it = Item::fromJsonAny(v.toObject())) children.push_back(it);
     barcode = o["barcode"].toObject();
     syncRect();
+}
+
+QPointF connectionSite(const Item &it, int site, bool *vertical)
+{
+    const bool group = it.type() == ItemType::Group;
+    const QSizeF sz = group ? it.bounds().size() : it.rect.size();
+    const QTransform t = group ? QTransform::fromTranslate(it.bounds().left(), it.bounds().top()) : it.transform();
+    static const QPointF at[kConnectionSites] = {{0.5, 0}, {0, 0.5}, {0.5, 1}, {1, 0.5}};
+    static const QPointF out[kConnectionSites] = {{0, -1}, {-1, 0}, {0, 1}, {1, 0}};
+    site = std::clamp(site, 0, kConnectionSites - 1);
+    const QPointF l(at[site].x() * sz.width(), at[site].y() * sz.height());
+    const QPointF p = t.map(l);
+    if (vertical) {
+        const QPointF n = t.map(l + out[site]) - p;
+        *vertical = std::abs(n.y()) > std::abs(n.x());
+    }
+    return p;
+}
+
+void remapGlue(const ItemList &items, const QHash<QString, QString> &ids)
+{
+    walkItems(items, [&](const ItemPtr &it) {
+        if (it->type() != ItemType::Line) return;
+        auto *l = static_cast<LineItem *>(it.get());
+        for (LineItem::Glue *g : {&l->start, &l->end})
+            if (!g->id.isEmpty()) *g = ids.contains(g->id) ? LineItem::Glue{ids.value(g->id), g->site} : LineItem::Glue();
+    });
 }
 
 } // namespace jp

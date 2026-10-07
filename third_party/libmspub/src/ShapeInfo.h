@@ -45,7 +45,11 @@ struct ShapeInfo
   std::vector<Line> m_lines;
   boost::optional<unsigned> m_pageSeqNum;
   boost::optional<unsigned> m_textId;
-  unsigned m_textChainIndex = 0;   // JeffPub 79: the box's place among the boxes sharing its story
+  unsigned m_textChainIndex = 0;
+  // JeffPub patch: the shape's sequence number, and for a connector the
+  // shapes (by sequence number) and connection sites its ends attach to.
+  unsigned m_jpSeqNum = 0;
+  boost::optional<std::pair<unsigned, unsigned> > m_glueStart, m_glueEnd;   // JeffPub 79: the box's place among the boxes sharing its story
   std::map<unsigned, int> m_adjustValuesByIndex;
   std::vector<int> m_adjustValues;
   boost::optional<double> m_rotation;

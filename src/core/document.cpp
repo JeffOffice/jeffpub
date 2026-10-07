@@ -548,10 +548,11 @@ QVector<TextItem *> Document::chainOf(const QString &frameId) const
     return out;
 }
 
-ItemPtr Document::cloneItem(const Item &src)
+ItemPtr Document::cloneItem(const Item &src, QHash<QString, QString> *ids)
 {
     ItemPtr c = src.clone();
-    std::function<void(Item *)> fix = [&](Item *it) {
+    if (ids) ids->insert(src.id, c->id);
+    std::function<void(Item *, const Item *)> fix = [&](Item *it, const Item *from) {
         switch (it->type()) {
         case ItemType::Text: {
             auto *t = static_cast<TextItem *>(it);
@@ -568,17 +569,36 @@ ItemPtr Document::cloneItem(const Item &src)
             for (auto &cell : static_cast<TableItem *>(it)->cells)
                 if (!cell.storyId.isEmpty()) cell.storyId = copyStory(cell.storyId);
             break;
-        case ItemType::Group:
-            for (auto &ch : static_cast<GroupItem *>(it)->children) {
-                ch->id = newId();
-                fix(ch.get());
+        case ItemType::Group: {
+            auto &kids = static_cast<GroupItem *>(it)->children;
+            const auto &was = static_cast<const GroupItem *>(from)->children;
+            for (int i = 0; i < int(kids.size()); ++i) {
+                kids[i]->id = newId();
+                if (ids && i < int(was.size())) ids->insert(was[i]->id, kids[i]->id);
+                fix(kids[i].get(), i < int(was.size()) ? was[i].get() : kids[i].get());
+            }
+            break;
+        }
+        case ItemType::Line:
+            if (!ids) {
+                auto *l = static_cast<LineItem *>(it);
+                l->start = l->end = LineItem::Glue();
             }
             break;
         default: break;
         }
     };
-    fix(c.get());
+    fix(c.get(), &src);
     return c;
+}
+
+ItemList Document::cloneItems(const ItemList &items)
+{
+    QHash<QString, QString> ids;
+    ItemList out;
+    for (const auto &it : items) out.push_back(cloneItem(*it, &ids));
+    remapGlue(out, ids);
+    return out;
 }
 
 void Document::forEachItem(const std::function<void(Item *, int, const QString &)> &fn) const
@@ -586,6 +606,47 @@ void Document::forEachItem(const std::function<void(Item *, int, const QString &
     for (int p = 0; p < pages.size(); ++p) walkItems(pages[p]->items, [&](const ItemPtr &it) { fn(it.get(), p, QString()); });
     for (const auto &m : masters) walkItems(m->items, [&](const ItemPtr &it) { fn(it.get(), -1, m->id); });
     walkItems(scratch, [&](const ItemPtr &it) { fn(it.get(), -1, QString()); });
+}
+
+bool Document::routeConnectors()
+{
+    QVector<LineItem *> glued;
+    forEachItem([&](Item *it, int, const QString &) {
+        if (it->type() == ItemType::Line) {
+            auto *l = static_cast<LineItem *>(it);
+            if (!l->start.id.isEmpty() || !l->end.id.isEmpty()) glued << l;
+        }
+    });
+    if (glued.isEmpty()) return false;
+    QHash<QString, Item *> byId;
+    forEachItem([&](Item *it, int, const QString &) { byId.insert(it->id, it); });
+    bool any = false;
+    for (LineItem *l : glued) {
+        bool moved = false;
+        auto follow = [&](LineItem::Glue &g, QPointF &pt, bool &vertical) {
+            if (g.id.isEmpty()) return;
+            const Item *o = byId.value(g.id);
+            if (!o || o == l || o->type() == ItemType::Line || g.site < 0 || g.site >= kConnectionSites) {
+                g = LineItem::Glue();
+                moved = true;
+                return;
+            }
+            bool v = false;
+            const QPointF at = connectionSite(*o, g.site, &v);
+            if (at != pt || v != vertical) {
+                pt = at;
+                vertical = v;
+                moved = true;
+            }
+        };
+        follow(l->start, l->p1, l->startVertical);
+        follow(l->end, l->p2, l->endVertical);
+        if (moved) {
+            l->syncRect();
+            any = true;
+        }
+    }
+    return any;
 }
 
 const TextStyle *Document::style(const QString &name) const

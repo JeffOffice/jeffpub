@@ -128,6 +128,11 @@ public:
   void setShapeFillSpot(unsigned seqNum, const std::string &ink) { m_shapeInfosBySeqNum[seqNum].m_fillSpot = ink; }
   void setTextNotHyphenated(unsigned textId) { m_notHyphenated.insert(textId); }
   void setTextAutofit(unsigned textId, unsigned kind) { m_autofit[textId] = kind; }
+  // JeffPub patch: a connector's start (or end) is attached to a site of another shape.
+  void setConnectorGlue(unsigned seqNum, bool start, unsigned toSeqNum, unsigned site)
+  {
+    (start ? m_shapeInfosBySeqNum[seqNum].m_glueStart : m_shapeInfosBySeqNum[seqNum].m_glueEnd) = std::make_pair(toSeqNum, site);
+  }
   void setShapePictureFlags(unsigned seqNum, unsigned flags);
   void setShapePictureTransparent(unsigned seqNum, ColorReference color);
 

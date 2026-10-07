@@ -30,6 +30,8 @@
 #define OFFICE_ART_FSP                0xF00A
 #define OFFICE_ART_FSPGR              0xF009
 #define OFFICE_ART_CHILD_ANCHOR       0xF00F
+#define OFFICE_ART_SOLVER_CONTAINER   0xF005 // JeffPub patch: a drawing's connector rules
+#define OFFICE_ART_CONNECTOR_RULE     0xF012
 
 #endif /* INCLUDED_ESCHERCONTAINERTYPE_H */
 /* vim:set shiftwidth=2 softtabstop=2 expandtab: */

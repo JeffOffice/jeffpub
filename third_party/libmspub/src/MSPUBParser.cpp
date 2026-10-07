@@ -1953,15 +1953,54 @@ bool MSPUBParser::parseEscher(librevenge::RVNGInputStream *input)
   }
   while (findEscherContainer(input, fakeroot, dg, OFFICE_ART_DG_CONTAINER))
   {
+    // JeffPub patch: the drawing's connector rules follow its shapes.
     EscherContainerInfo spgr;
-    while (findEscherContainer(input, dg, spgr, OFFICE_ART_SPGR_CONTAINER))
+    std::set<unsigned short> kinds;
+    kinds.insert(OFFICE_ART_SPGR_CONTAINER);
+    kinds.insert(OFFICE_ART_SOLVER_CONTAINER);
+    while (findEscherContainerWithTypeInSet(input, dg, spgr, kinds))
     {
+      if (spgr.type == OFFICE_ART_SOLVER_CONTAINER)
+      {
+        parseConnectorRules(input, spgr);
+        input->seek(spgr.contentsOffset + spgr.contentsLength, librevenge::RVNG_SEEK_SET);
+        continue;
+      }
       Coordinate c1, c2;
       parseShapeGroup(input, spgr, c1, c2);
     }
     input->seek(input->tell() + getEscherElementTailLength(OFFICE_ART_DG_CONTAINER), librevenge::RVNG_SEEK_SET);
   }
   return true;
+}
+
+// JeffPub patch: each connector rule (ruid, shape A, shape B, connector,
+// site on A, site on B, by drawing shape id) attaches the connector's start
+// to A and its end to B. Sites count from 0: top, left, bottom, right on a
+// rectangle. Checked against connectors attached through Publisher.
+void MSPUBParser::parseConnectorRules(librevenge::RVNGInputStream *input, const EscherContainerInfo &solver)
+{
+  input->seek(solver.contentsOffset, librevenge::RVNG_SEEK_SET);
+  EscherContainerInfo rule;
+  while (findEscherContainer(input, solver, rule, OFFICE_ART_CONNECTOR_RULE))
+  {
+    input->seek(rule.contentsOffset, librevenge::RVNG_SEEK_SET);
+    if (rule.contentsLength >= 24)
+    {
+      readU32(input);
+      const unsigned spidA = readU32(input), spidB = readU32(input), spidC = readU32(input);
+      const unsigned siteA = readU32(input), siteB = readU32(input);
+      const auto a = m_seqBySpid.find(spidA), b = m_seqBySpid.find(spidB), c = m_seqBySpid.find(spidC);
+      if (c != m_seqBySpid.end())
+      {
+        if (a != m_seqBySpid.end())
+          m_collector->setConnectorGlue(c->second, true, a->second, siteA);
+        if (b != m_seqBySpid.end())
+          m_collector->setConnectorGlue(c->second, false, b->second, siteB);
+      }
+    }
+    input->seek(rule.contentsOffset + rule.contentsLength, librevenge::RVNG_SEEK_SET);
+  }
 }
 
 void MSPUBParser::parseShapeGroup(librevenge::RVNGInputStream *input, const EscherContainerInfo &spgr, Coordinate parentCoordinateSystem, Coordinate parentGroupAbsoluteCoord, unsigned depth)
@@ -2013,11 +2052,13 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
     definesRelativeCoordinates = true;
   }
   input->seek(sp.contentsOffset, librevenge::RVNG_SEEK_SET);
+  unsigned spid = 0;
   if (findEscherContainer(input, sp, cFsp, OFFICE_ART_FSP))
   {
     st = cFsp.initial >> 4;
     std::map<unsigned short, unsigned> fspData = extractEscherValues(input, cFsp);
-    input->seek(cFsp.contentsOffset + 4, librevenge::RVNG_SEEK_SET);
+    input->seek(cFsp.contentsOffset, librevenge::RVNG_SEEK_SET);
+    spid = readU32(input);
     shapeFlags = readU32(input);
     isGroupLeader = shapeFlags & SF_GROUP;
   }
@@ -2028,6 +2069,8 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
     unsigned *shapeSeqNum = getIfExists(dataValues, FIELDID_SHAPE_ID);
     if (shapeSeqNum)
     {
+      if (spid)
+        m_seqBySpid[spid] = *shapeSeqNum;
       m_collector->setShapeType(*shapeSeqNum, st);
       m_collector->setShapeFlip(*shapeSeqNum, shapeFlags & SF_FLIP_V, shapeFlags & SF_FLIP_H);
       input->seek(sp.contentsOffset, librevenge::RVNG_SEEK_SET);
@@ -2198,11 +2241,14 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
           unsigned lineWidth = 0;
           if (useLine)
           {
-            if (ptr_lineColor)
+            // JeffPub patch: a line or connector left at the default color
+            // (black) records none.
+            const bool lineShape = st == 20 || (st >= 32 && st <= 40);
+            if (ptr_lineColor || lineShape)
             {
               unsigned *ptr_lineWidth = getIfExists(foptValues.m_scalarValues, FIELDID_LINE_WIDTH);
               lineWidth = ptr_lineWidth ? *ptr_lineWidth : 9525;
-              m_collector->addShapeLine(*shapeSeqNum, Line(ColorReference(*ptr_lineColor), lineWidth, true));
+              m_collector->addShapeLine(*shapeSeqNum, Line(ColorReference(ptr_lineColor ? *ptr_lineColor : 0), lineWidth, true));
             }
             else
             {

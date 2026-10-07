@@ -201,7 +201,7 @@ int main(int argc, char **argv)
     }
     out << "OK\t" << in << "\tpages=" << doc->pages.size() << " size=" << doc->pageSize().width() << "x" << doc->pageSize().height()
         << " text=" << rep.textBoxes << " pictures=" << rep.pictures << " shapes=" << rep.shapes << " tables=" << rep.tables
-        << " chains=" << rep.linkedChains << " masters=" << doc->masters.size() << " ms=" << t.elapsed() << "\n";
+        << " chains=" << rep.linkedChains << " attached=" << rep.attachedEnds << " masters=" << doc->masters.size() << " ms=" << t.elapsed() << "\n";
     if (!rep.fontsUsed.isEmpty()) out << "  fonts: " << rep.fontsUsed.join(", ") << "\n";
     for (const auto &w : rep.warnings) out << "  warning: " << w << "\n";
     if (cmd == "layout") {

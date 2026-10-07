@@ -361,6 +361,30 @@ Every vertical box in 40 of Publisher's covers has the first two; without
 files showed until October 2026. Checked by opening the saved file in
 Publisher.
 
+### Connectors
+
+Every line is a connector shape in the drawing: 32 straight, 33 an elbow
+with one bend, 34 an elbow with two, 37 and 38 the curved ones. The anchor
+is the box the line spans; the shape runs from the box's top left,
+leaving level, and flips and a turn (OPT `0x0004`) put its start at the
+line's start. A route that leaves level is turned 0, flipped across for
+leftward and up for upward (both at once is written as a half turn); one
+that leaves upright is turned 90 if it goes down, 270 if up, and flipped
+across when it runs down and right or up and left. A two-bend route's
+middle is OPT `0x0147`, in 21600ths of the way from start to end (10800,
+halfway, is left out for elbows), and `0x0303` is 0 straight, 1 elbow, 2
+curved.
+
+The drawing's container ends with a solver container (`0xF005`, instance =
+the rule count) holding one rule (`0xF012`, version 1) per line: rule
+number, shape A, shape B, the line, and the connection site on A and on
+B, by drawing shape id. The line starts on A and ends on B; a loose end has
+shape 0 and site -1 (Publisher writes a rule even for a line with both
+ends loose). A rectangle's sites count from 0: top, left, bottom, right.
+Checked by attaching connectors through Publisher and saving, and by
+opening JeffPub's files in Publisher and moving a shape: the connectors
+followed it.
+
 ### Linked text boxes
 
 A chain of linked boxes is one story. Every box has its own shape chunk

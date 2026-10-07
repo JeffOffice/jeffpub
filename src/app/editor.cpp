@@ -429,6 +429,8 @@ void Editor::endChange()
 {
     if (m_changeDepth == 0) return;
     if (--m_changeDepth > 0) return;
+    // Connectors follow the objects they're attached to.
+    m_doc->routeConnectors();
     // Keep the editing cursor valid if the story was replaced.
     QByteArray after = snapshot();
     if (after != m_before) {
@@ -445,7 +447,11 @@ void Editor::cancelChange()
     restore(m_before, m_selBefore, m_pageBefore, m_masterBefore);
 }
 
-void Editor::notifyLive() { Q_EMIT changed(); }
+void Editor::notifyLive()
+{
+    m_doc->routeConnectors();
+    Q_EMIT changed();
+}
 
 void Editor::undo()
 {
@@ -564,10 +570,10 @@ void Editor::duplicateSelection()
     if (ids.isEmpty()) return;
     beginChange(QStringLiteral("Duplicate"));
     QStringList made;
-    for (const auto &id : ids) {
-        Item *it = m_doc->item(id);
-        if (!it) continue;
-        ItemPtr c = m_doc->cloneItem(*it);
+    ItemList originals;
+    for (const auto &id : ids)
+        if (ItemPtr it = m_doc->itemPtr(id)) originals.push_back(it);
+    for (const ItemPtr &c : m_doc->cloneItems(originals)) {
         c->moveBy(12, 12);
         surfaceItems().push_back(c);
         made << c->id;
@@ -1077,8 +1083,11 @@ void Editor::paste(bool textOnly)
             }
             sid = storyMap[sid];
         };
+        QHash<QString, QString> idMap;
         std::function<void(Item *)> fix = [&](Item *it) {
+            const QString was = it->id;
             it->id = newId();
+            idMap[was] = it->id;
             if (!it->fill.imageId.isEmpty()) it->fill.imageId = imageMap.value(it->fill.imageId, it->fill.imageId);
             switch (it->type()) {
             case ItemType::Text: mapStory(static_cast<TextItem *>(it)->storyId); static_cast<TextItem *>(it)->nextId.clear(); break;
@@ -1102,6 +1111,10 @@ void Editor::paste(bool textOnly)
             surfaceItems().push_back(it);
             made << it->id;
         }
+        // Pasted connectors stay attached to the pasted copies of their
+        // objects, and come loose from objects that weren't copied with them.
+        for (const QString &id : made)
+            if (ItemPtr top = m_doc->itemPtr(id)) remapGlue(ItemList{top}, idMap);
         m_sel = made;
         endChange();
         Q_EMIT selectionChanged();
@@ -1153,7 +1166,7 @@ int Editor::insertPages(int after, int count, bool duplicate, bool oneTextBox, c
         if (duplicate && src) {
             p->background = src->background;
             p->guides = src->guides;
-            for (const auto &it : src->items) p->items.push_back(m_doc->cloneItem(*it));
+            for (const auto &it : m_doc->cloneItems(src->items)) p->items.push_back(it);
         } else if (oneTextBox) {
             const QRectF r = QRectF(QPointF(0, 0), m_doc->pageSize()).marginsRemoved(m_doc->setup.margins);
             p->items.push_back(newTextBox(r));
@@ -1227,7 +1240,7 @@ QString Editor::addMaster(bool duplicateCurrent)
             m->grid = src->grid;
             m->twoPage = src->twoPage;
             m->guides = src->guides;
-            for (const auto &it : src->items) m->items.push_back(m_doc->cloneItem(*it));
+            for (const auto &it : m_doc->cloneItems(src->items)) m->items.push_back(it);
         }
     }
     m_doc->masters << m;

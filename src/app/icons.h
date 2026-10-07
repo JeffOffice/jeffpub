@@ -15,6 +15,10 @@ QIcon colorBarIcon(const QString &name, const QColor &bar);
 // Icon drawn by a function into a size×size box.
 QIcon drawnIcon(const std::function<void(QPainter *, const QRectF &)> &draw);
 QIcon shapeIcon(const QString &shapeId);
+// The Lines gallery's connectors and freehand tools: "elbow", "curved"
+// (with "Arrow" or "Double" after for arrowheads), "curve", "freeform",
+// "scribble".
+QIcon lineToolIcon(const QString &kind);
 // Whether the interface is dark. main() decides from the user's setting (or the
 // system's color scheme) and records it here; every part of the UI asks this.
 bool uiDark();

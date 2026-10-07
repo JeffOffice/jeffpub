@@ -538,22 +538,22 @@ std::unique_ptr<Document> mergeToNewPublication(const Document &src)
             const bool catalogPage = pg->id == cat.pageId;
             if (!catalogPage) {
                 auto np = copyPage(*pg);
-                for (const auto &it : pg->items) np->items.push_back(out->cloneItem(*it));
+                for (const auto &it : out->cloneItems(pg->items)) np->items.push_back(it);
                 continue;
             }
             for (int first = 0; first < std::max<qsizetype>(1, records.size()); first += n) {
                 auto np = copyPage(*pg);
+                ItemList fixed;
                 for (const auto &it : pg->items)
-                    if (!cat.inTemplate(it->bounds())) np->items.push_back(out->cloneItem(*it));
+                    if (!cat.inTemplate(it->bounds())) fixed.push_back(it);
+                for (const auto &it : out->cloneItems(fixed)) np->items.push_back(it);
                 for (int k = 0; k < n && first + k < records.size(); ++k) {
                     const QPointF d = cat.cell(k).topLeft() - cat.cell(0).topLeft();
-                    ItemList cell;
-                    for (const auto &it : pg->items) {
-                        if (!cat.inTemplate(it->bounds())) continue;
-                        ItemPtr c = out->cloneItem(*it);
-                        c->moveBy(d.x(), d.y());
-                        cell.push_back(c);
-                    }
+                    ItemList inCell;
+                    for (const auto &it : pg->items)
+                        if (cat.inTemplate(it->bounds())) inCell.push_back(it);
+                    const ItemList cell = out->cloneItems(inCell);
+                    for (const auto &c : cell) c->moveBy(d.x(), d.y());
                     freezeMergeFields(*out, src.merge, cell, records[first + k]);
                     for (const auto &c : cell) np->items.push_back(c);
                 }
@@ -564,7 +564,7 @@ std::unique_ptr<Document> mergeToNewPublication(const Document &src)
             const int before = out->pages.size();
             for (const auto &pg : tmpl->pages) {
                 auto np = copyPage(*pg);
-                for (const auto &it : pg->items) np->items.push_back(out->cloneItem(*it));
+                for (const auto &it : out->cloneItems(pg->items)) np->items.push_back(it);
             }
             for (int p = before; p < out->pages.size(); ++p) freezeMergeFields(*out, src.merge, out->pages[p]->items, rec);
         }

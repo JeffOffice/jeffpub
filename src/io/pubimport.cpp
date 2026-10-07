@@ -305,6 +305,7 @@ public:
         t->wrap.mode = Wrap::None;
         // Stories marked in the file as not hyphenated (others are).
         if (p["jp:no-hyphenation"] && p["jp:no-hyphenation"]->getInt()) t->hyphenate = false;
+        if (p["jp:shape-seq"]) m_seqItems[p["jp:shape-seq"]->getInt()] = t->id;
         // AutoFit Text: 1 best fit, 2 shrink on overflow, 3 grow the box.
         if (p["jp:autofit"]) {
             const int fit = p["jp:autofit"]->getInt();
@@ -706,6 +707,21 @@ public:
         }
         for (const auto &kv : m_linkCount)
             if (kv.second > 0) ++m_rep.linkedChains;
+        // Connector ends attach to the objects Publisher attached them to,
+        // where JeffPub's connection site is where the end is (a rectangle's
+        // sites are Publisher's; some other shapes have more, in other places).
+        for (const PendingGlue &g : m_glue) {
+            auto attach = [&](int seq, int site, LineItem::Glue &glue, const QPointF &at) {
+                const auto it = m_seqItems.find(seq);
+                if (seq < 0 || it == m_seqItems.end() || site < 0 || site >= kConnectionSites) return;
+                const Item *o = m_doc.item(it->second);
+                if (!o || o->type() == ItemType::Line || QLineF(connectionSite(*o, site), at).length() > 1.5) return;
+                glue = LineItem::Glue{o->id, site};
+                ++m_rep.attachedEnds;
+            };
+            attach(g.startSeq, g.startSite, g.line->start, g.line->p1);
+            attach(g.endSeq, g.endSite, g.line->end, g.line->p2);
+        }
         if (m_doc.pages.isEmpty()) m_doc.addPage();
     }
 
@@ -722,6 +738,17 @@ private:
     {
         currentList().push_back(it);
         m_fillOnly = nullptr;
+        // Which item each drawing shape became, for the connectors attached to it.
+        if (m_style["jp:shape-seq"]) m_seqItems.emplace(m_style["jp:shape-seq"]->getInt(), it->id);
+    }
+
+    // A connector's ends as Publisher attached them; resolved once every
+    // shape is read.
+    void noteGlue(LineItem *l)
+    {
+        auto get = [&](const char *key) { return m_style[key] ? m_style[key]->getInt() : -1; };
+        if (get("jp:glue-start-seq") >= 0 || get("jp:glue-end-seq") >= 0)
+            m_glue.push_back({l, get("jp:glue-start-seq"), get("jp:glue-start-site"), get("jp:glue-end-seq"), get("jp:glue-end-site")});
     }
 
     // Publisher's Text Art: the warp from its shape number, the words and
@@ -963,15 +990,43 @@ private:
             }
         }
 
-        // Straight lines become line objects.
-        if (pathIn.elementCount() == 2 && open) {
+        // Straight lines become line objects, and so do elbow and curved
+        // connectors with one or two bends (Publisher's shapes 33, 34, 37, 38).
+        const int shapeType = m_style["jp:shape-type"] ? m_style["jp:shape-type"]->getInt() : 0;
+        const bool connector = open && (shapeType == 33 || shapeType == 34 || shapeType == 37 || shapeType == 38) && pathIn.elementCount() >= 3;
+        if ((pathIn.elementCount() == 2 && open) || connector) {
             auto l = std::make_shared<LineItem>();
+            const int n = pathIn.elementCount();
             l->p1 = pathIn.elementAt(0);
-            l->p2 = pathIn.elementAt(1);
+            l->p2 = pathIn.elementAt(n - 1);
+            if (connector) {
+                l->route = shapeType >= 37 ? LineItem::Curved : LineItem::Elbow;
+                // Which way the route leaves and arrives: toward the nearest
+                // other point (a corner, or a curve's control point).
+                auto upright = [&](int from, int step) {
+                    for (int i = from + step; i >= 0 && i < n; i += step) {
+                        const QPointF d = QPointF(pathIn.elementAt(i)) - QPointF(pathIn.elementAt(from));
+                        if (std::hypot(d.x(), d.y()) > 0.01) return std::abs(d.y()) > std::abs(d.x());
+                    }
+                    return false;
+                };
+                l->startVertical = upright(0, 1);
+                l->endVertical = upright(n - 1, -1);
+                // The middle of a two-bend route: an elbow's second corner,
+                // or where a curve's two halves meet.
+                if (l->startVertical == l->endVertical) {
+                    const QPointF mid = l->route == LineItem::Elbow ? QPointF(pathIn.elementAt(std::min(2, n - 1))) : QPointF(pathIn.elementAt(std::min(3, n - 1)));
+                    const QPointF d = l->p2 - l->p1;
+                    if (!l->startVertical && std::abs(d.x()) > 0.01) l->bend = (mid.x() - l->p1.x()) / d.x();
+                    else if (l->startVertical && std::abs(d.y()) > 0.01) l->bend = (mid.y() - l->p1.y()) / d.y();
+                    l->bend = std::round(l->bend * 10000) / 10000;
+                }
+            }
             l->stroke = stroke.isNone() ? Stroke::line(ColorRef::rgb(Qt::black), 0.75) : stroke;
             l->syncRect();
             applyShadow(*l);
             add(l);
+            noteGlue(l.get());
             ++m_rep.shapes;
             return;
         }
@@ -1149,6 +1204,12 @@ private:
     bool m_skipText = false;
     std::map<int, TextItem *> m_chains;
     std::map<int, std::vector<std::pair<int, TextItem *>>> m_chainBoxes;   // text id -> (place in chain, box)
+    std::map<int, QString> m_seqItems;      // drawing shape number -> the item made from it
+    struct PendingGlue {
+        LineItem *line;
+        int startSeq, startSite, endSeq, endSite;
+    };
+    std::vector<PendingGlue> m_glue;
     std::map<int, int> m_linkCount;
     std::shared_ptr<TableItem> m_table;
     std::vector<std::vector<TableCell>> m_cells;

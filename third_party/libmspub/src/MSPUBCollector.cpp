@@ -718,6 +718,7 @@ void MSPUBCollector::setupShapeStructures(ShapeGroupElement &elt)
         ptr_info->m_fill = std::shared_ptr<const Fill>(new ImgFill(index, this, false, rot));
       }
     }
+    ptr_info->m_jpSeqNum = elt.getSeqNum();
     elt.setShapeInfo(*ptr_info);
     std::pair<bool, bool> flips = ptr_info->m_flips.get_value_or(std::pair<bool, bool>(false, false));
     VectorTransformation2D flipsTransform = VectorTransformation2D::fromFlips(flips.second, flips.first);
@@ -748,6 +749,18 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
   {
     const Coordinate c = info.m_coordinates.get_value_or(Coordinate());
     graphicsProps.insert("jp:shape-type", int(info.m_type.get_value_or(RECTANGLE)));
+    graphicsProps.insert("jp:shape-seq", int(info.m_jpSeqNum));
+    // A connector's ends: the shapes and connection sites they're attached to.
+    if (bool(info.m_glueStart))
+    {
+      graphicsProps.insert("jp:glue-start-seq", int(info.m_glueStart->first));
+      graphicsProps.insert("jp:glue-start-site", int(info.m_glueStart->second));
+    }
+    if (bool(info.m_glueEnd))
+    {
+      graphicsProps.insert("jp:glue-end-seq", int(info.m_glueEnd->first));
+      graphicsProps.insert("jp:glue-end-site", int(info.m_glueEnd->second));
+    }
     graphicsProps.insert("jp:frame-x", c.getXIn(m_width));
     graphicsProps.insert("jp:frame-y", c.getYIn(m_height));
     graphicsProps.insert("jp:frame-width", c.getWidthIn());
@@ -1417,6 +1430,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
         props.insert("jp:text-id", (int)get(info.m_textId));
         // Its place in the chain: the file may list the boxes in any order.
         props.insert("jp:text-chain-index", (int)info.m_textChainIndex);
+        props.insert("jp:shape-seq", (int)info.m_jpSeqNum);
         if (m_notHyphenated.count(get(info.m_textId)))
           props.insert("jp:no-hyphenation", true);
         const auto fit = m_autofit.find(get(info.m_textId));

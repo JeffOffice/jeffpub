@@ -124,6 +124,7 @@ Features JeffPub 79 has that Publisher never did, then the ones planned before v
 
 ## Drawing Tools / Shape Format tab
 - [x] Insert Shapes gallery, Edit Shape (Change Shape and Edit Points), Draw Text Box
+- [x] Connectors (Shapes > Lines): elbow and curved connectors, plain or with one or two arrowheads; any line's ends attach to the middle of a side of a shape, text box, picture or table (the sites show as you draw) and follow it when it moves, resizes or turns; a yellow handle moves an elbow's bend; dragging a connector away on its own detaches it. Opened from and saved to `.pub` attached, as Publisher's own connectors *(checked by moving a shape in Publisher: the connectors followed it)*
 - [x] Shape Styles gallery, Shape Fill (colors, picture, gradient, texture, pattern, no fill), Shape Outline (color, weight, dashes, arrows, pattern), Change Shape
 - [x] Shape Effects: Shadow, Reflection, Glow, Soft Edges, Bevel, 3-D Rotation
 - [x] Shadow Effects and 3-D Effects (classic galleries and nudge controls)

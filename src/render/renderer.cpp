@@ -381,9 +381,7 @@ QPainterPath Renderer::silhouette(const Document &doc, const Item &it)
     case ItemType::TextArt: p = textArtOutline(static_cast<const TextArtItem &>(it)); break;
     case ItemType::Line: {
         const auto &l = static_cast<const LineItem &>(it);
-        QPainterPath lp;
-        lp.moveTo(l.p1 - l.rect.topLeft());
-        lp.lineTo(l.p2 - l.rect.topLeft());
+        const QPainterPath lp = l.path().translated(-l.rect.topLeft());
         QPainterPathStroker st;
         st.setWidth(std::max(2.0, l.stroke.width));
         p = st.createStroke(lp);
@@ -494,20 +492,30 @@ static QPainterPath arrowHead(Arrow type, const QPointF &tip, const QPointF &fro
 static void paintLine(QPainter *p, const PaintContext &ctx, const LineItem &l)
 {
     const ColorScheme &cs = ctx.doc->colors;
-    QPointF a = l.p1, b = l.p2;
+    // Each arrowhead points along the route's end: from the nearest other
+    // point of the route (a corner, or a curve's control point).
+    QVector<QPointF> pts = l.routePoints();
+    auto toward = [&](int from, int step) {
+        for (int i = from + step; i >= 0 && i < pts.size(); i += step)
+            if (QLineF(pts[from], pts[i]).length() > 0.01) return pts[i];
+        return pts[from];
+    };
+    const QPointF a = pts.first(), b = pts.last();
+    const QPointF fromA = toward(0, 1), fromB = toward(int(pts.size()) - 1, -1);
     double inA = 0, inB = 0;
-    const QPainterPath ha = arrowHead(l.stroke.startArrow, a, b, l.stroke.width, l.stroke.startSize, &inA);
-    const QPainterPath hb = arrowHead(l.stroke.endArrow, b, a, l.stroke.width, l.stroke.endSize, &inB);
-    const QPointF d = b - a;
-    const double L = std::hypot(d.x(), d.y());
-    if (L > 0.01) {
-        const QPointF u = d / L;
-        a += u * std::min(inA, L / 2);
-        b -= u * std::min(inB, L / 2);
-    }
-    QPainterPath path;
-    path.moveTo(a);
-    path.lineTo(b);
+    const QPainterPath ha = arrowHead(l.stroke.startArrow, a, fromA, l.stroke.width, l.stroke.startSize, &inA);
+    const QPainterPath hb = arrowHead(l.stroke.endArrow, b, fromB, l.stroke.width, l.stroke.endSize, &inB);
+    // The line stops short where a filled arrowhead covers its end.
+    auto pull = [](QPointF &end, const QPointF &next, double by) {
+        const QPointF d = next - end;
+        const double L = std::hypot(d.x(), d.y());
+        if (L > 0.01) end += d / L * std::min(by, L / 2);
+    };
+    pull(pts.first(), fromA, inA);
+    pull(pts.last(), fromB, inB);
+    QPainterPath path(pts.first());
+    if (l.route == LineItem::Curved && pts.size() == 4) path.cubicTo(pts[1], pts[2], pts[3]);
+    else for (int i = 1; i < pts.size(); ++i) path.lineTo(pts[i]);
     Renderer::strokePath(p, path, l.stroke, cs);
     QPen pen = l.stroke.pen(cs);
     pen.setStyle(Qt::SolidLine);

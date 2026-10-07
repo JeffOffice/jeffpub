@@ -1266,7 +1266,7 @@ void insertPageDialog(QWidget *p, Editor *ed)
         ed->beginChange(QStringLiteral("Insert Page"));
         for (int i = 0; i < count->value(); ++i) {
             auto pg = ed->doc()->addPage(at + 1 + i, master->currentData().toString());
-            for (const auto &it : ed->doc()->pages[src < at + 1 + i ? src : src + 1]->items) pg->items.push_back(ed->doc()->cloneItem(*it));
+            for (const auto &it : ed->doc()->cloneItems(ed->doc()->pages[src < at + 1 + i ? src : src + 1]->items)) pg->items.push_back(it);
         }
         ed->endChange();
         ed->setCurrentPage(at + 1);

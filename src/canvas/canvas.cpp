@@ -473,6 +473,17 @@ void Canvas::paintGuides(QPainter &p, const Slot &s)
     if (s.page >= 0) drawRulerGuides(d->pages[s.page]->guides);
 }
 
+// The yellow handle that moves the middle of an elbow or curved line
+// (shown when both ends leave level, or both upright).
+static bool lineBendHandle(const LineItem &l, QPointF *at)
+{
+    if (l.route == LineItem::Straight || l.startVertical != l.endVertical) return false;
+    const QVector<QPointF> pts = l.routePoints();
+    if (pts.size() != 4) return false;
+    *at = (pts[1] + pts[2]) / 2;
+    return true;
+}
+
 QVector<QPointF> Canvas::handlePoints(const Item *it) const
 {
     QVector<QPointF> out;
@@ -683,8 +694,22 @@ static QPainterPath inserted(const QPainterPath &path, const QPointF &q, double 
 void Canvas::paintHandles(QPainter &p, Item *it)
 {
     if (it->type() == ItemType::Line) {
+        const auto *l = static_cast<const LineItem *>(it);
         const auto pts = handlePoints(it);
-        for (const QPointF &pt : pts) drawHandle(p, pt);
+        for (int i = 0; i < pts.size(); ++i) {
+            // An end attached to an object shows as a green dot.
+            if (!(i == 0 ? l->start : l->end).id.isEmpty()) {
+                p.setPen(QPen(QColor(40, 110, 40), 1));
+                p.setBrush(QColor(120, 200, 120));
+                p.drawEllipse(pts[i], 4.5, 4.5);
+            } else drawHandle(p, pts[i]);
+        }
+        if (QPointF b; lineBendHandle(*l, &b)) {
+            const QPointF c = pageToView(b);
+            p.setPen(QPen(QColor(120, 90, 0), 1));
+            p.setBrush(QColor(255, 210, 40));
+            p.drawPolygon(QPolygonF({c + QPointF(0, -5), c + QPointF(5, 0), c + QPointF(0, 5), c + QPointF(-5, 0)}));
+        }
         return;
     }
     if (m_ed->wrapItem == it->id) {
@@ -927,6 +952,17 @@ void Canvas::paintOverlay(QPainter &p)
             p.drawLine(QPointF(cr.center().x(), cr.top()), QPointF(cr.center().x(), cr.bottom()));
         }
     }
+    // Connection sites of the object a line is being drawn or dragged to.
+    if (!m_siteHover.over.isEmpty() && (m_drag == Drag::None || m_drag == Drag::Draw || m_drag == Drag::LineEnd))
+        if (const Item *o = d->item(m_siteHover.over)) {
+            for (int i = 0; i < kConnectionSites; ++i) {
+                const QPointF c = pageToView(connectionSite(*o, i));
+                const bool on = m_siteHover.id == o->id && m_siteHover.site == i;
+                p.setPen(QPen(on ? QColor(200, 40, 40) : QColor(70, 120, 200), 1));
+                p.setBrush(on ? QColor(240, 90, 90) : QColor(255, 255, 255));
+                p.drawRect(QRectF(c - QPointF(3.5, 3.5), QSizeF(7, 7)));
+            }
+        }
     // Rubber band / draw preview.
     if (!m_rubber.isNull()) {
         const QRectF r(pageToView(m_rubber.topLeft()), pageToView(m_rubber.bottomRight()));
@@ -938,7 +974,20 @@ void Canvas::paintOverlay(QPainter &p)
             p.setPen(QPen(QColor(30, 30, 30), 1, Qt::DashLine));
             p.setBrush(Qt::NoBrush);
             const Tool t = m_ed->tool();
-            if (t == Tool::Line || t == Tool::Arrow || t == Tool::DoubleArrow) p.drawLine(pageToView(m_pressPage), pageToView(m_lastPage));
+            if (t == Tool::Line || t == Tool::Arrow || t == Tool::DoubleArrow) {
+                LineItem l;
+                l.p1 = m_pressPage;
+                l.p2 = m_lastPage;
+                l.route = m_ed->toolShape() == QLatin1String("elbow") ? LineItem::Elbow : m_ed->toolShape() == QLatin1String("curved") ? LineItem::Curved : LineItem::Straight;
+                if (const Item *o = m_siteStart.id.isEmpty() ? nullptr : m_ed->doc()->item(m_siteStart.id)) connectionSite(*o, m_siteStart.site, &l.startVertical);
+                if (const Item *o = m_siteHover.id.isEmpty() ? nullptr : m_ed->doc()->item(m_siteHover.id)) connectionSite(*o, m_siteHover.site, &l.endVertical);
+                QPainterPath vp;
+                const QVector<QPointF> rp = l.routePoints();
+                vp.moveTo(pageToView(rp.first()));
+                if (l.route == LineItem::Curved && rp.size() == 4) vp.cubicTo(pageToView(rp[1]), pageToView(rp[2]), pageToView(rp[3]));
+                else for (int i = 1; i < rp.size(); ++i) vp.lineTo(pageToView(rp[i]));
+                p.drawPath(vp);
+            }
             else if (t == Tool::Shape) {
                 QPainterPath sp = shapePath(m_ed->toolShape(), m_rubber.size());
                 QTransform tf;
@@ -1014,7 +1063,11 @@ QString Canvas::itemAt(const QPointF &page, bool enterGroups, int *row, int *col
         }
         if (it->type() == ItemType::Line) {
             const auto *l = static_cast<const LineItem *>(it);
-            return distToSegment(page, l->p1, l->p2) <= std::max(tol, l->stroke.width / 2 + tol / 2);
+            const double w = std::max(tol, l->stroke.width / 2 + tol / 2);
+            if (l->route == LineItem::Straight) return distToSegment(page, l->p1, l->p2) <= w;
+            QPainterPathStroker st;
+            st.setWidth(2 * w);
+            return st.createStroke(l->path()).contains(page);
         }
         const QPointF local = it->transform().inverted().map(page);
         const QRectF r(QPointF(0, 0), it->rect.size());
@@ -1129,6 +1182,7 @@ Canvas::Hit Canvas::hitTest(const QPointF &view) const
             if (it->type() == ItemType::Line) {
                 for (int i = 0; i < pts.size(); ++i)
                     if (near(pts[i])) return Hit{HitKind::LineEnd, it->id, i};
+                if (QPointF b; lineBendHandle(*static_cast<LineItem *>(it), &b) && near(pageToView(b))) return Hit{HitKind::LineBend, it->id};
             } else {
                 if (m_ed->cropItem == it->id) {
                     for (int i = 0; i < pts.size(); ++i)
@@ -1403,6 +1457,12 @@ void Canvas::mousePressEvent(QMouseEvent *e)
         m_ed->endTextEdit();
         m_drag = Drag::Draw;
         m_pressPage = snapPoint(m_pressPage, nullptr, {});
+        m_siteStart = SiteHit();
+        if (tool == Tool::Line || tool == Tool::Arrow || tool == Tool::DoubleArrow) {
+            // A line drawn from an object starts attached to it.
+            m_siteStart = siteNear(toPage(e->position()), {});
+            if (!m_siteStart.id.isEmpty()) m_pressPage = m_siteStart.at;
+        }
         m_rubber = QRectF(m_pressPage, QSizeF(0, 0));
         return;
     }
@@ -1501,6 +1561,7 @@ void Canvas::mousePressEvent(QMouseEvent *e)
     case HitKind::Handle:
     case HitKind::Rotate:
     case HitKind::LineEnd:
+    case HitKind::LineBend:
     case HitKind::Adjust:
     case HitKind::Crop:
     case HitKind::ColBorder:
@@ -1602,6 +1663,7 @@ void Canvas::beginResize(const Hit &h, const QPointF &page)
         break;
     }
     case HitKind::LineEnd: m_drag = Drag::LineEnd; m_ed->beginChange(QStringLiteral("Move Line Point")); break;
+    case HitKind::LineBend: m_drag = Drag::LineBend; m_ed->beginChange(QStringLiteral("Adjust Line")); break;
     case HitKind::Adjust: m_drag = Drag::Adjust; m_ed->beginChange(QStringLiteral("Adjust Shape")); break;
     case HitKind::Crop: m_drag = Drag::Crop; m_ed->beginChange(QStringLiteral("Crop")); break;
     case HitKind::ColBorder: m_drag = Drag::ColResize; m_ed->beginChange(QStringLiteral("Resize Column")); break;
@@ -1634,9 +1696,16 @@ void Canvas::mouseMoveEvent(QMouseEvent *e)
     m_tipPos = e->position();
 
     switch (m_drag) {
-    case Drag::None:
+    case Drag::None: {
         updateCursorShape(e->position());
+        // With a line tool, the connection sites of the object under the pointer show.
+        const Tool t = m_ed->tool();
+        const QString was = m_siteHover.over;
+        const int wasSite = m_siteHover.site;
+        m_siteHover = (t == Tool::Line || t == Tool::Arrow || t == Tool::DoubleArrow) ? siteNear(page, {}) : SiteHit();
+        if (m_siteHover.over != was || m_siteHover.site != wasSite) viewport()->update();
         return;
+    }
     case Drag::Pan: {
         const QPointF dv = e->position() - m_pressView;
         horizontalScrollBar()->setValue(horizontalScrollBar()->value() - int(dv.x()));
@@ -1652,13 +1721,28 @@ void Canvas::mouseMoveEvent(QMouseEvent *e)
         m_ed->beginChange(m_copyDrag ? QStringLiteral("Copy") : QStringLiteral("Move"));
         if (m_copyDrag) {
             QStringList copies;
+            ItemList originals;
             for (const auto &id : moveSet())
-                if (Item *it = d->item(id)) {
-                    ItemPtr c = d->cloneItem(*it);
-                    m_ed->surfaceItems().push_back(c);
-                    copies << c->id;
-                }
+                if (ItemPtr it = d->itemPtr(id)) originals.push_back(it);
+            for (const ItemPtr &c : d->cloneItems(originals)) {
+                m_ed->surfaceItems().push_back(c);
+                copies << c->id;
+            }
             m_ed->select(copies);
+        }
+        // A connector dragged away from its objects comes loose from them.
+        {
+            QSet<QString> moving;
+            ItemList moved;
+            for (const auto &id : moveSet())
+                if (ItemPtr it = d->itemPtr(id)) moved.push_back(it);
+            walkItems(moved, [&](const ItemPtr &it) { moving.insert(it->id); });
+            walkItems(moved, [&](const ItemPtr &it) {
+                if (it->type() != ItemType::Line) return;
+                auto *l = static_cast<LineItem *>(it.get());
+                for (LineItem::Glue *g : {&l->start, &l->end})
+                    if (!g->id.isEmpty() && !moving.contains(g->id)) *g = LineItem::Glue();
+            });
         }
         m_orig.clear();
         for (const auto &id : moveSet()) m_orig[id] = d->item(id)->toJson();
@@ -1792,6 +1876,15 @@ void Canvas::mouseMoveEvent(QMouseEvent *e)
             const double len = std::hypot(dv.x(), dv.y());
             pg = other + QPointF(std::cos(a), std::sin(a)) * len;
         }
+        // Near another object, the end attaches to its nearest connection site.
+        m_siteHover = siteNear(page, {l->id});
+        LineItem::Glue &g = m_hit.index == 0 ? l->start : l->end;
+        if (!m_siteHover.id.isEmpty()) {
+            pg = m_siteHover.at;
+            g = LineItem::Glue{m_siteHover.id, m_siteHover.site};
+        } else {
+            g = LineItem::Glue();
+        }
         (m_hit.index == 0 ? l->p1 : l->p2) = pg;
         l->syncRect();
         const QPointF dv = l->p2 - l->p1;
@@ -1812,6 +1905,17 @@ void Canvas::mouseMoveEvent(QMouseEvent *e)
         if (!sh || m_hit.index < 0) return;
         const QPointF local = sh->transform().inverted().map(page);
         sh->customPath = pts::moved(m_origPath, m_hit.index, local - m_origPoint);
+        m_ed->notifyLive();
+        return;
+    }
+    case Drag::LineBend: {
+        auto *l = dynamic_cast<LineItem *>(m_ed->single());
+        if (!l) return;
+        const QPointF d0 = l->p2 - l->p1;
+        if (!l->startVertical && std::abs(d0.x()) > 0.01) l->bend = (page.x() - l->p1.x()) / d0.x();
+        else if (l->startVertical && std::abs(d0.y()) > 0.01) l->bend = (page.y() - l->p1.y()) / d0.y();
+        l->bend = std::clamp(l->bend, -5.0, 6.0);
+        l->syncRect();
         m_ed->notifyLive();
         return;
     }
@@ -1895,6 +1999,10 @@ void Canvas::mouseMoveEvent(QMouseEvent *e)
             }
         }
         if (m_drag == Drag::Draw && ctrl) a = m_pressPage - (b - m_pressPage);
+        if (m_drag == Drag::Draw && (t == Tool::Line || t == Tool::Arrow || t == Tool::DoubleArrow)) {
+            m_siteHover = siteNear(page, {});
+            if (!m_siteHover.id.isEmpty()) b = m_siteHover.at;
+        }
         m_lastPage = b;
         m_rubber = QRectF(a, b).normalized();
         if (m_drag == Drag::Draw) m_tip = QStringLiteral("%1 × %2").arg(st.format(m_rubber.width()), st.format(m_rubber.height()));
@@ -1995,9 +2103,13 @@ void Canvas::mouseReleaseEvent(QMouseEvent *e)
         }
         m_ed->endChange();
         break;
+    case Drag::LineEnd:
+        m_siteHover = SiteHit();
+        m_ed->endChange();
+        break;
     case Drag::WrapPoint:
     case Drag::Rotate:
-    case Drag::LineEnd:
+    case Drag::LineBend:
     case Drag::Adjust:
     case Drag::Crop:
     case Drag::CropMove:
@@ -2085,6 +2197,35 @@ void Canvas::mouseReleaseEvent(QMouseEvent *e)
     viewport()->update();
 }
 
+Canvas::SiteHit Canvas::siteNear(const QPointF &page, const QSet<QString> &exclude) const
+{
+    SiteHit out;
+    const double pad = 12.0 / ppp(), snap = 10.0 / ppp();
+    const ItemList &items = m_ed->surfaceItems();
+    for (auto it = items.rbegin(); it != items.rend(); ++it) {
+        const Item *o = it->get();
+        if (o->type() == ItemType::Line || exclude.contains(o->id)) continue;
+        const bool group = o->type() == ItemType::Group;
+        const QRectF frame = group ? o->bounds() : QRectF(QPointF(0, 0), o->rect.size());
+        const QPointF local = group ? page : o->transform().inverted().map(page);
+        if (!frame.adjusted(-pad, -pad, pad, pad).contains(local)) continue;
+        out.over = o->id;
+        double best = snap;
+        for (int i = 0; i < kConnectionSites; ++i) {
+            const QPointF at = connectionSite(*o, i);
+            const double dd = QLineF(at, page).length();
+            if (dd <= best) {
+                best = dd;
+                out.id = o->id;
+                out.site = i;
+                out.at = at;
+            }
+        }
+        break;
+    }
+    return out;
+}
+
 void Canvas::finishDraw(const QRectF &rIn, bool clicked)
 {
     const Tool tool = m_ed->tool();
@@ -2138,7 +2279,18 @@ void Canvas::finishDraw(const QRectF &rIn, bool clicked)
         l->p2 = p1;
         if (tool != Tool::Line) l->stroke.endArrow = Arrow::Triangle;
         if (tool == Tool::DoubleArrow) l->stroke.startArrow = Arrow::Triangle;
+        const QString route = m_ed->toolShape();
+        l->route = route == QLatin1String("elbow") ? LineItem::Elbow : route == QLatin1String("curved") ? LineItem::Curved : LineItem::Straight;
+        // Ends drawn on an object's connection site attach to it.
+        if (!clicked) {
+            if (!m_siteStart.id.isEmpty()) l->start = LineItem::Glue{m_siteStart.id, m_siteStart.site};
+            if (!m_siteHover.id.isEmpty() && !(m_siteHover.id == m_siteStart.id && m_siteHover.site == m_siteStart.site))
+                l->end = LineItem::Glue{m_siteHover.id, m_siteHover.site};
+        }
+        for (const LineItem::Glue *g : {&l->start, &l->end})
+            if (const Item *o = g->id.isEmpty() ? nullptr : d->item(g->id)) connectionSite(*o, g->site, g == &l->start ? &l->startVertical : &l->endVertical);
         l->syncRect();
+        m_siteStart = m_siteHover = SiteHit();
         m_ed->addItem(l);
         break;
     }
@@ -2222,6 +2374,7 @@ void Canvas::updateCursorShape(const QPointF &view)
     }
     case HitKind::Rotate: viewport()->setCursor(rotateCursor()); return;
     case HitKind::LineEnd:
+    case HitKind::LineBend:
     case HitKind::Adjust: viewport()->setCursor(Qt::PointingHandCursor); return;
     case HitKind::Point: viewport()->setCursor(Qt::SizeAllCursor); return;
     case HitKind::WrapPoint: viewport()->setCursor(Qt::SizeAllCursor); return;

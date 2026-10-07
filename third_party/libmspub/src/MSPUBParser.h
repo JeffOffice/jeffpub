@@ -122,6 +122,7 @@ protected:
   void parseStyleNames(librevenge::RVNGInputStream *input, const QuillChunkReference &chunk);
   void parseDefaultStyle(librevenge::RVNGInputStream *input, const QuillChunkReference &chunk);
   void parseShapeGroup(librevenge::RVNGInputStream *input, const EscherContainerInfo &spgr, Coordinate parentCoordinateSystem, Coordinate parentGroupAbsoluteCoord, unsigned depth = 0);
+  void parseConnectorRules(librevenge::RVNGInputStream *input, const EscherContainerInfo &solver); // JeffPub patch
   void skipBlock(librevenge::RVNGInputStream *input, MSPUBBlockInfo block);
   void parseEscherShape(librevenge::RVNGInputStream *input, const EscherContainerInfo &sp, Coordinate &parentCoordinateSystem, Coordinate &parentGroupAbsoluteCoord);
   bool findEscherContainer(librevenge::RVNGInputStream *input, const EscherContainerInfo &parent, EscherContainerInfo &out, unsigned short type);
@@ -167,6 +168,7 @@ protected:
   unsigned m_lastAddedImage;
   std::vector<int> m_alternateShapeSeqNums;
   std::vector<int> m_escherDelayIndices;
+  std::map<unsigned, unsigned> m_seqBySpid; // JeffPub patch: drawing shape id -> shape sequence number
 
   static short getBlockDataLength(unsigned type);
   static bool isBlockDataString(unsigned type);
