@@ -11,6 +11,7 @@
 #define INCLUDED_MSPUBPARSER2K_H
 
 #include <deque>
+#include <set>
 #include <vector>
 #include <map>
 
@@ -26,6 +27,7 @@ class MSPUBParser2k : public MSPUBParser
   std::vector<unsigned> m_imageDataChunkIndices;
   std::vector<unsigned> m_quillColorEntries;
   std::map<unsigned, std::vector<unsigned> > m_chunkChildIndicesById;
+  std::set<unsigned> m_scratchPageIds; // JeffPub patch: page chunks holding the scratch area
   std::deque<unsigned> m_chunksBeingRead;
 
 protected:
@@ -59,7 +61,7 @@ protected:
   static Color getColorBy2kIndex(unsigned char index);
   static Color getColorBy2kHex(unsigned hex);
   static unsigned translate2kColorReference(unsigned ref2k);
-  static PageType getPageTypeBySeqNum(unsigned seqNum);
+  PageType getPageTypeBySeqNum(unsigned seqNum);
   virtual void parseContentsTextIfNecessary(librevenge::RVNGInputStream *input);
 public:
   explicit MSPUBParser2k(librevenge::RVNGInputStream *input, MSPUBCollector *collector);

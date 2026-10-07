@@ -373,6 +373,16 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
     {
     case 0x0014:
       MSPUB_DEBUG_MSG(("Found page chunk of id 0x%x and parent 0x%x\n", id, parent));
+      // JeffPub patch: a page chunk without the canvas size (bytes 12-19)
+      // holds the scratch area's objects, not a page Publisher shows.
+      {
+        const unsigned long back = input->tell();
+        input->seek(chunkOffset + 12, librevenge::RVNG_SEEK_SET);
+        const unsigned w = readU32(input), h = readU32(input);
+        input->seek(back, librevenge::RVNG_SEEK_SET);
+        if (w == 0 && h == 0)
+          m_scratchPageIds.insert(id);
+      }
       m_contentChunks.push_back(ContentChunkReference(PAGE, chunkOffset, 0, id, parent));
       m_pageChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
       m_chunkChildIndicesById[parent].push_back(unsigned(m_contentChunks.size() - 1));
@@ -804,6 +814,8 @@ bool MSPUBParser2k::parse()
 
 PageType MSPUBParser2k::getPageTypeBySeqNum(unsigned seqNum)
 {
+  if (m_scratchPageIds.count(seqNum))
+    return DUMMY_PAGE;
   switch (seqNum)
   {
   case 0x116:

@@ -2959,6 +2959,20 @@ private Q_SLOTS:
         QCOMPARE(back->storyDoc(bt->storyId)->toPlainText(), QStringLiteral("Beforeafter"));
     }
 
+    // In Publisher 2000 and 98 files the objects on the scratch area are
+    // under a page chunk without a canvas size; it's not a page (Publisher
+    // shows the samples with 2 pages; JeffPub showed an empty third).
+    void pub2000ScratchIsNotAPage()
+    {
+        for (const char *name : {"poi-Sample2000.pub", "poi-Sample98.pub"}) {
+            QString err;
+            auto doc = jp::importPublisherFile(QStringLiteral(JP_TEST_DATA "/pub/") + QLatin1String(name), &err);
+            QVERIFY2(doc, qPrintable(err));
+            QCOMPARE(int(doc->pages.size()), 2);
+            for (const auto &pg : doc->pages) QVERIFY(!pg->items.empty());
+        }
+    }
+
     // Publisher 2000 and 98 files give a run's font as a number in each
     // slot of its font container (not a container per slot, as later
     // versions do). The sample's second box says it's in Arial, and
