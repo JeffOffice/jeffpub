@@ -320,6 +320,7 @@ public:
             if (flow == 2) t->rotation = std::fmod(t->rotation + 180.0, 360.0);
         }
         t->wrap.mode = Wrap::None;
+        applyWrap(*t, p);
         // Stories marked in the file as not hyphenated (others are).
         if (p["jp:no-hyphenation"] && p["jp:no-hyphenation"]->getInt()) t->hyphenate = false;
         if (p["jp:shape-seq"]) m_seqItems[p["jp:shape-seq"]->getInt()] = t->id;
@@ -751,8 +752,27 @@ private:
         return m_doc.scratch;
     }
 
+    // How text in boxes behind an object wraps around it, as the file sets it
+    // (none when the file doesn't say, as in Publisher 2000 files).
+    static void applyWrap(Item &it, const RVNGPropertyList &p)
+    {
+        if (!p["jp:wrap"]) return;
+        const int w = p["jp:wrap"]->getInt();
+        it.wrap.mode = w >= Wrap::None && w <= Wrap::TopBottom ? Wrap::Mode(w) : Wrap::Square;
+        auto dist = [&](const char *key, double &v) {
+            if (p[key]) v = p[key]->getInt() / 12700.0;
+        };
+        dist("jp:wrap-left", it.wrap.left);
+        dist("jp:wrap-top", it.wrap.top);
+        dist("jp:wrap-right", it.wrap.right);
+        dist("jp:wrap-bottom", it.wrap.bottom);
+    }
+
     void add(const ItemPtr &it)
     {
+        // Pictures, shapes, lines and Text Art come from the shape being drawn.
+        const ItemType ty = it->type();
+        if (ty == ItemType::Picture || ty == ItemType::Shape || ty == ItemType::Line || ty == ItemType::TextArt) applyWrap(*it, m_style);
         currentList().push_back(it);
         m_fillOnly = nullptr;
         // Which item each drawing shape became, for the connectors attached to it.

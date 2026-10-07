@@ -2856,6 +2856,87 @@ private Q_SLOTS:
         QCOMPARE(pf2.readAll().count("/MediaBox [0 0 396.000000 612.000000]"), 8);
     }
 
+    // Text wrapping in .pub: the shape record's field 04 low byte (0 none, 2
+    // tight, 3 through, 4 top and bottom; left out for square), and the
+    // distances in the drawing. Agrees with the wrapping Publisher reports for
+    // 1,330 of the 1,342 objects in 284 publications.
+    void pubWrapSetting()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        const Wrap::Mode modes[] = {Wrap::None, Wrap::Square, Wrap::Tight, Wrap::Through, Wrap::TopBottom};
+        for (int i = 0; i < 5; ++i) {
+            auto s = std::make_shared<ShapeItem>();
+            s->rect = QRectF(72 + 90 * i, 72, 72, 72);
+            s->wrap.mode = modes[i];
+            s->wrap.left = 9 + i;
+            doc->pages[0]->items.push_back(s);
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("wrap.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        auto back = importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(int(back->pages[0]->items.size()), 5);
+        for (int i = 0; i < 5; ++i) {
+            const Item *it = back->pages[0]->items[i].get();
+            QCOMPARE(int(it->wrap.mode), int(modes[i]));
+            QVERIFY(std::abs(it->wrap.left - (9 + i)) < 0.01);
+            QVERIFY(std::abs(it->wrap.top - 2.88) < 0.01);
+        }
+    }
+
+    // Wrapping counts a line's text (ascent and descent), not the spacing
+    // below it: in Publisher a 48-point line keeps its full width while an
+    // object starts below the bottom of its text, even inside the line's
+    // spacing. And centered text wraps where it ends up: a line centered
+    // below a picture stays whole.
+    void wrapAroundObjectsLikePublisher()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<TextItem>();
+        t->rect = QRectF(72, 72, 400, 300);
+        t->insets = QMarginsF(0, 0, 0, 0);
+        t->storyId = doc->createStory(QStringLiteral("Wide words here and more words follow on and on and on."));
+        QTextCursor c(doc->storyDoc(t->storyId));
+        c.select(QTextCursor::Document);
+        QTextCharFormat cf;
+        cf.setFontFamilies({QStringLiteral("Tinos")});
+        cf.setFontPointSize(48);
+        c.mergeCharFormat(cf);
+        QTextBlockFormat bf;
+        bf.setLineHeight(130, QTextBlockFormat::ProportionalHeight);
+        c.mergeBlockFormat(bf);
+        auto pic = std::make_shared<ShapeItem>();
+        doc->pages[0]->items = {t, pic};
+        auto firstLineWidth = [&](double objectTop) {
+            pic->rect = QRectF(300, objectTop + 2.88, 100, 40);
+            LayoutCache cache;
+            const auto fl = cache.textFrame(*doc, *t, 1, RenderOptions());
+            return fl.layout->lineInfo(0).value(0).rect.width();
+        };
+        const double whole = firstLineWidth(400);
+        // The text's bottom is about 53 points (1.107 em) below the top; the
+        // line, with its spacing, about 62.
+        QVERIFY(firstLineWidth(72 + 56) >= whole - 0.5);
+        QVERIFY(firstLineWidth(72 + 40) < whole - 50);
+        // Centered text below an object it would meet at the top of the box.
+        t->valign = VAlign::Middle;
+        doc->storyDoc(t->storyId)->setPlainText(QStringLiteral("CENTERED"));
+        QTextCursor c2(doc->storyDoc(t->storyId));
+        c2.select(QTextCursor::Document);
+        cf.setFontPointSize(20);
+        c2.mergeCharFormat(cf);
+        pic->rect = QRectF(150, 72, 100, 60);
+        LayoutCache cache;
+        const auto fl = cache.textFrame(*doc, *t, 1, RenderOptions());
+        const auto info = fl.layout->lineInfo(0);
+        QCOMPARE(int(info.size()), 1);
+        QVERIFY2(info[0].rect.left() < 10, qPrintable(QString::number(info[0].rect.left())));   // not pushed right of the object
+    }
+
     // A .pub story marks an object set in its text with U+FFFC. Publisher
     // shows nothing there when the object doesn't come through; JeffPub
     // drew the font's "OBJ" box.

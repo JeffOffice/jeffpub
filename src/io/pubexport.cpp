@@ -1263,6 +1263,16 @@ QByteArray PubWriter::write(QStringList *skipped)
         const double a = std::fmod(std::fmod(deg, 360.0) + 360.0, 360.0);
         if (a > 1e-6) opt << Prop{0x0004, quint32(std::llround(a * 65536.0))};
     };
+    // Text wrapping: field 04's low byte (0 none, 2 tight, 3 through, 4 top
+    // and bottom; square leaves the field out, as Publisher does), and the
+    // distances kept clear in the drawing.
+    auto wrapField = [](QVector<B> &body, const Item *it, quint32 high = 0x100) {
+        if (it->wrap.mode != Wrap::Square) body << u16(0x04, high | quint32(it->wrap.mode), 0x10);
+    };
+    auto wrapProps = [](QVector<Prop> &opt, const Item *it) {
+        opt << Prop{0x0384, quint32(emu(it->wrap.left))} << Prop{0x0385, quint32(emu(it->wrap.top))} << Prop{0x0386, quint32(emu(it->wrap.right))}
+            << Prop{0x0387, quint32(emu(it->wrap.bottom))};
+    };
     auto spRecord = [&](quint16 kind, quint32 flags, const Item *it) {
         QByteArray d;
         putU32(d, quint32(spid));
@@ -1446,7 +1456,9 @@ QByteArray PubWriter::write(QStringList *skipped)
                 const quint32 seq = next++;
                 const int tid = pos->first;
                 m_textShapes << TextShape{tid, pos->second, seq};
-                QVector<B> body{flag(0x02), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}), u32(0x27, quint32(tid))};
+                QVector<B> body{flag(0x02)};
+                wrapField(body, t);
+                body << bytesB(0x0c, 0x28, {}) << bytesB(0x0d, 0x28, {}) << u32(0x27, quint32(tid));
                 // Vertical text: 34 = 2 here and text flow 1 in the drawing (every
                 // vertical box in 40 of Publisher's covers has both).
                 if (t->vertical) body << u32(0x34, 2);
@@ -1470,6 +1482,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                                       {0x05bf, 0x00080000}, {0x05ff, 0x00080000}, {0x063f, 0x00080000}, {0x06ff, 0x00020002}};
                 topt << kSideLines << kShadowFlags;
                 inkProps(topt, t->fill);
+                wrapProps(opt, t);
                 QByteArray sp = spRecord(202, 0x0a00, t) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(r);
                 sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
                 sp += clientBlocks(0xf00d, {u32(0x01, quint32(tid))});
@@ -1530,7 +1543,9 @@ QByteArray PubWriter::write(QStringList *skipped)
                 }
                 const QRectF box = turnedBox(frame, s->rotation);
                 const quint32 seq = next++;
-                QVector<B> body{flag(0x02), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {})};
+                QVector<B> body{flag(0x02)};
+                wrapField(body, s);
+                body << bytesB(0x0c, 0x28, {}) << bytesB(0x0d, 0x28, {});
                 if (hasText) body << u32(0x27, quint32(stx->first));
                 body << u32(0x34, 0);
                 if (hasText && s->valign != VAlign::Top) body << u32(0x35, s->valign == VAlign::Middle ? 1 : 2);
@@ -1560,6 +1575,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 QVector<Prop> topt = {{0x01ff, 0x00400000}, {0x06ff, 0x00020002}};
                 topt << kSideLines << kShadowFlags;
                 if (!open) inkProps(topt, s->fill);
+                wrapProps(opt, s);
                 QByteArray sp = spRecord(quint16(st), 0x0a00, s) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(box);
                 sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
                 if (hasText) sp += clientBlocks(0xf00d, {u32(0x01, quint32(stx->first))});
@@ -1573,8 +1589,12 @@ QByteArray PubWriter::write(QStringList *skipped)
                 // for connectors attached each way).
                 auto *l = static_cast<const LineItem *>(it.get());
                 const quint32 seq = next++;
-                cw.put(seq, {0x20, surfaceSeq[pi], {flag(0x02), flag(0x03), u16(0x04, 256, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
-                                                 u32(0xb7, 0)}});
+                {
+                    QVector<B> body{flag(0x02), flag(0x03)};
+                    wrapField(body, l);
+                    body << bytesB(0x0c, 0x28, {}) << bytesB(0x0d, 0x28, {}) << u32(0xb7, 0);
+                    cw.put(seq, {0x20, surfaceSeq[pi], body});
+                }
                 const double dx = l->p2.x() - l->p1.x(), dy = l->p2.y() - l->p1.y();
                 const bool twoBends = l->startVertical == l->endVertical;
                 quint16 kind = 32;
@@ -1606,6 +1626,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 putU32(d, quint32(spid));
                 putU32(d, 0x0b00 | (flipH ? 0x40 : 0) | (flipV ? 0x80 : 0));
                 const QRectF box = QRectF(l->p1, l->p2).normalized();
+                wrapProps(opt, l);
                 QByteArray sp = escherRecord(0x2, kind, 0xf00a, d) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(box);
                 sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
                 finish(seq, sp);
@@ -1664,7 +1685,9 @@ QByteArray PubWriter::write(QStringList *skipped)
                     rowEdge << emu(acc);
                     grid << rec(0x00, {u32(0x01, quint32(rowEdge.last())), u32(0x02, quint32(rowEdge.last() - rowEdge[row]))});
                 }
-                cw.put(seq, {0x10, surfaceSeq[pi], {flag(0x02), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
+                QVector<B> tableHead{flag(0x02)};
+                wrapField(tableHead, tb);
+                cw.put(seq, {0x10, surfaceSeq[pi], tableHead + QVector<B>{bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
                                                  u32(0x27, quint32(tid)), flag(0x2a), u32(0x66, quint32(tb->rows)), u32(0x67, quint32(tb->cols)),
                                                  u32(0x68, quint32(colEdge.last())), u32(0x69, quint32(rowEdge.last())), ref(0x6b, cellsSeq),
                                                  list(0x6d, grid, 0x90), u32(0x70, 0xfffffffdu), u32(0xb7, 0)}});
@@ -1741,6 +1764,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 QVector<Prop> topt = {{0x017f, 0x03800000}, {0x01ff, 0x00400000}, {0x054b, 0}, {0x058b, 0}, {0x05cb, 0}, {0x060b, 0},
                                       {0x06ff, 0x00020002}};
                 topt << kSideLines;
+                wrapProps(opt, tb);
                 QByteArray sp = spRecord(201, 0x0a00, tb) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(r);
                 sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
                 sp += clientBlocks(0xf00d, {u32(0x01, quint32(tid))});
@@ -1752,8 +1776,12 @@ QByteArray PubWriter::write(QStringList *skipped)
                 // the words, font, size, spacing and alignment as properties.
                 auto *ta = static_cast<const TextArtItem *>(it.get());
                 const quint32 seq = next++;
-                cw.put(seq, {0x20, surfaceSeq[pi], {flag(0x02), flag(0x03), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}),
-                                                 u32(0xb7, 0)}});
+                {
+                    QVector<B> body{flag(0x02), flag(0x03)};
+                    wrapField(body, ta);
+                    body << bytesB(0x0c, 0x28, {}) << bytesB(0x0d, 0x28, {}) << u32(0xb7, 0);
+                    cw.put(seq, {0x20, surfaceSeq[pi], body});
+                }
                 // Publisher draws the words only when their font is in the
                 // document's font table.
                 fontIndex(ta->font);
@@ -1783,6 +1811,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                                       {0x05ff, 0x00080000}, {0x063f, 0x00080000}, {0x06ff, 0x00020002}};
                 topt << kShadowFlags << kSideLines;
                 inkProps(topt, ta->fill);
+                wrapProps(opt, ta);
                 QByteArray sp = spRecord(quint16(pubTextArtType(ta->transform_)), 0x0a00, ta) + escherProps(0xf00b, opt) +
                                 escherProps(0xf122, topt) + anchor(r);
                 sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
@@ -1811,8 +1840,11 @@ QByteArray PubWriter::write(QStringList *skipped)
                 }
                 const quint32 seq = next++, nameSeq = next++;
                 const QString file = m_blips[blip - 1].fileName;
-                Chunk c{0x01, surfaceSeq[pi], {flag(0x02), flag(0x03), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}), u32(0x34, 0),
-                                            ref(0x3a, nameSeq), u32(0xaa, quint32(emu(r.width()))), u32(0xab, quint32(emu(r.height())))}};
+                QVector<B> picBody{flag(0x02), flag(0x03)};
+                wrapField(picBody, pic);
+                picBody << bytesB(0x0c, 0x28, {}) << bytesB(0x0d, 0x28, {}) << u32(0x34, 0) << ref(0x3a, nameSeq) << u32(0xaa, quint32(emu(r.width())))
+                        << u32(0xab, quint32(emu(r.height())));
+                Chunk c{0x01, surfaceSeq[pi], picBody};
                 c.dirVer = 0x0102;
                 c.dirB = 1;
                 cw.put(seq, c);
@@ -1859,6 +1891,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 topt << kShadowFlags << kSideLines;
                 if (pic->recolor == PictureItem::ColorTint) topt << Prop{0x011a, bgr(pic->recolorColor.resolve(m_doc.colors))};
                 if (pic->recolor == PictureItem::Sepia) topt << Prop{0x011a, bgr(QColor::fromRgb(kPubSepia))};
+                wrapProps(opt, pic);
                 QByteArray sp = spRecord(1, 0x0a00, pic) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(r);
                 sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
                 finish(seq, sp);

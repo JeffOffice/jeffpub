@@ -1082,6 +1082,10 @@ bool MSPUBParser::parseShape(librevenge::RVNGInputStream *input,
     unsigned width = 0;
     unsigned height = 0;
     std::string jpTrace;
+    // JeffPub patch: text wrapping is field 04's low byte (0 none, 2 tight,
+    // 3 through, 4 top and bottom); a shape without it wraps square (1).
+    // Checked against the wrapping Publisher reports for its objects.
+    unsigned wrap = 1;
     while (stillReading(input, pos + length))
     {
       MSPUBBlockInfo info = parseBlock(input, true);
@@ -1090,6 +1094,10 @@ bool MSPUBParser::parseShape(librevenge::RVNGInputStream *input,
         char buf[64];
         snprintf(buf, sizeof buf, " %02x:%02x=%u", info.id, info.type, info.data);
         jpTrace += buf;
+      }
+      if (info.id == 0x04 && info.type == 0x10)
+      {
+        wrap = info.data & 0xff;
       }
       if (info.id == SHAPE_WIDTH)
       {
@@ -1127,6 +1135,7 @@ bool MSPUBParser::parseShape(librevenge::RVNGInputStream *input,
       }
     }
     if (jpTraceOn()) fprintf(stderr, "SHAPEREC seq=%u text=%u%s\n", chunk.seqNum, textId, jpTrace.c_str());
+    m_collector->setShapeWrap(chunk.seqNum, wrap);
     if (shouldStretchBorderArt)
     {
       m_collector->setShapeStretchBorderArt(chunk.seqNum);
@@ -2210,6 +2219,21 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
           {
             m_collector->setShapeLineBackColor(
               *shapeSeqNum, ColorReference(*ptr_lineBackColor));
+          }
+          // JeffPub patch: the space kept clear around the shape when text
+          // wraps (EMU; left, top, right, bottom).
+          {
+            const unsigned short ids[4] = {0x0384, 0x0385, 0x0386, 0x0387};
+            int dist[4] = {36576, 36576, 36576, 36576};
+            bool any = false;
+            for (int k = 0; k < 4; ++k)
+              if (unsigned *d = getIfExists(foptValues.m_scalarValues, ids[k]))
+              {
+                dist[k] = int(*d);
+                any = true;
+              }
+            if (any)
+              m_collector->setShapeWrapDistances(*shapeSeqNum, dist[0], dist[1], dist[2], dist[3]);
           }
           unsigned *ptr_lineColor = getIfExists(foptValues.m_scalarValues, FIELDID_LINE_COLOR);
           unsigned *ptr_lineFlags = getIfExists(foptValues.m_scalarValues, FIELDID_LINE_STYLE_BOOL_PROPS);

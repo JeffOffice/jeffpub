@@ -129,6 +129,9 @@ public:
   void setTextNotHyphenated(unsigned textId) { m_notHyphenated.insert(textId); }
   void setTextAutofit(unsigned textId, unsigned kind) { m_autofit[textId] = kind; }
   void setPublicationLayout(unsigned layout) { m_publicationLayout = layout; } // JeffPub patch
+  // JeffPub patch: text wrapping around the shape, and its distances.
+  void setShapeWrap(unsigned seqNum, unsigned wrap) { m_shapeInfosBySeqNum[seqNum].m_wrap = wrap; }
+  void setShapeWrapDistances(unsigned seqNum, int l, int t, int r, int b) { m_shapeInfosBySeqNum[seqNum].m_wrapDistances = std::array<int, 4>{{l, t, r, b}}; }
   // JeffPub patch: a connector's start (or end) is attached to a site of another shape.
   void setConnectorGlue(unsigned seqNum, bool start, unsigned toSeqNum, unsigned site)
   {

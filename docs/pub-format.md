@@ -374,6 +374,21 @@ and a field `46` appears for a folded card or envelope. Writing `11` with
 `06` and `0b` alone, without the spreads, doesn't make Publisher print a
 booklet, so JeffPub reads the layout type but doesn't save it yet.
 
+### Text wrapping
+
+How text in boxes behind an object wraps around it is the low byte of the
+object's shape chunk field `04` (u16, type 0x10): 0 none, 2 tight, 3
+through, 4 top and bottom; square, the default, leaves the field out. (The
+high byte varies and isn't about wrapping.) The distances kept clear are
+drawing properties `0x0384`-`0x0387` (left, top, right, bottom, EMU). Read
+against the wrapping Publisher reports for its objects: 1,330 of 1,342 in
+284 publications agree (the rest are groups and boxes the check couldn't
+place). Publisher moves a line aside only for an object reaching above the
+bottom of the line's text (its fonts' ascent and descent), not into the
+spacing below it; and text centered or set at the bottom of its box wraps
+where it ends up. Until October 2026 JeffPub opened every object as not
+wrapping and saved every one as through (`04` = 0x103).
+
 ### Connectors
 
 Every line is a connector shape in the drawing: 32 straight, 33 an elbow

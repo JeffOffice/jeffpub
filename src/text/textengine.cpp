@@ -620,6 +620,33 @@ double naturalLineEm(const QFont &f, const QString &requestedFamily) { return li
 
 void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &frames, const LayoutEnv &env)
 {
+    QVector<double> shifts = buildOnce(doc, frames, env);
+    // Text centered or set at the bottom meets the objects it wraps around
+    // where it ends up, not at the frame's top (as in Publisher: a centered
+    // line just below a picture stays whole). Lay it out again with the
+    // objects moved up by that shift, until the shift settles.
+    QVector<double> applied(frames.size(), 0.0);
+    for (int pass = 0; pass < 3; ++pass) {
+        bool again = false;
+        QVector<FrameSpec> moved = frames;
+        for (int fi = 0; fi < frames.size(); ++fi) {
+            if (frames[fi].obstacles.isEmpty() || frames[fi].valign == VAlign::Top || frames[fi].columns > 1) continue;
+            const double s = fi < shifts.size() ? shifts[fi] : 0;
+            if (std::abs(s - applied[fi]) > 0.25) {
+                applied[fi] = s;
+                again = true;
+            }
+            for (QPolygonF &poly : moved[fi].obstacles) poly.translate(0, -applied[fi]);
+        }
+        if (!again) break;
+        shifts = buildOnce(doc, moved, env);
+    }
+    m_frames = frames;
+}
+
+QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<FrameSpec> &frames, const LayoutEnv &env)
+{
+    QVector<double> shifts(frames.size(), 0.0);
     m_blocks.clear();
     m_frames = frames;
     m_env = env;
@@ -966,7 +993,14 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
 
             // Estimate with the same rule the placed line will use, so wrap checks
             // see the obstacles the real line will meet.
-            const double estH = std::max(1.0, lineHeightFor(bf, scale, singleSpacing({}, 0, 0, base)));
+            const double estSingle = singleSpacing({}, 0, 0, base);
+            const double estH = std::max(1.0, lineHeightFor(bf, scale, estSingle));
+            // Wrapping counts a line's text (its fonts' ascent and descent),
+            // not the spacing around it: in Publisher a line moves aside only
+            // for an object reaching above the bottom of its text (checked with
+            // 48-point Times New Roman lines: the 53 points of its ascent and
+            // descent, not the 55 of its single spacing).
+            const double estText = std::min(estH, heightOf(base));
             B->tl->beginLayout();
             int lineNo = 0;
             while (true) {
@@ -996,7 +1030,7 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                     const QRectF col = colRect(f, c);
                     if (!rowActive) {
                         const double x0 = col.left() + indL, x1 = col.right() - indR;
-                        QVector<Iv> ivs = freeIntervals(frames[f].obstacles, x0, x1, col.top() + y, col.top() + y + estH);
+                        QVector<Iv> ivs = freeIntervals(frames[f].obstacles, x0, x1, col.top() + y, col.top() + y + estText);
                         QVector<Iv> ok;
                         const double minW = std::max(18.0, base.pointSizeF() / fontPointFactor() * 2.5);
                         for (const Iv &iv : ivs)
@@ -1049,8 +1083,9 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                         continue;
                     }
                     // Re-check wrap for a line taller than estimated.
-                    if (h > estH * 1.05 && !frames[f].obstacles.isEmpty() && rowIdx == 0) {
-                        const QVector<Iv> recheck = freeIntervals(frames[f].obstacles, iv.x0, iv.x1, col.top() + y, col.top() + y + h);
+                    const double inkH = std::min(textH, line.height());
+                    if (inkH > estText * 1.05 && !frames[f].obstacles.isEmpty() && rowIdx == 0) {
+                        const QVector<Iv> recheck = freeIntervals(frames[f].obstacles, iv.x0, iv.x1, col.top() + y, col.top() + y + inkH);
                         if (recheck.size() != 1 || recheck[0].x0 > iv.x0 + 0.5 || recheck[0].x1 < iv.x1 - 0.5) {
                             y += 2;
                             rowActive = false;
@@ -1275,8 +1310,10 @@ void StoryLayout::build(const QTextDocument *doc, const QVector<FrameSpec> &fram
                     B->lines[i].rect.translate(0, shift);
                 }
         m_used[fi] += shift;
+        shifts[fi] = shift;
     }
     for (int fi = 0; fi < nF; ++fi) m_used[fi] += frames[fi].insets.bottom();
+    return shifts;
 }
 
 QVector<QRectF> StoryLayout::lineRects(int frame) const

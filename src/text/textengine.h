@@ -133,6 +133,9 @@ public:
 private:
     const Block *blockAt(int pos, int *rel) const;
     double frameY(int frame) const;   // where a frame's lines start in the paragraph layouts (frameCount() for overflow)
+    // One layout pass; returns how far each frame's text moved down for its
+    // vertical alignment.
+    QVector<double> buildOnce(const QTextDocument *doc, const QVector<FrameSpec> &frames, const LayoutEnv &env);
     std::vector<std::unique_ptr<Block>> m_blocks;
     QVector<FrameSpec> m_frames;
     QVector<double> m_frameY;

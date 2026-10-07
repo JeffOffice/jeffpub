@@ -731,6 +731,21 @@ void MSPUBCollector::setupShapeStructures(ShapeGroupElement &elt)
 }
 
 
+// JeffPub patch: how text wraps around the shape.
+static void addWrapProps(librevenge::RVNGPropertyList &props, const ShapeInfo &info)
+{
+  if (bool(info.m_wrap))
+    props.insert("jp:wrap", int(info.m_wrap.get()));
+  if (bool(info.m_wrapDistances))
+  {
+    const std::array<int, 4> &d = info.m_wrapDistances.get();
+    props.insert("jp:wrap-left", d[0]);
+    props.insert("jp:wrap-top", d[1]);
+    props.insert("jp:wrap-right", d[2]);
+    props.insert("jp:wrap-bottom", d[3]);
+  }
+}
+
 std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, const Coordinate &/* relativeTo*/, const VectorTransformation2D &foldedTransform, bool isGroup, const VectorTransformation2D &thisTransform) const
 {
   std::vector<int> adjustValues = getShapeAdjustValues(info);
@@ -750,6 +765,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
     const Coordinate c = info.m_coordinates.get_value_or(Coordinate());
     graphicsProps.insert("jp:shape-type", int(info.m_type.get_value_or(RECTANGLE)));
     graphicsProps.insert("jp:shape-seq", int(info.m_jpSeqNum));
+    addWrapProps(graphicsProps, info);
     // A connector's ends: the shapes and connection sites they're attached to.
     if (bool(info.m_glueStart))
     {
@@ -1431,6 +1447,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
         // Its place in the chain: the file may list the boxes in any order.
         props.insert("jp:text-chain-index", (int)info.m_textChainIndex);
         props.insert("jp:shape-seq", (int)info.m_jpSeqNum);
+        addWrapProps(props, info);
         if (m_notHyphenated.count(get(info.m_textId)))
           props.insert("jp:no-hyphenation", true);
         const auto fit = m_autofit.find(get(info.m_textId));

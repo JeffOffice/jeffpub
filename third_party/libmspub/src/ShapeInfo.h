@@ -14,6 +14,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <array>
 #include <vector>
 
 #include <boost/optional.hpp>
@@ -49,6 +50,8 @@ struct ShapeInfo
   // JeffPub patch: the shape's sequence number, and for a connector the
   // shapes (by sequence number) and connection sites its ends attach to.
   unsigned m_jpSeqNum = 0;
+  boost::optional<unsigned> m_wrap;   // JeffPub patch: text wrapping (0 none, 1 square, 2 tight, 3 through, 4 top and bottom)
+  boost::optional<std::array<int, 4> > m_wrapDistances; // JeffPub patch: EMU left, top, right, bottom
   boost::optional<std::pair<unsigned, unsigned> > m_glueStart, m_glueEnd;   // JeffPub 79: the box's place among the boxes sharing its story
   std::map<unsigned, int> m_adjustValuesByIndex;
   std::vector<int> m_adjustValues;
