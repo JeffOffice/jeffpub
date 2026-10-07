@@ -1885,6 +1885,9 @@ boost::optional<unsigned> MSPUBParser::getFontIndex(librevenge::RVNGInputStream 
   while (stillReading(input, info.dataOffset + info.dataLength))
   {
     MSPUBBlockInfo subInfo = parseBlock(input, true);
+    // Publisher 2000 and 98 give each slot's font number directly.
+    if ((subInfo.type == 0x18 || subInfo.type == 0x20) && subInfo.id == 0 && !latin)
+      latin = subInfo.data;
     if (subInfo.type == GENERAL_CONTAINER)
     {
       const unsigned long after = subInfo.dataOffset + subInfo.dataLength;

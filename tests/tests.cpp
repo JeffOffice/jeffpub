@@ -2799,6 +2799,29 @@ private Q_SLOTS:
         QVERIFY(lines[3]->startVertical && !lines[3]->endVertical);
     }
 
+    // Publisher 2000 and 98 files give a run's font as a number in each
+    // slot of its font container (not a container per slot, as later
+    // versions do). The sample's second box says it's in Arial, and
+    // Publisher shows it in Arial.
+    void pub2000RunFonts()
+    {
+        for (const char *name : {"poi-Sample2000.pub", "poi-Sample98.pub"}) {
+            jp::PubImportReport rep;
+            QString err;
+            auto doc = jp::importPublisherFile(QStringLiteral(JP_TEST_DATA "/pub/") + QLatin1String(name), &err, &rep);
+            QVERIFY2(doc, qPrintable(err));
+            QVERIFY2(rep.fontsUsed.contains(QStringLiteral("Arial")), qPrintable(QLatin1String(name) + rep.fontsUsed.join(QLatin1Char(','))));
+            QString arialText;
+            for (const auto &it : doc->pages[0]->items)
+                if (auto *t = dynamic_cast<jp::TextItem *>(it.get())) {
+                    QTextCursor c(doc->storyDoc(t->storyId));
+                    c.movePosition(QTextCursor::NextCharacter);
+                    if (c.charFormat().fontFamilies().toStringList().value(0) == QLatin1String("Arial")) arialText = doc->storyDoc(t->storyId)->toPlainText();
+                }
+            QVERIFY2(arialText.contains(QStringLiteral("Arial, 20 point")), qPrintable(arialText));
+        }
+    }
+
     // AutoFit Text in .pub lives in the story's record: 05 = 1 for best fit,
     // 3 for shrink text on overflow, and a 0c flag for grow the box, as
     // Publisher writes them when each setting is chosen. A box without one
