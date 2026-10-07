@@ -75,6 +75,9 @@ public:
     // Each page as an SVG drawing: `path` for one page, name-1.svg, name-2.svg... for several.
     bool exportSvgTo(const QString &path, QString *error = nullptr);
     void exportHtml();
+    // An EPUB e-book; `cover` makes the first page its cover.
+    void exportEpub();
+    bool exportEpubTo(const QString &path, const QString &title, const QString &author, bool cover, QString *error = nullptr);
     bool exportHtmlTo(const QString &path);
     void printPublication();
     void showBackstage(const QString &page = QString());

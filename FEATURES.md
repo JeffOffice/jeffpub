@@ -20,7 +20,7 @@ Features JeffPub 79 has that Publisher never did, then the ones planned before v
 - [x] Footnotes and endnotes: numbered references (Insert > References), footnotes at the bottom of the column their number lands in under a short rule (a line moves on with its note when both don't fit), endnotes under "Notes" after the story *(note text is edited in a dialog; a note too tall for a whole column isn't split)*
 - [x] Insert > Icons: 1,539 vector icons from the open-source Lucide set, searched by name or keyword; each becomes an editable shape in the color scheme's main color (Line Color recolors it, Edit Points reshapes it) whose line weight grows and shrinks with it, sharp in print and PDF, and saved to `.pub` as a drawn shape
 - [x] SVG: pages saved as SVG drawings (Save as Picture), with letters as outlines so they look the same without the fonts; SVG pictures print and export to PDF as sharp vectors; and Convert to Shapes (Picture Format, or right-click) turns an SVG picture into editable shapes *(text and pictures inside the drawing are left out, with a note saying so; clipping inside SVG pictures isn't shown on screen, a limit of the Qt version JeffPub uses)*
-- [ ] EPUB export for e-book readers and stores
+- [x] EPUB export for e-book readers and stores (File > Export > Save as E-book): text that reflows to any screen, chapters at each Heading 1, contents from Heading 1-3, pictures and tables in place, footnotes that pop up and endnotes at the back, the first page as the cover *(not yet: a fixed-layout, page-for-page version)*
 - [ ] PDF pages placed as sharp vector graphics
 - [ ] A published specification of the `.jpub` format
 

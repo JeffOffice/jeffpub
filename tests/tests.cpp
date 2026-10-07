@@ -2,6 +2,8 @@
 #include "core/barcode.h"
 #include "core/svg.h"
 #include "render/svgexport.h"
+#include "io/epub.h"
+#include <QXmlStreamReader>
 #include <QSvgRenderer>
 #include <QSvgGenerator>
 #include "io/cfb.h"
@@ -2125,6 +2127,184 @@ private Q_SLOTS:
 
         QVERIFY(!w.exportSvgTo(dir.filePath(QStringLiteral("missing/folder/page.svg")), &err));
         QVERIFY(!err.isEmpty());
+    }
+
+    // File > Export > Save as E-book: a valid EPUB 3 (the type first and
+    // uncompressed, every file it lists present, well-formed XHTML), the
+    // stories in reading order split into chapters at Heading 1, formatting,
+    // links, lists, pictures, tables, footnotes beside the text, endnotes at
+    // the back, contents from the headings, and no page numbers.
+    void epubExport()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        doc->props.author = QStringLiteral("Pat Writer");
+        const QString footId = doc->createStory(QStringLiteral("A footnote's words."));
+        const QString endId = doc->createStory(QStringLiteral("An endnote's words."));
+        auto field = [](QTextCursor &c, const QString &code) {
+            QTextCharFormat f;
+            f.setProperty(tp::Field, code);
+            c.insertText(QString(QChar(0xFFFC)), f);
+            c.setCharFormat(QTextCharFormat());
+        };
+        auto heading = [](QTextCursor &c, const QString &style, const QString &text, bool first) {
+            QTextBlockFormat bf;
+            bf.setProperty(tp::StyleName, style);
+            if (first) c.setBlockFormat(bf);
+            else c.insertBlock(bf, QTextCharFormat());
+            c.insertText(text);
+        };
+        auto t1 = std::make_shared<TextItem>();
+        t1->rect = QRectF(72, 72, 468, 300);
+        t1->storyId = doc->createStory();
+        {
+            QTextCursor c(doc->storyDoc(t1->storyId));
+            heading(c, QStringLiteral("Heading 1"), QStringLiteral("Chapter One"), true);
+            c.insertBlock(QTextBlockFormat(), QTextCharFormat());
+            c.insertText(QStringLiteral("Plain, "));
+            QTextCharFormat b;
+            b.setFontWeight(QFont::Bold);
+            c.insertText(QStringLiteral("bold"), b);
+            c.insertText(QStringLiteral(", "), QTextCharFormat());
+            QTextCharFormat i;
+            i.setFontItalic(true);
+            c.insertText(QStringLiteral("italic"), i);
+            c.insertText(QStringLiteral(" & a "), QTextCharFormat());
+            QTextCharFormat a;
+            a.setAnchor(true);
+            a.setAnchorHref(QStringLiteral("https://example.com/"));
+            c.insertText(QStringLiteral("link"), a);
+            c.insertText(QStringLiteral("."), QTextCharFormat());
+            field(c, QStringLiteral("footnote:") + footId);
+            c.insertBlock(QTextBlockFormat(), QTextCharFormat());
+            QTextListFormat lf;
+            lf.setStyle(QTextListFormat::ListDecimal);
+            c.createList(lf);
+            c.insertText(QStringLiteral("First"));
+            c.insertBlock();
+            c.insertText(QStringLiteral("Second"));
+            c.insertBlock(QTextBlockFormat(), QTextCharFormat());
+            c.currentList() ? c.currentList()->remove(c.block()) : void();
+        }
+        doc->pages[0]->items.push_back(t1);
+        QImage green(80, 40, QImage::Format_RGB32);
+        green.fill(Qt::darkGreen);
+        QByteArray png;
+        QBuffer pb(&png);
+        pb.open(QIODevice::WriteOnly);
+        green.save(&pb, "PNG");
+        auto pic = std::make_shared<PictureItem>();
+        pic->imageId = doc->addImage(png, QStringLiteral("png"));
+        pic->rect = QRectF(72, 400, 200, 100);
+        pic->imgRect = QRectF(0, 0, 200, 100);
+        pic->altText = QStringLiteral("A green box");
+        doc->pages[0]->items.push_back(pic);
+
+        doc->pages.push_back(std::make_shared<Page>());
+        auto t2 = std::make_shared<TextItem>();
+        t2->rect = QRectF(72, 72, 468, 400);
+        t2->storyId = doc->createStory();
+        {
+            QTextCursor c(doc->storyDoc(t2->storyId));
+            QTextBlockFormat toc;
+            toc.setProperty(tp::TocLevel, 1);
+            c.setBlockFormat(toc);
+            c.insertText(QStringLiteral("Contents line\t1"));
+            heading(c, QStringLiteral("Heading 1"), QStringLiteral("Chapter Two"), false);
+            heading(c, QStringLiteral("Heading 2"), QStringLiteral("Part A"), false);
+            c.insertBlock(QTextBlockFormat(), QTextCharFormat());
+            c.insertText(QStringLiteral("Text with an endnote"));
+            field(c, QStringLiteral("endnote:") + endId);
+            c.insertText(QStringLiteral(" on page "));
+            field(c, QStringLiteral("page"));
+            c.insertText(QStringLiteral("."));
+        }
+        doc->pages[1]->items.push_back(t2);
+
+        MainWindow w;
+        w.editor()->setDocument(std::move(doc));
+        Editor *ed = w.editor();
+        auto table = std::static_pointer_cast<TableItem>(ed->newTable(QRectF(72, 600, 300, 60), 2, 2));
+        const QStringList cells = {QStringLiteral("A1"), QStringLiteral("B1"), QStringLiteral("A2"), QStringLiteral("B2")};
+        for (int k = 0; k < 4; ++k) setStoryText(ed->doc()->storyDoc(table->cells[k].storyId), cells[k]);
+        ed->doc()->pages[1]->items.push_back(table);
+
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("book.epub"));
+        QString err;
+        QVERIFY2(w.exportEpubTo(path, QStringLiteral("My Book"), QString(), true, &err), qPrintable(err));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QByteArray epub = f.readAll();
+        QCOMPARE(epub.mid(30, 28), QByteArray("mimetypeapplication/epub+zip"));   // first, stored
+        QCOMPARE(int(epub[8]), 0);
+        QMap<QString, QByteArray> z;
+        QVERIFY2(readZip(epub, z, &err), qPrintable(err));
+        QVERIFY(z.value(QStringLiteral("META-INF/container.xml")).contains("full-path=\"OEBPS/content.opf\""));
+
+        // Every XML file is well formed.
+        for (auto it = z.cbegin(); it != z.cend(); ++it) {
+            if (!it.key().endsWith(QLatin1String(".xhtml")) && !it.key().endsWith(QLatin1String(".opf")) && !it.key().endsWith(QLatin1String(".xml"))) continue;
+            QXmlStreamReader r(it.value());
+            while (!r.atEnd()) r.readNext();
+            QVERIFY2(!r.hasError(), qPrintable(it.key() + QStringLiteral(": ") + r.errorString()));
+        }
+        // The package lists only files that are there, and reads them in order.
+        const QByteArray opf = z.value(QStringLiteral("OEBPS/content.opf"));
+        QXmlStreamReader r(opf);
+        QStringList ids, spine;
+        while (!r.atEnd()) {
+            r.readNext();
+            if (!r.isStartElement()) continue;
+            if (r.name() == QLatin1String("item")) {
+                ids << r.attributes().value(QStringLiteral("id")).toString();
+                QVERIFY2(z.contains(QStringLiteral("OEBPS/") + r.attributes().value(QStringLiteral("href")).toString()), qPrintable(r.attributes().value(QStringLiteral("href")).toString()));
+            } else if (r.name() == QLatin1String("itemref")) {
+                spine << r.attributes().value(QStringLiteral("idref")).toString();
+            }
+        }
+        for (const QString &s : std::as_const(spine)) QVERIFY(ids.contains(s));
+        QCOMPARE(spine, QStringList({QStringLiteral("cover"), QStringLiteral("c1"), QStringLiteral("c2"), QStringLiteral("notes")}));
+        QVERIFY(opf.contains("properties=\"nav\"") && opf.contains("properties=\"cover-image\""));
+        QVERIFY(opf.contains("<dc:title>My Book</dc:title>") && opf.contains("<dc:creator>Pat Writer</dc:creator>") && opf.contains("<dc:language>en-US</dc:language>"));
+
+        const QString c1 = QString::fromUtf8(z.value(QStringLiteral("OEBPS/chapter1.xhtml")));
+        QVERIFY(c1.contains(QStringLiteral("<h1 id=\"h1\">Chapter One</h1>")));
+        QVERIFY(c1.contains(QStringLiteral("<strong>bold</strong>")) && c1.contains(QStringLiteral("<em>italic</em>")) && c1.contains(QStringLiteral(" &amp; a ")));
+        QVERIFY(c1.contains(QStringLiteral("<a href=\"https://example.com/\">link</a>")));
+        QVERIFY(c1.contains(QStringLiteral("<ol type=\"1\">\n<li>First</li>\n<li>Second</li>\n</ol>")));
+        QVERIFY(c1.contains(QStringLiteral("href=\"#fn1\">1</a>")) && c1.contains(QStringLiteral("<aside epub:type=\"footnote\" id=\"fn1\">")));
+        QVERIFY(c1.contains(QStringLiteral("A footnote's words.")));
+        QVERIFY(c1.contains(QStringLiteral("<img src=\"images/pic1.png\" alt=\"A green box\"")));
+        QVERIFY(c1.indexOf(QStringLiteral("Plain")) < c1.indexOf(QStringLiteral("<img")));   // the text above comes first
+        const QString c2 = QString::fromUtf8(z.value(QStringLiteral("OEBPS/chapter2.xhtml")));
+        QVERIFY(c2.contains(QStringLiteral(">Chapter Two</h1>")) && c2.contains(QStringLiteral(">Part A</h2>")));
+        QVERIFY(!c2.contains(QStringLiteral("Contents line")));                                 // the book has its own contents
+        QVERIFY(c2.contains(QStringLiteral("href=\"notes.xhtml#en1\"")));
+        QVERIFY(c2.contains(QStringLiteral(" on page .</p>")));                                  // no page numbers
+        QCOMPARE(c2.count(QStringLiteral("<td>")), 4);
+        QVERIFY(c2.contains(QStringLiteral("<td><p>B2</p></td>")));
+        const QString notes = QString::fromUtf8(z.value(QStringLiteral("OEBPS/notes.xhtml")));
+        QVERIFY(notes.contains(QStringLiteral("An endnote's words.")) && notes.contains(QStringLiteral("chapter2.xhtml#enref1")));
+        const QString nav = QString::fromUtf8(z.value(QStringLiteral("OEBPS/nav.xhtml")));
+        QVERIFY(nav.contains(QStringLiteral("<a href=\"chapter1.xhtml#h1\">Chapter One</a>")));
+        QVERIFY(nav.contains(QStringLiteral("Chapter Two</a><ol>\n<li><a href=\"chapter2.xhtml#h3\">Part A</a>")));   // nested under its chapter
+        QVERIFY(!QImage::fromData(z.value(QStringLiteral("OEBPS/images/cover.jpg"))).isNull());
+        QCOMPARE(z.value(QStringLiteral("OEBPS/images/pic1.png")), png);                        // a picture used as it is keeps its file
+
+        // A compressed entry that claims another size, or a huge one, is refused.
+        ZipWriter zw;
+        zw.add(QStringLiteral("a.txt"), QByteArray(5000, 'a'), true);
+        const QByteArray good = zw.finish();
+        QMap<QString, QByteArray> back;
+        QVERIFY(readZip(good, back) && back.value(QStringLiteral("a.txt")) == QByteArray(5000, 'a'));
+        const qsizetype dirAt = qFromLittleEndian<quint32>(good.constData() + good.size() - 22 + 16);
+        for (const quint32 claimed : {4999u, 0x7FFFFFFFu}) {
+            QByteArray bad = good;
+            qToLittleEndian<quint32>(claimed, bad.data() + dirAt + 24);
+            back.clear();
+            QVERIFY(!readZip(bad, back));
+        }
     }
 
     // Footnotes at the bottom of the column their reference lands in (under

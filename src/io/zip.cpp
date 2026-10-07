@@ -1,6 +1,7 @@
 #include "io/zip.h"
 
 #include <QFile>
+#include <zlib.h>
 
 #include <QtEndian>
 
@@ -26,22 +27,63 @@ quint32 crc32(const QByteArray &data)
 static void put16(QByteArray &a, quint16 v) { char b[2]; qToLittleEndian(v, b); a.append(b, 2); }
 static void put32(QByteArray &a, quint32 v) { char b[4]; qToLittleEndian(v, b); a.append(b, 4); }
 
-void ZipWriter::add(const QString &name, const QByteArray &data)
+// Raw deflate (no zlib header), as ZIP entries hold it.
+static QByteArray deflateRaw(const QByteArray &in)
+{
+    z_stream zs{};
+    if (deflateInit2(&zs, 9, Z_DEFLATED, -15, 8, Z_DEFAULT_STRATEGY) != Z_OK) return {};
+    QByteArray out(qsizetype(deflateBound(&zs, uLong(in.size()))), Qt::Uninitialized);
+    zs.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(in.constData()));
+    zs.avail_in = uInt(in.size());
+    zs.next_out = reinterpret_cast<Bytef *>(out.data());
+    zs.avail_out = uInt(out.size());
+    const int r = ::deflate(&zs, Z_FINISH);
+    out.resize(qsizetype(zs.total_out));
+    deflateEnd(&zs);
+    return r == Z_STREAM_END ? out : QByteArray();
+}
+
+static QByteArray inflateRaw(const QByteArray &in, qsizetype expected, bool *ok)
+{
+    *ok = false;
+    // Nothing this program saves is near this; more is a decompression bomb.
+    if (expected < 0 || expected > (qsizetype(1) << 30)) return {};
+    if (expected == 0) {
+        *ok = true;
+        return {};
+    }
+    z_stream zs{};
+    if (inflateInit2(&zs, -15) != Z_OK) return {};
+    QByteArray out(expected, Qt::Uninitialized);
+    zs.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(in.constData()));
+    zs.avail_in = uInt(in.size());
+    zs.next_out = reinterpret_cast<Bytef *>(out.data());
+    zs.avail_out = uInt(out.size());
+    const int r = ::inflate(&zs, Z_FINISH);
+    *ok = r == Z_STREAM_END && qsizetype(zs.total_out) == expected;
+    inflateEnd(&zs);
+    return out;
+}
+
+void ZipWriter::add(const QString &name, const QByteArray &data, bool compress)
 {
     const QByteArray n = name.toUtf8();
-    Entry e{name, crc32(data), quint32(data.size()), quint32(m_out.size())};
+    QByteArray packed = compress ? deflateRaw(data) : QByteArray();
+    const bool deflated = !packed.isEmpty() && packed.size() < data.size();
+    if (!deflated) packed = data;
+    Entry e{name, crc32(data), quint32(data.size()), quint32(packed.size()), quint16(deflated ? 8 : 0), quint32(m_out.size())};
     put32(m_out, 0x04034b50);
     put16(m_out, 20);        // version needed
     put16(m_out, 0x0800);    // UTF-8 names
-    put16(m_out, 0);         // stored
+    put16(m_out, e.method);  // stored or deflated
     put16(m_out, 0); put16(m_out, 0x21); // time, date (1980-01-01)
     put32(m_out, e.crc);
-    put32(m_out, e.size);
+    put32(m_out, e.csize);
     put32(m_out, e.size);
     put16(m_out, quint16(n.size()));
     put16(m_out, 0);
     m_out.append(n);
-    m_out.append(data);
+    m_out.append(packed);
     m_entries << e;
 }
 
@@ -53,10 +95,10 @@ QByteArray ZipWriter::finish()
         put32(m_out, 0x02014b50);
         put16(m_out, 20); put16(m_out, 20);
         put16(m_out, 0x0800);
-        put16(m_out, 0);
+        put16(m_out, e.method);
         put16(m_out, 0); put16(m_out, 0x21);
         put32(m_out, e.crc);
-        put32(m_out, e.size);
+        put32(m_out, e.csize);
         put32(m_out, e.size);
         put16(m_out, quint16(n.size()));
         put16(m_out, 0); put16(m_out, 0); put16(m_out, 0); put16(m_out, 0);
@@ -93,7 +135,7 @@ bool readZip(const QByteArray &zip, QMap<QString, QByteArray> &out, QString *err
     for (int i = 0; i < count; ++i) {
         if (p + 46 > zip.size() || get32(zip, p) != 0x02014b50) return fail("The publication's file directory is damaged.");
         const quint16 method = get16(zip, p + 10);
-        const quint32 csize = get32(zip, p + 20);
+        const quint32 crc = get32(zip, p + 16), csize = get32(zip, p + 20), usize = get32(zip, p + 24);
         const quint16 nlen = get16(zip, p + 28), xlen = get16(zip, p + 30), clen = get16(zip, p + 32);
         const quint32 local = get32(zip, p + 42);
         // The entry's name, extra field and comment must fit in the file too.
@@ -102,9 +144,16 @@ bool readZip(const QByteArray &zip, QMap<QString, QByteArray> &out, QString *err
         p += 46 + nlen + xlen + clen;
         if (qsizetype(local) + 30 > zip.size()) return fail("The publication is truncated.");
         const qsizetype data = local + 30 + get16(zip, local + 26) + get16(zip, local + 28);
-        if (method != 0) return fail("The publication uses a compression method JeffPub cannot read.");
+        if (method != 0 && method != 8) return fail("The publication uses a compression method JeffPub cannot read.");
         if (data + qsizetype(csize) > zip.size()) return fail("The publication is truncated.");
-        out.insert(name, zip.mid(data, csize));
+        if (method == 8) {
+            bool ok = false;
+            const QByteArray inflated = inflateRaw(zip.mid(data, csize), qsizetype(usize), &ok);
+            if (!ok || crc32(inflated) != crc) return fail("The publication is damaged.");
+            out.insert(name, inflated);
+        } else {
+            out.insert(name, zip.mid(data, csize));
+        }
     }
     return true;
 }

@@ -1,5 +1,6 @@
 #include "app/mainwindow.h"
 #include <QComboBox>
+#include <QLineEdit>
 #include <QLocale>
 #include <QDateTime>
 #include <QCheckBox>
@@ -20,6 +21,7 @@
 #include "app/taskpane.h"
 #include "app/widgets.h"
 #include "render/svgexport.h"
+#include "io/epub.h"
 #include "canvas/canvas.h"
 #include "io/jpubfile.h"
 #include "io/pubimport.h"
@@ -733,6 +735,59 @@ bool MainWindow::exportSvgTo(const QString &path, QString *error)
         if (!writePageSvg(ctx, i, out, title, error)) return false;
     }
     return true;
+}
+
+void MainWindow::exportEpub()
+{
+    Document *d = m_ed->doc();
+    QDialog dlg(this);
+    dlg.setWindowTitle(QStringLiteral("Save as E-book"));
+    auto *v = new QVBoxLayout(&dlg);
+    auto *about = new QLabel(QStringLiteral("An EPUB e-book whose text flows to fit each reader's screen. Chapters start at each "
+                                            "Heading 1 paragraph, and the Heading 1-3 paragraphs make its table of contents."), &dlg);
+    about->setWordWrap(true);
+    v->addWidget(about);
+    auto *form = new QFormLayout();
+    auto *title = new QLineEdit(d->props.title.isEmpty() ? QFileInfo(m_ed->displayName()).completeBaseName() : d->props.title, &dlg);
+    auto *author = new QLineEdit(d->props.author, &dlg);
+    form->addRow(QStringLiteral("Title:"), title);
+    form->addRow(QStringLiteral("Author:"), author);
+    v->addLayout(form);
+    auto *cover = new QCheckBox(QStringLiteral("Use the first page as the cover"), &dlg);
+    cover->setChecked(true);
+    v->addWidget(cover);
+    auto *bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    v->addWidget(bb);
+    dlg.resize(460, dlg.sizeHint().height());
+    if (dlg.exec() != QDialog::Accepted) return;
+    const QString base = m_ed->filePath().isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/" + m_ed->displayName()
+                                                    : QFileInfo(m_ed->filePath()).absolutePath() + "/" + QFileInfo(m_ed->filePath()).completeBaseName();
+    const QString path = askSavePath(this, QStringLiteral("Save as E-book"), QFileInfo(base).absolutePath() + "/" + QFileInfo(base).completeBaseName() + ".epub",
+                                     QStringLiteral("EPUB e-book (*.epub)"));
+    if (path.isEmpty()) return;
+    QString error;
+    if (exportEpubTo(path, title->text().trimmed(), author->text().trimmed(), cover->isChecked(), &error))
+        statusBar()->showMessage(QStringLiteral("Saved the e-book."), 5000);
+    else
+        QMessageBox::warning(this, QStringLiteral("Save as E-book"), QStringLiteral("The e-book couldn't be saved: %1").arg(error));
+}
+
+bool MainWindow::exportEpubTo(const QString &path, const QString &title, const QString &author, bool cover, QString *error)
+{
+    EpubOptions opt;
+    opt.title = title;
+    opt.author = author;
+    if (cover && !m_ed->doc()->pages.isEmpty()) {
+        // About what e-book stores ask for: 1,600 pixels tall.
+        PaintContext ctx;
+        ctx.doc = m_ed->doc();
+        ctx.cache = &m_ed->cache();
+        ctx.opt.output = true;
+        opt.cover = Renderer::renderToImage(ctx, 0, 1600 / std::max(1.0, m_ed->doc()->pageSize().height()));
+    }
+    return jp::exportEpub(*m_ed->doc(), path, opt, error);
 }
 
 void MainWindow::exportHtml()
