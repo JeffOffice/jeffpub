@@ -1,7 +1,10 @@
 #include "io/pdfx.h"
 
 #include "io/qtpdf.h"
+#include "io/zip.h"
 
+#include <QCryptographicHash>
+#include <QMap>
 #include <QImage>
 #include <QRegularExpression>
 #include <QVector>
@@ -16,8 +19,42 @@ const QVector<PdfXCondition> &pdfXConditions()
         {QStringLiteral("European offset, coated paper (FOGRA39)"), QStringLiteral("FOGRA39"),
          QStringLiteral("Offset commercial and specialty printing according to ISO 12647-2:2004 / Amd 1, paper type 1 or 2"),
          QStringLiteral("Coated FOGRA39 (ISO 12647-2:2004)")},
+        [] {
+            PdfXCondition c{QStringLiteral("Offset, premium coated paper (FOGRA51, PSO Coated v3)"), QStringLiteral("FOGRA51"),
+                            QStringLiteral("Commercial and specialty offset printing according to ISO 12647-2:2013, premium coated paper"),
+                            QStringLiteral("PSO Coated v3")};
+            c.x4 = true;
+            c.profileUrl = QStringLiteral("https://www.eci.org/lib/exe/pso-coated_v3.zip");
+            c.zipSha256 = QByteArrayLiteral("5c8ed32d40949c2e8b84a03642ca7aadc4e3f153237cf439d3cdddffffd4ed95");
+            c.profileFile = QStringLiteral("PSOcoated_v3.icc");
+            c.profileSha256 = QByteArrayLiteral("c30ad2c01e8f93135ec7682c535e0a81bc2d177c301e196376c5f5838b5c8e86");
+            c.profileSize = QStringLiteral("1.8 MB");
+            return c;
+        }(),
+        [] {
+            PdfXCondition c{QStringLiteral("Your printer's color profile (an .icc file)"), QStringLiteral("Custom"), QString(), QString()};
+            c.x4 = true;
+            c.ownProfile = true;
+            return c;
+        }(),
     };
     return list;
+}
+
+QByteArray pdfXProfileFromZip(const PdfXCondition &c, const QByteArray &zip, QString *error)
+{
+    auto fail = [&](const QString &why) {
+        if (error) *error = why;
+        return QByteArray();
+    };
+    if (QCryptographicHash::hash(zip, QCryptographicHash::Sha256).toHex() != c.zipSha256)
+        return fail(QStringLiteral("the download isn't the file expected"));
+    QMap<QString, QByteArray> entries;
+    if (!readZip(zip, entries)) return fail(QStringLiteral("the download couldn't be unpacked"));
+    const QByteArray icc = entries.value(c.profileFile);
+    if (QCryptographicHash::hash(icc, QCryptographicHash::Sha256).toHex() != c.profileSha256)
+        return fail(QStringLiteral("the profile in the download isn't the one expected"));
+    return icc;
 }
 
 namespace {
@@ -51,10 +88,10 @@ int intIn(const QByteArray &dict, const char *key)
 
 // An RGB picture as CMYK, Flate-compressed, with Qt's own conversion (the
 // one the vector colors went through).
-bool cmykImage(QtPdf &pdf, QtPdf::Obj &o, QString *why)
+bool cmykImage(QtPdf &pdf, QtPdf::Obj &o, bool keepMask, QString *why)
 {
     const QByteArray dict = QtPdf::dictOf(o.body);
-    if (dict.contains("/SMask")) {
+    if (dict.contains("/SMask") && !keepMask) {
         *why = QStringLiteral("a picture still has see-through parts");
         return false;
     }
@@ -87,9 +124,9 @@ bool cmykImage(QtPdf &pdf, QtPdf::Obj &o, QString *why)
     return true;
 }
 
-} // namespace
-
-bool makePdfX1a(const QString &path, const PdfXOptions &opt, QString *error)
+// Both versions: X-4 keeps transparency, and Qt has already written its
+// output intent, document information and metadata.
+bool finishPdfX(const QString &path, const PdfXOptions &opt, bool x4, QString *error)
 {
     auto fail = [&](const QString &why) {
         if (error) *error = why;
@@ -112,7 +149,7 @@ bool makePdfX1a(const QString &path, const PdfXOptions &opt, QString *error)
         if (dict.contains("/Subtype /Image")) {
             if (dict.contains("/DeviceRGB") || dict.contains("/Indexed")) {
                 QString why;
-                if (!cmykImage(pdf, o, &why)) return fail(why);
+                if (!cmykImage(pdf, o, x4, &why)) return fail(why);
             }
             continue;
         }
@@ -131,7 +168,7 @@ bool makePdfX1a(const QString &path, const PdfXOptions &opt, QString *error)
         }
         QString body = dictString(o.body);
         // Graphics states: transparency must be gone; PDF 1.4 keys go.
-        if (body.contains(QLatin1String("/ExtGState")) || body.contains(alpha)) {
+        if (!x4 && (body.contains(QLatin1String("/ExtGState")) || body.contains(alpha))) {
             auto it = alpha.globalMatch(body);
             while (it.hasNext())
                 if (it.next().captured(2).toDouble() < 0.999) return fail(QStringLiteral("see-through objects were left unflattened"));
@@ -144,7 +181,7 @@ bool makePdfX1a(const QString &path, const PdfXOptions &opt, QString *error)
             body.remove(QRegularExpression(QStringLiteral("\\s*/AIS\\s+(true|false)")));
             body.remove(QRegularExpression(QStringLiteral("\\s*/SMask\\s*/None")));
         }
-        if (body.contains(QLatin1String("/S /Transparency"))) return fail(QStringLiteral("a transparency group"));
+        if (!x4 && body.contains(QLatin1String("/S /Transparency"))) return fail(QStringLiteral("a transparency group"));
         // Qt declares RGB spaces in every resource dictionary; its CMYK
         // output never colors with them but starts each page in one.
         body.replace(QLatin1String("/CSp /DeviceRGB"), QLatin1String("/CSp /DeviceCMYK"));
@@ -163,6 +200,7 @@ bool makePdfX1a(const QString &path, const PdfXOptions &opt, QString *error)
         }
         // The catalog names the printing condition.
         if (body.contains(QLatin1String("/Type /Catalog")) && !body.contains(QLatin1String("/OutputIntents"))) {
+            if (x4) return fail(QStringLiteral("no output intent (the printing condition)"));
             const QByteArray intent = "<< /Type /OutputIntent /S /GTS_PDFX /OutputConditionIdentifier " + pdfString(cond.identifier) +
                                       " /OutputCondition " + pdfString(cond.condition) + " /RegistryName (http://www.color.org) /Info " +
                                       pdfString(cond.info) + " >>\n";
@@ -170,7 +208,7 @@ bool makePdfX1a(const QString &path, const PdfXOptions &opt, QString *error)
             body.replace(QLatin1String("/Type /Catalog"), QStringLiteral("/Type /Catalog /OutputIntents [%1 0 R]").arg(id));
         }
         // The document information: the PDF/X version, a title, not trapped.
-        if (o.id == infoId) {
+        if (o.id == infoId && !x4) {
             body.remove(QRegularExpression(QStringLiteral("\\s*/GTS_PDFX\\w+\\s*\\([^)]*\\)")));
             body.remove(QRegularExpression(QStringLiteral("\\s*/Trapped\\s*/\\w+")));
             body.replace(QRegularExpression(QStringLiteral("/Title\\s*\\(\\)")), QStringLiteral("/Title (Untitled)"));
@@ -181,11 +219,16 @@ bool makePdfX1a(const QString &path, const PdfXOptions &opt, QString *error)
         }
         o.body = body.toLatin1();
     }
-    // Everything left is PDF 1.3.
-    pdf.header.replace("%PDF-1.4", "%PDF-1.3");
+    // Everything left is PDF 1.3 (PDF/X-4 stays 1.6).
+    if (!x4) pdf.header.replace("%PDF-1.4", "%PDF-1.3");
     for (const QtPdf::Obj &o : pdf.objects)
         if (QtPdf::dictOf(o.body).contains("/DeviceRGB")) return fail(QStringLiteral("an RGB color space JeffPub couldn't convert"));
     return pdf.save(path, error);
 }
+
+} // namespace
+
+bool makePdfX1a(const QString &path, const PdfXOptions &opt, QString *error) { return finishPdfX(path, opt, false, error); }
+bool makePdfX4(const QString &path, const PdfXOptions &opt, QString *error) { return finishPdfX(path, opt, true, error); }
 
 } // namespace jp

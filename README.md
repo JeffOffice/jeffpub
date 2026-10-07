@@ -85,6 +85,7 @@ JeffPub 79 includes or downloads these components, each under its own license:
 | [NSIS](https://nsis.sourceforge.io/) (Windows) | Installer | zlib/libpng license |
 | [ICU](https://icu.unicode.org/) (in PDFium; with Qt in the Linux packages) | Unicode text support | Unicode License v3 |
 | [LibreTranslate](https://libretranslate.com/) | Translate opens it in the browser; not bundled | AGPL-3.0 |
+| [PSO Coated v3](https://www.eci.org/) color profile, from the European Color Initiative | The printing condition in PDF/X-4 files; downloaded from ECI the first time you make one (after asking); not bundled | ECI's terms: free to use and embed in PDFs, not to pass on |
 | [International ISBN Agency](https://www.isbn-international.org/range_file_generation) range table | Placing the hyphens in ISBNs from every country; downloaded from the agency when you make an ISBN barcode, monthly at most; not bundled | The agency's terms (it doesn't allow republishing the table) |
 
 The dictionaries come unchanged from the [LibreOffice dictionaries project](https://github.com/LibreOffice/dictionaries); each language's authors, license and license text are in [resources/dict](resources/dict/README.md). Changes made to libmspub and librevenge are listed in [third_party/README.md](third_party/README.md). PDFium's license texts, and those of the libraries built into it, are in [third_party/pdfium/licenses](third_party/pdfium/licenses) and ship with the program (in its `licenses/pdfium` folder; on Linux in `/usr/share/doc/jeffpub79/pdfium`).

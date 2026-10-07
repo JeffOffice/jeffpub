@@ -1415,7 +1415,7 @@ QWidget *Backstage::buildExport()
     row("archive", QStringLiteral("Create PDF/A for Archiving"), QStringLiteral("An ISO 19005 (PDF/A-1b) file for long-term storage and court or records filing: every font embedded, standard sRGB color, no transparency."),
         [this] { m_win->exportPdf(QString(), false, true); });
     row("printer-check", QStringLiteral("Create PDF/X for a Commercial Printer"),
-        QStringLiteral("An ISO 15930 (PDF/X-1a) file, the kind printers and print-on-demand services ask for: every color in ink, fonts embedded, no transparency, trim and bleed marked."),
+        QStringLiteral("An ISO 15930 file (PDF/X-1a or PDF/X-4), the kind printers and print-on-demand services ask for: every color in ink, fonts embedded, trim and bleed marked. PDF/X-4 keeps transparency and carries the printing condition's color profile."),
         [this] {
             Settings::get().setValue(QStringLiteral("pdf/pdfx"), true);
             m_win->exportPdfWithOptions();
@@ -1629,6 +1629,7 @@ QWidget *Backstage::buildAbout()
         {"NSIS", "https://nsis.sourceforge.io/", "Installer", "zlib/libpng license", "https://nsis.sourceforge.io/License"},
 #endif
         {"LibreTranslate", "https://libretranslate.com/", "Translate (opens in your browser)", "AGPL-3.0", "https://www.gnu.org/licenses/agpl-3.0.html"},
+        {"PSO Coated v3 color profile", "https://www.eci.org/", "PDF/X-4 (downloaded from the European Color Initiative)", "ECI's terms", "https://www.eci.org/"},
         {"ISBN range table", "https://www.isbn-international.org/", "ISBN hyphens (downloaded from the International ISBN Agency)", "The agency's terms",
          "https://www.isbn-international.org/range_file_generation"},
     };

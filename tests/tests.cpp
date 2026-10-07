@@ -26,6 +26,9 @@
 #include "io/zip.h"
 #include "io/qtpdf.h"
 #include "render/pdfpage.h"
+#include "io/pdfx.h"
+#include <QColorSpace>
+#include <QCryptographicHash>
 #include <QPdfWriter>
 #include <QPrinter>
 #include "app/icons.h"
@@ -78,6 +81,76 @@
 #include <clocale>
 
 using namespace jp;
+
+// A small CMYK printer profile (ICC version 2, 2-point lookup tables), as
+// a printer's own .icc file would be, made here so no real one is needed.
+static QByteArray testCmykProfile()
+{
+    QByteArray tags;
+    struct Tag { const char *sig; QByteArray data; };
+    auto u16 = [](QByteArray &b, int v) { b.append(char((v >> 8) & 0xff)).append(char(v & 0xff)); };
+    auto u32 = [](QByteArray &b, quint32 v) { for (int k = 3; k >= 0; --k) b.append(char((v >> (8 * k)) & 0xff)); };
+    auto s15 = [&](QByteArray &b, double v) { u32(b, quint32(qint32(std::lround(v * 65536)))); };
+    auto lut = [&](int in, int out, const QVector<int> &clut) {
+        QByteArray b("mft2\0\0\0\0", 8);
+        b.append(char(in)).append(char(out)).append(char(2)).append(char(0));
+        for (int r = 0; r < 3; ++r)
+            for (int c = 0; c < 3; ++c) s15(b, r == c ? 1 : 0);
+        u16(b, 2);
+        u16(b, 2);
+        for (int i = 0; i < in; ++i) { u16(b, 0); u16(b, 65535); }
+        for (int v : clut) u16(b, std::clamp(v, 0, 65535));
+        for (int i = 0; i < out; ++i) { u16(b, 0); u16(b, 65535); }
+        return b;
+    };
+    QVector<int> a2b, b2a;   // corners: CMYK to Lab, Lab to CMYK
+    for (int i = 0; i < 16; ++i) {
+        const int c = i >> 3 & 1, m = i >> 2 & 1, y = i >> 1 & 1, k = i & 1;
+        const double L = 100 * (1 - k) * (1 - 0.25 * c) * (1 - 0.35 * m) * (1 - 0.1 * y);
+        a2b << int(L / 100 * 65280) << int((128 + (60 * m - 40 * c) * (1 - k)) * 256) << int((128 + (70 * y - 50 * c) * (1 - k)) * 256);
+    }
+    for (int i = 0; i < 8; ++i) {
+        const double L = (i >> 2 & 1) * 100.0, a = -128 + (i >> 1 & 1) * 255.0, b = -128 + (i & 1) * 255.0;
+        b2a << int(65535 * std::max(0.0, -a / 256)) << int(65535 * std::max(0.0, a / 256)) << int(65535 * std::max(0.0, b / 256)) << int(65535 * (1 - L / 100));
+    }
+    QByteArray desc("desc\0\0\0\0", 8);
+    u32(desc, 10);
+    desc.append("Test CMYK", 10);
+    desc.append(QByteArray(8 + 3 + 67, '\0'));
+    QByteArray cprt("text\0\0\0\0", 8);
+    cprt.append("No copyright, use freely", 25);
+    QByteArray wtpt("XYZ \0\0\0\0", 8);
+    s15(wtpt, 0.9642);
+    s15(wtpt, 1.0);
+    s15(wtpt, 0.8249);
+    const QVector<Tag> list{{"desc", desc}, {"cprt", cprt}, {"wtpt", wtpt}, {"A2B0", lut(4, 3, a2b)}, {"B2A0", lut(3, 4, b2a)}};
+    QByteArray table, body;
+    const int start = 128 + 4 + 12 * int(list.size());
+    for (const Tag &t : list) {
+        table.append(t.sig, 4);
+        u32(table, quint32(start + body.size()));
+        u32(table, quint32(t.data.size()));
+        body += t.data;
+        while (body.size() % 4) body.append('\0');
+    }
+    QByteArray head;
+    u32(head, quint32(start + body.size()));
+    head.append("none", 4);
+    head.append("\x02\x10\0\0", 4);
+    head.append("prtrCMYKLab ", 12);
+    for (int v : {2026, 1, 1, 0, 0, 0}) u16(head, v);
+    head.append("acsp", 4);
+    head.append(QByteArray(24, '\0'));   // platform, flags, maker, model, attributes
+    u32(head, 0);                        // perceptual
+    s15(head, 0.9642);
+    s15(head, 1.0);
+    s15(head, 0.8249);
+    head.append("none", 4);
+    head.append(QByteArray(44, '\0'));
+    QByteArray count;
+    u32(count, quint32(list.size()));
+    return head + count + table + body;
+}
 
 class Tests : public QObject {
     Q_OBJECT
@@ -3456,6 +3529,134 @@ private Q_SLOTS:
     // its booklet as its own (layout, spreads, masters) and pictured it the
     // same (Oct 7). On opening, the parts make one two-page master, and every
     // page comes back (pages marked 0 counted as special: one page did).
+    // PDF/X-4 with the printer's own color profile: transparency kept,
+    // pictures in CMYK with their see-through parts, the profile in the
+    // output intent, the PDF/X-4 identification in the metadata.
+    void pdfX4WithOwnProfile()
+    {
+        const QByteArray icc = testCmykProfile();
+        const QColorSpace cs = QColorSpace::fromIccProfile(icc);
+        QVERIFY(cs.isValid());
+        QCOMPARE(cs.colorModel(), QColorSpace::ColorModel::Cmyk);
+        QTemporaryDir dir;
+        const QString iccPath = dir.filePath(QStringLiteral("printer.icc"));
+        {
+            QFile f(iccPath);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(icc);
+        }
+        auto doc = Document::blank(QSizeF(400, 300));
+        auto shape = std::make_shared<ShapeItem>();
+        shape->shape = QStringLiteral("rect");
+        shape->rect = QRectF(50, 50, 200, 100);
+        shape->fill = Fill::solid(ColorRef::rgb(QColor(0, 0, 255)));
+        shape->fill.transparency = 0.5;
+        doc->pages[0]->items.push_back(shape);
+        QImage img(8, 8, QImage::Format_ARGB32);
+        img.fill(QColor(255, 0, 0, 120));
+        QByteArray png;
+        QBuffer buf(&png);
+        buf.open(QIODevice::WriteOnly);
+        img.save(&buf, "PNG");
+        auto pic = std::make_shared<PictureItem>();
+        pic->imageId = doc->addImage(png, QStringLiteral("png"));
+        pic->rect = QRectF(200, 120, 100, 100);
+        pic->imgRect = QRectF(0, 0, 100, 100);
+        doc->pages[0]->items.push_back(pic);
+
+        MainWindow w;
+        w.editor()->setDocument(std::move(doc));
+        MainWindow::PdfSettings ps;
+        ps.pdfx = true;
+        for (int i = 0; i < pdfXConditions().size(); ++i)
+            if (pdfXConditions()[i].ownProfile) ps.pdfxCondition = i;
+        QVERIFY(pdfXConditions().value(ps.pdfxCondition).x4);
+        // Without the profile there's no PDF/X-4 (and no file).
+        const QString none = dir.filePath(QStringLiteral("none.pdf"));
+        QVERIFY(!w.exportPdfTo(none, ps));
+        QVERIFY(!QFile::exists(none));
+        ps.pdfxProfile = iccPath;
+        const QString path = dir.filePath(QStringLiteral("x4.pdf"));
+        QVERIFY(w.exportPdfTo(path, ps));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QByteArray bytes = f.readAll();
+        QVERIFY(bytes.startsWith("%PDF-1.6"));
+        QVERIFY(bytes.contains("pdfxid:GTS_PDFXVersion=\"PDF/X-4\""));
+
+        QtPdf parsed;
+        QVERIFY(parsed.load(path));
+        bool intent = false, profile = false, seeThrough = false, cmykPicture = false, mask = false, trim = false;
+        for (const auto &o : parsed.objects) {
+            const QByteArray dict = QtPdf::dictOf(o.body);
+            QVERIFY2(!dict.contains("/DeviceRGB"), dict.constData());
+            if (dict.contains("/Type /OutputIntent")) intent = dict.contains("/S/GTS_PDFX") && dict.contains("/DestOutputProfile");
+            if (dict.contains("/N 4") && QtPdf::isStream(o.body)) {
+                bool ok = false;
+                profile = parsed.streamData(o, &ok) == icc;
+            }
+            if (QRegularExpression(QStringLiteral("/ca\\s+0\\.[0-9]")).match(QString::fromLatin1(dict)).hasMatch()) seeThrough = true;
+            if (dict.contains("/Subtype /Image") && dict.contains("/DeviceCMYK")) {
+                cmykPicture = true;
+                mask = mask || dict.contains("/SMask");
+            }
+            trim = trim || (dict.contains("/TrimBox") && dict.contains("/BleedBox"));
+        }
+        QVERIFY(intent);
+        QVERIFY(profile);
+        QVERIFY(seeThrough);
+        QVERIFY(cmykPicture);
+        QVERIFY(mask);
+        QVERIFY(trim);
+        // It opens, and the blue is half see-through (PDFium draws the page
+        // with nothing behind it).
+        const PdfDocument out(bytes);
+        QVERIFY(out.isValid());
+        const QImage page = out.render(0, QSize(400, 300));
+        const QRgb mid = page.pixel(100, 100);
+        QVERIFY2(qAlpha(mid) > 100 && qAlpha(mid) < 160 && qBlue(mid) > qRed(mid) + 40, qPrintable(QString::number(mid, 16)));
+    }
+
+    // ECI's profile, downloaded: used only when the download and the
+    // profile in it are the files expected.
+    void pdfXProfileDownloadChecked()
+    {
+        PdfXCondition c;
+        c.profileFile = QStringLiteral("Profile.icc");
+        const QByteArray icc = testCmykProfile();
+        ZipWriter zw;
+        zw.add(QStringLiteral("Profile.icc"), icc, true);
+        zw.add(QStringLiteral("Profile_info.pdf"), QByteArray("%PDF-1.4"));
+        const QByteArray zip = zw.finish();
+        c.zipSha256 = QCryptographicHash::hash(zip, QCryptographicHash::Sha256).toHex();
+        c.profileSha256 = QCryptographicHash::hash(icc, QCryptographicHash::Sha256).toHex();
+        QString err;
+        QCOMPARE(pdfXProfileFromZip(c, zip, &err), icc);
+        // A page of HTML (a moved file) or a changed zip: no profile.
+        QVERIFY(pdfXProfileFromZip(c, QByteArray("<html>moved</html>"), &err).isEmpty());
+        QVERIFY(err.contains(QLatin1String("isn't the file expected")));
+        PdfXCondition other = c;
+        other.profileSha256 = QByteArray(64, '0');
+        QVERIFY(pdfXProfileFromZip(other, zip, &err).isEmpty());
+        QVERIFY(err.contains(QLatin1String("profile")));
+        // ECI's own: a FOGRA51 condition, checked by hash.
+        bool eci = false;
+        for (const PdfXCondition &x : pdfXConditions())
+            if (x.identifier == QLatin1String("FOGRA51")) eci = x.x4 && x.profileUrl.startsWith(QLatin1String("https://")) && x.zipSha256.size() == 64 && x.profileSha256.size() == 64;
+        QVERIFY(eci);
+        // With ECI's download at hand (JP_ECI_ZIP), the real thing.
+        if (qEnvironmentVariableIsSet("JP_ECI_ZIP")) {
+            QFile f(qEnvironmentVariable("JP_ECI_ZIP"));
+            QVERIFY(f.open(QIODevice::ReadOnly));
+            for (const PdfXCondition &x : pdfXConditions())
+                if (x.identifier == QLatin1String("FOGRA51")) {
+                    const QByteArray real = pdfXProfileFromZip(x, f.readAll(), &err);
+                    QVERIFY2(!real.isEmpty(), qPrintable(err));
+                    QCOMPARE(QColorSpace::fromIccProfile(real).colorModel(), QColorSpace::ColorModel::Cmyk);
+                }
+        }
+    }
+
     // A PDF page placed as a picture: shown from PDFium's raster, exported
     // to PDF as vectors, kept as a PDF in .jpub and as a picture in .pub.
     void pdfPagePlacedAsPicture()

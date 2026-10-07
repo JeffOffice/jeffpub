@@ -66,6 +66,13 @@
 #include <QTextDocumentFragment>
 #include <QToolButton>
 #include <QBuffer>
+#include <QColorSpace>
+#include <QCryptographicHash>
+#include <QEventLoop>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QPdfOutputIntent>
+#include <QProgressDialog>
 
 namespace jp {
 
@@ -499,10 +506,42 @@ void MainWindow::exportPdfWithOptions()
     auto *props = new QCheckBox(QStringLiteral("Include document properties (title, author, subject, keywords)"), &dlg);
     props->setChecked(true);
     auto *pdfa = new QCheckBox(QStringLiteral("PDF/A for long-term archiving"), &dlg);
-    auto *pdfx = new QCheckBox(QStringLiteral("PDF/X-1a for a commercial printer"), &dlg);
+    auto *pdfx = new QCheckBox(QStringLiteral("PDF/X for a commercial printer"), &dlg);
     auto *condition = new QComboBox(&dlg);
-    for (const PdfXCondition &c : pdfXConditions()) condition->addItem(c.name);
+    // PDF/X-1a flattens transparency; PDF/X-4 keeps it and carries the
+    // condition's color profile (ECI's, or the printer's own file).
+    QString ownProfile = Settings::get().value(QStringLiteral("pdf/pdfxProfile")).toString();
+    auto conditionText = [&ownProfile](const PdfXCondition &c) {
+        QString t = (c.x4 ? QStringLiteral("PDF/X-4: ") : QStringLiteral("PDF/X-1a: ")) + c.name;
+        if (c.ownProfile && QFileInfo::exists(ownProfile)) t = QStringLiteral("PDF/X-4: Your printer's color profile (%1)").arg(QFileInfo(ownProfile).fileName());
+        return t;
+    };
+    for (const PdfXCondition &c : pdfXConditions()) condition->addItem(conditionText(c));
     condition->setCurrentIndex(std::clamp(Settings::get().value(QStringLiteral("pdf/pdfxCondition"), 0).toInt(), 0, condition->count() - 1));
+    auto lastCondition = std::make_shared<int>(condition->currentIndex());
+    QObject::connect(condition, &QComboBox::activated, &dlg, [&, condition, lastCondition](int i) {
+        const PdfXCondition c = pdfXConditions().value(i);
+        if (!c.ownProfile) {
+            *lastCondition = i;
+            return;
+        }
+        // The printer's own profile: chosen now, and checked to be one for
+        // printing in CMYK.
+        const QString file = QFileDialog::getOpenFileName(&dlg, QStringLiteral("Your Printer's Color Profile"),
+                                                          QFileInfo(ownProfile).absolutePath(), QStringLiteral("Color profiles (*.icc *.icm);;All Files (*)"));
+        QFile f(file);
+        const QColorSpace cs = !file.isEmpty() && f.open(QIODevice::ReadOnly) ? QColorSpace::fromIccProfile(f.read(64 << 20)) : QColorSpace();
+        if (!cs.isValid() || cs.colorModel() != QColorSpace::ColorModel::Cmyk) {
+            if (!file.isEmpty())
+                QMessageBox::warning(&dlg, QStringLiteral("Create PDF"), QStringLiteral("\"%1\" isn't a color profile for printing in CMYK.").arg(QFileInfo(file).fileName()));
+            condition->setCurrentIndex(*lastCondition);
+            return;
+        }
+        ownProfile = file;
+        Settings::get().setValue(QStringLiteral("pdf/pdfxProfile"), file);
+        condition->setItemText(i, conditionText(c));
+        *lastCondition = i;
+    });
     pdfx->setChecked(Settings::get().value(QStringLiteral("pdf/pdfx"), false).toBool());
     // One or the other: PDF/A keeps screen (RGB) color, PDF/X prints in ink.
     auto syncStandards = [=] {
@@ -538,6 +577,7 @@ void MainWindow::exportPdfWithOptions()
     s.archival = pdfa->isChecked();
     s.pdfx = pdfx->isChecked();
     s.pdfxCondition = condition->currentIndex();
+    s.pdfxProfile = ownProfile;
     s.booklet = booklet->isChecked();
     Settings::get().setValue(QStringLiteral("pdf/pdfx"), s.pdfx);
     Settings::get().setValue(QStringLiteral("pdf/pdfxCondition"), s.pdfxCondition);
@@ -564,6 +604,73 @@ void MainWindow::exportPdfWithOptions()
                                                                  : QFileInfo(m_ed->filePath()).absolutePath() + "/" + QFileInfo(m_ed->filePath()).completeBaseName()) + ".pdf",
                                      QStringLiteral("PDF (*.pdf)"));
     if (!path.isEmpty()) exportPdfTo(path, s);
+}
+
+// A PDF/X-4 printing condition's color profile: the printer's own, or
+// ECI's, downloaded once (after asking) and kept with JeffPub's other
+// downloads. Empty, with the reason, when there's none to be had; with no
+// window to ask from (the command line) nothing is downloaded.
+static QByteArray pdfX4Profile(QWidget *parent, const PdfXCondition &c, const QString &ownProfile, QString *error)
+{
+    if (c.ownProfile) {
+        QFile f(ownProfile);
+        if (ownProfile.isEmpty() || !f.open(QIODevice::ReadOnly)) {
+            *error = QStringLiteral("choose your printer's color profile (an .icc file) first");
+            return {};
+        }
+        return f.read(64 << 20);
+    }
+    const QString saved = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/profiles/") + c.profileFile;
+    QFile f(saved);
+    if (f.open(QIODevice::ReadOnly)) {
+        const QByteArray icc = f.read(64 << 20);
+        if (QCryptographicHash::hash(icc, QCryptographicHash::Sha256).toHex() == c.profileSha256) return icc;
+    }
+    if (!parent || QGuiApplication::platformName() == QLatin1String("offscreen")) {
+        *error = QStringLiteral("its color profile, %1, hasn't been downloaded yet").arg(c.info);
+        return {};
+    }
+    const QUrl url(c.profileUrl);
+    if (QMessageBox::question(parent, QStringLiteral("Create PDF"),
+                              QStringLiteral("A PDF/X-4 file carries the color profile of its printing condition, \"%1\". The European Color Initiative, "
+                                             "which makes it, lets anyone use it and put it in PDFs but not pass it on, so it doesn't come with JeffPub 79.\n\n"
+                                             "Download it from %2 now? (%3, once.)")
+                                  .arg(c.info, url.host(), c.profileSize),
+                              QMessageBox::Yes | QMessageBox::Cancel) != QMessageBox::Yes) {
+        *error = QStringLiteral("its color profile wasn't downloaded");
+        return {};
+    }
+    QNetworkAccessManager net;
+    QNetworkRequest req(url);
+    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("JeffPub79/%1").arg(QStringLiteral(JP_VERSION)));
+    QNetworkReply *r = net.get(req);
+    QProgressDialog progress(QStringLiteral("Downloading %1…").arg(c.info), QStringLiteral("Cancel"), 0, 0, parent);
+    progress.setWindowModality(Qt::WindowModal);
+    progress.setMinimumDuration(400);
+    QObject::connect(r, &QNetworkReply::downloadProgress, &progress, [&progress](qint64 got, qint64 total) {
+        if (total <= 0) return;
+        progress.setMaximum(int(total / 1024));
+        progress.setValue(int(got / 1024));
+    });
+    QObject::connect(&progress, &QProgressDialog::canceled, r, &QNetworkReply::abort);
+    QEventLoop loop;
+    QObject::connect(r, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    if (!r->isFinished()) loop.exec();
+    progress.close();
+    const QByteArray zip = r->error() == QNetworkReply::NoError ? r->read(32 << 20) : QByteArray();
+    if (zip.isEmpty()) {
+        *error = QStringLiteral("the download didn't finish (%1)").arg(r->errorString());
+        return {};
+    }
+    const QByteArray icc = pdfXProfileFromZip(c, zip, error);
+    if (icc.isEmpty()) return {};
+    QDir().mkpath(QFileInfo(saved).path());
+    QSaveFile out(saved);
+    if (out.open(QIODevice::WriteOnly)) {
+        out.write(icc);
+        out.commit();
+    }
+    return icc;
 }
 
 static QByteArray pdfXmp(const DocProps &pr, const QString &title)
@@ -597,14 +704,43 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
     }
     const bool press = s.preset == PdfSettings::CommercialPress;
     const double margin = press ? kMarksMargin : 0;
+    // PDF/X-4 needs its printing condition's color profile before anything.
+    const PdfXCondition &xcond = pdfXConditions().value(s.pdfxCondition, pdfXConditions().first());
+    const bool x4 = s.pdfx && xcond.x4;
+    QColorSpace x4Profile;
+    if (x4) {
+        QString why;
+        const QByteArray icc = pdfX4Profile(isVisible() ? this : nullptr, xcond, s.pdfxProfile, &why);
+        if (!icc.isEmpty()) {
+            x4Profile = QColorSpace::fromIccProfile(icc);
+            if (!x4Profile.isValid() || x4Profile.colorModel() != QColorSpace::ColorModel::Cmyk) why = QStringLiteral("the color profile isn't one for printing in CMYK");
+        }
+        if (!why.isEmpty()) {
+            if (isVisible()) QMessageBox::warning(this, QStringLiteral("Create PDF"), QStringLiteral("JeffPub 79 couldn't make the PDF/X-4: %1.").arg(why));
+            else qWarning("Create PDF: no PDF/X-4: %s", qPrintable(why));
+            return false;
+        }
+    }
     QPdfWriter pdf(path);
     pdf.setCreator(QStringLiteral("JeffPub 79"));
     const QString title = d->props.title.isEmpty() ? m_ed->displayName() : d->props.title;
     pdf.setTitle(title);
     if (s.pdfx) s.archival = false;
+    if (x4) {
+        // PDF/X-4: Qt writes the output intent with the profile in it, and
+        // the identification and document ID in the XMP metadata (its own,
+        // so not the properties' version below).
+        pdf.setPdfVersion(QPagedPaintDevice::PdfVersion_X4);
+        QPdfOutputIntent intent;
+        intent.setOutputConditionIdentifier(xcond.identifier);
+        intent.setOutputCondition(xcond.ownProfile ? x4Profile.description() : xcond.condition);
+        if (!xcond.ownProfile) intent.setRegistryName(QUrl(QStringLiteral("http://www.color.org")));
+        intent.setOutputProfile(x4Profile);
+        pdf.setOutputIntent(intent);
+    }
     // PDF/A-1b: Qt embeds every font, writes the XMP identification and an sRGB
     // output intent, and leaves out transparency.
-    if (s.archival) pdf.setPdfVersion(QPagedPaintDevice::PdfVersion_A1b);
+    else if (s.archival) pdf.setPdfVersion(QPagedPaintDevice::PdfVersion_A1b);
     else if (s.properties) pdf.setDocumentXmpMetadata(pdfXmp(d->props, title));
     // A publication set up for process-color printing (Commercial Print
     // Information) makes a CMYK PDF: colors given as ink amounts keep them.
@@ -633,7 +769,7 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
     ctx.doc = d;
     ctx.cache = &m_ed->cache();
     ctx.opt.output = true;
-    ctx.opt.flattenTransparency = s.archival || s.pdfx;   // PDF/A-1 and PDF/X-1a allow no transparency
+    ctx.opt.flattenTransparency = s.archival || (s.pdfx && !x4);   // PDF/A-1 and PDF/X-1a allow no transparency
     ctx.opt.maxImageDpi = s.preset == PdfSettings::Minimum ? 96 : s.preset == PdfSettings::Standard ? 150 : s.preset == PdfSettings::HighQuality ? 300 : 0;
     PrinterMarks marks;
     marks.crop = marks.bleed = marks.registration = marks.colorBars = marks.jobInfo = press;
@@ -688,8 +824,8 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
         if (!addPdfSpotColors(path, d->print.spotColors, names, &spotErr))
             QMessageBox::warning(this, QStringLiteral("Create PDF"), QStringLiteral("The PDF was made, but its spot colors are process colors: %1").arg(spotErr));
     }
-    // PDF/X-1a: pictures in CMYK, the page's trim and bleed, and the
-    // printing condition.
+    // PDF/X: pictures in CMYK, the page's trim and bleed, and (PDF/X-1a)
+    // the printing condition.
     if (s.pdfx) {
         PdfXOptions xo;
         xo.condition = s.pdfxCondition;
@@ -699,14 +835,14 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
         const double bleed = press ? std::min(marks.bleedSize, margin) : 0;
         xo.bleed = xo.trim.adjusted(-bleed, -bleed, bleed, bleed);
         QString xErr;
-        if (!makePdfX1a(path, xo, &xErr)) {
+        if (!(x4 ? makePdfX4(path, xo, &xErr) : makePdfX1a(path, xo, &xErr))) {
             QApplication::restoreOverrideCursor();
             QMessageBox::warning(this, QStringLiteral("Create PDF"), QStringLiteral("The PDF was made, but it isn't PDF/X: %1.").arg(xErr));
             return false;
         }
     }
     QApplication::restoreOverrideCursor();
-    statusBar()->showMessage(QStringLiteral("Exported %1%2").arg(QFileInfo(path).fileName(), s.pdfx ? QStringLiteral(" (PDF/X-1a)") : s.archival ? QStringLiteral(" (PDF/A)") : QString()), 5000);
+    statusBar()->showMessage(QStringLiteral("Exported %1%2").arg(QFileInfo(path).fileName(), s.pdfx ? (x4 ? QStringLiteral(" (PDF/X-4)") : QStringLiteral(" (PDF/X-1a)")) : s.archival ? QStringLiteral(" (PDF/A)") : QString()), 5000);
     // Not for exports from the command line, which show no window.
     if (openPdfAfterSaving() && isVisible() && openFileHook) openFileHook(path);
     return true;
