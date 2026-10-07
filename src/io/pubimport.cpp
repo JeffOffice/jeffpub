@@ -823,6 +823,9 @@ private:
         // Shift+Enter is \v (or \n): a line break inside the paragraph.
         QString t = s;
         t.remove(QLatin1Char('\r'));
+        // U+FFFC marks an object set in the text; without the object,
+        // Publisher shows nothing there (a font would draw an "OBJ" box).
+        t.remove(QChar(QChar::ObjectReplacementCharacter));
         t.replace(QLatin1Char('\v'), QChar::LineSeparator);
         t.replace(QLatin1Char('\n'), QChar::LineSeparator);
         if (t.isEmpty()) {

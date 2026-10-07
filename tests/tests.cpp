@@ -2856,6 +2856,28 @@ private Q_SLOTS:
         QCOMPARE(pf2.readAll().count("/MediaBox [0 0 396.000000 612.000000]"), 8);
     }
 
+    // A .pub story marks an object set in its text with U+FFFC. Publisher
+    // shows nothing there when the object doesn't come through; JeffPub
+    // drew the font's "OBJ" box.
+    void pubInlineObjectMarks()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<TextItem>();
+        t->rect = QRectF(72, 72, 300, 100);
+        t->storyId = doc->createStory(QStringLiteral("Before") + QChar(QChar::ObjectReplacementCharacter) + QStringLiteral("after"));
+        doc->pages[0]->items.push_back(t);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("obj.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        auto back = importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        auto *bt = dynamic_cast<TextItem *>(back->pages[0]->items[0].get());
+        QVERIFY(bt);
+        QCOMPARE(back->storyDoc(bt->storyId)->toPlainText(), QStringLiteral("Beforeafter"));
+    }
+
     // Publisher 2000 and 98 files give a run's font as a number in each
     // slot of its font container (not a container per slot, as later
     // versions do). The sample's second box says it's in Arial, and
