@@ -33,6 +33,7 @@
 #include "app/editor.h"
 #include "app/mainwindow.h"
 #include "app/ribbon.h"
+#include "app/telemetry.h"
 #include "app/updater.h"
 #include "app/toc.h"
 #include "app/notes.h"
@@ -53,6 +54,7 @@
 #include <QCheckBox>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QUuid>
 #include <QApplication>
 #include <QDialog>
 #include <QTimer>
@@ -2706,6 +2708,44 @@ private Q_SLOTS:
         QVERIFY2(d->storyDoc(inner), "the text of the box set in text was dropped");
     }
 
+    // Usage statistics: nothing is counted until the person says yes; then
+    // commands count by id, in the form the collector takes, and a ping holds
+    // only the install id, version, system, language, launches and counts.
+    // Turning them off forgets what was counted and the id.
+    void telemetryCountsOnlyWhenOn()
+    {
+        using namespace jp;
+        telemetry::setEnabled(false);
+        QVERIFY(telemetry::decided());
+        telemetry::count(QStringLiteral("file.open.pub"));
+        QVERIFY(telemetry::payload()[QStringLiteral("counts")].toObject().isEmpty());
+        telemetry::setEnabled(true);
+        telemetry::count(QStringLiteral("file.open.pub"));
+        telemetry::count(QStringLiteral("file.open.pub"));
+        telemetry::count(QStringLiteral("wrap.topBottom"));
+        const QJsonObject p = telemetry::payload();
+        const QJsonObject counts = p[QStringLiteral("counts")].toObject();
+        QCOMPARE(counts[QStringLiteral("file.open.pub")].toInt(), 2);
+        QCOMPARE(counts[QStringLiteral("wrap.topbottom")].toInt(), 1);
+        QStringList keys = p.keys();
+        keys.sort();
+        QCOMPARE(keys, (QStringList{"counts", "install", "lang", "launches", "os", "osVersion", "version"}));
+        const QString id = p[QStringLiteral("install")].toString();
+        QVERIFY(!QUuid::fromString(id).isNull());
+        // What the collector checks (server/telemetry/main.py).
+        QVERIFY(QRegularExpression(QStringLiteral("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")).match(id).hasMatch());
+        QVERIFY(QRegularExpression(QStringLiteral("^[a-z]{1,16}$")).match(p[QStringLiteral("os")].toString()).hasMatch());
+        QVERIFY(QRegularExpression(QStringLiteral("^[0-9A-Za-z .()_+-]{0,40}$")).match(p[QStringLiteral("osVersion")].toString()).hasMatch());
+        QVERIFY(QRegularExpression(QStringLiteral("^[A-Za-z_-]{0,20}$")).match(p[QStringLiteral("lang")].toString()).hasMatch());
+        QVERIFY(QRegularExpression(QStringLiteral("^[0-9A-Za-z.+-]{1,20}$")).match(p[QStringLiteral("version")].toString()).hasMatch());
+        for (const QString &k : counts.keys()) QVERIFY(QRegularExpression(QStringLiteral("^[a-z0-9][a-z0-9._-]{0,47}$")).match(k).hasMatch());
+        QCOMPARE(telemetry::payload()[QStringLiteral("install")].toString(), id);   // the same install each time
+        telemetry::setEnabled(false);
+        QVERIFY(telemetry::payload()[QStringLiteral("counts")].toObject().isEmpty());
+        QVERIFY(telemetry::payload()[QStringLiteral("install")].toString() != id);
+        telemetry::setEnabled(false);
+    }
+
     void regroupAfterUngroup()
     {
         using namespace jp;
@@ -3049,10 +3089,11 @@ private Q_SLOTS:
             QVERIFY2(std::abs((b2 - b1) - (descent + 2.88 + h + 2.88)) < 0.05,
                      qPrintable(QStringLiteral("h %1: b1 %2 b2 %3 b3 %4").arg(h).arg(b1).arg(b2).arg(b3)));
             QVERIFY(normal > 10 && normal < 16);
-            // Across: after the "H", inside the side distances.
-            QFont f(QStringLiteral("Times New Roman"));
-            f.setPointSizeF(12 * fontPointFactor());
-            QVERIFY2(std::abs(r.left() - (QFontMetricsF(f).horizontalAdvance(QLatin1Char('H')) + 2.88)) < 0.3, qPrintable(QString::number(r.left())));
+            // Across: after line 2's "H" (document position 4), inside the
+            // side distances.
+            const QVector<QRectF> hRects = fl.layout->rangeRects(0, 4, 5);
+            QVERIFY(!hRects.isEmpty());
+            QVERIFY2(std::abs(r.left() - (hRects.first().right() + 2.88)) < 0.05, qPrintable(QStringLiteral("%1 after %2").arg(r.left()).arg(hRects.first().right())));
             QCOMPARE(objects[0].docPos, 5);
             // The display text keeps one character for it, which isn't drawn.
             QCOMPARE(info[1].text.size(), 4);
