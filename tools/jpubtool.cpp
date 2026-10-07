@@ -35,7 +35,7 @@ int main(int argc, char **argv)
     const QStringList args = app.arguments();
     QTextStream out(stdout);
     if (args.size() < 4) {
-        out << "usage: jpubtool render <file> <outdir> [dpi] | convert <in> <out.jpub> | repack <in.pub> <out.pub> | topub <in> <out.pub> | layout <file> x\n";
+        out << "usage: jpubtool render <file> <outdir> [dpi [pages]] | convert <in> <out.jpub> | repack <in.pub> <out.pub> | topub <in> <out.pub> | layout <file> x\n";
         return 2;
     }
     const QString cmd = args[1], in = args[2];
@@ -241,6 +241,8 @@ int main(int argc, char **argv)
         return 0;
     }
     const double dpi = args.size() > 4 ? args[4].toDouble() : 60;
+    // An optional page count draws only the first pages of a long book.
+    const int pages = args.size() > 5 ? std::min(int(doc->pages.size()), std::max(1, args[5].toInt())) : int(doc->pages.size());
     QDir().mkpath(args[3]);
     LayoutCache cache;
     PaintContext ctx;
@@ -248,7 +250,7 @@ int main(int argc, char **argv)
     ctx.cache = &cache;
     ctx.opt.output = true;
     const QString base = QFileInfo(in).completeBaseName();
-    for (int i = 0; i < doc->pages.size(); ++i) {
+    for (int i = 0; i < pages; ++i) {
         const QImage img = Renderer::renderToImage(ctx, i, dpi / 72.0);
         img.save(QDir(args[3]).filePath(QStringLiteral("%1-%2.png").arg(base).arg(i + 1)));
     }
