@@ -45,6 +45,7 @@ struct ShapeInfo
   std::vector<Line> m_lines;
   boost::optional<unsigned> m_pageSeqNum;
   boost::optional<unsigned> m_textId;
+  unsigned m_textChainIndex = 0;   // JeffPub 79: the box's place among the boxes sharing its story
   std::map<unsigned, int> m_adjustValuesByIndex;
   std::vector<int> m_adjustValues;
   boost::optional<double> m_rotation;

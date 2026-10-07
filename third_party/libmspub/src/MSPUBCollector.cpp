@@ -1415,6 +1415,8 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
       if (bool(info.m_textId))
       {
         props.insert("jp:text-id", (int)get(info.m_textId));
+        // Its place in the chain: the file may list the boxes in any order.
+        props.insert("jp:text-chain-index", (int)info.m_textChainIndex);
         if (m_notHyphenated.count(get(info.m_textId)))
           props.insert("jp:no-hyphenation", true);
       }
@@ -1671,6 +1673,11 @@ bool MSPUBCollector::addPage(unsigned seqNum)
   MSPUB_DEBUG_MSG(("Adding page of seqnum 0x%x\n", seqNum));
   m_pagesBySeqNum[seqNum] = PageInfo();
   return true;
+}
+
+void MSPUBCollector::setShapeTextChainIndex(unsigned seqNum, unsigned index)
+{
+  m_shapeInfosBySeqNum[seqNum].m_textChainIndex = index;
 }
 
 void MSPUBCollector::addTextShape(unsigned stringId, unsigned seqNum)

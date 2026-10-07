@@ -28,6 +28,7 @@ enum MSPUBBlockID // Don't be alarmed by multiple elements with the same value; 
   SHAPE_HEIGHT = 0xab,
   SHAPE_DONT_STRETCH_BA = 0x07,
   SHAPE_TEXT_ID = 0x27,
+  SHAPE_TEXT_CHAIN_INDEX = 0x28, // JeffPub 79: a text box's place in its story's chain (none = first)
   SHAPE_BORDER_IMAGE_ID = 0x09,
   SUPER_SUB_TYPE_ID = 0x0F,
   BOLD_1_ID = 0x02,

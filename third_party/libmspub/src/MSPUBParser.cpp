@@ -1105,6 +1105,10 @@ bool MSPUBParser::parseShape(librevenge::RVNGInputStream *input,
         textId = info.data;
         isText = true;
       }
+      else if (info.id == SHAPE_TEXT_CHAIN_INDEX)
+      {
+        m_collector->setShapeTextChainIndex(chunk.seqNum, info.data);
+      }
       else if (info.id == SHAPE_VALIGN)
       {
         m_collector->setShapeVerticalTextAlign(chunk.seqNum,

@@ -16,6 +16,7 @@
 #include <QTextDocument>
 #include <QTextList>
 #include <QtMath>
+#include <algorithm>
 #include <cmath>
 #include <functional>
 
@@ -308,6 +309,7 @@ public:
         // Boxes sharing a story become a linked chain.
         if (p["jp:text-id"]) {
             const int tid = p["jp:text-id"]->getInt();
+            m_chainBoxes[tid].push_back({p["jp:text-chain-index"] ? p["jp:text-chain-index"]->getInt() : 0, t.get()});
             auto it = m_chains.find(tid);
             if (it != m_chains.end() && it->second) {
                 TextItem *prev = it->second;
@@ -688,6 +690,15 @@ public:
 
     void finish()
     {
+        // The file may list a chain's boxes in any order (the order they are
+        // drawn): link them in the order of each box's place in the chain.
+        // The story's text was read with whichever box came first; it is
+        // shared, so only the links change.
+        for (auto &[tid, boxes] : m_chainBoxes) {
+            if (boxes.size() < 2) continue;
+            std::stable_sort(boxes.begin(), boxes.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
+            for (size_t i = 0; i < boxes.size(); ++i) boxes[i].second->nextId = i + 1 < boxes.size() ? boxes[i + 1].second->id : QString();
+        }
         for (const auto &kv : m_linkCount)
             if (kv.second > 0) ++m_rep.linkedChains;
         if (m_doc.pages.isEmpty()) m_doc.addPage();
@@ -1129,6 +1140,7 @@ private:
     QString m_listKey;
     bool m_skipText = false;
     std::map<int, TextItem *> m_chains;
+    std::map<int, std::vector<std::pair<int, TextItem *>>> m_chainBoxes;   // text id -> (place in chain, box)
     std::map<int, int> m_linkCount;
     std::shared_ptr<TableItem> m_table;
     std::vector<std::vector<TableCell>> m_cells;

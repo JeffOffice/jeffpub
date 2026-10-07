@@ -113,6 +113,7 @@ public:
   void setHeightInEmu(unsigned long);
   void setShapeNumColumns(unsigned seqNum, unsigned numColumns);
   void setShapeTextFlow(unsigned seqNum, unsigned flow);
+  void setShapeTextChainIndex(unsigned seqNum, unsigned index);
   void setShapeColumnSpacing(unsigned seqNum, unsigned spacing);
   void setShapeBeginArrow(unsigned seqNum, const Arrow &arrow);
   void setShapeEndArrow(unsigned seqNum, const Arrow &arrow);

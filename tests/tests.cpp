@@ -2412,6 +2412,51 @@ private Q_SLOTS:
         }
     }
 
+    // Linked boxes keep their order when the file lists them in another
+    // (here the second box is in front of the first): the chain follows each
+    // box's place in it (0x28), not the order the boxes are drawn.
+    void linkedBoxOrderFromPub()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto first = std::make_shared<TextItem>(), second = std::make_shared<TextItem>(), third = std::make_shared<TextItem>();
+        first->rect = QRectF(36, 72, 160, 300);
+        second->rect = QRectF(216, 72, 160, 300);
+        third->rect = QRectF(396, 72, 160, 300);
+        QString text;
+        for (int i = 1; i <= 120; ++i) text += QStringLiteral("Sentence %1 of a story that runs through three boxes. ").arg(i);
+        first->storyId = doc->createStory(QStringLiteral("START ") + text);
+        second->storyId = third->storyId = first->storyId;
+        first->nextId = second->id;
+        second->nextId = third->id;
+        // Drawn back to front: third, first, second.
+        doc->pages[0]->items = {third, first, second};
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("order.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        auto back = importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QVector<TextItem *> boxes;
+        for (const auto &it : back->pages[0]->items)
+            if (auto *t = dynamic_cast<TextItem *>(it.get())) boxes << t;
+        QCOMPARE(boxes.size(), 3);
+        auto at = [&](double x) { for (TextItem *t : boxes) if (std::abs(t->rect.x() - x) < 1) return t; return static_cast<TextItem *>(nullptr); };
+        TextItem *a = at(36), *b = at(216), *c = at(396);
+        QVERIFY(a && b && c);
+        QVERIFY(!back->prevFrame(a->id));          // the left box starts the story
+        QCOMPARE(a->nextId, b->id);
+        QCOMPARE(b->nextId, c->id);
+        QVERIFY(c->nextId.isEmpty());
+        LayoutCache cache;
+        RenderOptions opt;
+        const auto fl = cache.textFrame(*back, *a, 1, opt);
+        QVERIFY(fl.layout);
+        const auto lines = fl.layout->lineInfo(fl.frame);
+        QVERIFY(!lines.isEmpty());
+        QVERIFY(lines.first().text.startsWith(QStringLiteral("START")));
+    }
+
     // Footnotes at the bottom of the column their reference lands in (under
     // a rule, numbered in order, the text kept above them); a line whose
     // note won't fit moves on with it; endnotes under "Notes" after the
