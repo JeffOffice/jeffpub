@@ -3384,6 +3384,55 @@ private Q_SLOTS:
         QVERIFY2(exportPublisher(*doc, dir.filePath(QStringLiteral("self.pub")), &err), qPrintable(err));
     }
 
+    // Many hyperlinks in one story (a link directory) open in moments and
+    // all come back: Qt finished each insertion on its own (6,000 links took
+    // 10 seconds), and the reader dropped every address past 10,000.
+    void pubManyLinksOpenQuickly()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<TextItem>();
+        t->rect = QRectF(72, 72, 400, 600);
+        t->storyId = doc->createStory(QString());
+        const int links = 12000;
+        {
+            QTextCursor c(doc->storyDoc(t->storyId));
+            c.beginEditBlock();
+            for (int i = 0; i < links; ++i) {
+                QTextCharFormat lf;
+                lf.setAnchor(true);
+                lf.setAnchorHref(QStringLiteral("https://example.com/%1").arg(i));
+                c.insertText(QStringLiteral("site%1").arg(i), lf);
+                c.insertText(QStringLiteral(" "), QTextCharFormat());
+            }
+            c.endEditBlock();
+        }
+        doc->pages[0]->items.push_back(t);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("links.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        QElapsedTimer timer;
+        timer.start();
+        auto back = importPublisherFile(path, &err);
+        const qint64 ms = timer.elapsed();
+        QVERIFY(back);
+        QSet<QString> found;
+        for (const auto &st : back->stories)
+            for (QTextBlock b = st->doc->begin(); b.isValid(); b = b.next())
+                for (auto it = b.begin(); !it.atEnd(); ++it)
+                    if (it.fragment().charFormat().isAnchor()) found << it.fragment().charFormat().anchorHref();
+        QCOMPARE(found.size(), links);
+        QVERIFY(found.contains(QStringLiteral("https://example.com/11999")));
+        QVERIFY2(ms < 15000, qPrintable(QStringLiteral("%1 ms").arg(ms)));   // was over 40 s; a sanitizer build takes 5
+        // And as .jpub, reopened just as quickly.
+        const QString jpub = dir.filePath(QStringLiteral("links.jpub"));
+        QVERIFY2(savePublication(*back, jpub, QImage(), &err), qPrintable(err));
+        timer.restart();
+        QVERIFY(loadPublication(jpub, &err));
+        QVERIFY2(timer.elapsed() < 15000, qPrintable(QStringLiteral("%1 ms").arg(timer.elapsed())));
+    }
+
     // Fields and hyperlinks are saved as Publisher saves them: each story's
     // TOKN section lists them (page numbers, dates and times in Publisher's
     // 17 formats, hyperlinks with their address) and they come back as

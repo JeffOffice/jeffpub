@@ -14,6 +14,7 @@
 #include "render/pdfpage.h"
 #include "render/renderer.h"
 #include "templates/templates.h"
+#include "text/textprops.h"
 #include "io/pubshapes.h"
 #include "render/shapes.h"
 #include <QPainter>
@@ -275,6 +276,25 @@ int main(int argc, char **argv)
                         << "\tpara=" << li.docStart << "\t" << li.text << "\n";
                 }
             });
+        return 0;
+    }
+    if (cmd == "spans") {
+        // Every story's runs with their links, fields and objects in text,
+        // in a fixed order (to compare two builds' reading of a file).
+        QStringList stories;
+        for (const auto &st : doc->stories) {
+            QString dump;
+            for (QTextBlock b = st->doc->begin(); b.isValid(); b = b.next()) {
+                for (auto it = b.begin(); !it.atEnd(); ++it) {
+                    const QTextCharFormat cf = it.fragment().charFormat();
+                    dump += QStringLiteral("[%1|%2|%3|%4]").arg(it.fragment().text(), cf.anchorHref(), cf.stringProperty(tp::Field), cf.stringProperty(tp::InlineObject).isEmpty() ? QString() : QStringLiteral("obj"));
+                }
+                dump += QLatin1Char('\n');
+            }
+            stories << dump;
+        }
+        std::sort(stories.begin(), stories.end());
+        for (const QString &d : stories) out << d << "----\n";
         return 0;
     }
     if (cmd == "topub") {

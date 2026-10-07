@@ -1362,7 +1362,7 @@ bool MSPUBParser::parseQuill(librevenge::RVNGInputStream *input)
       // Optional: a damaged section loses its fields, never the text.
       try
       {
-        const unsigned long end = i->offset + i->length;
+        const unsigned long long end = 0ull + i->offset + i->length;
         input->seek(i->offset, librevenge::RVNG_SEEK_SET);
         const unsigned n = readU32(input);
         readU32(input);
@@ -1375,7 +1375,7 @@ bool MSPUBParser::parseQuill(librevenge::RVNGInputStream *input)
           readU32(input);
           auto propList = [&](std::map<unsigned, unsigned> &props)
           {
-            const unsigned long start = input->tell();
+            const unsigned long long start = input->tell();
             const unsigned len = readU32(input);
             if (len < 4 || start + len > end)
               return false;
@@ -1403,13 +1403,14 @@ bool MSPUBParser::parseQuill(librevenge::RVNGInputStream *input)
             payloadOf[k] = second.count(0) ? int(second[0]) : -1;
             anyPayload = anyPayload || payloadOf[k] >= 0;
           }
-          if (ok && anyPayload && input->tell() + 20 <= end)
+          if (ok && anyPayload && 0ull + input->tell() + 20 <= end)
           {
             const unsigned len = readU32(input);
             const unsigned m = readU32(input);
             input->seek(12, librevenge::RVNG_SEEK_CUR);
-            const unsigned long base = input->tell();
-            if (m > 0 && m <= 10000 && 4ull * m <= len && base + len <= end)
+            const unsigned long long base = input->tell();
+            // At most one payload an entry.
+            if (m > 0 && m <= n && 4ull * m <= len && base + len <= end)
             {
               std::vector<unsigned> offsets(m);
               for (unsigned p = 0; p < m; ++p)

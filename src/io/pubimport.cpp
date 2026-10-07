@@ -419,7 +419,7 @@ public:
             }
         }
         m_text = t;
-        m_cursor = QTextCursor(m_doc.storyDoc(t->storyId));
+        useStory(m_doc.storyDoc(t->storyId));
         m_firstPara = !m_skipText;
         m_list = nullptr;
         add(t, num);
@@ -428,7 +428,7 @@ public:
     void endTextObject() override
     {
         m_text.reset();
-        m_cursor = QTextCursor();
+        useStory(nullptr);
         m_skipText = false;
     }
 
@@ -740,12 +740,12 @@ public:
         if (p["fo:padding-left"])
             c.margins = QMarginsF(toPt(p["fo:padding-left"]), toPt(p["fo:padding-top"]), toPt(p["fo:padding-right"]), toPt(p["fo:padding-bottom"]));
         m_cells.back().push_back(c);
-        m_cursor = QTextCursor(m_doc.storyDoc(c.storyId));
+        useStory(m_doc.storyDoc(c.storyId));
         m_firstPara = true;
         m_list = nullptr;
         m_skipText = false;
     }
-    void closeTableCell() override { m_cursor = QTextCursor(); }
+    void closeTableCell() override { useStory(nullptr); }
     void insertCoveredTableCell(const RVNGPropertyList &) override
     {
         if (!m_table || m_row < 0) return;
@@ -784,6 +784,7 @@ public:
 
     void finish()
     {
+        useStory(nullptr);   // a text box the file never closed
         // The file may list a chain's boxes in any order (the order they are
         // drawn): link them in the order of each box's place in the chain.
         // The story's text was read with whichever box came first; it is
@@ -1367,6 +1368,15 @@ private:
     std::vector<std::shared_ptr<GroupItem>> m_stack;
     std::shared_ptr<TextItem> m_text;
     QTextCursor m_cursor;
+    // Text goes into a story inside one edit block: otherwise Qt finishes
+    // each insertion on its own, at a cost that grows with the paragraph
+    // (a story of 8,000 runs took seconds to open; with the block, 10 ms).
+    void useStory(QTextDocument *d)
+    {
+        if (!m_cursor.isNull()) m_cursor.endEditBlock();
+        m_cursor = d ? QTextCursor(d) : QTextCursor();
+        if (!m_cursor.isNull()) m_cursor.beginEditBlock();
+    }
     QTextCharFormat m_span;
     QString m_spanField;   // the open span is this field ("page")
     int m_spanInline = -1; // the open span is the object set in text with this number

@@ -141,6 +141,9 @@ void storyFromJson(QTextDocument *doc, const QJsonObject &o)
 {
     doc->clear();
     QTextCursor c(doc);
+    // One edit block: Qt otherwise finishes each run on its own, at a cost
+    // that grows with the paragraph (12,000 runs took 40 seconds).
+    c.beginEditBlock();
     const QJsonArray blocks = o["blocks"].toArray();
     const QJsonArray lists = o["lists"].toArray();
     QHash<int, QTextList *> made;
@@ -175,6 +178,7 @@ void storyFromJson(QTextDocument *doc, const QJsonObject &o)
             c.insertText(r["t"].toString(), cf);
         }
     }
+    c.endEditBlock();
     doc->clearUndoRedoStacks();
     doc->setModified(false);
 }

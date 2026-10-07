@@ -1486,6 +1486,24 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
         if (t != m_textTokens.end())
           tokens = &t->second;
       }
+      // Both in story order, swept along with the spans: each span looks
+      // only at the objects in it and the dates and hyperlinks over it (a
+      // story with thousands of links took seconds when every piece of text
+      // looked at all of them).
+      std::vector<std::pair<unsigned, unsigned> > objectsByPos;
+      if (objects)
+      {
+        objectsByPos = *objects;
+        std::sort(objectsByPos.begin(), objectsByPos.end());
+      }
+      std::vector<const TextToken *> tokensByPos;
+      if (tokens)
+        for (const auto &t : *tokens)
+          if ((t.type == 1 || t.type == 6) && t.len > 0)
+            tokensByPos.push_back(&t);
+      std::stable_sort(tokensByPos.begin(), tokensByPos.end(), [](const TextToken *a, const TextToken *b) { return a->pos < b->pos; });
+      size_t nextObject = 0, nextToken = 0;
+      std::vector<const TextToken *> openTokens;
       unsigned storyPos = 0;
       for (const auto &line : text)
       {
@@ -1519,49 +1537,58 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
           // The span is cut where an object, a date or a hyperlink starts or
           // ends; each piece says what it is.
           const unsigned first = storyPos, count = unsigned(chars.size() / 2);
+          const unsigned long long spanEnd = 0ull + first + count;
           storyPos += count;
+          std::vector<std::pair<unsigned, unsigned> > here;   // objects in this span
+          while (nextObject < objectsByPos.size() && objectsByPos[nextObject].first < first)
+            ++nextObject;
+          for (; nextObject < objectsByPos.size() && objectsByPos[nextObject].first < spanEnd; ++nextObject)
+            here.push_back(objectsByPos[nextObject]);
+          while (nextToken < tokensByPos.size() && tokensByPos[nextToken]->pos < spanEnd)
+            openTokens.push_back(tokensByPos[nextToken++]);
+          openTokens.erase(std::remove_if(openTokens.begin(), openTokens.end(),
+                                          [first](const TextToken *t) { return 0ull + t->pos + t->len <= first; }),
+                           openTokens.end());
           std::set<unsigned> cuts{0, count};
-          if (objects)
-            for (const auto &o : *objects)
-              if (o.first >= first && o.first < first + count)
-              {
-                cuts.insert(o.first - first);
-                cuts.insert(o.first - first + 1);
-              }
-          if (tokens)
-            for (const auto &t : *tokens)
-              if ((t.type == 1 || t.type == 6) && t.pos < first + count && t.pos + t.len > first)
-              {
-                if (t.pos > first)
-                  cuts.insert(t.pos - first);
-                if (t.pos + t.len < first + count)
-                  cuts.insert(t.pos + t.len - first);
-              }
+          for (const auto &o : here)
+          {
+            cuts.insert(o.first - first);
+            cuts.insert(o.first - first + 1);
+          }
+          for (const TextToken *t : openTokens)
+          {
+            const unsigned long long end = 0ull + t->pos + t->len;
+            if (t->pos > first)
+              cuts.insert(t->pos - first);
+            if (end < spanEnd)
+              cuts.insert(unsigned(end - first));
+          }
           for (auto c = cuts.begin(); std::next(c) != cuts.end(); ++c)
           {
             const unsigned a = *c, b = *std::next(c), at = first + a;
             librevenge::RVNGPropertyList props = charProps;
-            if (objects && b == a + 1 && chars[2 * a] == 0xfc && chars[2 * a + 1] == 0xff)
-              for (const auto &o : *objects)
+            if (b == a + 1 && chars[2 * a] == 0xfc && chars[2 * a + 1] == 0xff)
+              for (const auto &o : here)
                 if (o.first == at)
                   props.insert("jp:inline-num", int(o.second));
             const TextToken *link = nullptr;
-            if (tokens)
-              for (const auto &t : *tokens)
-                if (at >= t.pos && at < t.pos + t.len)
-                {
-                  if (t.type == 1)
-                    link = &t;
-                  // A date: its first piece is the field, any others its text.
-                  else if (t.type == 6 && at == t.pos)
-                  {
-                    librevenge::RVNGString code("pubdate:");
-                    code.append(t.text);
-                    props.insert("jp:field", code);
-                  }
-                  else if (t.type == 6)
-                    props.insert("jp:field-cont", true);
-                }
+            for (const TextToken *tp : openTokens)
+            {
+              const TextToken &t = *tp;
+              if (at < t.pos || at >= 0ull + t.pos + t.len)
+                continue;
+              if (t.type == 1)
+                link = &t;
+              // A date: its first piece is the field, any others its text.
+              else if (at == t.pos)
+              {
+                librevenge::RVNGString code("pubdate:");
+                code.append(t.text);
+                props.insert("jp:field", code);
+              }
+              else
+                props.insert("jp:field-cont", true);
+            }
             if (link)
             {
               librevenge::RVNGPropertyList linkProps;
