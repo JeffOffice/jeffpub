@@ -494,6 +494,32 @@ numbers aren't read yet (they show "#"). Dates and times live in TOKN
 sections of the text stream; JeffPub writes its date, time and page-count
 fields as their text.
 
+### Objects in text
+
+An object set in a line of text (Publisher's "inline" position) is a U+FFFC
+in the story whose character run has `00:12` = 2 (a page number has 5). Each
+story with such objects has an EOBJ section in the text stream (kind
+"PLC "): the count n, the entry size (4), 0xFF00, n character positions,
+the story's length (twice it in a 2006 file), then each object's number.
+The objects themselves sit on the last special page (seq 279 in 2021
+files), which Publisher lists but never shows; each object's chunk has
+`03:08`, `0f:20` = its number and `34:20` = 0. A 0x70 chunk, field `05:70`
+of the text index (0x5b), lists each number with its story's text id and
+its object (`00:88 {01:20 number, 02:20 text id, 03:68 object}`). In the
+drawing, an object in text is locked against grouping (`007f` =
+0x00010001) and, in the tertiary properties, against ungrouping (0x02000200),
+and its anchor is in its own box, from its left and top wrap distances.
+
+Layout (Publisher 2021, Oct 7: boxes 6, 18, 36 and 72 pt tall in 12 and 24
+pt Times New Roman and 12 pt Arial, measured at 300 dpi): the object sits
+on the baseline inside its wrap distances, as a character as wide as the
+object and its side distances; one taller than the text's ascent lowers
+the baseline, and the line, by the difference, and line spacing stays the
+text's. JeffPub matches every case to a pixel. Publisher showed a copy of
+its sample saved by JeffPub identically to its own file (the 300 dpi
+pictures were the same, pixel for pixel), but only once the run carried
+`00:12` = 2: without it the objects floated above their text boxes.
+
 ### Paragraph and character settings
 
 Right to left: a sample made in Publisher (Oct 6) holds two paragraph

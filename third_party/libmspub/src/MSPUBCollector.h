@@ -128,6 +128,12 @@ public:
   void setShapeFillSpot(unsigned seqNum, const std::string &ink) { m_shapeInfosBySeqNum[seqNum].m_fillSpot = ink; }
   void setTextNotHyphenated(unsigned textId) { m_notHyphenated.insert(textId); }
   void setTextAutofit(unsigned textId, unsigned kind) { m_autofit[textId] = kind; }
+  void setShapeInlineNum(unsigned seqNum, unsigned num) { m_shapeInfosBySeqNum[seqNum].m_inlineNum = num; }
+  void setInlineObjects(unsigned textId, const std::vector<std::pair<unsigned, unsigned> > &objects)
+  {
+    m_inlineObjects[textId] = objects;
+    for (const auto &o : objects) m_inlineNums.insert(o.second);
+  }
   void setPublicationLayout(unsigned layout) { m_publicationLayout = layout; } // JeffPub patch
   // JeffPub patch: text wrapping around the shape, and its distances.
   void setShapeWrap(unsigned seqNum, unsigned wrap) { m_shapeInfosBySeqNum[seqNum].m_wrap = wrap; }
@@ -185,6 +191,14 @@ private:
   std::map<unsigned, unsigned> m_shapeTypesBySeqNum;
   std::set<unsigned> m_notHyphenated; // JeffPub patch: text ids of stories without automatic hyphenation
   std::map<unsigned, unsigned> m_autofit; // JeffPub patch: text id -> AutoFit Text (1 best fit, 2 shrink, 3 grow)
+  // JeffPub patch: objects set in text. Per story (text id), each object's
+  // character position and number (EOBJ); the numbers any story uses; and
+  // whether they've been written (once, with the first page).
+  std::map<unsigned, std::vector<std::pair<unsigned, unsigned> > > m_inlineObjects;
+  std::set<unsigned> m_inlineNums;
+  mutable bool m_inlineWritten = false;
+  bool isInlineShape(unsigned seqNum) const;
+  void writeInlineShapes() const;
   unsigned m_publicationLayout = 0;       // JeffPub patch: Page Setup layout type (0 one page per sheet)
   std::vector<Color> m_paletteColors;
   std::vector<unsigned> m_shapeSeqNumsOrdered;

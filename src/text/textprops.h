@@ -40,6 +40,7 @@ enum : int {
     KernAbove,                                   // double: automatic pair kerning from this size up (points; 14 when unset)
     Tracking,                                    // double: percent of normal letter spacing (100 when unset)
     LineSize,                                    // double: layout only, the (Qt) size a run's line spacing counts at
+    InlineObject,                                // QString item JSON: an object set in the text, run text is U+FFFC
 
     // block
     StyleName = QTextFormat::UserProperty + 100, // QString paragraph style

@@ -548,13 +548,7 @@ void Editor::deleteItems(const QStringList &ids)
         }
     }
     // Drop stories no longer referenced.
-    QSet<QString> used;
-    m_doc->forEachItem([&](Item *it, int, const QString &) {
-        if (it->type() == ItemType::Text) used.insert(static_cast<TextItem *>(it)->storyId);
-        if (it->type() == ItemType::Shape) used.insert(static_cast<ShapeItem *>(it)->storyId);
-        if (it->type() == ItemType::Table)
-            for (const auto &c : static_cast<TableItem *>(it)->cells) used.insert(c.storyId);
-    });
+    const QSet<QString> used = m_doc->storiesInUse();
     for (const auto &sid : m_doc->stories.keys())
         if (!used.contains(sid)) m_doc->removeStory(sid);
     m_sel.clear();
@@ -880,9 +874,7 @@ void Editor::linkFrames(const QString &from, const QString &to)
     QString old = b->storyId;
     for (TextItem *f : m_doc->chainOf(b->id)) f->storyId = head;
     a->nextId = b->id;
-    bool used = false;
-    m_doc->forEachItem([&](Item *it, int, const QString &) { if (auto *t = dynamic_cast<TextItem *>(it); t && t->storyId == old) used = true; });
-    if (!used) m_doc->removeStory(old);
+    if (!m_doc->storiesInUse().contains(old)) m_doc->removeStory(old);
     endChange();
 }
 

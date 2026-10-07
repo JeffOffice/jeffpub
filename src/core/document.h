@@ -206,6 +206,9 @@ public:
     QString createStory(const QString &text = QString());
     QString copyStory(const QString &id);   // deep copy, returns new id
     void removeStory(const QString &id);
+    // Stories in use: those of text boxes, shapes and table cells, and those
+    // their text refers to (a note's, an object set in text's own), on down.
+    QSet<QString> storiesInUse() const;
     void applyDefaultFont(QTextDocument *d) const;
 
     // pictures

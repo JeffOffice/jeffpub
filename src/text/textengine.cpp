@@ -690,6 +690,7 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
     // Notes. A note's own text is laid out without notes of its own.
     m_notes.clear();
     m_noteRules.clear();
+    m_inline.clear();
     m_notesHeading = Heading();
     static thread_local int noteDepth = 0;
     const bool withNotes = noteDepth == 0 && nF > 0;
@@ -752,6 +753,42 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
             const QString text = frag.text();
             const QTextCharFormat cf = frag.charFormat();
             QTextCharFormat rf = resolveCharFormat(cf, env);
+            // An object set in the text: an em dash (a line may break on
+            // either side, as at a picture) in the run's own font, so the
+            // line's text metrics stay; letter spacing makes it as wide as the
+            // object and its side wrap distances, and it's drawn clear.
+            const QString object = cf.stringProperty(tp::InlineObject);
+            if (!object.isEmpty()) {
+                const ItemPtr item = Item::fromJsonAny(QJsonDocument::fromJson(object.toUtf8()).object());
+                const QChar standIn(0x2014);
+                QFont plain = rf.font();
+                plain.setLetterSpacing(QFont::AbsoluteSpacing, 0);
+                const double adv = advanceOf(plain, QString(standIn));
+                for (int i = 0; i < text.size(); ++i) {
+                    Block::Box box;
+                    box.disp = int(B->disp.size());
+                    box.docPos = b.position() + rel + i;
+                    box.json = object;
+                    if (item) {
+                        box.size = item->rect.size();
+                        box.pad = QMarginsF(item->wrap.left, item->wrap.top, item->wrap.right, item->wrap.bottom);
+                    }
+                    QTextCharFormat of = rf;
+                    of.setFontLetterSpacingType(QFont::AbsoluteSpacing);
+                    of.setFontLetterSpacing(box.pad.left() + box.size.width() + box.pad.right() - adv);
+                    of.setForeground(QColor(Qt::transparent));
+                    of.setFontUnderline(false);
+                    of.setUnderlineStyle(QTextCharFormat::NoUnderline);
+                    of.setFontStrikeOut(false);
+                    of.setFontOverline(false);
+                    of.clearBackground();
+                    B->map << Seg{rel + i, 1, int(B->disp.size()), 1};
+                    ranges << QTextLayout::FormatRange{int(B->disp.size()), 1, of};
+                    B->objects << box;
+                    B->disp += standIn;
+                }
+                continue;
+            }
             const QString field = cf.stringProperty(tp::Field);
             if (!field.isEmpty()) {
                 const bool isNote = field.startsWith(QLatin1String("footnote:")) || field.startsWith(QLatin1String("endnote:"));
@@ -1058,13 +1095,39 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
                     }
                     double single = singleSpacing(ranges, line.textStart(), std::max(1, line.textLength()), base);
                     if (line.textStart() == 0) single = std::max(single, markerSingle);
-                    const double h = lineHeightFor(bf, scale, single);
+                    double h = lineHeightFor(bf, scale, single);
                     // .pub layouts put a line's extra spacing below it: the first
                     // line of a column sits one ascent below the top, and a
                     // paragraph after one with wider spacing starts that much
                     // lower. Whether a line fits counts its text, not that space.
                     const double below = h > single && bf.lineHeightType() == QTextBlockFormat::ProportionalHeight ? h - single : 0;
-                    const double textH = h - below;
+                    double textH = h - below;
+                    // Baseline one descent above the text's bottom (for a substituted
+                    // proprietary font, the original font's descent). Set closer than
+                    // single, the whole line shrinks in proportion, its descent too,
+                    // small capitals at the full size: in Publisher's PDFs the baseline
+                    // sits spacing x (single - descent) below the top (0.75 and 0.94
+                    // spacing; Times, Futura, Oswald).
+                    const bool closer = bf.lineHeightType() == QTextBlockFormat::ProportionalHeight && h < single && single > 0;
+                    const double kd = knownDescent(ranges, line.textStart(), std::max(1, line.textLength()), closer);
+                    const double fd = kd > 0 ? 0 : fontDescent(ranges, line.textStart(), std::max(1, line.textLength()), closer);
+                    const double descent = kd > 0 ? kd : fd > 0 ? fd : line.height() - line.ascent();
+                    double baseDown = closer ? h / single * (single - descent) : textH - descent;
+                    // An object set in the line sits on the baseline with its wrap
+                    // distances around it; one reaching above the text's ascent
+                    // lowers the baseline, and the line, by the difference. The
+                    // line's spacing stays the text's (Publisher, Oct 7: a 72 pt
+                    // box in 12 pt Times gave the line 2.88 + 72 + 2.88 above the
+                    // baseline, single or double spaced, and the next line its
+                    // usual distance).
+                    double objUp = 0;
+                    for (const auto &ob : B->objects)
+                        if (ob.disp >= line.textStart() && ob.disp < line.textStart() + line.textLength())
+                            objUp = std::max(objUp, ob.pad.bottom() + ob.size.height() + ob.pad.top());
+                    const double rise = objUp > baseDown && bf.lineHeightType() != QTextBlockFormat::FixedHeight ? objUp - baseDown : 0;
+                    h += rise;
+                    textH += rise;
+                    baseDown += rise;
                     const bool firstInColumn = (y <= 0.001) && rowIdx == 0;
                     // Footnotes referred to on this line go at the bottom of
                     // its column, with it: both fit, or both move on.
@@ -1083,7 +1146,7 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
                         continue;
                     }
                     // Re-check wrap for a line taller than estimated.
-                    const double inkH = std::min(textH, line.height());
+                    const double inkH = rise > 0 ? textH : std::min(textH, line.height());
                     if (inkH > estText * 1.05 && !frames[f].obstacles.isEmpty() && rowIdx == 0) {
                         const QVector<Iv> recheck = freeIntervals(frames[f].obstacles, iv.x0, iv.x1, col.top() + y, col.top() + y + inkH);
                         if (recheck.size() != 1 || recheck[0].x0 > iv.x0 + 0.5 || recheck[0].x1 < iv.x1 - 0.5) {
@@ -1093,17 +1156,7 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
                             continue;
                         }
                     }
-                    // Baseline one descent above the text's bottom (for a substituted
-                    // proprietary font, the original font's descent). Set closer than
-                    // single, the whole line shrinks in proportion, its descent too,
-                    // small capitals at the full size: in Publisher's PDFs the baseline
-                    // sits spacing x (single - descent) below the top (0.75 and 0.94
-                    // spacing; Times, Futura, Oswald).
-                    const bool closer = bf.lineHeightType() == QTextBlockFormat::ProportionalHeight && h < single && single > 0;
-                    const double kd = knownDescent(ranges, line.textStart(), std::max(1, line.textLength()), closer);
-                    const double fd = kd > 0 ? 0 : fontDescent(ranges, line.textStart(), std::max(1, line.textLength()), closer);
-                    const double descent = kd > 0 ? kd : fd > 0 ? fd : line.height() - line.ascent();
-                    const double lead = (closer ? h / single * (single - descent) : textH - descent) - line.ascent();
+                    const double lead = baseDown - line.ascent();
                     // Align to baseline guides: the baseline moves down onto the next guide.
                     if (bf.boolProperty(tp::AlignToBaseline) && frames[f].baselineGrid > 0.5) {
                         const double grid = frames[f].baselineGrid * scale, origin = frames[f].baselineOrigin * scale;
@@ -1313,6 +1366,19 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
         shifts[fi] = shift;
     }
     for (int fi = 0; fi < nF; ++fi) m_used[fi] += frames[fi].insets.bottom();
+
+    // Where each object set in the text is drawn: on its line's baseline,
+    // inside its wrap distances.
+    for (const auto &B : m_blocks)
+        for (const auto &ob : B->objects)
+            for (int i = 0; i < B->lines.size(); ++i) {
+                const PtLine l(B->tl->lineAt(i));
+                if (ob.disp < l.textStart() || ob.disp >= l.textStart() + l.textLength()) continue;
+                const double x = std::min(l.cursorToX(ob.disp), l.cursorToX(ob.disp + 1)) + ob.pad.left();
+                const double baseline = l.y() - frameY(B->lines[i].frame) + l.ascent();
+                m_inline << InlineObject{B->lines[i].frame, QRectF(QPointF(x, baseline - ob.pad.bottom() - ob.size.height()), ob.size), ob.json, ob.docPos};
+                break;
+            }
     return shifts;
 }
 

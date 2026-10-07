@@ -12,6 +12,7 @@ struct PubImportReport {
     int textBoxes = 0, pictures = 0, shapes = 0, tables = 0;
     int linkedChains = 0;
     int attachedEnds = 0;   // connector ends attached to objects
+    int inlineObjects = 0;  // objects set in text
     QStringList fontsUsed;
     QStringList warnings;
 };

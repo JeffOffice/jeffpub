@@ -13,6 +13,7 @@
 #include <QJsonArray>
 #include <QSvgRenderer>
 #include <QPainter>
+#include <QRegularExpression>
 #include <QTextDocument>
 #include <QTextBlock>
 #include <QTextCursor>
@@ -458,6 +459,37 @@ QString Document::copyStory(const QString &id)
 }
 
 void Document::removeStory(const QString &id) { stories.remove(id); }
+
+QSet<QString> Document::storiesInUse() const
+{
+    QSet<QString> used;
+    QStringList queue;
+    auto use = [&](const QString &id) {
+        if (id.isEmpty() || used.contains(id)) return;
+        used.insert(id);
+        queue << id;
+    };
+    forEachItem([&](Item *it, int, const QString &) {
+        if (it->type() == ItemType::Text) use(static_cast<TextItem *>(it)->storyId);
+        if (it->type() == ItemType::Shape) use(static_cast<ShapeItem *>(it)->storyId);
+        if (it->type() == ItemType::Table)
+            for (const auto &c : static_cast<TableItem *>(it)->cells) use(c.storyId);
+    });
+    static const QRegularExpression storyKey(QStringLiteral("\"story\":\"([^\"]+)\""));
+    while (!queue.isEmpty()) {
+        const QTextDocument *sd = storyDoc(queue.takeFirst());
+        if (!sd) continue;
+        for (QTextBlock b = sd->begin(); b.isValid(); b = b.next())
+            for (auto f = b.begin(); !f.atEnd(); ++f) {
+                const QTextCharFormat cf = f.fragment().charFormat();
+                const QString field = cf.stringProperty(tp::Field);
+                if (field.startsWith(QLatin1String("footnote:")) || field.startsWith(QLatin1String("endnote:"))) use(field.section(QLatin1Char(':'), 1));
+                const QString object = cf.stringProperty(tp::InlineObject);
+                for (auto m = storyKey.globalMatch(object); m.hasNext();) use(m.next().captured(1));
+            }
+    }
+    return used;
+}
 
 QString Document::addImage(const QByteArray &bytes, const QString &format, const QString &sourcePath, const QImage &decoded)
 {

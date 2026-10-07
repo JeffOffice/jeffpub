@@ -528,6 +528,19 @@ static void paintLine(QPainter *p, const PaintContext &ctx, const LineItem &l)
 }
 
 // ---------- item content ----------
+// Objects set in a story's text, where its layout put them in this frame
+// (in the same coordinates as the text).
+static void paintInlineObjects(QPainter *p, const PaintContext &ctx, const StoryLayout &lay, int frame)
+{
+    for (const auto &ob : lay.inlineObjects()) {
+        if (ob.frame != frame) continue;
+        const ItemPtr it = Item::fromJsonAny(QJsonDocument::fromJson(ob.json.toUtf8()).object());
+        if (!it) continue;
+        it->moveBy(ob.rect.left() - it->rect.left(), ob.rect.top() - it->rect.top());
+        Renderer::paintItem(p, ctx, *it);
+    }
+}
+
 static void paintText(QPainter *p, const PaintContext &ctx, const TextItem &t)
 {
     const QRectF r(QPointF(0, 0), t.rect.size());
@@ -548,6 +561,7 @@ static void paintText(QPainter *p, const PaintContext &ctx, const TextItem &t)
             p->rotate(90);
         }
         fl.layout->paint(p, fl.frame, po);
+        paintInlineObjects(p, ctx, *fl.layout, fl.frame);
         p->restore();
         // Continued notices.
         const FrameSpec spec = Renderer::frameSpec(*ctx.doc, t, ctx.pageNumber, ctx.opt);
@@ -624,6 +638,7 @@ static void paintShape(QPainter *p, const PaintContext &ctx, const ShapeItem &s)
             p->save();
             p->translate(origin);
             lay->paint(p, 0, po);
+            paintInlineObjects(p, ctx, *lay, 0);
             p->restore();
         }
     }
@@ -698,6 +713,7 @@ static void paintTable(QPainter *p, const PaintContext &ctx, const TableItem &t)
             p->translate(cr.topLeft());
             p->setClipRect(QRectF(QPointF(0, 0), cr.size()), Qt::IntersectClip);
             lay->paint(p, 0, po);
+            paintInlineObjects(p, ctx, *lay, 0);
             p->restore();
         }
     // Borders and diagonals on top.

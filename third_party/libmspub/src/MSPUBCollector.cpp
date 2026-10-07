@@ -1,6 +1,7 @@
 #include <set>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /*
  * This file is part of the libmspub project.
@@ -751,7 +752,10 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
   std::vector<int> adjustValues = getShapeAdjustValues(info);
   if (isGroup)
   {
-    m_painter->startLayer(librevenge::RVNGPropertyList());
+    librevenge::RVNGPropertyList groupProps;
+    if (isInlineShape(info.m_jpSeqNum))
+      groupProps.insert("jp:inline-num", int(get(info.m_inlineNum)));
+    m_painter->startLayer(groupProps);
     return std::bind(&endShapeGroup, m_painter);
   }
   librevenge::RVNGPropertyList graphicsProps;
@@ -766,6 +770,8 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
     graphicsProps.insert("jp:shape-type", int(info.m_type.get_value_or(RECTANGLE)));
     graphicsProps.insert("jp:shape-seq", int(info.m_jpSeqNum));
     addWrapProps(graphicsProps, info);
+    if (isInlineShape(info.m_jpSeqNum))
+      graphicsProps.insert("jp:inline-num", int(get(info.m_inlineNum)));
     // A connector's ends: the shapes and connection sites they're attached to.
     if (bool(info.m_glueStart))
     {
@@ -885,10 +891,20 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
       y = coord.getYIn(m_height);
       height = coord.getHeightIn();
       width = coord.getWidthIn();
-      m_painter->startLayer(calcClipPath(info.m_clipPath, x, y, height, width, foldedTransform, info.getCustomShape()));
+      librevenge::RVNGPropertyList layerProps = calcClipPath(info.m_clipPath, x, y, height, width, foldedTransform, info.getCustomShape());
+      if (isInlineShape(info.m_jpSeqNum))
+        layerProps.insert("jp:inline-num", int(get(info.m_inlineNum)));
+      m_painter->startLayer(layerProps);
     }
     else
-      m_painter->startLayer(librevenge::RVNGPropertyList());
+    {
+      // JeffPub patch: a shape drawn as a layer (its fill and outline) is
+      // one object, set in text when the shape is.
+      librevenge::RVNGPropertyList layerProps;
+      if (isInlineShape(info.m_jpSeqNum))
+        layerProps.insert("jp:inline-num", int(get(info.m_inlineNum)));
+      m_painter->startLayer(layerProps);
+    }
   }
   graphicsProps.insert("draw:stroke", "none");
   const Coordinate coord = info.m_coordinates.get_value_or(Coordinate());
@@ -1448,6 +1464,8 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
         props.insert("jp:text-chain-index", (int)info.m_textChainIndex);
         props.insert("jp:shape-seq", (int)info.m_jpSeqNum);
         addWrapProps(props, info);
+        if (isInlineShape(info.m_jpSeqNum))
+          props.insert("jp:inline-num", int(get(info.m_inlineNum)));
         if (m_notHyphenated.count(get(info.m_textId)))
           props.insert("jp:no-hyphenation", true);
         const auto fit = m_autofit.find(get(info.m_textId));
@@ -1455,6 +1473,15 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
           props.insert("jp:autofit", (int)fit->second);
       }
       m_painter->startTextObject(props);
+      // JeffPub patch: the story's objects set in text, by character position.
+      const std::vector<std::pair<unsigned, unsigned> > *objects = nullptr;
+      if (bool(info.m_textId))
+      {
+        const auto o = m_inlineObjects.find(get(info.m_textId));
+        if (o != m_inlineObjects.end() && !strcmp(getCalculatedEncoding(), "UTF-16LE"))
+          objects = &o->second;
+      }
+      unsigned storyPos = 0;
       for (const auto &line : text)
       {
         librevenge::RVNGPropertyList paraProps = getParaStyleProps(line.style, line.style.m_defaultCharStyleIndex);
@@ -1467,13 +1494,43 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
         m_painter->openParagraph(paraProps);
         for (size_t i_spans = 0; i_spans < line.spans.size(); ++i_spans)
         {
-          librevenge::RVNGString textString;
-          appendCharacters(textString, line.spans[i_spans].chars,
-                           getCalculatedEncoding());
+          const std::vector<unsigned char> &chars = line.spans[i_spans].chars;
           librevenge::RVNGPropertyList charProps = getCharStyleProps(line.spans[i_spans].style, line.style.m_defaultCharStyleIndex);
-          m_painter->openSpan(charProps);
-          separateSpacesAndInsertText(m_painter, textString);
-          m_painter->closeSpan();
+          auto emit = [&](size_t from, size_t to, int num)
+          {
+            if (from >= to)
+              return;
+            librevenge::RVNGString textString;
+            appendCharacters(textString, std::vector<unsigned char>(chars.begin() + from, chars.begin() + to), getCalculatedEncoding());
+            librevenge::RVNGPropertyList spanProps = charProps;
+            if (num >= 0)
+              spanProps.insert("jp:inline-num", num);
+            m_painter->openSpan(spanProps);
+            separateSpacesAndInsertText(m_painter, textString);
+            m_painter->closeSpan();
+          };
+          size_t from = 0;
+          if (objects)
+          {
+            // A U+FFFC at a listed position is that object; it gets a span
+            // of its own.
+            for (size_t k = 0; k + 1 < chars.size(); k += 2)
+            {
+              if (chars[k] != 0xfc || chars[k + 1] != 0xff)
+                continue;
+              const unsigned at = storyPos + unsigned(k / 2);
+              for (const auto &o : *objects)
+                if (o.first == at)
+                {
+                  emit(from, k, -1);
+                  emit(k, k + 2, int(o.second));
+                  from = k + 2;
+                  break;
+                }
+            }
+            storyPos += unsigned(chars.size() / 2);
+          }
+          emit(from, chars.size(), -1);
         }
         m_painter->closeParagraph();
       }
@@ -2082,6 +2139,11 @@ void MSPUBCollector::writePage(unsigned pageSeqNum) const
     }
     writePageBackground(pageSeqNum);
     writePageShapes(pageSeqNum);
+    if (!m_inlineWritten)
+    {
+      m_inlineWritten = true;
+      writeInlineShapes();
+    }
     m_painter->endPage();
   }
 }
@@ -2090,7 +2152,26 @@ void MSPUBCollector::writePageShapes(unsigned pageSeqNum) const
 {
   const PageInfo &pageInfo = m_pagesBySeqNum.find(pageSeqNum)->second;
   for (const auto &shapeGroup : pageInfo.m_shapeGroupsOrdered)
-    shapeGroup->visit(std::bind(&MSPUBCollector::paintShape, this, _1, _2, _3, _4, _5));
+    if (!isInlineShape(shapeGroup->getSeqNum()))
+      shapeGroup->visit(std::bind(&MSPUBCollector::paintShape, this, _1, _2, _3, _4, _5));
+}
+
+// JeffPub patch: an object set in text is a shape whose number a story's
+// EOBJ section lists.
+bool MSPUBCollector::isInlineShape(unsigned seqNum) const
+{
+  const ShapeInfo *info = getIfExists_const(m_shapeInfosBySeqNum, seqNum);
+  return info && bool(info->m_inlineNum) && m_inlineNums.count(get(info->m_inlineNum));
+}
+
+// JeffPub patch: the objects set in text, wherever Publisher keeps them,
+// each marked with its number (jp:inline-num) for the text to take in.
+void MSPUBCollector::writeInlineShapes() const
+{
+  // Their page is often one of the special ones, never made a page here.
+  for (const auto &shapeGroup : m_topLevelShapes)
+    if (isInlineShape(shapeGroup->getSeqNum()))
+      shapeGroup->visit(std::bind(&MSPUBCollector::paintShape, this, _1, _2, _3, _4, _5));
 }
 
 void MSPUBCollector::writePageBackground(unsigned pageSeqNum) const

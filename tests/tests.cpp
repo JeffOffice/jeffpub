@@ -2671,6 +2671,41 @@ private Q_SLOTS:
     }
 
     // Regroup puts the objects of the group last ungrouped back together.
+    // Deleting an object keeps the stories text refers to: a footnote's (the
+    // field "footnote:<story>") and the text of a text box set in text.
+    // Both counted as unused and were dropped with any deletion.
+    void deleteKeepsStoriesTextRefersTo()
+    {
+        using namespace jp;
+        Editor ed;
+        ed.setDocument(Document::blank(QSizeF(612, 792)));
+        Document *d = ed.doc();
+        auto t = std::make_shared<TextItem>();
+        t->rect = QRectF(72, 72, 300, 200);
+        t->storyId = d->createStory(QStringLiteral("Text"));
+        const QString note = d->createStory(QStringLiteral("A note."));
+        const QString inner = d->createStory(QStringLiteral("Inner."));
+        QTextCursor c(d->storyDoc(t->storyId));
+        c.movePosition(QTextCursor::End);
+        QTextCharFormat ff;
+        ff.setProperty(tp::Field, QStringLiteral("footnote:") + note);
+        c.insertText(QString(QChar::ObjectReplacementCharacter), ff);
+        TextItem box;
+        box.rect = QRectF(0, 0, 50, 20);
+        box.storyId = inner;
+        QTextCharFormat of;
+        of.setProperty(tp::InlineObject, QString::fromUtf8(QJsonDocument(box.toJson()).toJson(QJsonDocument::Compact)));
+        c.insertText(QString(QChar::ObjectReplacementCharacter), of);
+        ed.addItem(t, false);
+        auto s = std::make_shared<ShapeItem>();
+        s->rect = QRectF(400, 400, 50, 50);
+        ed.addItem(s);
+        ed.deleteItems({s->id});
+        QVERIFY(d->storyDoc(t->storyId));
+        QVERIFY2(d->storyDoc(note), "the footnote's text was dropped");
+        QVERIFY2(d->storyDoc(inner), "the text of the box set in text was dropped");
+    }
+
     void regroupAfterUngroup()
     {
         using namespace jp;
@@ -2965,6 +3000,124 @@ private Q_SLOTS:
         const auto info = fl.layout->lineInfo(0);
         QCOMPARE(int(info.size()), 1);
         QVERIFY2(info[0].rect.left() < 10, qPrintable(QString::number(info[0].rect.left())));   // not pushed right of the object
+    }
+
+    // An object set in the text sits on the baseline inside its wrap
+    // distances (2.88 pt), and one taller than the text's ascent lowers its
+    // line by the difference; the next line keeps its usual distance.
+    // Publisher (Oct 7), 24 pt wide boxes 6, 18 and 72 pt tall in 12 pt Times
+    // New Roman, single spaced: line 2's baseline 2.64 + 2.88 + h + 2.88
+    // below line 1's, the box 2.88 above it, line 3 12.72 below.
+    void inlineObjectInLine()
+    {
+        using namespace jp;
+        for (double h : {6.0, 18.0, 72.0}) {
+            auto doc = Document::blank(QSizeF(612, 792));
+            auto t = std::make_shared<TextItem>();
+            t->rect = QRectF(72, 72, 120, 220);
+            t->insets = QMarginsF(0, 0, 0, 0);
+            t->storyId = doc->createStory(QStringLiteral("HxH\nHxH\nHxH"));
+            QTextCursor c(doc->storyDoc(t->storyId));
+            c.select(QTextCursor::Document);
+            QTextCharFormat cf;
+            cf.setFontFamilies({QStringLiteral("Times New Roman")});
+            cf.setFontPointSize(12);
+            c.mergeCharFormat(cf);
+            QTextBlockFormat bf;
+            bf.setTopMargin(0);
+            bf.setBottomMargin(0);
+            bf.setLineHeight(100, QTextBlockFormat::ProportionalHeight);
+            c.mergeBlockFormat(bf);
+            ShapeItem box;
+            box.rect = QRectF(400, 600, 24, h);
+            c.setPosition(5);   // after line 2's "H"
+            QTextCharFormat of = c.charFormat();
+            of.setProperty(tp::InlineObject, QString::fromUtf8(QJsonDocument(box.toJson()).toJson(QJsonDocument::Compact)));
+            c.insertText(QString(QChar::ObjectReplacementCharacter), of);
+            doc->pages[0]->items = {t};
+            LayoutCache cache;
+            const auto fl = cache.textFrame(*doc, *t, 1, RenderOptions());
+            const auto info = fl.layout->lineInfo(0);
+            QCOMPARE(int(info.size()), 3);
+            const auto objects = fl.layout->inlineObjects();
+            QCOMPARE(int(objects.size()), 1);
+            const QRectF r = objects[0].rect;
+            const double b1 = info[0].baseline, b2 = info[1].baseline, b3 = info[2].baseline;
+            const double normal = b3 - b2, descent = normal - b1;
+            QVERIFY2(std::abs(r.height() - h) < 0.01 && std::abs(r.width() - 24) < 0.01, qPrintable(QStringLiteral("%1x%2").arg(r.width()).arg(r.height())));
+            QVERIFY2(std::abs(r.bottom() - (b2 - 2.88)) < 0.05, qPrintable(QStringLiteral("h %1: bottom %2 baseline %3").arg(h).arg(r.bottom()).arg(b2)));
+            QVERIFY2(std::abs((b2 - b1) - (descent + 2.88 + h + 2.88)) < 0.05,
+                     qPrintable(QStringLiteral("h %1: b1 %2 b2 %3 b3 %4").arg(h).arg(b1).arg(b2).arg(b3)));
+            QVERIFY(normal > 10 && normal < 16);
+            // Across: after the "H", inside the side distances.
+            QFont f(QStringLiteral("Times New Roman"));
+            f.setPointSizeF(12 * fontPointFactor());
+            QVERIFY2(std::abs(r.left() - (QFontMetricsF(f).horizontalAdvance(QLatin1Char('H')) + 2.88)) < 0.3, qPrintable(QString::number(r.left())));
+            QCOMPARE(objects[0].docPos, 5);
+            // The display text keeps one character for it, which isn't drawn.
+            QCOMPARE(info[1].text.size(), 4);
+        }
+    }
+
+    // An object set in text, saved as Publisher saves one: its U+FFFC's run
+    // has 00 = 2, the story's EOBJ section gives its position and number,
+    // the object sits on the last special page with that number (0f), and
+    // an index (0x70, field 05 of the text index) ties number, story and
+    // object together. Publisher showed such a copy exactly as its own file
+    // (Oct 7); the object comes back with its size and wrap distances.
+    void pubInlineObjectRoundTrip()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<TextItem>();
+        t->rect = QRectF(72, 72, 200, 200);
+        t->storyId = doc->createStory(QStringLiteral("Logo: here"));
+        ShapeItem box;
+        box.rect = QRectF(300, 500, 36, 24);
+        box.fill = Fill::solid(ColorRef::rgb(Qt::red));
+        box.wrap.left = 5;
+        QTextCursor c(doc->storyDoc(t->storyId));
+        c.setPosition(6);
+        QTextCharFormat of = c.charFormat();
+        of.setProperty(tp::InlineObject, QString::fromUtf8(QJsonDocument(box.toJson()).toJson(QJsonDocument::Compact)));
+        c.insertText(QString(QChar::ObjectReplacementCharacter), of);
+        doc->pages[0]->items = {t};
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("inline.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        const QByteArray q = cfb::readStream(path, QStringLiteral("Quill/QuillSub/CONTENTS"));
+        // EOBJ 0 (the first story): one object at 6, the story 12 long (with
+        // its paragraph mark), number 1.
+        QByteArray eobj;
+        for (quint32 v : {1u, 4u, 0xff00u, 6u, 12u, 1u}) eobj.append(reinterpret_cast<const char *>(&v), 4);
+        QVERIFY(q.contains(eobj));
+        // The object's run: 00 (type 0x12) = 2.
+        QVERIFY(q.contains(QByteArray::fromHex("001202000c22")));
+        auto back = importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(int(back->pages[0]->items.size()), 1);   // the object isn't on the page
+        auto *bt = dynamic_cast<TextItem *>(back->pages[0]->items[0].get());
+        QVERIFY(bt);
+        QTextDocument *sd = back->storyDoc(bt->storyId);
+        QCOMPARE(sd->toPlainText(), QStringLiteral("Logo: ") + QChar(QChar::ObjectReplacementCharacter) + QStringLiteral("here"));
+        QTextCursor bc(sd);
+        bc.setPosition(7);
+        const ItemPtr obj = Item::fromJsonAny(QJsonDocument::fromJson(bc.charFormat().stringProperty(tp::InlineObject).toUtf8()).object());
+        QVERIFY(obj && obj->type() == ItemType::Shape);
+        QVERIFY(std::abs(obj->rect.width() - 36) < 0.01 && std::abs(obj->rect.height() - 24) < 0.01);
+        QVERIFY(std::abs(obj->wrap.left - 5) < 0.01);
+        QCOMPARE(static_cast<const ShapeItem *>(obj.get())->fill.color.resolve(back->colors), QColor(Qt::red));
+        // JeffPub's own files keep it too.
+        const QString jpath = dir.filePath(QStringLiteral("inline.jpub"));
+        QVERIFY2(savePublication(*doc, jpath, QImage(), &err), qPrintable(err));
+        auto again = loadPublication(jpath, &err);
+        QVERIFY2(again, qPrintable(err));
+        auto *jt = dynamic_cast<TextItem *>(again->pages[0]->items[0].get());
+        QVERIFY(jt);
+        QTextCursor jc(again->storyDoc(jt->storyId));
+        jc.setPosition(7);
+        QCOMPARE(jc.charFormat().stringProperty(tp::InlineObject), of.stringProperty(tp::InlineObject));
     }
 
     // A .pub page number field is a "#" whose character run has 00 = 5 (low

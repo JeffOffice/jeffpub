@@ -6,6 +6,7 @@
 #include "render/shapes.h"
 #include "text/textprops.h"
 
+#include <QJsonDocument>
 #include <QFile>
 #include <QHash>
 #include <QPainter>
@@ -167,6 +168,7 @@ public:
         page->masterId = p["jp:master-seq"] ? m_masterIds.value(p["jp:master-seq"]->getInt(), QStringLiteral("A")) : QStringLiteral("A");
         m_page = page.get();
         m_stack.clear();
+        m_lastList = nullptr;
         ++m_rep.pages;
     }
     void endPage() override { m_page = nullptr; }
@@ -187,12 +189,17 @@ public:
         }
         m_master = m;
         m_stack.clear();
+        m_lastList = nullptr;
     }
     void endMasterPage() override { m_master = nullptr; }
 
     void setStyle(const RVNGPropertyList &p) override { m_style = p; }
 
-    void startLayer(const RVNGPropertyList &) override { m_stack.push_back(std::make_shared<GroupItem>()); }
+    void startLayer(const RVNGPropertyList &p) override
+    {
+        m_stack.push_back(std::make_shared<GroupItem>());
+        if (p["jp:inline-num"]) m_inlineGroups[m_stack.back().get()] = p["jp:inline-num"]->getInt();
+    }
     void endLayer() override { closeGroup(); }
     void startEmbeddedGraphics(const RVNGPropertyList &) override {}
     void endEmbeddedGraphics() override {}
@@ -202,10 +209,13 @@ public:
         if (m_stack.empty()) return;
         auto g = m_stack.back();
         m_stack.pop_back();
+        const auto inl = m_inlineGroups.find(g.get());
+        const int num = inl == m_inlineGroups.end() ? -1 : inl->second;
+        if (inl != m_inlineGroups.end()) m_inlineGroups.erase(inl);
         if (g->children.empty()) return;
-        if (g->children.size() == 1) { add(g->children.front()); return; }
+        if (g->children.size() == 1) { add(g->children.front(), num); return; }
         g->syncRect();
-        add(g);
+        add(g, num);
     }
 
     void drawRectangle(const RVNGPropertyList &p) override
@@ -350,7 +360,8 @@ public:
             t->storyId = m_doc.createStory();
         }
         // A plain rectangle drawn just before at the same place is this box's fill/border.
-        ItemList &list = currentList();
+        const int num = p["jp:inline-num"] && m_stack.empty() ? p["jp:inline-num"]->getInt() : -1;
+        ItemList &list = num >= 0 ? m_inlineList : currentList();
         if (!list.empty() && list.back()->type() == ItemType::Shape) {
             auto *s = static_cast<ShapeItem *>(list.back().get());
             if (s->shape == "rect" && s->customPath.isEmpty() && s->storyId.isEmpty() && std::abs(s->rect.x() - t->rect.x()) < 1 &&
@@ -367,7 +378,7 @@ public:
         m_cursor = QTextCursor(m_doc.storyDoc(t->storyId));
         m_firstPara = !m_skipText;
         m_list = nullptr;
-        add(t);
+        add(t, num);
         ++m_rep.textBoxes;
     }
     void endTextObject() override
@@ -561,6 +572,8 @@ public:
         m_span = cf;
         // A field: the page number Publisher shows in place of the run's "#".
         m_spanField = str(p["jp:field"]);
+        // An object set in the text: the span is its U+FFFC.
+        m_spanInline = p["jp:inline-num"] ? p["jp:inline-num"]->getInt() : -1;
         if (!m_styleFromSpan.isEmpty()) {
             for (TextStyle &st : m_doc.styles)
                 if (st.name == m_styleFromSpan) {
@@ -575,6 +588,7 @@ public:
     {
         m_span = QTextCharFormat();
         m_spanField.clear();
+        m_spanInline = -1;
     }
     void openLink(const RVNGPropertyList &p) override { m_link = str(p["xlink:href"]); }
     void closeLink() override { m_link.clear(); }
@@ -746,6 +760,32 @@ public:
             attach(g.startSeq, g.startSite, g.line->start, g.line->p1);
             attach(g.endSeq, g.endSite, g.line->end, g.line->p2);
         }
+        // Objects set in text take their place in it.
+        for (auto &story : m_doc.stories) {
+            QTextDocument *sd = m_doc.storyDoc(story->id);
+            if (!sd) continue;
+            QVector<QPair<int, QString>> marks;
+            for (QTextBlock b = sd->begin(); b.isValid(); b = b.next())
+                for (auto f = b.begin(); !f.atEnd(); ++f) {
+                    const QString v = f.fragment().charFormat().stringProperty(tp::InlineObject);
+                    if (v.startsWith(QLatin1String("pub:")))
+                        for (int k = 0; k < f.fragment().length(); ++k) marks << qMakePair(f.fragment().position() + k, v);
+                }
+            for (int i = int(marks.size()) - 1; i >= 0; --i) {
+                QTextCursor c(sd);
+                c.setPosition(marks[i].first);
+                c.setPosition(marks[i].first + 1, QTextCursor::KeepAnchor);
+                const auto it = m_inlineItems.find(marks[i].second.mid(4).toInt());
+                if (it == m_inlineItems.end()) {
+                    c.removeSelectedText();
+                    continue;
+                }
+                QTextCharFormat of;
+                of.setProperty(tp::InlineObject, QString::fromUtf8(QJsonDocument(it->second->toJson()).toJson(QJsonDocument::Compact)));
+                c.mergeCharFormat(of);
+                ++m_rep.inlineObjects;
+            }
+        }
         if (m_doc.pages.isEmpty()) m_doc.addPage();
     }
 
@@ -774,12 +814,22 @@ private:
         dist("jp:wrap-bottom", it.wrap.bottom);
     }
 
-    void add(const ItemPtr &it)
+    // inlineNum: an object set in text (Publisher's number for it), kept for
+    // its story instead of the page; -2 takes it from the shape being drawn.
+    void add(const ItemPtr &it, int inlineNum = -2)
     {
         // Pictures, shapes, lines and Text Art come from the shape being drawn.
         const ItemType ty = it->type();
         if (ty == ItemType::Picture || ty == ItemType::Shape || ty == ItemType::Line || ty == ItemType::TextArt) applyWrap(*it, m_style);
-        currentList().push_back(it);
+        if (inlineNum == -2) inlineNum = m_stack.empty() && m_style["jp:inline-num"] ? m_style["jp:inline-num"]->getInt() : -1;
+        if (inlineNum >= 0) {
+            m_inlineList.push_back(it);
+            m_inlineItems[inlineNum] = it;
+            m_lastList = &m_inlineList;
+        } else {
+            currentList().push_back(it);
+            m_lastList = &currentList();
+        }
         m_fillOnly = nullptr;
         // Which item each drawing shape became, for the connectors attached to it.
         if (m_style["jp:shape-seq"]) m_seqItems.emplace(m_style["jp:shape-seq"]->getInt(), it->id);
@@ -849,8 +899,15 @@ private:
         // Shift+Enter is \v (or \n): a line break inside the paragraph.
         QString t = s;
         t.remove(QLatin1Char('\r'));
-        // U+FFFC marks an object set in the text; without the object,
-        // Publisher shows nothing there (a font would draw an "OBJ" box).
+        // U+FFFC marks an object set in the text: the object, once read
+        // (finish() puts it in), or nothing, as Publisher shows when there's
+        // no object (a font would draw an "OBJ" box).
+        if (m_spanInline >= 0 && t == QString(QChar::ObjectReplacementCharacter)) {
+            QTextCharFormat of = cf;
+            of.setProperty(tp::InlineObject, QStringLiteral("pub:%1").arg(m_spanInline));
+            m_cursor.insertText(t, of);
+            return;
+        }
         t.remove(QChar(QChar::ObjectReplacementCharacter));
         t.replace(QLatin1Char('\v'), QChar::LineSeparator);
         t.replace(QLatin1Char('\n'), QChar::LineSeparator);
@@ -1029,7 +1086,7 @@ private:
         // The outline is the same shape's when it names the same shape
         // number and frame; it can be an open path, and can add inner lines
         // (a flowchart shape's), so only the bounds are compared.
-        if (fill.type == Fill::NoFill && !stroke.isNone() && m_fillOnly && !currentList().empty() && currentList().back().get() == m_fillOnly
+        if (fill.type == Fill::NoFill && !stroke.isNone() && m_fillOnly && m_lastList && !m_lastList->empty() && m_lastList->back().get() == m_fillOnly
             && m_style["jp:shape-type"] && shapeKey() == m_fillOnlyKey) {
             const double slack = stroke.width / 2 + 0.3;
             const QRectF &f = m_fillOnlyBounds;
@@ -1238,6 +1295,7 @@ private:
 
     Document &m_doc;
     Item *m_fillOnly = nullptr;           // the last shape added with a fill and no outline
+    ItemList *m_lastList = nullptr;       // where the last item went
     QRectF m_fillOnlyBounds;
     QString m_fillOnlyKey;
     int m_fillOnlyCount = 0;
@@ -1251,6 +1309,10 @@ private:
     QTextCursor m_cursor;
     QTextCharFormat m_span;
     QString m_spanField;   // the open span is this field ("page")
+    int m_spanInline = -1; // the open span is the object set in text with this number
+    ItemList m_inlineList;                   // objects set in text, as read
+    std::map<int, ItemPtr> m_inlineItems;    // and by Publisher's number
+    std::map<const GroupItem *, int> m_inlineGroups;   // open groups that are such objects
     QString m_link;
     bool m_firstPara = true;
     QSet<QString> m_stylesRead;   // named styles met so far

@@ -15,6 +15,8 @@
 #include "render/shapes.h"
 #include "text/textprops.h"
 
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QFile>
 #include <QFileInfo>
 #include <QBuffer>
@@ -213,6 +215,12 @@ public:
         body << fields;
         std::stable_sort(body.begin(), body.end(), [](const B &a, const B &b) { return a.id < b.id; });
     }
+    bool has(quint32 seq, quint8 id) const
+    {
+        for (const B &b : m_chunks.value(seq).body)
+            if (b.id == id) return true;
+        return false;
+    }
     QByteArray build(const QString &path) const;
 
 private:
@@ -336,6 +344,46 @@ QByteArray escherProps(quint16 type, QVector<Prop> props)
 // Client data and anchors carry blocks after a u32 length (version 0xA, as
 // Publisher writes them).
 QByteArray clientBlocks(quint16 type, const QVector<B> &blocks) { return escherRecord(0xa, 0x1a, type, lengthPrefixed(blocks)); }
+
+// A shape's records as an object set in text: locked against grouping
+// (007f = 0x00010001) and, in the tertiary properties, against ungrouping
+// (0x02000200), with its anchor in its own box, inside its wrap distances,
+// not on the page (Publisher, Oct 7).
+QByteArray inlineShapeRecords(const QByteArray &sp, const QByteArray &anchor)
+{
+    QByteArray out;
+    int at = 0;
+    while (at + 8 <= sp.size()) {
+        const quint16 verInst = quint16(uchar(sp[at]) | uchar(sp[at + 1]) << 8);
+        const quint16 type = quint16(uchar(sp[at + 2]) | uchar(sp[at + 3]) << 8);
+        const quint32 len = quint32(uchar(sp[at + 4])) | quint32(uchar(sp[at + 5])) << 8 | quint32(uchar(sp[at + 6])) << 16 | quint32(uchar(sp[at + 7])) << 24;
+        const QByteArray body = sp.mid(at + 8, int(len));
+        if (type == 0xf00b || type == 0xf122) {
+            const int n = verInst >> 4;
+            QVector<Prop> props;
+            int extra = 6 * n;
+            for (int k = 0; k < n && 6 * k + 6 <= body.size(); ++k) {
+                Prop p;
+                p.id = quint16(uchar(body[6 * k]) | uchar(body[6 * k + 1]) << 8);
+                p.value = quint32(uchar(body[6 * k + 2])) | quint32(uchar(body[6 * k + 3])) << 8 | quint32(uchar(body[6 * k + 4])) << 16 |
+                          quint32(uchar(body[6 * k + 5])) << 24;
+                if (p.id & 0x8000) {
+                    p.complex = body.mid(extra, int(p.value));
+                    extra += int(p.value);
+                }
+                props << p;
+            }
+            props << Prop{0x007f, type == 0xf00b ? 0x00010001u : 0x02000200u};
+            out += escherProps(type, props);
+        } else if (type == 0xf010) {
+            out += anchor;
+        } else {
+            out += sp.mid(at, int(8 + len));
+        }
+        at += int(8 + len);
+    }
+    return out;
+}
 
 const QVector<Prop> kSideLines = {{0x0540, 0x08000000}, {0x0542, 0x08000007}, {0x0580, 0x08000000}, {0x0582, 0x08000007},
                                   {0x05c0, 0x08000000}, {0x05c2, 0x08000007}, {0x0600, 0x08000000}, {0x0602, 0x08000007},
@@ -798,6 +846,11 @@ private:
     // Text boxes: text id, place in its chain of linked boxes, sequence number.
     struct TextShape { int tid; int index; quint32 seq; };
     QVector<TextShape> m_textShapes;
+    // Objects set in text, numbered from 1 in this order: the story (its
+    // index in the text stream) and text id, the character position, the
+    // item, and the chunk it's written as.
+    struct InlineObj { int story; int tid; quint32 pos; QString json; QString itemId; quint32 seq = 0; };
+    QVector<InlineObj> m_inline;
     QHash<int, int> m_chainLength;   // text id -> boxes in its chain
 };
 
@@ -1003,6 +1056,22 @@ void PubWriter::addStory(int textId, const QVector<const QTextDocument *> &docs,
                 fc.doc = &m_doc;
                 t = QString();
                 for (int k = 0; k < fr.text().size(); ++k) t += fc.resolve(field);
+            }
+            const QString object = fr.charFormat().stringProperty(tp::InlineObject);
+            if (!object.isEmpty()) {
+                // An object set in the text: its U+FFFC's run says so (00 =
+                // 2), as Publisher writes it, and the story's EOBJ section
+                // gives its number.
+                for (int k = 0; k < t.size(); ++k) {
+                    m_inline << InlineObj{int(m_storyLengths.size()), textId, quint32((512 + m_text.size() - start) / 2), object, {}};
+                    putU16(m_text, t[k].unicode());
+                }
+                QVector<B> blocks = charBlocks(fr.charFormat(), styleChr);
+                blocks << u16(0x00, 2, 0x12);
+                std::sort(blocks.begin(), blocks.end(), [](const B &a, const B &b) { return a.id < b.id; });
+                m_charRuns << Run{quint32(512 + m_text.size()), lengthPrefixed(blocks)};
+                last = fr.charFormat();
+                continue;
             }
             for (QChar c : t) putU16(m_text, c.unicode());
             m_charRuns << Run{quint32(512 + m_text.size()), charProps(fr.charFormat(), styleChr)};
@@ -1413,8 +1482,7 @@ QByteArray PubWriter::write(QStringList *skipped)
     // in page order by its first box, with a frame per box in chain order.
     QHash<QString, QPair<int, int>> chainPos;   // box id -> text id, place in chain
     QHash<QString, QPair<int, int>> shapeText;  // shape id -> text id, story index
-    for (int pi = 0; pi < surfaces.size(); ++pi) {
-        std::function<void(const ItemPtr &)> find = [&](const ItemPtr &it) {
+    std::function<void(const ItemPtr &)> find = [&](const ItemPtr &it) {
             if (it->type() == ItemType::Group) {
                 for (const ItemPtr &c : static_cast<const GroupItem *>(it.get())->children) find(c);
                 return;
@@ -1450,8 +1518,40 @@ QByteArray PubWriter::write(QStringList *skipped)
             m_frames << frames;
             m_chainLength[tid] = int(frames.size());
         };
+    for (int pi = 0; pi < surfaces.size(); ++pi)
         for (const ItemPtr &it : surfaces[pi]->items) find(it);
+    // Objects set in text go on the last special page, where Publisher keeps
+    // them. Their own text can hold more, so this goes on until none are new.
+    PageBase inlinePage;
+    for (int done = 0; done < m_inline.size();) {
+        if (surfaces.isEmpty() || surfaces.last() != &inlinePage) {
+            surfaces << &inlinePage;
+            surfaceSeq << kSpecial[3];
+            pageShapes.resize(surfaces.size());
+        }
+        const int from = int(inlinePage.items.size());
+        for (; done < m_inline.size(); ++done) {
+            ItemPtr it = Item::fromJsonAny(QJsonDocument::fromJson(m_inline[done].json.toUtf8()).object());
+            if (!it) it = std::make_shared<ShapeItem>();
+            // New ids, so a copy of an object on a page stays apart from it.
+            std::function<void(Item *)> renumber = [&](Item *x) {
+                x->id = newId();
+                if (x->type() == ItemType::Text) static_cast<TextItem *>(x)->nextId.clear();
+                if (x->type() == ItemType::Group)
+                    for (const ItemPtr &c : static_cast<GroupItem *>(x)->children) renumber(c.get());
+            };
+            renumber(it.get());
+            // Groups are written as their parts; the first carries the number.
+            const Item *leaf = it.get();
+            while (leaf->type() == ItemType::Group && !static_cast<const GroupItem *>(leaf)->children.empty())
+                leaf = static_cast<const GroupItem *>(leaf)->children.front().get();
+            m_inline[done].itemId = leaf->id;
+            inlinePage.items.push_back(it);
+        }
+        for (int k = from; k < int(inlinePage.items.size()); ++k) find(inlinePage.items[k]);
     }
+    QHash<QString, quint32> seqOf;   // item -> its chunk
+    const int inlineSurface = !surfaces.isEmpty() && surfaces.last() == &inlinePage ? int(surfaces.size()) - 1 : -1;
     for (int pi = 0; pi < surfaces.size(); ++pi) {
         std::function<void(const ItemPtr &)> visit = [&](const ItemPtr &it) {
             if (it->type() == ItemType::Group) {
@@ -1460,8 +1560,10 @@ QByteArray PubWriter::write(QStringList *skipped)
             }
             const QRectF r = turnedBox(it->rect, it->rotation);
             auto finish = [&](quint32 seq, QByteArray sp) {
+                if (pi == inlineSurface) sp = inlineShapeRecords(sp, anchor(QRectF(cx + it->wrap.left, cy + it->wrap.top, r.width(), r.height())));
                 objs << Obj{seq, pi, escherContainer(0xf004, sp)};
                 pageShapes[pi] << seq;
+                seqOf.insert(it->id, seq);
                 spidOf.insert(it->id, quint32(spid));
                 ++spid;
             };
@@ -1944,6 +2046,22 @@ QByteArray PubWriter::write(QStringList *skipped)
         }
     }
     if (skipped && skippedCount) *skipped << QStringLiteral("%1 object(s) couldn't be saved to .pub").arg(skippedCount);
+    // An object set in text says so (03) and gives its number (0f), with 34
+    // = 0, as in Publisher's files (Oct 7); an index lists each number's
+    // story and object.
+    QVector<B> inlineIndex;
+    for (int n = 0; n < m_inline.size(); ++n) {
+        InlineObj &o = m_inline[n];
+        o.seq = seqOf.value(o.itemId);
+        if (!o.seq) continue;
+        QVector<B> f;
+        if (!cw.has(o.seq, 0x03)) f << flag(0x03);
+        f << u32(0x0f, quint32(n + 1));
+        if (!cw.has(o.seq, 0x34)) f << u32(0x34, 0);
+        cw.extend(o.seq, f);
+        inlineIndex << rec(0x00, {u32(0x01, quint32(n + 1)), u32(0x02, quint32(o.tid)), ref(0x03, o.seq, 0x68)});
+    }
+    const quint32 inlineIndexSeq = inlineIndex.isEmpty() ? 0 : next++;
     const quint32 fontSeq = m_fonts.isEmpty() && m_textIds.isEmpty() ? 0 : next++;
     // Fonts the style sheet names, so the font table, written first, has them.
     for (const QString &name : styleNames())
@@ -1990,13 +2108,19 @@ QByteArray PubWriter::write(QStringList *skipped)
     const QSizeF specExt[4] = {QSizeF(106299000, 105156000), ext, ext, ext};
     for (int k = 0; k < 4; ++k) {
         const quint32 s = kSpecial[k];
-        cw.put(s, {0x43, 256, pageBody({}, s + 1, s + 2, false, true, specScratch[k], specExt[k])});
+        // The last holds the objects set in text.
+        const bool inl = k == 3 && surfaces.last() == &inlinePage;
+        cw.put(s, {0x43, 256, pageBody(inl ? pageShapes[surfaces.size() - 1] : QVector<quint32>{}, s + 1, s + 2, false, true, specScratch[k], specExt[k])});
         cw.put(s + 1, {0x60, s, {u32(0x05, 1)}});
         cw.put(s + 2, {0x77, s, webForm()});
     }
     cw.put(278, {0x7f, 256, {}});
     QVector<B> textIndex{ref(0x01, 283), ref(0x02, 284)};
     if (fontSeq) textIndex << ref(0x04, fontSeq);
+    if (inlineIndexSeq) {
+        textIndex << ref(0x05, inlineIndexSeq);
+        cw.put(inlineIndexSeq, {0x70, 282, {u32(0x01, quint32(inlineIndex.size())), list(0x02, inlineIndex)}});
+    }
     textIndex << rec(0x0a, {u32(0x01, 0x08000000)}, 0x98);
     cw.put(282, {0x5b, 256, textIndex});
     // 0x61 maps each text id to its text box; 0x65 lists the stories.
@@ -2240,6 +2364,23 @@ QByteArray PubWriter::write(QStringList *skipped)
         putU32(tcd, 0xff00);
         for (quint32 e : ce.second) putU32(tcd, e);
         secs << Section{"TCD ", "PLC ", quint16(ce.first), tcd, false};
+    }
+    // Objects set in each story's text: count, entry size (4), 0xff00, the
+    // positions, the story's length, then each one's number.
+    {
+        QMap<int, QVector<int>> byStory;
+        for (int n = 0; n < m_inline.size(); ++n)
+            if (m_inline[n].seq) byStory[m_inline[n].story] << n;
+        for (auto it = byStory.cbegin(); it != byStory.cend(); ++it) {
+            QByteArray eobj;
+            putU32(eobj, quint32(it.value().size()));
+            putU32(eobj, 4);
+            putU32(eobj, 0xff00);
+            for (int n : it.value()) putU32(eobj, m_inline[n].pos);
+            putU32(eobj, it.key() < m_storyLengths.size() ? m_storyLengths[it.key()] : 0);
+            for (int n : it.value()) putU32(eobj, quint32(n + 1));
+            secs << Section{"EOBJ", "PLC ", quint16(it.key()), eobj, false};
+        }
     }
     if (!m_text.isEmpty()) {
         QByteArray strs;

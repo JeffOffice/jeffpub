@@ -1099,6 +1099,13 @@ bool MSPUBParser::parseShape(librevenge::RVNGInputStream *input,
       {
         wrap = info.data & 0xff;
       }
+      // JeffPub patch: an object set in text carries the number its story's
+      // EOBJ section gives it (Publisher puts such objects on a page of
+      // their own, not shown).
+      if (info.id == 0x0f && info.type == 0x20)
+      {
+        m_collector->setShapeInlineNum(chunk.seqNum, info.data);
+      }
       if (info.id == SHAPE_WIDTH)
       {
         width = info.data;
@@ -1238,6 +1245,7 @@ bool MSPUBParser::parseQuill(librevenge::RVNGInputStream *input)
   std::vector<unsigned> textIDs;
   std::vector<unsigned> textOffsets;
   std::map<unsigned, std::vector<unsigned> > tableCellTextEnds;
+  std::map<unsigned, std::vector<std::pair<unsigned, unsigned> > > inlineObjects;   // JeffPub patch: by story index
   unsigned textOffsetAccum = 0;
   std::vector<TextSpanReference> spans;
   std::vector<TextParagraphReference> paras;
@@ -1330,6 +1338,31 @@ bool MSPUBParser::parseQuill(librevenge::RVNGInputStream *input)
       input->seek(i->offset, librevenge::RVNG_SEEK_SET);
       tableCellTextEnds[i->id] = parseTableCellDefinitions(input, *i);
     }
+    else if (i->name == "EOBJ")
+    {
+      // JeffPub patch: the objects set in story i->id's text: a count n, the
+      // size of each entry, flags, n character positions and an end (the
+      // story's length; twice it in files from 2006), then the entries,
+      // each starting with the object's number.
+      input->seek(i->offset, librevenge::RVNG_SEEK_SET);
+      const unsigned n = readU32(input);
+      const unsigned size = readU32(input);
+      readU32(input);
+      if (n > 0 && size >= 4 && 12 + 4 * (unsigned long long)(n + 1) + (unsigned long long)n * size <= i->length)
+      {
+        std::vector<unsigned> positions;
+        for (unsigned k = 0; k < n; ++k)
+          positions.push_back(readU32(input));
+        readU32(input);
+        auto &objects = inlineObjects[i->id];
+        for (unsigned k = 0; k < n; ++k)
+        {
+          const unsigned long next = input->tell() + size;
+          objects.push_back(std::make_pair(positions[k], readU32(input)));
+          input->seek(next, librevenge::RVNG_SEEK_SET);
+        }
+      }
+    }
   }
   if (parsedStrs && parsedSyid && parsedFdpc && parsedFdpp && parsedStsh && parsedFont && textChunkReference != chunkReferences.end())
   {
@@ -1393,6 +1426,9 @@ bool MSPUBParser::parseQuill(librevenge::RVNGInputStream *input)
       const std::map<unsigned, std::vector<unsigned> >::const_iterator it = tableCellTextEnds.find(j);
       if (it != tableCellTextEnds.end())
         m_collector->setTableCellTextEnds(textIDs[j], it->second);
+      const auto objects = inlineObjects.find(j);
+      if (objects != inlineObjects.end())
+        m_collector->setInlineObjects(textIDs[j], objects->second);
     }
     textChunkReference = chunkReferences.end();
   }

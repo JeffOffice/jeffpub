@@ -92,6 +92,12 @@ public:
     struct LineInfo { QRectF rect; QString text; QString family; double pointSize = 0; int docStart = 0; double baseline = 0; };
     QVector<LineInfo> lineInfo(int frame) const;  // for diagnostics (jpubtool layout)
 
+    // An object set in the text (tp::InlineObject): where it's drawn,
+    // frame-local, and the item as JSON. It sits on the baseline, padded by
+    // its wrap distances, as in Publisher.
+    struct InlineObject { int frame = -1; QRectF rect; QString json; int docPos = 0; };
+    const QVector<InlineObject> &inlineObjects() const { return m_inline; }
+
     struct Seg { int docPos, docLen, dispPos, dispLen; };
     struct Line { int frame = -1; int column = 0; QRectF rect; double below = 0; };   // below: the spacing under the text
     struct Block {
@@ -107,6 +113,8 @@ public:
         QVector<QPair<int, int>> fieldRanges;        // display ranges of fields
         QString leaders;                             // a leader character per tab stop (space = none)
         QVector<QPair<int, int>> noteRefs;           // a note reference's display position, and its index in notes()
+        struct Box { int disp = 0; int docPos = 0; QString json; QSizeF size; QMarginsF pad; };
+        QVector<Box> objects;                        // objects set in the text, by display position
         int dispFromDoc(int rel) const;
         int docFromDisp(int d) const;
     };
@@ -147,6 +155,7 @@ private:
     QVector<Rule> m_noteRules;         // above each column's footnotes
     struct Heading { int frame = -1; QPointF baseline; QFont font; QColor color; };
     Heading m_notesHeading;            // above the endnotes
+    QVector<InlineObject> m_inline;
 };
 
 // Resolve a character format for display: scheme colors, scheme fonts, scaling.
