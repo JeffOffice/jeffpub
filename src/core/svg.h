@@ -28,7 +28,7 @@ struct Drawing {
     QRectF viewBox;                 // the coordinates the elements use
     QSizeF size;                    // the drawing's own size, in points
     QVector<Element> elements;
-    bool skipped = false;           // had text or pictures this reader leaves out
+    bool skipped = false;           // had text or pictures this reader leaves out, or too many parts
     bool isValid() const { return !viewBox.isEmpty(); }
 };
 

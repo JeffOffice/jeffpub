@@ -499,8 +499,17 @@ Drawing read(const QByteArray &svg, const QColor &currentColor)
         return plainColor(v, current);
     };
 
-    auto apply = [&](Style &st, const Node &n, bool *display) {
-        for (const auto &[k, v] : declsOf(n)) {
+    // Each element's declarations and transform, worked out once: <use>
+    // can draw the same element many times.
+    std::vector<Decls> nodeDecls(nodes.size());
+    std::vector<QTransform> nodeTransforms(nodes.size());
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        nodeDecls[i] = declsOf(nodes[i]);
+        if (const QString t = nodes[i].attrs.value(QStringLiteral("transform")); !t.isEmpty()) nodeTransforms[i] = transformOf(t);
+    }
+
+    auto apply = [&](Style &st, int idx, bool *display) {
+        for (const auto &[k, v] : nodeDecls[idx]) {
             if (v == QLatin1String("inherit")) continue;
             if (k == QLatin1String("fill")) st.fill = v;
             else if (k == QLatin1String("stroke")) st.stroke = v;
@@ -550,13 +559,19 @@ Drawing read(const QByteArray &svg, const QColor &currentColor)
     auto attr = [](const Node &n, const char *name, double ref) { return length(n.attrs.value(QLatin1String(name)), ref); };
 
     // `use` is the <use> element drawing a symbol, whose size it sets.
+    // <use> can repeat a group that repeats another, ten times at each of
+    // nine levels making a billion parts; the work stops at a fixed count.
+    int budget = 200000;
     std::function<void(int, QTransform, Style, int, const Node *)> walk = [&](int idx, QTransform ctm, Style st, int depth, const Node *use) {
-        if (depth > 32) return;
+        if (depth > 32 || --budget < 0 || out.elements.size() >= 100000) {
+            out.skipped = true;
+            return;
+        }
         const Node &n = nodes[idx];
         bool display = true;
-        apply(st, n, &display);
+        apply(st, idx, &display);
         if (!display) return;
-        ctm = transformOf(n.attrs.value(QStringLiteral("transform"))) * ctm;
+        ctm = nodeTransforms[idx] * ctm;
         const QString &name = n.name;
         auto children = [&](const QTransform &t) {
             for (int ch : n.children) walk(ch, t, st, depth + 1, nullptr);
@@ -639,6 +654,7 @@ ItemPtr shapes(const Drawing &d, const QRectF &frame, bool merge, const QColor &
 {
     if (!d.isValid() || d.elements.isEmpty() || frame.isEmpty()) return {};
     const double sx = frame.width() / d.viewBox.width(), sy = frame.height() / d.viewBox.height(), k = std::sqrt(sx * sy);
+    if (!std::isfinite(sx) || !std::isfinite(sy) || !std::isfinite(k) || sx > 1e6 || sy > 1e6) return {};
     QTransform toFrame;
     toFrame.scale(sx, sy);
     toFrame.translate(-d.viewBox.x(), -d.viewBox.y());

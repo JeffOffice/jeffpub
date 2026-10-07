@@ -52,6 +52,7 @@
 #include <QApplication>
 #include <QDialog>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QBuffer>
 #include <QAbstractItemView>
 #include <QPainter>
@@ -1795,6 +1796,28 @@ private Q_SLOTS:
         QCOMPARE(d.elements[2].cap, Qt::RoundCap);
         QCOMPARE(d.elements[3].fill, QColor(0, 255, 0));          // a gradient's first color
         QCOMPARE(d.elements[3].path.boundingRect(), QRectF(50, 50, 10, 10));
+
+        // A drawing that repeats itself through <use>, ten times over at
+        // each of nine levels, stops at a bounded number of parts.
+        QByteArray bomb = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" viewBox=\"0 0 10 10\">"
+                          "<defs><g id=\"g0\"><rect width=\"1\" height=\"1\"/></g>";
+        for (int level = 1; level < 10; ++level) {
+            bomb += "<g id=\"g" + QByteArray::number(level) + "\">";
+            for (int i = 0; i < 10; ++i) bomb += "<use xlink:href=\"#g" + QByteArray::number(level - 1) + "\"/>";
+            bomb += "</g>";
+        }
+        bomb += "</defs><use xlink:href=\"#g9\"/></svg>";
+        QElapsedTimer bombTime;
+        bombTime.start();
+        const svg::Drawing many = svg::read(bomb);
+        QVERIFY(bombTime.elapsed() < 5000);
+        QVERIFY(many.elements.size() <= 100000);
+        QVERIFY(many.skipped);
+        // A box too small to scale from gives no shapes, not endless ones.
+        svg::Drawing tiny;
+        tiny.viewBox = QRectF(0, 0, 1e-300, 1e-300);
+        tiny.elements << svg::Element{svg::pathData(QStringLiteral("M0 0L1e-300 1e-300")), QColor(Qt::black)};
+        QVERIFY(!svg::shapes(tiny, QRectF(0, 0, 72, 72), true));
 
         // Every icon, drawn by this reader and by Qt's renderer at 48 pixels.
         int icons = 0, worst = 0;
