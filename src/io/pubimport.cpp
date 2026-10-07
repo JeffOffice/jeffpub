@@ -727,7 +727,10 @@ private:
         auto ta = std::make_shared<TextArtItem>();
         ta->rect = QRectF(toPt(p["svg:x"]), toPt(p["svg:y"]), toPt(p["svg:width"]), toPt(p["svg:height"]));
         ta->text = str(p["jp:textart-text"]);
-        if (p["jp:textart-font"]) ta->font = str(p["jp:textart-font"]);
+        if (p["jp:textart-font"]) {
+            ta->font = str(p["jp:textart-font"]);
+            if (!m_rep.fontsUsed.contains(ta->font)) m_rep.fontsUsed << ta->font;
+        }
         const QString tf = p["jp:textart-type"] ? textArtTransformForPubType(p["jp:textart-type"]->getInt()) : QString();
         ta->transform_ = tf.isEmpty() ? QStringLiteral("plain") : tf;
         if (p["jp:textart-size"]) ta->size = (p["jp:textart-size"]->getInt() & 0xffffffff) / 65536.0;
@@ -1184,6 +1187,8 @@ std::unique_ptr<Document> importPublisher(const QByteArray &data, QString *error
         return nullptr;
     }
     c.finish();
+    // Saving back to .pub keeps these names as they are.
+    doc->pubFonts = rep.fontsUsed;
     if (!ok) {
         if (error) *error = QStringLiteral("JeffPub 79 could not read this .pub file. It may be damaged or use features that aren't supported yet.");
         return nullptr;

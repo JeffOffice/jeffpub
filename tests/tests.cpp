@@ -2557,6 +2557,51 @@ private Q_SLOTS:
         QVERIFY(cfb::readStream(path, QStringLiteral("Contents")).contains(QByteArray("\x34\x20\x02\x00\x00\x00", 6)));
     }
 
+    // Fonts in .pub: JeffPub's look-alikes (Tinos) go under the standard
+    // font's name (Times New Roman), unless the publication came from a .pub
+    // that named the look-alike itself; then the name it had is kept.
+    void pubKeepsFontsItCameWith()
+    {
+        using namespace jp;
+        auto make = [](const QStringList &pubFonts) {
+            auto doc = Document::blank(QSizeF(612, 792));
+            auto t = std::make_shared<TextItem>();
+            t->rect = QRectF(72, 72, 400, 100);
+            t->storyId = doc->createStory(QStringLiteral("Set in Tinos"));
+            QTextCursor c(doc->storyDoc(t->storyId));
+            c.select(QTextCursor::Document);
+            QTextCharFormat f;
+            f.setFontFamilies(QStringList{QStringLiteral("Tinos")});
+            c.mergeCharFormat(f);
+            doc->pages[0]->items.push_back(t);
+            doc->pubFonts = pubFonts;
+            return doc;
+        };
+        QTemporaryDir dir;
+        auto fontAfter = [&](const Document &d) {
+            const QString path = dir.filePath(QStringLiteral("fonts.pub"));
+            QString err;
+            if (!exportPublisher(d, path, &err)) return QStringLiteral("save failed: ") + err;
+            PubImportReport rep;
+            auto back = importPublisherFile(path, &err, &rep);
+            if (!back) return QStringLiteral("open failed: ") + err;
+            return rep.fontsUsed.join(QLatin1Char(','));
+        };
+        QCOMPARE(fontAfter(*make({})), QStringLiteral("Times New Roman"));
+        QCOMPARE(fontAfter(*make({QStringLiteral("Tinos")})), QStringLiteral("Tinos"));
+        // Opening a .pub remembers its fonts, and .jpub keeps the list.
+        auto fromPub = make({QStringLiteral("Tinos")});
+        const QString pubPath = dir.filePath(QStringLiteral("orig.pub"));
+        QString err;
+        QVERIFY(exportPublisher(*fromPub, pubPath, &err));
+        auto opened = importPublisherFile(pubPath, &err);
+        QVERIFY(opened && opened->pubFonts.contains(QStringLiteral("Tinos")));
+        const QString jpub = dir.filePath(QStringLiteral("kept.jpub"));
+        QVERIFY(savePublication(*opened, jpub, QImage(), &err));
+        auto reloaded = loadPublication(jpub, &err);
+        QVERIFY(reloaded && reloaded->pubFonts == opened->pubFonts);
+    }
+
     // Footnotes at the bottom of the column their reference lands in (under
     // a rule, numbered in order, the text kept above them); a line whose
     // note won't fit moves on with it; endnotes under "Notes" after the

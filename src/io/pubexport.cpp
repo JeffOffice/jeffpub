@@ -709,7 +709,10 @@ private:
     // Fonts and text colors referenced from text.
     int fontIndex(const QString &family)
     {
-        const QString f = interchangeFontName(family.isEmpty() ? m_doc.fonts.body : family);
+        // A font the .pub this came from named keeps its name; JeffPub's own
+        // look-alikes go under the standard font's name.
+        const QString chosen = family.isEmpty() ? m_doc.fonts.body : family;
+        const QString f = m_doc.pubFonts.contains(chosen) ? chosen : interchangeFontName(chosen);
         int i = m_fonts.indexOf(f);
         if (i < 0) {
             m_fonts << f;
@@ -1728,7 +1731,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 // document's font table.
                 fontIndex(ta->font);
                 QVector<Prop> opt = kInsets;
-                opt << Prop{0xc0c0, 0, utf16z(ta->text)} << Prop{0xc0c5, 0, utf16z(interchangeFontName(ta->font))};
+                opt << Prop{0xc0c0, 0, utf16z(ta->text)} << Prop{0xc0c5, 0, utf16z(m_doc.pubFonts.contains(ta->font) ? ta->font : interchangeFontName(ta->font))};
                 // Alignment: Publisher counts stretch 0, center 1, left 2, right 3, letter 4, word 5.
                 static const quint32 kAlign[] = {2, 1, 3, 5, 4, 0};
                 if (ta->align != 1 && ta->align >= 0 && ta->align <= 5) opt << Prop{0x00c2, kAlign[ta->align]};

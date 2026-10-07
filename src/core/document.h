@@ -188,6 +188,10 @@ public:
     QString templateId;
     QJsonObject templateOptions;
     bool facingPages = false;   // default spread display
+    // The fonts a .pub file named, when the publication came from one:
+    // saved back to .pub under these names, not swapped for the standard
+    // fonts JeffPub's look-alikes match (interchangeFontName).
+    QStringList pubFonts;
 
     // pages
     QSizeF pageSize() const { return setup.size; }

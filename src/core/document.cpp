@@ -689,6 +689,7 @@ QJsonObject Document::toJson() const
     o["template"] = templateId;
     o["templateOptions"] = templateOptions;
     o["facing"] = facingPages;
+    if (!pubFonts.isEmpty()) o["pubFonts"] = QJsonArray::fromStringList(pubFonts);
     QJsonArray spots;
     for (int i = 0; i < print.spotColors.size(); ++i)
         spots.append(QJsonObject{{"name", print.spotName(i)}, {"color", colorToString(print.spotColors[i])}});
@@ -758,6 +759,8 @@ void Document::fromJson(const QJsonObject &o)
     templateId = o["template"].toString();
     templateOptions = o["templateOptions"].toObject();
     facingPages = o["facing"].toBool();
+    pubFonts.clear();
+    for (const auto &f : o["pubFonts"].toArray()) pubFonts << f.toString();
     const auto pr = o["print"].toObject();
     print.model = PrintInfo::ColorModel(pr["model"].toInt());
     print.spotColors.clear();
