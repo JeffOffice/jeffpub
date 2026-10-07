@@ -19,6 +19,7 @@
 #include "app/settings.h"
 #include "app/taskpane.h"
 #include "app/widgets.h"
+#include "render/svgexport.h"
 #include "canvas/canvas.h"
 #include "io/jpubfile.h"
 #include "io/pubimport.h"
@@ -686,8 +687,15 @@ void MainWindow::exportImages()
                                                     : QFileInfo(m_ed->filePath()).absolutePath() + "/" + QFileInfo(m_ed->filePath()).completeBaseName();
     QString selected;
     const QString path = askSavePath(this, QStringLiteral("Save as Picture"), base + ".png",
-                                                      QStringLiteral("PNG (*.png);;JPEG (*.jpg);;GIF (*.gif);;TIFF (*.tif);;Bitmap (*.bmp)"), &selected);
+                                                      QStringLiteral("PNG (*.png);;JPEG (*.jpg);;GIF (*.gif);;TIFF (*.tif);;Bitmap (*.bmp);;SVG vector drawing (*.svg)"), &selected);
     if (path.isEmpty()) return;
+    // A vector drawing has no resolution to ask for.
+    if (QFileInfo(path).suffix().compare(QLatin1String("svg"), Qt::CaseInsensitive) == 0) {
+        QString error;
+        if (exportSvgTo(path, &error)) statusBar()->showMessage(QStringLiteral("Saved %1 drawing(s).").arg(m_ed->doc()->pages.size()), 5000);
+        else QMessageBox::warning(this, QStringLiteral("Save as Picture"), QStringLiteral("The drawing couldn't be saved: %1").arg(error));
+        return;
+    }
     bool ok = false;
     const int dpi = QInputDialog::getItem(this, QStringLiteral("Save as Picture"), QStringLiteral("Resolution (dots per inch):"),
                                           {"96", "150", "300", "600"}, 2, false, &ok).toInt();
@@ -708,6 +716,23 @@ void MainWindow::exportImages()
         img.save(out);
     }
     statusBar()->showMessage(QStringLiteral("Saved %1 picture(s).").arg(n), 5000);
+}
+
+bool MainWindow::exportSvgTo(const QString &path, QString *error)
+{
+    const QFileInfo fi(path);
+    PaintContext ctx;
+    ctx.doc = m_ed->doc();
+    ctx.cache = &m_ed->cache();
+    ctx.opt.output = true;
+    ctx.opt.mergeRecord = m_ed->mergeRecord();
+    const int n = int(m_ed->doc()->pages.size());
+    for (int i = 0; i < n; ++i) {
+        const QString out = n == 1 ? path : fi.absolutePath() + "/" + fi.completeBaseName() + QStringLiteral("-%1.").arg(i + 1) + fi.suffix();
+        const QString title = n == 1 ? m_ed->displayName() : QStringLiteral("%1, page %2").arg(m_ed->displayName()).arg(i + 1);
+        if (!writePageSvg(ctx, i, out, title, error)) return false;
+    }
+    return true;
 }
 
 void MainWindow::exportHtml()

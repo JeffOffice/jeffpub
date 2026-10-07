@@ -1,7 +1,9 @@
 #include "core/document.h"
 #include "core/barcode.h"
 #include "core/svg.h"
+#include "render/svgexport.h"
 #include <QSvgRenderer>
+#include <QSvgGenerator>
 #include "io/cfb.h"
 #include "io/jpubfile.h"
 #include "io/pubimport.h"
@@ -2048,6 +2050,81 @@ private Q_SLOTS:
         QCOMPARE(ed->doc()->pages[0]->items[0]->type(), ItemType::Picture);
         ed->clearSelection();
         QTRY_VERIFY(!w.act(QStringLiteral("pic.toShapes"))->isEnabled());
+    }
+
+    // Save as Picture > SVG: each page as a vector drawing with letters as
+    // outlines (no <text> to be respaced by another font), pictures cropped
+    // to their shape, and the whole looking as JeffPub draws it.
+    void svgExport()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<TextItem>();
+        t->rect = QRectF(72, 72, 300, 100);
+        t->storyId = doc->createStory(QStringLiteral("Hello vector world, in letters drawn as outlines."));
+        doc->pages[0]->items.push_back(t);
+        auto sh = std::make_shared<ShapeItem>();
+        sh->rect = QRectF(72, 300, 100, 60);
+        doc->pages[0]->items.push_back(sh);
+        doc->pages[0]->items.push_back(iconItem(QStringLiteral("heart"), QPointF(150, 500), 72, ColorRef::scheme(Accent1)));
+        QImage photo(200, 100, QImage::Format_RGB32);
+        photo.fill(Qt::darkGreen);
+        QByteArray png;
+        QBuffer pb(&png);
+        pb.open(QIODevice::WriteOnly);
+        photo.save(&pb, "PNG");
+        auto pic = std::make_shared<PictureItem>();
+        pic->imageId = doc->addImage(png, QStringLiteral("png"));
+        pic->rect = QRectF(300, 300, 100, 100);
+        pic->imgRect = QRectF(-50, 0, 200, 100);
+        pic->maskShape = QStringLiteral("ellipse");
+        doc->pages[0]->items.push_back(pic);
+        doc->pages.push_back(std::make_shared<Page>());
+
+        MainWindow w;
+        w.editor()->setDocument(std::move(doc));
+        QTemporaryDir dir;
+        QString err;
+        QVERIFY2(w.exportSvgTo(dir.filePath(QStringLiteral("pages.svg")), &err), qPrintable(err));
+        QVERIFY(QFile::exists(dir.filePath(QStringLiteral("pages-1.svg"))) && QFile::exists(dir.filePath(QStringLiteral("pages-2.svg"))));
+        QFile f(dir.filePath(QStringLiteral("pages-1.svg")));
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QByteArray svg = f.readAll();
+        QVERIFY(!svg.contains("<text"));
+        QVERIFY(svg.contains("<image") && svg.contains("clip-path"));
+        QVERIFY(svg.contains("viewBox=\"0 0 612 792\""));
+
+        // The oval crop is a clip path around the picture's frame.
+        const qsizetype clipAt = svg.indexOf("<clipPath");
+        QVERIFY(clipAt > 0 && svg.indexOf("d=\"M400,350 C", clipAt) > clipAt);
+
+        // Drawn by Qt's SVG renderer, it matches JeffPub's own drawing. (Qt's
+        // renderer ignores clip paths, which browsers follow, so the cropped
+        // picture's square is left out of the comparison.)
+        PaintContext ctx;
+        ctx.doc = w.editor()->doc();
+        ctx.cache = &w.editor()->cache();
+        ctx.opt.output = true;
+        const QImage ours = Renderer::renderToImage(ctx, 0, 1.0).convertToFormat(QImage::Format_RGB32);
+        QImage drawn(ours.size(), QImage::Format_RGB32);
+        drawn.fill(Qt::white);
+        {
+            QPainter p(&drawn);
+            QSvgRenderer(svg).render(&p, QRectF(0, 0, drawn.width(), drawn.height()));
+        }
+        int differ = 0, inked = 0;
+        for (int y = 0; y < ours.height(); ++y)
+            for (int x = 0; x < ours.width(); ++x) {
+                if (QRectF(250, 300, 200, 100).contains(x, y)) continue;
+                const QRgb a = ours.pixel(x, y), b = drawn.pixel(x, y);
+                inked += a != qRgb(255, 255, 255);
+                differ += std::max({std::abs(qRed(a) - qRed(b)), std::abs(qGreen(a) - qGreen(b)), std::abs(qBlue(a) - qBlue(b))}) > 96;
+            }
+        QVERIFY(inked > 3000);
+        QVERIFY2(differ < inked / 50, qPrintable(QStringLiteral("%1 of %2 inked pixels differ").arg(differ).arg(inked)));
+
+        QVERIFY(!w.exportSvgTo(dir.filePath(QStringLiteral("missing/folder/page.svg")), &err));
+        QVERIFY(!err.isEmpty());
     }
 
     // Footnotes at the bottom of the column their reference lands in (under

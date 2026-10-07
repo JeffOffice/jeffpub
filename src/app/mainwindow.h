@@ -72,6 +72,8 @@ public:
     static void setOpenPdfAfterSaving(bool on);
     static std::function<bool(const QString &path)> openFileHook;
     void exportImages();
+    // Each page as an SVG drawing: `path` for one page, name-1.svg, name-2.svg... for several.
+    bool exportSvgTo(const QString &path, QString *error = nullptr);
     void exportHtml();
     bool exportHtmlTo(const QString &path);
     void printPublication();

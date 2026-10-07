@@ -1424,7 +1424,7 @@ QWidget *Backstage::buildExport()
     openAfter->setChecked(MainWindow::openPdfAfterSaving());
     connect(openAfter, &QCheckBox::toggled, this, [](bool on) { MainWindow::setOpenPdfAfterSaving(on); });
     v->addWidget(openAfter);
-    row("image-down", QStringLiteral("Save as Picture"), QStringLiteral("PNG, JPEG, GIF, TIFF or BMP at the resolution you choose, one file per page."), [this] { m_win->exportImages(); });
+    row("image-down", QStringLiteral("Save as Picture"), QStringLiteral("PNG, JPEG, GIF, TIFF or BMP at the resolution you choose, or SVG vector drawings, one file per page."), [this] { m_win->exportImages(); });
     row("globe", QStringLiteral("Save as Web Page"), QStringLiteral("A single HTML file you can open in any browser."), [this] { m_win->exportHtml(); });
     row("file-output", QStringLiteral("Save as .pub File"), QStringLiteral("Saves a .pub file for people who work with .pub publications."), [this] { m_win->saveAs("pub"); });
     row("package", QStringLiteral("Pack and Go: Save for a Commercial Printer"), QStringLiteral("A high-quality PDF with crop marks plus the publication file in one folder."), [this] {
