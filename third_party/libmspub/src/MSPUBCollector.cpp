@@ -2053,6 +2053,8 @@ void MSPUBCollector::writePage(unsigned pageSeqNum) const
     auto hasMaster = bool(masterSeqNum);
     if (hasMaster)
       pageProps.insert("jp:master-seq", int(masterSeqNum.get()));
+    if (m_publicationLayout)
+      pageProps.insert("jp:layout", int(m_publicationLayout));
     m_painter->startPage(pageProps);
     if (hasMaster)
     {

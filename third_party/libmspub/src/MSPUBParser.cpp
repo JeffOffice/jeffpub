@@ -643,6 +643,13 @@ bool MSPUBParser::parseDocumentChunk(librevenge::RVNGInputStream *input, const C
         }
       }
     }
+    // JeffPub patch: the publication's layout type (Page Setup): 1 booklet,
+    // 3 folded card, 7 envelope; one page per sheet leaves it out. Checked
+    // by choosing each in Publisher's Page Setup and saving.
+    else if (info.id == 0x11 && info.type == 0x20)
+    {
+      m_collector->setPublicationLayout(info.data);
+    }
     else if (info.id == DOCUMENT_PAGE_LIST)
     {
       input->seek(info.dataOffset + 4, librevenge::RVNG_SEEK_SET);

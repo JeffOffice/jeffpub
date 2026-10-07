@@ -62,6 +62,9 @@ public:
         bool pdfx = false;              // PDF/X-1a:2001 for a commercial printer
         int pdfxCondition = 0;          // its printing condition (pdfXConditions())
         bool merged = false;
+        // A booklet's PDF holds its printed sheets: two pages to a side, in
+        // folding order (as Publisher makes it). Off: one page per PDF page.
+        bool booklet = true;
     };
     void exportPdfWithOptions();
     bool exportPdfTo(const QString &path, const PdfSettings &s);

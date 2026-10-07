@@ -42,7 +42,7 @@ Features JeffPub 79 has that Publisher never did, then the ones planned before v
 - [x] Open JeffPub publications (`.jpub`) and recent publications, with pinning
 - [~] Open `.pub` files (versions from 1998 to 2021), including linked text boxes, pictures, shapes, and tables *(partial: text, pictures, shapes and tables open; Publisher's shapes come back as JeffPub's own where they match, and picture crops, transparency, brightness, contrast and recoloring are kept; checked against PDFs of the same files, most covers and pages now match closely)*
 - [x] Save as `.pub` *(each part checked by opening the saved file in another .pub program. Saved: pages and master pages, text boxes and linked text boxes, character formatting (font, size, bold, italic, underline, strikethrough, small and all caps, superscript and subscript, color, letter spacing and tracking), paragraphs (alignment, indents, spacing, line spacing, tab stops with leaders, bullets and numbering with their fonts, right-to-left direction), every shape (as Publisher's own where it matches, otherwise an exact outline), lines with dashes and arrowheads, text in shapes, rotation and flips, pictures with cropping, transparency, brightness, contrast, recoloring and a clear color, pictures cut to a shape, tables with merged cells, fills (solid, gradient, picture, texture and pattern) with transparency, borders with transparency, shadows, Text Art, named paragraph styles (each paragraph keeps its style), process (CMYK) colors. Saving reports objects it leaves out)*
-- [x] Checked against Publisher itself: Publisher 2021 opened and exported all 284 publications of a real collection, and opened every one of them after JeffPub saved it as `.pub`. JeffPub draws their pages within a median blurred-pixel difference of 1.3 of Publisher's, and 95% of their text boxes break into the same words *(the rest differ by a word or two at a box's end; booklet print layout isn't read or saved yet)*
+- [x] Checked against Publisher itself: Publisher 2021 opened and exported all 284 publications of a real collection, and opened every one of them after JeffPub saved it as `.pub`. JeffPub draws their pages within a median blurred-pixel difference of 1.3 of Publisher's, and 95% of their text boxes break into the same words *(the rest differ by a word or two at a box's end; a booklet, folded card or envelope layout is read from `.pub` but not yet saved to it)*
 - [x] Save, Save As, AutoRecover, and backup on save
 - [x] Close and prompt to save changes
 
@@ -56,7 +56,7 @@ Features JeffPub 79 has that Publisher never did, then the ones planned before v
 - [x] Mail merge and catalog merge printing
 
 ### Share and Export
-- [x] Create PDF (standard, minimum size, high quality, commercial press; page ranges; document properties; PDF/A; PDF/X-1a; open the PDF after saving it)
+- [x] Create PDF (standard, minimum size, high quality, commercial press; page ranges; document properties; PDF/A; PDF/X-1a; open the PDF after saving it; a booklet as its printed sheets, two pages to a side in folding order, as Publisher makes it, or as single pages)
 - [x] Save pages as pictures: PNG, JPEG, GIF, TIFF, and BMP at a chosen resolution
 - [x] Web page export (single-file HTML)
 - [x] Pack and Go: Save for a Commercial Printer, Save for Another Computer (bundle fonts and linked pictures)

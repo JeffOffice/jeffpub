@@ -128,6 +128,7 @@ public:
   void setShapeFillSpot(unsigned seqNum, const std::string &ink) { m_shapeInfosBySeqNum[seqNum].m_fillSpot = ink; }
   void setTextNotHyphenated(unsigned textId) { m_notHyphenated.insert(textId); }
   void setTextAutofit(unsigned textId, unsigned kind) { m_autofit[textId] = kind; }
+  void setPublicationLayout(unsigned layout) { m_publicationLayout = layout; } // JeffPub patch
   // JeffPub patch: a connector's start (or end) is attached to a site of another shape.
   void setConnectorGlue(unsigned seqNum, bool start, unsigned toSeqNum, unsigned site)
   {
@@ -181,6 +182,7 @@ private:
   std::map<unsigned, unsigned> m_shapeTypesBySeqNum;
   std::set<unsigned> m_notHyphenated; // JeffPub patch: text ids of stories without automatic hyphenation
   std::map<unsigned, unsigned> m_autofit; // JeffPub patch: text id -> AutoFit Text (1 best fit, 2 shrink, 3 grow)
+  unsigned m_publicationLayout = 0;       // JeffPub patch: Page Setup layout type (0 one page per sheet)
   std::vector<Color> m_paletteColors;
   std::vector<unsigned> m_shapeSeqNumsOrdered;
   std::map<unsigned, unsigned> m_pageSeqNumsByShapeSeqNum;

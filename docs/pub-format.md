@@ -361,6 +361,19 @@ Every vertical box in 40 of Publisher's covers has the first two; without
 files showed until October 2026. Checked by opening the saved file in
 Publisher.
 
+### Layout type
+
+Page Setup's layout type is the DOCUMENT chunk's field `11` (u32): 1 for a
+booklet, 3 for a folded card, 7 for an envelope; one page per sheet and
+multiple pages per sheet leave it out. Found by choosing each in
+Publisher's Page Setup dialog and saving. A booklet (and a folded card)
+also sets flags `06` and `0b`, and keeps its pages as two-page spreads:
+the master is split into a right-hand part (`10` = 1) and a left-hand one
+(`10` = 0), each page's canvas (`05`, `11`) is widened toward its partner,
+and a field `46` appears for a folded card or envelope. Writing `11` with
+`06` and `0b` alone, without the spreads, doesn't make Publisher print a
+booklet, so JeffPub reads the layout type but doesn't save it yet.
+
 ### Connectors
 
 Every line is a connector shape in the drawing: 32 straight, 33 an elbow

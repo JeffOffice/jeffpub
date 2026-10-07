@@ -144,6 +144,23 @@ public:
             m_doc.setup.sizeName = QStringLiteral("Custom");
             const double m = std::min(w, h) < 216 ? 9 : 36;
             m_doc.setup.margins = QMarginsF(m, m, m, m);
+            // Page Setup's layout type: a booklet prints two pages to a
+            // sheet, folded at the side (or the top, for wide pages); a
+            // folded card four to a sheet (two for a half-sheet card).
+            const int layout = p["jp:layout"] ? p["jp:layout"]->getInt() : 0;
+            const bool upright = h >= w;
+            if (layout == 1) {
+                m_doc.setup.layout = PageSetup::Booklet;
+                m_doc.setup.sheet = upright ? QSizeF(2 * w, h) : QSizeF(w, 2 * h);
+            } else if (layout == 3) {
+                m_doc.setup.layout = PageSetup::FoldedCard;
+                const bool quarter = 4 * w * h <= 612 * 792 * 1.05;
+                m_doc.setup.fold = quarter ? (upright ? PageSetup::SideFoldQuarter : PageSetup::TopFoldQuarter)
+                                           : (upright ? PageSetup::SideFoldHalf : PageSetup::TopFoldHalf);
+                m_doc.setup.sheet = quarter ? QSizeF(2 * w, 2 * h) : upright ? QSizeF(2 * w, h) : QSizeF(w, 2 * h);
+            } else if (layout == 7) {
+                m_doc.setup.layout = PageSetup::Envelope;
+            }
         }
         auto page = m_doc.addPage();
         // The page's master: the one written under that sequence number (A when the file names none).

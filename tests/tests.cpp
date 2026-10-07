@@ -2799,6 +2799,63 @@ private Q_SLOTS:
         QVERIFY(lines[3]->startVertical && !lines[3]->endVertical);
     }
 
+    // Page Setup's layout type is the DOCUMENT chunk's field 11 (1 booklet,
+    // 3 folded card, 7 envelope; checked by choosing each in Publisher). A
+    // booklet opens set to print two pages to a sheet, and its PDF holds
+    // those sheets in folding order (8 and 1, 2 and 7...), as Publisher's does.
+    void pubBookletLayout()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(396, 612));
+        while (doc->pages.size() < 8) doc->addPage();
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("booklet.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        // Make the file a booklet: its DOCUMENT chunk's 41 field (u32 0)
+        // becomes 11 = 1, the same length.
+        QFile in(path);
+        QVERIFY(in.open(QIODevice::ReadOnly));
+        cfb::File file;
+        QVERIFY(cfb::read(in.readAll(), &file));
+        in.close();
+        QByteArray c = file.stream(QStringLiteral("Contents"));
+        const qsizetype at = c.indexOf(QByteArray("\x41\x20\x00\x00\x00\x00\x44\x70", 8));
+        QVERIFY(at > 0);
+        c.replace(at, 6, QByteArray("\x11\x20\x01\x00\x00\x00", 6));
+        QVERIFY(file.setStream(QStringLiteral("Contents"), c));
+        QFile out(path);
+        QVERIFY(out.open(QIODevice::WriteOnly));
+        out.write(cfb::write(file));
+        out.close();
+        auto back = importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(back->setup.layout, PageSetup::Booklet);
+        QCOMPARE(back->setup.sheet, QSizeF(792, 612));
+        // Its PDF: four sheets of two pages, the first holding pages 8 and 1.
+        for (int i = 0; i < 8; ++i) {
+            auto t = std::make_shared<TextItem>();
+            t->rect = QRectF(36, 36, 300, 60);
+            t->storyId = back->createStory(QStringLiteral("Page %1").arg(i + 1));
+            back->pages[i]->items.push_back(t);
+        }
+        MainWindow w;
+        w.editor()->setDocument(std::move(back));
+        const QString pdfPath = dir.filePath(QStringLiteral("booklet.pdf"));
+        QVERIFY(w.exportPdfTo(pdfPath, MainWindow::PdfSettings()));
+        QFile pf(pdfPath);
+        QVERIFY(pf.open(QIODevice::ReadOnly));
+        const QByteArray pdf = pf.readAll();
+        QCOMPARE(pdf.count("/MediaBox [0 0 792.000000 612.000000]"), 4);
+        // Reader pages instead when asked.
+        MainWindow::PdfSettings single;
+        single.booklet = false;
+        QVERIFY(w.exportPdfTo(pdfPath, single));
+        QFile pf2(pdfPath);
+        QVERIFY(pf2.open(QIODevice::ReadOnly));
+        QCOMPARE(pf2.readAll().count("/MediaBox [0 0 396.000000 612.000000]"), 8);
+    }
+
     // Publisher 2000 and 98 files give a run's font as a number in each
     // slot of its font container (not a container per slot, as later
     // versions do). The sample's second box says it's in Arial, and

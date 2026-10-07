@@ -504,6 +504,10 @@ void MainWindow::exportPdfWithOptions()
     syncStandards();
     auto *openAfter = new QCheckBox(QStringLiteral("Open the PDF after saving it"), &dlg);
     openAfter->setChecked(openPdfAfterSaving());
+    auto *booklet = new QCheckBox(QStringLiteral("Booklet sheets (two pages to a side, in folding order)"), &dlg);
+    booklet->setChecked(true);
+    booklet->setVisible(d->setup.layout == PageSetup::Booklet);
+    form->addRow(booklet);
     form->addRow(props);
     form->addRow(pdfa);
     form->addRow(pdfx);
@@ -524,6 +528,7 @@ void MainWindow::exportPdfWithOptions()
     s.archival = pdfa->isChecked();
     s.pdfx = pdfx->isChecked();
     s.pdfxCondition = condition->currentIndex();
+    s.booklet = booklet->isChecked();
     Settings::get().setValue(QStringLiteral("pdf/pdfx"), s.pdfx);
     Settings::get().setValue(QStringLiteral("pdf/pdfxCondition"), s.pdfxCondition);
     if (range->currentIndex() == 1) s.from = s.to = m_ed->currentPage();
@@ -599,7 +604,12 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
         inks.emplace();
     }
     const QSizeF ps = d->pageSize();
-    pdf.setPageSize(QPageSize(ps + QSizeF(2 * margin, 2 * margin), QPageSize::Point, QString(), QPageSize::ExactMatch));
+    // A whole booklet (not for a press, which imposes its own) goes out as
+    // its printed sheets: side by side, or one above the other for wide pages.
+    const bool impose = s.booklet && d->setup.layout == PageSetup::Booklet && s.from <= 0 && s.to < 0 && !press && !s.pdfx && d->pages.size() > 1;
+    const bool topFold = ps.width() > ps.height();
+    pdf.setPageSize(QPageSize(impose ? (topFold ? QSizeF(ps.width(), 2 * ps.height()) : QSizeF(2 * ps.width(), ps.height())) : ps + QSizeF(2 * margin, 2 * margin),
+                              QPageSize::Point, QString(), QPageSize::ExactMatch));
     pdf.setPageMargins(QMarginsF(0, 0, 0, 0));
     pdf.setResolution(1200);
     QPainter p;
@@ -625,6 +635,22 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
     bool first = true;
     for (int rec : records) {
         ctx.opt.mergeRecord = rec;
+        if (impose) {
+            for (const QVector<int> &side : bookletOrder(int(d->pages.size()))) {
+                if (!first) pdf.newPage();
+                first = false;
+                for (int k = 0; k < 2; ++k) {
+                    if (side[k] < 0) continue;
+                    p.save();
+                    p.scale(scale, scale);
+                    p.translate(topFold ? 0 : k * ps.width(), topFold ? k * ps.height() : 0);
+                    p.setClipRect(QRectF(QPointF(0, 0), ps));
+                    Renderer::paintPage(&p, ctx, side[k]);
+                    p.restore();
+                }
+            }
+            continue;
+        }
         for (int i = from; i <= to; ++i) {
             if (!first) pdf.newPage();
             first = false;
