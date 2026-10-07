@@ -12,6 +12,7 @@ zlib is downloaded at build time when the system has none.
 
 These are the only modifications to the upstream sources. Each is marked with a `JeffPub 79` comment.
 
+- **Long text.** `MSPUBParser.h` keeps the text stream positions of character and paragraph runs as 32-bit numbers. Upstream stores them in 16 bits, which wrap past 64 KB of text, so in any publication with more than about 32,000 characters every story after that point opened empty (a four-page newsletter lost pages 2 to 4). Found by comparing every page with Publisher's own rendering.
 - **No Boost.** `compat/boost/*` provides `optional` (on `std::optional`), `cstdint`, `numeric_cast`, a 2-D `multi_array`, and `trim`. librevenge's Boost.Spirit number parsing (`RVNGPropertyList.cpp`) and Boost.Archive base64 (`RVNGBinaryData.cpp`) are rewritten in plain C++.
 - **No ICU.** libmspub decodes UTF-16LE and windows-1252 itself. Other legacy codepages go through `libmspub::setDecodeHook()` (`inc/libmspub/jp_hooks.h`), which JeffPub implements with Qt. A small LCID table replaces `uloc_getLocaleForLCID`, and the encoding guess for Publisher 97/98 files defaults to windows-1252.
 - **Linked text boxes.** `MSPUBCollector.cpp` adds a `jp:text-id` property to each text object, so text boxes that share one story can be linked again on import. Upstream emits the full story into every box.

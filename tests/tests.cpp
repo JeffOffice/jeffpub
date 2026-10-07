@@ -2376,6 +2376,41 @@ private Q_SLOTS:
         for (int n = tp::StyleName; n <= tp::TocLevel; ++n) QVERIFY2(spec.contains(QString::number(n)), qPrintable(QString::number(n)));
     }
 
+    // A long publication keeps all its text: .pub text past 64 KB of the
+    // text stream used to wrap libmspub's 16-bit run positions, so every
+    // story after the first ~32,000 characters opened empty.
+    void longTextSurvivesPubRoundTrip()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        QStringList expected;
+        for (int i = 0; i < 4; ++i) {
+            if (i) doc->pages.push_back(std::make_shared<Page>());
+            auto t = std::make_shared<TextItem>();
+            t->rect = QRectF(36, 36, 540, 720);
+            QString text;
+            while (text.size() < 12000) text += QStringLiteral("Story %1 keeps every word of its text. ").arg(i + 1);
+            text += QStringLiteral("End of story %1.").arg(i + 1);
+            t->storyId = doc->createStory(text);
+            expected << text;
+            doc->pages[i]->items.push_back(t);
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("long.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        auto back = importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(back->pages.size(), 4);
+        for (int i = 0; i < 4; ++i) {
+            auto *t = dynamic_cast<TextItem *>(back->pages[i]->items.empty() ? nullptr : back->pages[i]->items[0].get());
+            QVERIFY(t);
+            const QString got = back->storyDoc(t->storyId)->toPlainText().remove(QChar(0x00AD));
+            QVERIFY2(got.endsWith(QStringLiteral("End of story %1.").arg(i + 1)), qPrintable(QStringLiteral("story %1: %2 characters").arg(i + 1).arg(got.size())));
+            QCOMPARE(got.size(), expected[i].size());
+        }
+    }
+
     // Footnotes at the bottom of the column their reference lands in (under
     // a rule, numbered in order, the text kept above them); a line whose
     // note won't fit moves on with it; endnotes under "Notes" after the

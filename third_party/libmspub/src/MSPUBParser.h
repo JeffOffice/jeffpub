@@ -71,19 +71,22 @@ public:
 protected:
   virtual unsigned getColorIndexByQuillEntry(unsigned entry);
 
+  // JeffPub 79: positions in the text stream are 32-bit. As 16-bit values
+  // they wrapped past 64 KB, so every story after the first ~32,000
+  // characters of a long publication came out empty.
   struct TextSpanReference
   {
-    TextSpanReference(unsigned short f, unsigned short l, const CharacterStyle &cs) : first(f), last(l), charStyle(cs) { }
-    unsigned short first;
-    unsigned short last;
+    TextSpanReference(unsigned f, unsigned l, const CharacterStyle &cs) : first(f), last(l), charStyle(cs) { }
+    unsigned first;
+    unsigned last;
     CharacterStyle charStyle;
   };
 
   struct TextParagraphReference
   {
-    TextParagraphReference(unsigned short f, unsigned short l, const ParagraphStyle &ps) : first(f), last(l), paraStyle(ps) { }
-    unsigned short first;
-    unsigned short last;
+    TextParagraphReference(unsigned f, unsigned l, const ParagraphStyle &ps) : first(f), last(l), paraStyle(ps) { }
+    unsigned first;
+    unsigned last;
     ParagraphStyle paraStyle;
   };
 

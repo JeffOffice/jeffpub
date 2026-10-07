@@ -1366,6 +1366,8 @@ bool MSPUBParser::parseQuill(librevenge::RVNGInputStream *input)
         readParas.push_back(TextParagraph(readSpans, currentTextPara->paraStyle));
         MSPUB_DEBUG_MSG(("Saw paragraph %d in the current text block.\n", (unsigned)readParas.size()));
       }
+      if (jpTraceOn()) fprintf(stderr, "STORY %u id=%u len=%u paras=%u bytes=%u spanleft=%d paraleft=%d\n", j, textIDs[j], textLengths[j], unsigned(readParas.size()), bytesRead,
+                               int(currentTextSpan != spans.end()), int(currentTextPara != paras.end()));
       m_collector->addTextString(readParas, textIDs[j]);
       m_collector->setTextStringOffset(textIDs[j], textOffsets[j]);
       const std::map<unsigned, std::vector<unsigned> >::const_iterator it = tableCellTextEnds.find(j);
