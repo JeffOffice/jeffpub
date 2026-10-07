@@ -767,7 +767,9 @@ private:
     QVector<QPair<int, QVector<quint32>>> m_cellEnds;
     // Each story's text frames (a text box, or a table's cells in list
     // order) for the frame layout section, MCLD.
-    struct Frame { QRectF r; QMarginsF m; bool cell = false; };
+    // A vertical box's text runs along its height: its frame is recorded
+    // turned a quarter turn, as Publisher records a spine.
+    struct Frame { QRectF r; QMarginsF m; bool cell = false; bool vertical = false; };
     QVector<QVector<Frame>> m_frames;
     QVector<int> m_tableTextIds;
     QSet<int> m_notHyphenated;   // stories without automatic hyphenation
@@ -1405,7 +1407,7 @@ QByteArray PubWriter::write(QStringList *skipped)
             for (const TextItem *box = t; box && !seen.contains(box->id);) {
                 seen.insert(box->id);
                 chainPos[box->id] = qMakePair(tid, int(frames.size()));
-                frames << Frame{box->rect, box->insets, false};
+                frames << Frame{box->rect, box->insets, false, box->vertical};
                 Item *nx = box->nextId.isEmpty() ? nullptr : m_doc.item(box->nextId);
                 box = nx && nx->type() == ItemType::Text ? static_cast<const TextItem *>(nx) : nullptr;
             }
@@ -1438,6 +1440,9 @@ QByteArray PubWriter::write(QStringList *skipped)
                 const int tid = pos->first;
                 m_textShapes << TextShape{tid, pos->second, seq};
                 QVector<B> body{flag(0x02), u16(0x04, 259, 0x10), bytesB(0x0c, 0x28, {}), bytesB(0x0d, 0x28, {}), u32(0x27, quint32(tid))};
+                // Vertical text: 34 = 2 here and text flow 1 in the drawing (every
+                // vertical box in 40 of Publisher's covers has both).
+                if (t->vertical) body << u32(0x34, 2);
                 if (t->valign != VAlign::Top) body << u32(0x35, t->valign == VAlign::Middle ? 1 : 2);   // vertical alignment
                 body << u32(0xaa, quint32(emu(r.width()))) << u32(0xab, quint32(emu(r.height()))) << u32(0xb7, 0);
                 cw.put(seq, {0x01, surfaceSeq[pi], body});
@@ -1446,6 +1451,10 @@ QByteArray PubWriter::write(QStringList *skipped)
                                      {0x0181, 0x08000001}, {0x0183, 0x08000007}, {0x01bf, 0x00100000}, {0x01c0, 0x08000000}, {0x01c2, 0x08000007},
                                      {0x01cb, 25400}, {0x01ff, 0x00080000}, {0x0201, 0x08000000}, {0x0285, 0}, {0x02cb, 0}, {0x02cc, 0}, {0x02ce, 0},
                                      {0x02cf, 0}, {0x0384, 36576}, {0x0385, 36576}, {0x0386, 36576}, {0x0387, 36576}};
+                // Vertical text: text flow 1, top to bottom, after the insets (as
+                // Publisher writes a spine). Without it the words stack up letter
+                // by letter in the tall box.
+                if (t->vertical) opt.insert(5, Prop{0x0088, 1});
                 fillProps(opt, t->fill);
                 strokeProps(opt, t->stroke);
                 shadowProps(opt, t->fx.shadow);
@@ -2171,7 +2180,12 @@ QByteArray PubWriter::write(QStringList *skipped)
         for (const QVector<Frame> &frames : m_frames) {
             mcld += lengthPrefixed({flag(0x00, 0x0a), u32(0x01, 228600, 0x22)});
             putU32(mcld, quint32(frames.size()));
-            for (const Frame &f : frames) {
+            for (const Frame &frame : frames) {
+                Frame f = frame;
+                if (f.vertical) {
+                    const QPointF c = f.r.center();
+                    f.r = QRectF(c.x() - f.r.height() / 2, c.y() - f.r.width() / 2, f.r.height(), f.r.width());
+                }
                 auto at = [&](double pt, double center, bool start) {
                     const double v = double(origin + emu(pt - center)) / unit;
                     return quint32(qint64(start ? std::ceil(v - 0.01) : std::floor(v + 0.01)));

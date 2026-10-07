@@ -2522,6 +2522,41 @@ private Q_SLOTS:
         QVERIFY(text.contains(QStringLiteral("Paragraph 400 of a long story.")));
     }
 
+    // A vertical text box (a book's spine) saves as one: text flow 1 (top
+    // to bottom), as Publisher writes it, not letters stacked in a tall box.
+    void verticalTextBoxSavesToPub()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto spine = std::make_shared<TextItem>();
+        spine->rect = QRectF(290, 36, 32, 700);
+        spine->vertical = true;
+        spine->storyId = doc->createStory(QStringLiteral("UNITED STATES BANKRUPTCY CODE"));
+        doc->pages[0]->items.push_back(spine);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("spine.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        auto back = importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        auto *t = dynamic_cast<TextItem *>(back->pages[0]->items[0].get());
+        QVERIFY(t);
+        QVERIFY(t->vertical);
+        QCOMPARE(t->rotation, 0.0);
+        QVERIFY(std::abs(t->rect.width() - 32) < 0.5 && std::abs(t->rect.height() - 700) < 0.5);
+        // Its frame layout record is turned: width 700 points, height 32.
+        const QByteArray q = cfb::readStream(path, QStringLiteral("Quill/QuillSub/CONTENTS"));
+        auto field = [](int id, quint32 v) {
+            QByteArray b;
+            b.append(char(id)).append(char(0x22));
+            for (int k = 0; k < 4; ++k) b.append(char((v >> (8 * k)) & 0xff));
+            return b;
+        };
+        QVERIFY(q.contains(field(0x04, 700 * 12700) + field(0x05, 32 * 12700)));
+        // And its shape chunk says so (34 = 2), or Publisher stacks the letters.
+        QVERIFY(cfb::readStream(path, QStringLiteral("Contents")).contains(QByteArray("\x34\x20\x02\x00\x00\x00", 6)));
+    }
+
     // Footnotes at the bottom of the column their reference lands in (under
     // a rule, numbered in order, the text kept above them); a line whose
     // note won't fit moves on with it; endnotes under "Notes" after the

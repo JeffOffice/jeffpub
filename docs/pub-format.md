@@ -329,6 +329,16 @@ text box has one; a table has one per cell, in cell-list order):
 | 16 | 9525 for a text box, 0 for a cell |
 | 0b:1a 0, 0d 0, 11 0, 13:12 255, 14:0a, 15 1, 18 0, 1a:02, 1d:8a {00:22 = -4} | Fixed |
 
+### Vertical text
+
+A text box whose text runs top to bottom (a book's spine) has `34:20 = 2`
+in its shape chunk and text flow 1 (OPT `0x0088`) in its drawing, and its
+MCLD frame is recorded turned a quarter turn (width = the box's height).
+Every vertical box in 40 of Publisher's covers has the first two; without
+`34` Publisher stacks the letters one per line in the tall box, which JeffPub's
+files showed until October 2026. Checked by opening the saved file in
+Publisher.
+
 ### Linked text boxes
 
 A chain of linked boxes is one story. Every box has its own shape chunk
