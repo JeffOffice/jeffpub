@@ -150,6 +150,21 @@ jobs:
           name: JeffPub79-Setup
           path: installer
 
+      # The command-line tool, for testing on Windows: it runs from the
+      # program's folder (same DLLs). Not part of the release.
+      - name: Developer tools (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dev-tools | Out-Null
+          Copy-Item build/jpubtool.exe dev-tools/
+
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: JeffPub79-windows-tools
+          path: dev-tools
+
       - name: Package (Linux)
         if: runner.os == 'Linux'
         run: |
