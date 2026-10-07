@@ -2292,6 +2292,32 @@ private Q_SLOTS:
         QVERIFY(!QImage::fromData(z.value(QStringLiteral("OEBPS/images/cover.jpg"))).isNull());
         QCOMPARE(z.value(QStringLiteral("OEBPS/images/pic1.png")), png);                        // a picture used as it is keeps its file
 
+        // A cropped picture wider than the e-book's largest picture size
+        // still comes out, scaled down.
+        {
+            auto big = Document::blank(QSizeF(3000, 2000));
+            QImage photo(1000, 500, QImage::Format_RGB32);
+            photo.fill(Qt::darkBlue);
+            QByteArray jpg;
+            QBuffer jb(&jpg);
+            jb.open(QIODevice::WriteOnly);
+            photo.save(&jb, "JPG");
+            auto wide = std::make_shared<PictureItem>();
+            wide->imageId = big->addImage(jpg, QStringLiteral("jpg"));
+            wide->rect = QRectF(0, 0, 2800, 1400);
+            wide->imgRect = QRectF(-100, 0, 3000, 1400);
+            big->pages[0]->items.push_back(wide);
+            const QString bigPath = dir.filePath(QStringLiteral("big.epub"));
+            QVERIFY2(exportEpub(*big, bigPath, EpubOptions(), &err), qPrintable(err));
+            QFile bf(bigPath);
+            QVERIFY(bf.open(QIODevice::ReadOnly));
+            QMap<QString, QByteArray> bz;
+            QVERIFY(readZip(bf.readAll(), bz));
+            const QImage out = QImage::fromData(bz.value(QStringLiteral("OEBPS/images/pic1.jpg")));
+            QVERIFY(!out.isNull());
+            QVERIFY(out.width() <= 1601 && out.width() >= 1000);
+        }
+
         // A compressed entry that claims another size, or a huge one, is refused.
         ZipWriter zw;
         zw.add(QStringLiteral("a.txt"), QByteArray(5000, 'a'), true);

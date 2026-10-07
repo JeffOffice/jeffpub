@@ -322,7 +322,10 @@ void Book::picture(const PictureItem &pic)
             } else {
                 // At the picture's own resolution where it is known, within reason.
                 const QSize px = data.pixelSize.isValid() ? data.pixelSize : QSize(1200, 1200);
-                const double scale = std::clamp(px.width() / std::max(1.0, pic.imgRect.width()), 1.0, 1600 / std::max(1.0, std::max(pic.rect.width(), pic.rect.height())));
+                // At least a pixel a point, at most 1,600 pixels across (std::clamp
+                // would need the smaller limit first).
+                const double native = std::max(1.0, px.width() / std::max(1.0, pic.imgRect.width()));
+                const double scale = std::min(native, 1600 / std::max(1.0, std::max(pic.rect.width(), pic.rect.height())));
                 img = QImage((pic.rect.size() * scale).toSize().expandedTo(QSize(1, 1)), QImage::Format_ARGB32_Premultiplied);
                 img.fill(Qt::transparent);
                 QPainter p(&img);
