@@ -2746,6 +2746,48 @@ private Q_SLOTS:
         telemetry::setEnabled(false);
     }
 
+    // Wrap Text > In Line with Text: a shape over a text box goes into its
+    // text where its top left is (the start, here). Selected in the text,
+    // Square brings it back onto the page where the text showed it. Both
+    // undo.
+    void moveObjectIntoAndOutOfText()
+    {
+        using namespace jp;
+        Editor ed;
+        ed.setDocument(Document::blank(QSizeF(612, 792)));
+        ItemPtr t = ed.newTextBox(QRectF(72, 72, 300, 200), QStringLiteral("Hello world"));
+        ed.addItem(t, false);
+        const QString sid = static_cast<TextItem *>(t.get())->storyId;
+        auto s = std::make_shared<ShapeItem>();
+        s->rect = QRectF(70, 70, 30, 20);
+        ed.addItem(s);
+        QVERIFY(ed.canMoveIntoText());
+        QVERIFY(ed.moveIntoText());
+        QCOMPARE(int(ed.doc()->pages[0]->items.size()), 1);
+        const QString inText = QString(QChar::ObjectReplacementCharacter) + QStringLiteral("Hello world");
+        QCOMPARE(ed.doc()->storyDoc(sid)->toPlainText(), inText);
+        ed.beginTextEdit(t->id, 0);
+        QTextCursor c = ed.cursor();
+        c.setPosition(0);
+        c.setPosition(1, QTextCursor::KeepAnchor);
+        ed.setCursor(c);
+        QVERIFY(ed.selectionIsInlineObject());
+        QVERIFY(ed.moveOutOfText(Wrap::Square));
+        QCOMPARE(int(ed.doc()->pages[0]->items.size()), 2);
+        QCOMPARE(ed.doc()->storyDoc(sid)->toPlainText(), QStringLiteral("Hello world"));
+        const Item *out = ed.doc()->pages[0]->items[1].get();
+        QVERIFY(out->type() == ItemType::Shape && out->wrap.mode == Wrap::Square);
+        QVERIFY(std::abs(out->rect.width() - 30) < 0.01 && std::abs(out->rect.height() - 20) < 0.01);
+        // At the start of the first line: the box's inset, then the object's left wrap distance.
+        QVERIFY2(std::abs(out->rect.left() - (72 + 2.88 + 2.88)) < 0.5, qPrintable(QString::number(out->rect.left())));
+        ed.undo();
+        QCOMPARE(int(ed.doc()->pages[0]->items.size()), 1);
+        QCOMPARE(ed.doc()->storyDoc(sid)->toPlainText(), inText);
+        ed.undo();
+        QCOMPARE(int(ed.doc()->pages[0]->items.size()), 2);
+        QCOMPARE(ed.doc()->storyDoc(sid)->toPlainText(), QStringLiteral("Hello world"));
+    }
+
     void regroupAfterUngroup()
     {
         using namespace jp;

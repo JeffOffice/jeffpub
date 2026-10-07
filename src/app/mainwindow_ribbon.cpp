@@ -128,7 +128,7 @@ void MainWindow::buildRibbon()
     auto arrangeGroup = [&](RibbonTab *tab) {
         RibbonGroup *g = tab->addGroup(QStringLiteral("Arrange"));
         auto *wrapA = menuAction(this, QStringLiteral("Wrap Text"), "wrap-text");
-        g->addLarge(wrapA, menuOf(this, {act("wrap.none"), act("wrap.square"), act("wrap.tight"), act("wrap.through"), act("wrap.topBottom"), nullptr, act("wrap.edit"), act("wrap.more")}));
+        g->addLarge(wrapA, menuOf(this, {act("wrap.none"), act("wrap.square"), act("wrap.tight"), act("wrap.through"), act("wrap.topBottom"), act("wrap.inline"), nullptr, act("wrap.edit"), act("wrap.more")}));
         g->addSmall(act("arr.forward"), menuOf(this, {act("arr.forward"), act("arr.front")}), true);
         g->addSmall(act("arr.backward"), menuOf(this, {act("arr.backward"), act("arr.back")}), true);
         g->addSmall(act("arr.group"));
@@ -1494,9 +1494,11 @@ void MainWindow::refreshUi()
     // Object-specific checks.
     Item *one = editing ? d->item(ed->textTarget().itemId) : ed->single();
     if (one) {
+        const bool inText = ed->selectionIsInlineObject();
         for (const auto &[id, mode] : {std::pair{"wrap.none", Wrap::None}, {"wrap.square", Wrap::Square}, {"wrap.tight", Wrap::Tight}, {"wrap.through", Wrap::Through},
                                        {"wrap.topBottom", Wrap::TopBottom}})
-            act(id)->setChecked(one->wrap.mode == mode);
+            act(id)->setChecked(!inText && one->wrap.mode == mode);
+        act("wrap.inline")->setChecked(inText);
         act("obj.lock")->setChecked(one->locked);
     }
     if (auto *t = dynamic_cast<TextItem *>(one)) {

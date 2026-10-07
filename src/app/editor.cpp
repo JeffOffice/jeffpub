@@ -558,6 +558,108 @@ void Editor::deleteItems(const QStringList &ids)
 
 void Editor::deleteSelection() { deleteItems(topLevelSelection()); }
 
+// ---- objects set in text ----
+
+TextItem *Editor::textBoxUnder(const Item &obj) const
+{
+    const QPointF c = obj.transform().map(QPointF(obj.rect.width() / 2, obj.rect.height() / 2));
+    const ItemList &items = surfaceItems();
+    for (int i = int(items.size()) - 1; i >= 0; --i) {
+        auto *t = dynamic_cast<TextItem *>(items[i].get());
+        if (!t || t->id == obj.id) continue;
+        if (QRectF(QPointF(), t->rect.size()).contains(t->transform().inverted().map(c))) return t;
+    }
+    return nullptr;
+}
+
+bool Editor::canMoveIntoText() const
+{
+    const Item *it = single();
+    if (!it || isEditingText() || it->locked || it->type() == ItemType::Line || it->type() == ItemType::Table) return false;
+    // A box in a chain of linked boxes stays on the page.
+    if (it->type() == ItemType::Text && (!static_cast<const TextItem *>(it)->nextId.isEmpty() || m_doc->prevFrame(it->id))) return false;
+    bool onSurface = false;
+    for (const ItemPtr &x : surfaceItems()) onSurface = onSurface || x.get() == it;
+    return onSurface && textBoxUnder(*it);
+}
+
+bool Editor::moveIntoText()
+{
+    if (!canMoveIntoText()) return false;
+    Item *it = single();
+    TextItem *t = textBoxUnder(*it);
+    const auto fl = m_cache.textFrame(*m_doc, *t, surfacePageNumber(), renderOptions());
+    if (!fl.layout) return false;
+    QPointF local = t->transform().inverted().map(it->transform().map(QPointF(0, 0)));
+    if (t->vertical) local = QPointF(local.y(), t->rect.width() - local.x());
+    int pos = fl.layout->hitTest(fl.frame, local);
+    if (pos < 0) pos = fl.layout->lastPosition(fl.frame);
+    const QVector<TextItem *> chain = m_doc->chainOf(t->id);
+    QTextDocument *sd = m_doc->storyDoc(chain.isEmpty() ? t->storyId : chain.first()->storyId);
+    if (!sd) return false;
+    pos = std::clamp(pos, 0, sd->characterCount() - 1);
+    const QString json = QString::fromUtf8(QJsonDocument(it->toJson()).toJson(QJsonDocument::Compact));
+    const QString id = it->id;
+    beginChange(QStringLiteral("In Line with Text"));
+    QTextCursor c(sd);
+    c.setPosition(pos);
+    QTextCharFormat f = c.charFormat();
+    f.clearProperty(tp::Field);
+    f.setProperty(tp::InlineObject, json);
+    c.insertText(QString(QChar::ObjectReplacementCharacter), f);
+    const auto loc = m_doc->find(id);
+    if (loc.list) loc.list->erase(loc.list->begin() + loc.index);
+    m_sel.clear();
+    endChange();
+    Q_EMIT selectionChanged();
+    return true;
+}
+
+bool Editor::selectionIsInlineObject() const
+{
+    if (!isEditingText() || std::abs(m_cursor.position() - m_cursor.anchor()) != 1) return false;
+    QTextCursor c(m_cursor.document());
+    c.setPosition(std::max(m_cursor.position(), m_cursor.anchor()));   // the character before
+    return !c.charFormat().stringProperty(tp::InlineObject).isEmpty();
+}
+
+bool Editor::moveOutOfText(Wrap::Mode mode)
+{
+    if (!selectionIsInlineObject()) return false;
+    const int pos = std::min(m_cursor.position(), m_cursor.anchor());
+    QTextCursor c(m_cursor.document());
+    c.setPosition(pos + 1);
+    ItemPtr it = Item::fromJsonAny(QJsonDocument::fromJson(c.charFormat().stringProperty(tp::InlineObject).toUtf8()).object());
+    if (!it) return false;
+    // New ids, so a copy of the object stays apart from this one.
+    std::function<void(Item *)> renumber = [&](Item *x) {
+        x->id = newId();
+        if (x->type() == ItemType::Group)
+            for (const ItemPtr &k : static_cast<GroupItem *>(x)->children) renumber(k.get());
+    };
+    renumber(it.get());
+    // Where the text box shows it (its top left, when it doesn't).
+    auto *t = dynamic_cast<TextItem *>(m_doc->item(m_text.itemId));
+    if (!t) return false;
+    QPointF at = t->transform().map(QPointF(0, 0));
+    const auto fl = m_cache.textFrame(*m_doc, *t, surfacePageNumber(), renderOptions());
+    if (fl.layout)
+        for (const auto &ob : fl.layout->inlineObjects())
+            if (ob.frame == fl.frame && ob.docPos == pos) at = t->transform().map(t->vertical ? QPointF(t->rect.width() - ob.rect.bottom(), ob.rect.left()) : ob.rect.topLeft());
+    it->moveBy(at.x() - it->rect.x(), at.y() - it->rect.y());
+    it->wrap.mode = mode;
+    beginChange(QStringLiteral("Wrap Text"));
+    QTextCursor del(m_cursor.document());
+    del.setPosition(pos);
+    del.setPosition(pos + 1, QTextCursor::KeepAnchor);
+    del.removeSelectedText();
+    surfaceItems().push_back(it);
+    endChange();
+    endTextEdit();
+    select(it->id);
+    return true;
+}
+
 void Editor::duplicateSelection()
 {
     const QStringList ids = topLevelSelection();

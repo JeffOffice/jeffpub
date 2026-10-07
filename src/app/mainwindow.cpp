@@ -1079,7 +1079,7 @@ void MainWindow::contextMenu(const QPoint &global)
         order->addAction(act("arr.backward"));
         order->addAction(act("arr.back"));
         QMenu *wrap = menu.addMenu(icon("wrap-text"), QStringLiteral("Wrap Text"));
-        for (const char *id : {"wrap.none", "wrap.square", "wrap.tight", "wrap.through", "wrap.topBottom"}) wrap->addAction(act(id));
+        for (const char *id : {"wrap.none", "wrap.square", "wrap.tight", "wrap.through", "wrap.topBottom", "wrap.inline"}) wrap->addAction(act(id));
         if (kind == "picture") {
             menu.addSeparator();
             menu.addAction(act("pic.change"));

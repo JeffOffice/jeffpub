@@ -503,12 +503,21 @@ void MainWindow::createActions()
     mk("arr.flipH", QStringLiteral("Flip Horizontal"), "flip-horizontal-2", QKeySequence(), [ed] { ed->flipSelection(true); });
     mk("arr.flipV", QStringLiteral("Flip Vertical"), "flip-vertical-2", QKeySequence(), [ed] { ed->flipSelection(false); });
     mk("arr.freeRotate", QStringLiteral("More Rotation Options…"), "", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 1); });
-    auto setWrap = [ed](Wrap::Mode m) { ed->forEachSelected(QStringLiteral("Wrap Text"), [m](Item *it) { it->wrap.mode = m; }); };
+    // An object set in text that the text selection holds comes back onto the page.
+    auto setWrap = [ed](Wrap::Mode m) {
+        if (ed->moveOutOfText(m)) return;
+        ed->forEachSelected(QStringLiteral("Wrap Text"), [m](Item *it) { it->wrap.mode = m; });
+    };
     mk("wrap.none", QStringLiteral("None"), "", QKeySequence(), [setWrap] { setWrap(Wrap::None); }, true);
     mk("wrap.square", QStringLiteral("Square"), "", QKeySequence(), [setWrap] { setWrap(Wrap::Square); }, true);
     mk("wrap.tight", QStringLiteral("Tight"), "", QKeySequence(), [setWrap] { setWrap(Wrap::Tight); }, true);
     mk("wrap.through", QStringLiteral("Through"), "", QKeySequence(), [setWrap] { setWrap(Wrap::Through); }, true);
     mk("wrap.topBottom", QStringLiteral("Top and Bottom"), "", QKeySequence(), [setWrap] { setWrap(Wrap::TopBottom); }, true);
+    mk("wrap.inline", QStringLiteral("In Line with Text"), "", QKeySequence(), [this, ed] {
+        if (ed->selectionIsInlineObject()) return;
+        if (!ed->moveIntoText())
+            statusBar()->showMessage(QStringLiteral("Move the object over a text box first; it goes into the text where its top left corner is."), 6000);
+    }, true);
     mk("wrap.edit", QStringLiteral("Edit Wrap Points"), "wrap-points", QKeySequence(), [this] {
         Item *it = m_ed->single();
         if (!it) return;

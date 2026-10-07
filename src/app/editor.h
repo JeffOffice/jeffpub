@@ -138,6 +138,14 @@ public:
     // Regroup: the objects of the group last ungrouped, grouped again.
     bool canRegroup() const;
     void regroup();
+    // Objects set in text (Wrap Text > In Line with Text). The selected object
+    // goes into the text box under it, at the character nearest its top left;
+    // an object in text that the text selection holds goes back onto the page
+    // where it's drawn, wrapped as `mode`.
+    bool canMoveIntoText() const;
+    bool moveIntoText();
+    bool selectionIsInlineObject() const;
+    bool moveOutOfText(Wrap::Mode mode);
     void ungroupSelection();
     enum class Order { Forward, Backward, Front, Back };
     void arrange(Order o);
@@ -223,6 +231,7 @@ Q_SIGNALS:
     void modifiedChanged(bool);
 
 private:
+    TextItem *textBoxUnder(const Item &obj) const;
     friend class SnapshotCommand;
     QByteArray snapshot() const;
     void restore(const QByteArray &snap, const QStringList &sel, int page, const QString &master);
