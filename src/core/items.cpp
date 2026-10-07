@@ -4,6 +4,7 @@
 
 #include <QJsonArray>
 #include <QRandomGenerator>
+#include <QTransform>
 #include <QUuid>
 #include <QtMath>
 #include <atomic>
@@ -295,6 +296,22 @@ ItemPtr ShapeItem::clone() const
     return c;
 }
 
+void ShapeItem::resized(const QSizeF &before)
+{
+    if (before.width() <= 0 || before.height() <= 0) return;
+    const double kx = rect.width() / before.width(), ky = rect.height() / before.height();
+    if (kx == 1 && ky == 1) return;
+    if (!customPath.isEmpty()) customPath = QTransform::fromScale(kx, ky).map(customPath);
+    if (isArt()) stroke.width *= std::sqrt(kx * ky);
+}
+
+void ShapeItem::scaleInto(const QRectF &from, const QRectF &to)
+{
+    const QSizeF before = rect.size();
+    Item::scaleInto(from, to);
+    resized(before);
+}
+
 static QJsonArray pathJson(const QPainterPath &p)
 {
     QJsonArray a;
@@ -333,6 +350,8 @@ QJsonObject ShapeItem::toJson() const
         o["adj"] = a;
     }
     if (!customPath.isEmpty()) o["path"] = pathJson(customPath);
+    // Overlapping outlines fill by winding (as SVG does by default).
+    if (!customPath.isEmpty() && customPath.fillRule() == Qt::WindingFill) o["winding"] = true;
     if (!storyId.isEmpty()) {
         o["story"] = storyId;
         o["insets"] = marginsJson(insets);
@@ -348,6 +367,7 @@ void ShapeItem::fromJson(const QJsonObject &o)
     adj.clear();
     for (const auto &v : o["adj"].toArray()) adj.push_back(v.toDouble());
     customPath = pathFrom(o["path"].toArray());
+    if (o["winding"].toBool()) customPath.setFillRule(Qt::WindingFill);
     storyId = o["story"].toString();
     insets = marginsFrom(o["insets"], insets);
     valign = VAlign(o["valign"].toInt(int(VAlign::Middle)));

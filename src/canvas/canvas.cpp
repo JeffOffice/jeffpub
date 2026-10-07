@@ -1708,7 +1708,8 @@ void Canvas::mouseMoveEvent(QMouseEvent *e)
             }
             if (x1 - x0 < 2) { if (hx[i] == 1) x1 = x0 + 2; else x0 = x1 - 2; }
             if (y1 - y0 < 2) { if (hy[i] == 1) y1 = y0 + 2; else y0 = y1 - 2; }
-            const bool keepAspect = (hx[i] && hy[i]) && (shift != (it->type() == ItemType::Picture || it->type() == ItemType::TextArt));
+            const bool art = it->type() == ItemType::Shape && static_cast<ShapeItem *>(it)->isArt();
+            const bool keepAspect = (hx[i] && hy[i]) && (shift != (it->type() == ItemType::Picture || it->type() == ItemType::TextArt || art));
             if (keepAspect && w > 0 && h > 0) {
                 const double s = std::max((x1 - x0) / w, (y1 - y0) / h);
                 const double nw = w * s, nh = h * s;
@@ -1734,6 +1735,7 @@ void Canvas::mouseMoveEvent(QMouseEvent *e)
                 for (double &rh : t->rowH) rh *= ky;
             }
             it->rect = to;
+            if (it->type() == ItemType::Shape) static_cast<ShapeItem *>(it)->resized(from.size());
             m_tip = QStringLiteral("%1 × %2").arg(st.format(to.width()), st.format(to.height()));
         } else {
             // Scale the whole selection (or a group) inside its bounding box.

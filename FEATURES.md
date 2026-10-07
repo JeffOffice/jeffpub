@@ -14,11 +14,11 @@ Features JeffPub 79 has that Publisher never did, then the ones planned before v
 - [x] An open file format: a `.jpub` publication is a ZIP of readable JSON and the original pictures, alongside opening and saving `.pub`
 - [x] Barcodes: book ISBNs with or without a price add-on (hyphenated as the ISBN agency assigns them, for every country), EAN-13, UPC-A and EAN-8 with add-ons, Code 128 and Code 39, drawn as vector bars and editable after placing
 - [x] WebP and SVG pictures
-- [ ] macOS app (Apple silicon and Intel)
+- [~] macOS app (Apple silicon and Intel) *(test builds; not yet signed, so macOS asks before opening it the first time)*
 - [~] PDF/X export for commercial printers, with a print check before export *(PDF/X-1a:2001 for U.S. web coated (SWOP) or European coated (FOGRA39) printing, checked for low-resolution pictures and missing fonts first; not yet: PDF/X-4, which needs a color profile JeffPub may bundle, and overprint settings)*
 - [x] Automatic table of contents from the Heading 1-3 styles, with page numbers taken from the layout and dot leaders, updated with one click (Insert > References)
 - [x] Footnotes and endnotes: numbered references (Insert > References), footnotes at the bottom of the column their number lands in under a short rule (a line moves on with its note when both don't fit), endnotes under "Notes" after the story *(note text is edited in a dialog; a note too tall for a whole column isn't split)*
-- [ ] Insert > Icons: a gallery of recolorable vector icons
+- [x] Insert > Icons: 1,539 vector icons from the open-source Lucide set, searched by name or keyword; each becomes an editable shape in the color scheme's main color (Line Color recolors it, Edit Points reshapes it) whose line weight grows and shrinks with it, sharp in print and PDF, and saved to `.pub` as a drawn shape
 - [ ] SVG export, and SVG pictures converted to editable shapes
 - [ ] EPUB export for e-book readers and stores
 - [ ] PDF pages placed as sharp vector graphics
@@ -77,7 +77,7 @@ Features JeffPub 79 has that Publisher never did, then the ones planned before v
 ## Insert tab
 - [x] Pages: Insert Blank Page, Insert Duplicate Page, Insert Page dialog (count, before/after, blank, duplicate, or one text box per page), Catalog Pages (a catalog area repeated for each item of a product list, in rows and columns, with preview and merging to a new publication, PDF or printer)
 - [x] Tables: grid picker and Insert Table dialog
-- [x] Illustrations: Pictures (from file), Online Pictures **(alt: Openverse and Wikimedia Commons search with license info)**, Shapes (full gallery), Picture Placeholder, Barcode (book ISBN from ISBN-10 or -13, hyphenated as the International ISBN Agency assigns ranges for every country, with a price add-on in US, Canadian, Australian or New Zealand dollars or pounds, or no suggested price; EAN-13, UPC-A and EAN-8 with 2- or 5-digit add-ons; Code 128; Code 39; magnification and bar height; vector bars and digits on a white quiet zone)
+- [x] Illustrations: Pictures (from file), Online Pictures **(alt: Openverse and Wikimedia Commons search with license info)**, Shapes (full gallery), Icons, Picture Placeholder, Barcode (book ISBN from ISBN-10 or -13, hyphenated as the International ISBN Agency assigns ranges for every country, with a price add-on in US, Canadian, Australian or New Zealand dollars or pounds, or no suggested price; EAN-13, UPC-A and EAN-8 with 2- or 5-digit add-ons; Code 128; Code 39; magnification and bar height; vector bars and digits on a white quiet zone)
 - [x] Building Blocks: Page Parts (headings, pull quotes, sidebars, stories, tables of contents), Calendars (by month and year, with options), Borders & Accents, Advertisements, and saving your own building blocks to the library
 - [x] Text: Draw Text Box, Business Information fields, Text Art, Insert File (text, RTF, HTML, and `.docx` documents into a text box), Symbol (recently used symbols, kept between sessions, in the Symbol drop-down and the dialog, and the full character map), Date & Time (formats, update automatically), Object (embed a file)
 - [x] Links: Hyperlink (web, email, place in this document, new document), Bookmark

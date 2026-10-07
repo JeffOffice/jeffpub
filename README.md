@@ -70,7 +70,7 @@ JeffPub 79 includes or downloads these components, each under its own license:
 | Dutch dictionary and hyphenation patterns ([OpenTaal](https://www.opentaal.org/)) | Spelling, hyphenation | BSD (revised) or CC BY 3.0 |
 | Brazilian Portuguese dictionary and hyphenation patterns ([VERO](http://pt-br.libreoffice.org/projetos/projeto-vero-verificador-ortografico/)) | Spelling, hyphenation | LGPL-3.0 or MPL |
 | European Portuguese dictionary and hyphenation patterns | Spelling, hyphenation | GPL-2.0+ |
-| [Lucide](https://lucide.dev/) icons | Interface icons | ISC |
+| [Lucide](https://lucide.dev/) icons and their search keywords | Interface icons and Insert > Icons | ISC |
 | Open fonts | Fonts and substitutes | SIL Open Font License, GUST Font License, Bitstream Vera; see `resources/fonts/README.md` |
 | [zlib](https://zlib.net/) | Compression (when the system has none) | zlib license |
 | [MinGW-w64](https://www.mingw-w64.org/) runtime (Windows) | C++ runtime DLLs | GPL-3.0 with the [GCC Runtime Library Exception](https://www.gnu.org/licenses/gcc-exception-3.1.html); winpthreads MIT |

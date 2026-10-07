@@ -1586,7 +1586,7 @@ QWidget *Backstage::buildAbout()
          "LGPL-3.0 or MPL", "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/dict/pt_BR/README_en.txt"},
         {"European Portuguese dictionary", "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/dict/pt_PT/README_pt_PT.txt", "Spelling and hyphenation", "GPL-2.0+",
          "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/dict/pt_PT/LICENSES.txt"},
-        {"Lucide icons", "https://lucide.dev/", "Interface icons", "ISC", "https://lucide.dev/license"},
+        {"Lucide icons", "https://lucide.dev/", "Interface icons, Insert > Icons", "ISC", "https://lucide.dev/license"},
         {"Open fonts", "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/fonts/README.md", "Fonts and substitutes",
          "SIL OFL 1.1, GUST, Bitstream Vera", "https://openfontlicense.org/"},
         {"zlib", "https://zlib.net/", "Compression", "zlib license", "https://zlib.net/zlib_license.html"},

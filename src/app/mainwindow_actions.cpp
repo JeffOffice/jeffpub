@@ -10,6 +10,7 @@
 #include "render/renderer.h"
 #include "app/pagespane.h"
 #include "app/notes.h"
+#include "app/iconpicker.h"
 #include "app/toc.h"
 
 #include "app/dialogs.h"
@@ -372,6 +373,7 @@ void MainWindow::createActions()
     mk("ins.file", QStringLiteral("Insert File"), "file-input", QKeySequence(), [this] { insertFileDialog(this, m_ed); });
     mk("ins.symbol", QStringLiteral("Symbol"), "omega", QKeySequence(), [this] { symbolDialog(this, m_ed); });
     mk("ins.barcode", QStringLiteral("Barcode"), "barcode", QKeySequence(), [this] { barcodeDialog(this, m_ed); });
+    mk("ins.icons", QStringLiteral("Icons"), "smile-plus", QKeySequence(), [this] { insertIcons(m_ed, pickIcons(this)); });
     mk("ins.toc", QStringLiteral("Table of Contents"), "table-of-contents", QKeySequence(), [this] { insertTableOfContents(m_ed); });
     mk("ins.footnote", QStringLiteral("Footnote"), "superscript", QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_F), [this] {
         if (m_ed->isEditingText()) noteDialog(this, m_ed, false);

@@ -1,5 +1,6 @@
 #include "io/pubimport.h"
 
+#include "core/svg.h"
 #include "render/renderer.h"
 #include "io/pubshapes.h"
 #include "render/shapes.h"
@@ -69,42 +70,6 @@ double percent(const RVNGProperty *p, double def = 1.0)
     return p->getDouble();
 }
 
-// SVG elliptical arc to cubic Béziers.
-void arcTo(QPainterPath &path, QPointF p0, double rx, double ry, double phiDeg, bool large, bool sweep, QPointF p1)
-{
-    if (rx == 0 || ry == 0) { path.lineTo(p1); return; }
-    rx = std::abs(rx); ry = std::abs(ry);
-    const double phi = qDegreesToRadians(phiDeg), c = std::cos(phi), s = std::sin(phi);
-    const double dx = (p0.x() - p1.x()) / 2, dy = (p0.y() - p1.y()) / 2;
-    const double x1 = c * dx + s * dy, y1 = -s * dx + c * dy;
-    double lam = (x1 * x1) / (rx * rx) + (y1 * y1) / (ry * ry);
-    if (lam > 1) { rx *= std::sqrt(lam); ry *= std::sqrt(lam); }
-    double num = rx * rx * ry * ry - rx * rx * y1 * y1 - ry * ry * x1 * x1;
-    double den = rx * rx * y1 * y1 + ry * ry * x1 * x1;
-    double k = den == 0 ? 0 : std::sqrt(std::max(0.0, num / den));
-    if (large == sweep) k = -k;
-    const double cx1 = k * rx * y1 / ry, cy1 = -k * ry * x1 / rx;
-    const double cx = c * cx1 - s * cy1 + (p0.x() + p1.x()) / 2, cy = s * cx1 + c * cy1 + (p0.y() + p1.y()) / 2;
-    auto ang = [](double ux, double uy, double vx, double vy) {
-        const double a = std::atan2(ux * vy - uy * vx, ux * vx + uy * vy);
-        return a;
-    };
-    const double t1 = ang(1, 0, (x1 - cx1) / rx, (y1 - cy1) / ry);
-    double dt = ang((x1 - cx1) / rx, (y1 - cy1) / ry, (-x1 - cx1) / rx, (-y1 - cy1) / ry);
-    if (!sweep && dt > 0) dt -= 2 * M_PI;
-    if (sweep && dt < 0) dt += 2 * M_PI;
-    const int segs = std::max(1, int(std::ceil(std::abs(dt) / (M_PI / 2))));
-    const double d = dt / segs;
-    const double alpha = 4.0 / 3.0 * std::tan(d / 4);
-    double t = t1;
-    for (int i = 0; i < segs; ++i) {
-        const double c1 = std::cos(t), s1 = std::sin(t), c2 = std::cos(t + d), s2 = std::sin(t + d);
-        auto pt = [&](double x, double y) { return QPointF(cx + c * rx * x - s * ry * y, cy + s * rx * x + c * ry * y); };
-        path.cubicTo(pt(c1 - alpha * s1, s1 + alpha * c1), pt(c2 + alpha * s2, s2 - alpha * c2), pt(c2, s2));
-        t += d;
-    }
-}
-
 QPainterPath pathFromVector(const RVNGPropertyListVector &v, bool *open)
 {
     QPainterPath path;
@@ -119,7 +84,7 @@ QPainterPath pathFromVector(const RVNGPropertyListVector &v, bool *open)
         else if (act == "C") { path.cubicTo(QPointF(toPt(e["svg:x1"]), toPt(e["svg:y1"])), QPointF(toPt(e["svg:x2"]), toPt(e["svg:y2"])), pt); cur = pt; }
         else if (act == "Q") { path.quadTo(QPointF(toPt(e["svg:x1"]), toPt(e["svg:y1"])), pt); cur = pt; }
         else if (act == "A") {
-            arcTo(path, cur, toPt(e["svg:rx"]), toPt(e["svg:ry"]), e["librevenge:rotate"] ? e["librevenge:rotate"]->getDouble() : 0,
+            svg::arcTo(path, cur, toPt(e["svg:rx"]), toPt(e["svg:ry"]), e["librevenge:rotate"] ? e["librevenge:rotate"]->getDouble() : 0,
                   e["librevenge:large-arc"] && e["librevenge:large-arc"]->getInt(), e["librevenge:sweep"] && e["librevenge:sweep"]->getInt(), pt);
             cur = pt;
         } else if (act == "Z") { path.closeSubpath(); closed = true; }

@@ -354,6 +354,7 @@ void MainWindow::buildRibbon()
         g->addLarge(act("ins.picture"));
         g->addLarge(act("ins.onlinePicture"));
         g->addWidget(shapesButton(true));
+        g->addLarge(act("ins.icons"));
         g->addLarge(act("ins.placeholder"));
         g->addLarge(act("ins.barcode"));
 

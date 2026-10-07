@@ -128,6 +128,14 @@ public:
     QMarginsF insets{7.2, 3.6, 7.2, 3.6};
     VAlign valign = VAlign::Middle;
 
+    // Artwork (shape "art": an icon, or an SVG picture turned into shapes)
+    // scales like a picture: its line weight grows and shrinks with it, and
+    // corner handles keep its proportions.
+    bool isArt() const { return shape == QLatin1String("art"); }
+    // Fits the edited points (and artwork's line weight) to the frame after
+    // its size changed from `before`.
+    void resized(const QSizeF &before);
+    void scaleInto(const QRectF &from, const QRectF &to) override;
     QJsonObject toJson() const override;
     void fromJson(const QJsonObject &o) override;
 };

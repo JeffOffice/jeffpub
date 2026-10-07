@@ -1544,5 +1544,6 @@
   </qresource>
   <qresource prefix="/">
     <file>app.png</file>
+    <file>icon-tags.txt</file>
   </qresource>
 </RCC>

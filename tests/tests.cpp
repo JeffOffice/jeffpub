@@ -1,5 +1,7 @@
 #include "core/document.h"
 #include "core/barcode.h"
+#include "core/svg.h"
+#include <QSvgRenderer>
 #include "io/cfb.h"
 #include "io/jpubfile.h"
 #include "io/pubimport.h"
@@ -30,6 +32,7 @@
 #include "app/updater.h"
 #include "app/toc.h"
 #include "app/notes.h"
+#include "app/iconpicker.h"
 #include "app/widgets.h"
 #include "app/settings.h"
 #include "canvas/canvas.h"
@@ -1739,6 +1742,217 @@ private Q_SLOTS:
                 QVERIFY2(ink > 50, qPrintable(QStringLiteral("box %1, line at %2: no text drawn").arg(i + 1).arg(r.top())));
             }
         }
+    }
+
+    // The SVG reader: path data (implicit lines, relative moves, reflected
+    // controls, run-together arc flags), shapes, transforms, <use>, style
+    // sheets, gradients and currentColor; and every bundled icon draws the
+    // same as Qt's own SVG renderer draws it.
+    void svgReader()
+    {
+        using namespace jp;
+        QPainterPath p = svg::pathData(QStringLiteral("M10 10h5v5z m10 0 5 0 0 5"));
+        QCOMPARE(p.elementCount(), 7);
+        QCOMPARE(QPointF(p.elementAt(4)), QPointF(20, 10));      // a relative move after a close starts at the subpath's start
+        QCOMPARE(QPointF(p.elementAt(6)), QPointF(25, 15));      // pairs after a move are lines
+        p = svg::pathData(QStringLiteral("M0 0a10 10 0 1010 0")); // flags "1" "0" run into "10"
+        QCOMPARE(p.currentPosition(), QPointF(10, 0));
+        QVERIFY(p.boundingRect().height() > 18);                  // the large arc goes the long way round
+        p = svg::pathData(QStringLiteral("M0 0C0 10 10 10 10 0S20 -10 20 0"));
+        QCOMPARE(QPointF(p.elementAt(4)), QPointF(10, -10));      // S reflects the last control point
+        p = svg::pathData(QStringLiteral("M1.5.5L-2-3e1"));
+        QCOMPARE(QPointF(p.elementAt(0)), QPointF(1.5, 0.5));
+        QCOMPARE(QPointF(p.elementAt(1)), QPointF(-2, -30));
+
+        const QByteArray doc =
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"2in\" height=\"1in\" viewBox=\"0 0 200 100\">"
+            "<style>.a { fill: #ff0000; stroke: none } #b { fill: rgb(0, 0, 255) }</style>"
+            "<defs><linearGradient id=\"g\"><stop offset=\"0\" stop-color=\"#00ff00\"/><stop offset=\"1\" stop-color=\"#000\"/></linearGradient>"
+            "<rect id=\"sq\" width=\"10\" height=\"10\"/></defs>"
+            "<rect class=\"a\" x=\"10\" y=\"10\" width=\"20\" height=\"20\"/>"
+            "<g transform=\"translate(100 0) scale(2)\" stroke=\"currentColor\" stroke-width=\"3\" fill=\"none\">"
+            "<circle id=\"b\" cx=\"5\" cy=\"5\" r=\"5\"/>"
+            "<line x1=\"0\" y1=\"20\" x2=\"10\" y2=\"20\" stroke-linecap=\"round\"/>"
+            "</g>"
+            "<use xlink:href=\"#sq\" x=\"50\" y=\"50\" fill=\"url(#g)\"/>"
+            "<text x=\"0\" y=\"90\">words</text>"
+            "<rect width=\"5\" height=\"5\" display=\"none\"/>"
+            "</svg>";
+        const svg::Drawing d = svg::read(doc, QColor(10, 20, 30));
+        QVERIFY(d.isValid());
+        QCOMPARE(d.viewBox, QRectF(0, 0, 200, 100));
+        QCOMPARE(d.size, QSizeF(144, 72));
+        QVERIFY(d.skipped);                                       // the text
+        QCOMPARE(d.elements.size(), 4);
+        QCOMPARE(d.elements[0].fill, QColor(255, 0, 0));
+        QVERIFY(!d.elements[0].stroke.isValid());
+        QCOMPARE(d.elements[0].path.boundingRect(), QRectF(10, 10, 20, 20));
+        QCOMPARE(d.elements[1].fill, QColor(0, 0, 255));          // the id rule beats the group's fill="none"
+        QCOMPARE(d.elements[1].stroke, QColor(10, 20, 30));
+        QCOMPARE(d.elements[1].strokeWidth, 6.0);                 // scaled with the group
+        QCOMPARE(d.elements[1].path.boundingRect(), QRectF(100, 0, 20, 20));
+        QVERIFY(!d.elements[2].fill.isValid());                   // a line has no inside
+        QCOMPARE(d.elements[2].cap, Qt::RoundCap);
+        QCOMPARE(d.elements[3].fill, QColor(0, 255, 0));          // a gradient's first color
+        QCOMPARE(d.elements[3].path.boundingRect(), QRectF(50, 50, 10, 10));
+
+        // Every icon, drawn by this reader and by Qt's renderer at 48 pixels.
+        int icons = 0, worst = 0;
+        QString worstName;
+        QDirIterator it(QStringLiteral(":/icons"), {QStringLiteral("*.svg")});
+        while (it.hasNext()) {
+            const QString path = it.next();
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::ReadOnly));
+            const QByteArray bytes = f.readAll();
+            if (!bytes.contains("lucide")) continue;
+            QImage qt(48, 48, QImage::Format_ARGB32_Premultiplied), ours(qt.size(), qt.format());
+            qt.fill(Qt::transparent);
+            ours.fill(Qt::transparent);
+            {
+                QPainter pq(&qt);
+                QSvgRenderer(bytes).render(&pq);
+            }
+            const svg::Drawing icon = svg::read(bytes);
+            QVERIFY2(icon.isValid() && !icon.elements.isEmpty(), qPrintable(path));
+            {
+                QPainter po(&ours);
+                po.setRenderHint(QPainter::Antialiasing);
+                po.scale(48 / icon.viewBox.width(), 48 / icon.viewBox.height());
+                po.translate(-icon.viewBox.topLeft());
+                for (const svg::Element &e : icon.elements) {
+                    QPen pen(e.stroke.isValid() ? QBrush(e.stroke) : QBrush(Qt::NoBrush), e.strokeWidth, Qt::SolidLine, e.cap, e.join);
+                    if (!e.dashes.isEmpty()) {
+                        QVector<qreal> pattern;
+                        for (double x : e.dashes) pattern << x / e.strokeWidth;
+                        pen.setDashPattern(pattern);
+                        pen.setDashOffset(e.dashOffset / e.strokeWidth);
+                    }
+                    po.setPen(e.stroke.isValid() ? pen : QPen(Qt::NoPen));
+                    po.setBrush(e.fill.isValid() ? QBrush(e.fill) : QBrush(Qt::NoBrush));
+                    po.drawPath(e.path);
+                }
+            }
+            int differ = 0;
+            for (int y = 0; y < 48; ++y)
+                for (int x = 0; x < 48; ++x)
+                    if (std::abs(qAlpha(qt.pixel(x, y)) - qAlpha(ours.pixel(x, y))) > 64) ++differ;
+            if (differ > worst) { worst = differ; worstName = path; }
+            ++icons;
+        }
+        QVERIFY(icons > 1500);
+        QVERIFY2(worst <= 4, qPrintable(QStringLiteral("%1: %2 pixels differ").arg(worstName).arg(worst)));
+    }
+
+    // Insert > Icons: the picker searches names and tags; an icon becomes
+    // one editable artwork shape in the scheme's main color whose line
+    // weight scales with it; an icon with filled parts is a group; inserting
+    // several is one undo step; edited points follow any shape's resize; and
+    // icons survive saving as .jpub and as .pub.
+    void iconsInsert()
+    {
+        using namespace jp;
+        QVERIFY(iconCatalog().size() > 1500);
+
+        ItemPtr it = iconItem(QStringLiteral("heart"), QPointF(100, 100), 72, ColorRef::scheme(Main));
+        QVERIFY(it && it->type() == ItemType::Shape);
+        auto *heart = static_cast<ShapeItem *>(it.get());
+        QVERIFY(heart->isArt());
+        QCOMPARE(heart->rect, QRectF(64, 64, 72, 72));
+        QCOMPARE(heart->stroke.width, 6.0);                       // 2 of 24 units, at an inch
+        QCOMPARE(heart->stroke.color, ColorRef::scheme(Main));
+        QCOMPARE(heart->stroke.cap, Qt::RoundCap);
+        QCOMPARE(heart->stroke.join, Qt::RoundJoin);
+        QVERIFY(heart->fill.type == Fill::NoFill);
+        QCOMPARE(heart->altText, QStringLiteral("heart"));
+        const QRectF pathBox = heart->customPath.boundingRect();
+        QVERIFY(QRectF(0, 0, 72, 72).contains(pathBox) && pathBox.width() > 55);
+        heart->scaleInto(heart->rect, QRectF(64, 64, 144, 144));
+        QCOMPARE(heart->stroke.width, 12.0);
+        QVERIFY(std::abs(heart->customPath.boundingRect().width() - 2 * pathBox.width()) < 1e-6);
+
+        // A shape with edited points stretches with its frame, its line kept.
+        ShapeItem edited;
+        edited.rect = QRectF(0, 0, 100, 50);
+        edited.customPath.addRect(QRectF(0, 0, 100, 50));
+        edited.scaleInto(edited.rect, QRectF(0, 0, 200, 100));
+        QCOMPARE(edited.customPath.boundingRect(), QRectF(0, 0, 200, 100));
+        QCOMPARE(edited.stroke.width, 1.0);
+
+        ItemPtr tag = iconItem(QStringLiteral("tag"), QPointF(300, 300), 72, ColorRef::scheme(Main));
+        QVERIFY(tag && tag->type() == ItemType::Group);
+        const auto &parts = static_cast<GroupItem *>(tag.get())->children;
+        QCOMPARE(parts.size(), size_t(2));
+        QVERIFY(static_cast<ShapeItem *>(parts[1].get())->fill.type == Fill::Solid);   // the dot is filled
+        QCOMPARE(static_cast<ShapeItem *>(parts[1].get())->fill.color, ColorRef::scheme(Main));
+
+        // The picker: words match the starts of names and tags.
+        MainWindow w;
+        w.editor()->setDocument(Document::blank(QSizeF(612, 792)));
+        Editor *ed = w.editor();
+        QStringList picked, love, arrows;
+        QTimer::singleShot(0, &w, [&] {
+            // Checked after the dialog closes, so a failure can't leave it open.
+            auto *dlg = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            if (!dlg) return;
+            auto *search = dlg->findChild<QLineEdit *>();
+            auto *list = dlg->findChild<QListWidget *>(QStringLiteral("iconList"));
+            auto shown = [&] {
+                QStringList v;
+                for (int i = 0; i < list->count(); ++i)
+                    if (!list->item(i)->isHidden()) v << list->item(i)->data(Qt::UserRole).toString();
+                return v;
+            };
+            if (search && list) {
+                search->setText(QStringLiteral("love"));             // a tag of "heart"
+                love = shown();
+                search->setText(QStringLiteral("arrow-big-down"));   // hyphens count as spaces
+                arrows = shown();
+                for (int i = 0, n = 0; i < list->count() && n < 2; ++i)
+                    if (!list->item(i)->isHidden()) { list->item(i)->setSelected(true); ++n; }
+            }
+            dlg->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok)->click();
+        });
+        picked = pickIcons(&w);
+        QVERIFY(love.contains(QStringLiteral("heart")));
+        QVERIFY(love.size() < 60);
+        QVERIFY(arrows.contains(QStringLiteral("arrow-big-down")) && arrows.contains(QStringLiteral("arrow-big-down-dash")));
+        QVERIFY(!arrows.contains(QStringLiteral("arrow-big-up")));
+        QCOMPARE(picked, arrows.mid(0, 2));
+        insertIcons(ed, picked);
+        QCOMPARE(ed->doc()->pages[0]->items.size(), size_t(2));
+        QCOMPARE(ed->selectedItems().size(), 2);
+        const QRectF r0 = ed->doc()->pages[0]->items[0]->rect, r1 = ed->doc()->pages[0]->items[1]->rect;
+        QCOMPARE(r0.size(), QSizeF(72, 72));
+        QCOMPARE(r0.center().y(), 396.0);
+        QCOMPARE(r0.center().x() + r1.center().x(), 612.0);         // side by side across the middle
+        ed->undo();
+        QCOMPARE(ed->doc()->pages[0]->items.size(), size_t(0));
+        ed->redo();
+        QCOMPARE(ed->doc()->pages[0]->items.size(), size_t(2));
+
+        // Saving: .jpub keeps the artwork exactly; .pub keeps a drawn shape.
+        ed->doc()->pages[0]->items.push_back(it);
+        QTemporaryDir dir;
+        QString err;
+        const QString jpub = dir.filePath(QStringLiteral("icons.jpub"));
+        QVERIFY2(savePublication(*ed->doc(), jpub, QImage(), &err), qPrintable(err));
+        auto back = loadPublication(jpub, &err);
+        QVERIFY2(back, qPrintable(err));
+        auto *again = static_cast<ShapeItem *>(back->pages[0]->items[2].get());
+        QVERIFY(again->isArt());
+        QCOMPARE(again->stroke.width, 12.0);
+        QCOMPARE(again->customPath.elementCount(), heart->customPath.elementCount());
+        QCOMPARE(again->customPath.fillRule(), Qt::WindingFill);
+        const QString pub = dir.filePath(QStringLiteral("icons.pub"));
+        QVERIFY2(exportPublisher(*ed->doc(), pub, &err), qPrintable(err));
+        auto fromPub = importPublisherFile(pub, &err);
+        QVERIFY2(fromPub, qPrintable(err));
+        QCOMPARE(fromPub->pages[0]->items.size(), size_t(3));
+        auto *pubHeart = dynamic_cast<ShapeItem *>(fromPub->pages[0]->items[2].get());
+        QVERIFY(pubHeart && !pubHeart->customPath.isEmpty());
+        QVERIFY(std::abs(pubHeart->stroke.width - 12) < 0.1);
+        QVERIFY(std::abs(pubHeart->customPath.boundingRect().width() - heart->customPath.boundingRect().width()) < 0.5);
     }
 
     // Footnotes at the bottom of the column their reference lands in (under
