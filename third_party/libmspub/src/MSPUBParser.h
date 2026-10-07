@@ -145,7 +145,7 @@ protected:
     const std::vector<unsigned char> &guideData,
     unsigned geoWidth, unsigned geoHeight);
   int getColorIndex(librevenge::RVNGInputStream *input, const MSPUBBlockInfo &info);
-  unsigned getFontIndex(librevenge::RVNGInputStream *input, const MSPUBBlockInfo &info);
+  boost::optional<unsigned> getFontIndex(librevenge::RVNGInputStream *input, const MSPUBBlockInfo &info);
   CharacterStyle getCharacterStyle(librevenge::RVNGInputStream *input);
   ParagraphStyle getParagraphStyle(librevenge::RVNGInputStream *input);
   std::shared_ptr<Fill> getNewFill(const std::map<unsigned short, unsigned> &foptProperties, bool &skipIfNotBg, std::map<unsigned short, std::vector<unsigned char> > &foptValues);

@@ -2627,6 +2627,67 @@ private Q_SLOTS:
         QVERIFY(std::abs(notInstalled - (1491.0 + 431 + 307) / 2048) < 1e-6);
     }
 
+    // A run's fonts are kept per script (slots in container 0x24); slot 0 is
+    // the one for Latin text, as Publisher writes it. A run with fonts for
+    // other scripts only (older newsletters: Courier New in slots 3-7,
+    // Sendnya in slot 0x0c) takes its Latin font from its style, as
+    // Publisher shows it, not the first slot's font.
+    void pubLatinFontSlot()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<TextItem>();
+        t->rect = QRectF(72, 72, 400, 100);
+        // The file's first font (Arial) is the one a run without a Latin
+        // font falls back to.
+        t->storyId = doc->createStory(QStringLiteral("Set in Arial\nTyped in Courier New"));
+        QTextCursor c(doc->storyDoc(t->storyId));
+        c.select(QTextCursor::Document);
+        QTextCharFormat f;
+        f.setFontFamilies(QStringList{QStringLiteral("Arial")});
+        c.mergeCharFormat(f);
+        c.movePosition(QTextCursor::End);
+        c.movePosition(QTextCursor::StartOfBlock, QTextCursor::KeepAnchor);
+        f.setFontFamilies(QStringList{QStringLiteral("Courier New")});
+        c.mergeCharFormat(f);
+        doc->pages[0]->items.push_back(t);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("slots.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        PubImportReport rep;
+        QVERIFY(importPublisherFile(path, &err, &rep));
+        QVERIFY(rep.fontsUsed.contains(QStringLiteral("Courier New")));
+        // Move the Latin and two other slots to slots Publisher uses for other
+        // scripts: 00 -> 06, 01 -> 07, 02 -> 0c.
+        QFile in(path);
+        QVERIFY(in.open(QIODevice::ReadOnly));
+        cfb::File file;
+        QVERIFY(cfb::read(in.readAll(), &file));
+        in.close();
+        QByteArray q = file.stream(QStringLiteral("Quill/QuillSub/CONTENTS"));
+        const QByteArray tail("\x88\x08\x00\x00\x00\x00\x18", 7);
+        int moved = 0;
+        for (qsizetype at = q.indexOf(tail); at > 0; at = q.indexOf(tail, at + 1)) {
+            const char slot = q[at - 1];
+            if (slot == 0 || slot == 1 || slot == 2) {
+                q[at - 1] = slot == 0 ? 6 : slot == 1 ? 7 : 0x0c;
+                ++moved;
+            }
+        }
+        QVERIFY(moved >= 3);
+        QVERIFY(file.setStream(QStringLiteral("Quill/QuillSub/CONTENTS"), q));
+        const QString patched = dir.filePath(QStringLiteral("patched.pub"));
+        QFile out(patched);
+        QVERIFY(out.open(QIODevice::WriteOnly));
+        out.write(cfb::write(file));
+        out.close();
+        PubImportReport rep2;
+        auto back = importPublisherFile(patched, &err, &rep2);
+        QVERIFY2(back, qPrintable(err));
+        QVERIFY2(!rep2.fontsUsed.contains(QStringLiteral("Courier New")), qPrintable(rep2.fontsUsed.join(',')));
+    }
+
     // Footnotes at the bottom of the column their reference lands in (under
     // a rule, numbered in order, the text kept above them); a line whose
     // note won't fit moves on with it; endnotes under "Notes" after the

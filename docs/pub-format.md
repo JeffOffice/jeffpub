@@ -329,6 +329,16 @@ text box has one; a table has one per cell, in cell-list order):
 | 16 | 9525 for a text box, 0 for a cell |
 | 0b:1a 0, 0d 0, 11 0, 13:12 255, 14:0a, 15 1, 18 0, 1a:02, 1d:8a {00:22 = -4} | Fixed |
 
+### Fonts per script
+
+A run's font container (`24:8a`) holds a container per script, its id the
+slot, each with the font's index: Publisher sets slots 0-5 and `2a`
+together when you choose a font (checked by setting Courier New and Arial
+through Publisher and saving). Slot 0 is the font for Latin text. Runs in
+older files can list only other slots (3, 4, 6, 7, `0c`); their Latin text
+is in the style's font (Publisher shows Gill Sans MT where those slots say
+Courier New). JeffPub writes slots 0-4.
+
 ### Vertical text
 
 A text box whose text runs top to bottom (a book's spine) has `34:20 = 2`

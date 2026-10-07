@@ -1873,25 +1873,32 @@ CharacterStyle MSPUBParser::getCharacterStyle(librevenge::RVNGInputStream *input
   return style;
 }
 
-unsigned MSPUBParser::getFontIndex(librevenge::RVNGInputStream *input, const MSPUBBlockInfo &info)
+// JeffPub 79: a run keeps a font per script, each in a container whose id is
+// the slot; slot 0 is the one for Latin text (Publisher sets 0-5 and 0x2a
+// together). A run with fonts for other scripts only takes its Latin font
+// from its style, as Publisher shows it; upstream took the first slot's.
+boost::optional<unsigned> MSPUBParser::getFontIndex(librevenge::RVNGInputStream *input, const MSPUBBlockInfo &info)
 {
   MSPUB_DEBUG_MSG(("In getFontIndex\n"));
   input->seek(info.dataOffset + 4, librevenge::RVNG_SEEK_SET);
+  boost::optional<unsigned> latin;
   while (stillReading(input, info.dataOffset + info.dataLength))
   {
     MSPUBBlockInfo subInfo = parseBlock(input, true);
     if (subInfo.type == GENERAL_CONTAINER)
     {
+      const unsigned long after = subInfo.dataOffset + subInfo.dataLength;
       input->seek(subInfo.dataOffset + 4, librevenge::RVNG_SEEK_SET);
-      if (stillReading(input, subInfo.dataOffset + subInfo.dataLength))
+      if (stillReading(input, after))
       {
         MSPUBBlockInfo subSubInfo = parseBlock(input, true);
-        skipBlock(input, info);
-        return subSubInfo.data;
+        if (subInfo.id == 0 && !latin)
+          latin = subSubInfo.data;
       }
+      input->seek(after, librevenge::RVNG_SEEK_SET);
     }
   }
-  return 0;
+  return latin;
 }
 
 int MSPUBParser::getColorIndex(librevenge::RVNGInputStream *input, const MSPUBBlockInfo &info)
