@@ -3201,6 +3201,112 @@ private Q_SLOTS:
         QTextCursor jc(again->storyDoc(jt->storyId));
         jc.setPosition(7);
         QCOMPARE(jc.charFormat().stringProperty(tp::InlineObject), of.stringProperty(tp::InlineObject));
+
+        // A damaged EOBJ section (its index entry and count claim more than
+        // the stream holds) loses the object, never the publication's text.
+        QFile in(path);
+        QVERIFY(in.open(QIODevice::ReadOnly));
+        cfb::File file;
+        QVERIFY(cfb::read(in.readAll(), &file));
+        in.close();
+        QByteArray quill = file.stream(QStringLiteral("Quill/QuillSub/CONTENTS"));
+        const qsizetype entry = quill.indexOf("EOBJ") - 2;   // the section's index entry
+        QVERIFY(entry > 0 && entry < 512);
+        const quint32 eobjAt = qFromLittleEndian<quint32>(quill.constData() + entry + 16);
+        qToLittleEndian<quint32>(0x00ffffff, quill.data() + entry + 20);   // its length
+        qToLittleEndian<quint32>(100000, quill.data() + eobjAt);            // its count
+        QVERIFY(file.setStream(QStringLiteral("Quill/QuillSub/CONTENTS"), quill));
+        const QString damaged = dir.filePath(QStringLiteral("damaged.pub"));
+        QFile out(damaged);
+        QVERIFY(out.open(QIODevice::WriteOnly));
+        out.write(cfb::write(file));
+        out.close();
+        auto rescued = importPublisherFile(damaged, &err);
+        QVERIFY2(rescued, qPrintable(err));
+        QVERIFY(!rescued->pages[0]->items.empty());
+        auto *rt = dynamic_cast<TextItem *>(rescued->pages[0]->items.front().get());
+        QVERIFY(rt);
+        QCOMPARE(rescued->storyDoc(rt->storyId)->toPlainText(), QStringLiteral("Logo: here"));
+    }
+
+    // A text box set in text shows its own text (it's on no page, so it had
+    // no chain of boxes, and its text was never laid out).
+    void textBoxInTextShowsItsText()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto host = std::make_shared<TextItem>();
+        host->rect = QRectF(72, 72, 300, 300);
+        host->storyId = doc->createStory(QStringLiteral("Before "));
+        TextItem inner;
+        inner.rect = QRectF(0, 0, 150, 40);
+        inner.storyId = doc->createStory(QStringLiteral("Inner words"));
+        QTextCursor c(doc->storyDoc(host->storyId));
+        c.movePosition(QTextCursor::End);
+        QTextCharFormat of;
+        of.setProperty(tp::InlineObject, QString::fromUtf8(QJsonDocument(inner.toJson()).toJson(QJsonDocument::Compact)));
+        c.insertText(QString(QChar::ObjectReplacementCharacter), of);
+        doc->pages[0]->items = {host};
+        LayoutCache cache;
+        const auto fl = cache.textFrame(*doc, inner, 1, RenderOptions());
+        QVERIFY(fl.layout && fl.frame == 0);
+        const auto lines = fl.layout->lineInfo(0);
+        QVERIFY(!lines.isEmpty());
+        QCOMPARE(QString(lines.first().text).remove(QChar(0x00AD)).trimmed(), QStringLiteral("Inner words"));
+    }
+
+    // Objects in text from a damaged or crafted file: a text box set in its
+    // own story (drawing it drew it again, without end, and saving it kept
+    // adding it), and sizes that aren't numbers or are absurd (they reached
+    // Qt's fixed-point line positions).
+    void inlineObjectsFromBadFilesStaySafe()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<TextItem>();
+        t->rect = QRectF(72, 72, 300, 300);
+        t->storyId = doc->createStory(QStringLiteral("Self: "));
+        // First in its story, with no insets or wrap distances, so the box
+        // fits in itself at every level.
+        TextItem self;
+        self.rect = QRectF(0, 0, 100, 40);
+        self.insets = QMarginsF();
+        self.wrap.left = self.wrap.top = self.wrap.right = self.wrap.bottom = 0;
+        self.storyId = t->storyId;
+        QTextCursor c(doc->storyDoc(t->storyId));
+        QTextCharFormat of;
+        of.setProperty(tp::InlineObject, QString::fromUtf8(QJsonDocument(self.toJson()).toJson(QJsonDocument::Compact)));
+        c.insertText(QString(QChar::ObjectReplacementCharacter), of);
+        c.movePosition(QTextCursor::End);
+        // Absurd and not-a-number sizes.
+        for (const char *json : {"{\"type\":\"shape\",\"rect\":[0,0,1e300,1e300]}", "{\"type\":\"shape\",\"rect\":[0,0,-50,-50]}",
+                                 "{\"type\":\"shape\",\"rect\":[0,0,100,100],\"wrap\":{\"t\":1e300,\"b\":-1e300,\"l\":1e300,\"r\":0}}"}) {
+            QTextCharFormat bad;
+            bad.setProperty(tp::InlineObject, QString::fromLatin1(json));
+            c.insertText(QString(QChar::ObjectReplacementCharacter), bad);
+        }
+        doc->pages[0]->items = {t};
+        LayoutCache cache;
+        const auto fl = cache.textFrame(*doc, *t, 1, RenderOptions());
+        QVERIFY(fl.layout);
+        for (const auto &ob : fl.layout->inlineObjects()) {
+            QVERIFY(std::isfinite(ob.rect.left()) && std::isfinite(ob.rect.top()) && std::isfinite(ob.rect.width()) && std::isfinite(ob.rect.height()));
+            QVERIFY(std::abs(ob.rect.top()) < 1e6 && ob.rect.width() >= 0 && ob.rect.height() >= 0);
+        }
+        for (const auto &li : fl.layout->lineInfo(0)) QVERIFY(std::isfinite(li.baseline) && std::abs(li.baseline) < 1e6);
+        // Drawing ends (the box in its own text is drawn, but not inside itself).
+        QImage img(612, 792, QImage::Format_ARGB32);
+        img.fill(Qt::white);
+        QPainter p(&img);
+        PaintContext ctx;
+        ctx.doc = doc.get();
+        ctx.cache = &cache;
+        Renderer::paintItem(&p, ctx, *t);
+        p.end();
+        // Saving ends too.
+        QTemporaryDir dir;
+        QString err;
+        QVERIFY2(exportPublisher(*doc, dir.filePath(QStringLiteral("self.pub")), &err), qPrintable(err));
     }
 
     // A .pub page number field is a "#" whose character run has 00 = 5 (low

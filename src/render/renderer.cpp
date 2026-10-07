@@ -208,8 +208,9 @@ static QString specSig(const FrameSpec &s)
 LayoutCache::FrameLayout LayoutCache::textFrame(const Document &doc, const TextItem &frame, int pageNumber, const RenderOptions &opt)
 {
     FrameLayout out;
-    const QVector<TextItem *> chain = doc.chainOf(frame.id);
-    if (chain.isEmpty()) return out;
+    QVector<TextItem *> chain = doc.chainOf(frame.id);
+    // A text box set in text is on no page: it's a chain of its own.
+    if (chain.isEmpty()) chain << const_cast<TextItem *>(&frame);
     const TextItem *head = chain.first();
     Story *story = doc.story(head->storyId);
     if (!story) return out;
@@ -532,13 +533,20 @@ static void paintLine(QPainter *p, const PaintContext &ctx, const LineItem &l)
 // (in the same coordinates as the text).
 static void paintInlineObjects(QPainter *p, const PaintContext &ctx, const StoryLayout &lay, int frame)
 {
+    // A text box in text can hold objects too, but a damaged file can set a
+    // box in its own story: a few levels, then no deeper.
+    static thread_local int depth = 0;
+    if (depth >= 3) return;
+    ++depth;
     for (const auto &ob : lay.inlineObjects()) {
         if (ob.frame != frame) continue;
         const ItemPtr it = Item::fromJsonAny(QJsonDocument::fromJson(ob.json.toUtf8()).object());
-        if (!it) continue;
+        // The layout keeps sizes sane; an object it had to change isn't drawn.
+        if (!it || std::abs(it->rect.width() - ob.rect.width()) > 0.01 || std::abs(it->rect.height() - ob.rect.height()) > 0.01) continue;
         it->moveBy(ob.rect.left() - it->rect.left(), ob.rect.top() - it->rect.top());
         Renderer::paintItem(p, ctx, *it);
     }
+    --depth;
 }
 
 static void paintText(QPainter *p, const PaintContext &ctx, const TextItem &t)

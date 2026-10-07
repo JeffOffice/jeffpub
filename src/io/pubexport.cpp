@@ -1482,6 +1482,8 @@ QByteArray PubWriter::write(QStringList *skipped)
     // in page order by its first box, with a frame per box in chain order.
     QHash<QString, QPair<int, int>> chainPos;   // box id -> text id, place in chain
     QHash<QString, QPair<int, int>> shapeText;  // shape id -> text id, story index
+    // Each story is written once (a damaged file can set a box in its own text).
+    QSet<QString> storiesAdded;
     std::function<void(const ItemPtr &)> find = [&](const ItemPtr &it) {
             if (it->type() == ItemType::Group) {
                 for (const ItemPtr &c : static_cast<const GroupItem *>(it.get())->children) find(c);
@@ -1491,7 +1493,8 @@ QByteArray PubWriter::write(QStringList *skipped)
                 // Text in a shape is a story too; its frame is set when the shape is written.
                 auto *sh = static_cast<const ShapeItem *>(it.get());
                 const QTextDocument *sd = sh->storyId.isEmpty() ? nullptr : m_doc.storyDoc(sh->storyId);
-                if (!sd) return;
+                if (!sd || storiesAdded.contains(sh->storyId)) return;
+                storiesAdded.insert(sh->storyId);
                 const int tid = textId++;
                 addStory(tid, sd);
                 shapeText[sh->id] = qMakePair(tid, int(m_frames.size()));
@@ -1501,7 +1504,8 @@ QByteArray PubWriter::write(QStringList *skipped)
             if (it->type() != ItemType::Text || m_doc.prevFrame(it->id)) return;
             auto *t = static_cast<const TextItem *>(it.get());
             const QTextDocument *sd = m_doc.storyDoc(t->storyId);
-            if (!sd) return;
+            if (!sd || storiesAdded.contains(t->storyId)) return;
+            storiesAdded.insert(t->storyId);
             const int tid = textId++;
             addStory(tid, sd);
             if (!t->hyphenate) m_notHyphenated << tid;

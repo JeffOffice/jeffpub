@@ -1344,23 +1344,31 @@ bool MSPUBParser::parseQuill(librevenge::RVNGInputStream *input)
       // size of each entry, flags, n character positions and an end (the
       // story's length; twice it in files from 2006), then the entries,
       // each starting with the object's number.
-      input->seek(i->offset, librevenge::RVNG_SEEK_SET);
-      const unsigned n = readU32(input);
-      const unsigned size = readU32(input);
-      readU32(input);
-      if (n > 0 && size >= 4 && 12 + 4 * (unsigned long long)(n + 1) + (unsigned long long)n * size <= i->length)
+      // Optional: a damaged section loses its objects, never the text.
+      try
       {
-        std::vector<unsigned> positions;
-        for (unsigned k = 0; k < n; ++k)
-          positions.push_back(readU32(input));
+        input->seek(i->offset, librevenge::RVNG_SEEK_SET);
+        const unsigned n = readU32(input);
+        const unsigned size = readU32(input);
         readU32(input);
-        auto &objects = inlineObjects[i->id];
-        for (unsigned k = 0; k < n; ++k)
+        if (n > 0 && size >= 4 && 12ull + 4ull * (n + 1ull) + (unsigned long long)n * size <= i->length)
         {
-          const unsigned long next = input->tell() + size;
-          objects.push_back(std::make_pair(positions[k], readU32(input)));
-          input->seek(next, librevenge::RVNG_SEEK_SET);
+          std::vector<unsigned> positions;
+          for (unsigned k = 0; k < n; ++k)
+            positions.push_back(readU32(input));
+          readU32(input);
+          std::vector<std::pair<unsigned, unsigned> > objects;
+          for (unsigned k = 0; k < n; ++k)
+          {
+            const unsigned long next = input->tell() + size;
+            objects.push_back(std::make_pair(positions[k], readU32(input)));
+            input->seek(next, librevenge::RVNG_SEEK_SET);
+          }
+          inlineObjects[i->id] = objects;
         }
+      }
+      catch (const EndOfStreamException &)
+      {
       }
     }
   }

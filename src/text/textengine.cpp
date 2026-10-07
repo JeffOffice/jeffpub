@@ -770,8 +770,10 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
                     box.docPos = b.position() + rel + i;
                     box.json = object;
                     if (item) {
-                        box.size = item->rect.size();
-                        box.pad = QMarginsF(item->wrap.left, item->wrap.top, item->wrap.right, item->wrap.bottom);
+                        // Sizes from a file: finite and within a page or so.
+                        auto sane = [](double v, double most) { return std::isfinite(v) ? std::clamp(v, 0.0, most) : 0.0; };
+                        box.size = QSizeF(sane(item->rect.width(), 20000), sane(item->rect.height(), 20000));
+                        box.pad = QMarginsF(sane(item->wrap.left, 1000), sane(item->wrap.top, 1000), sane(item->wrap.right, 1000), sane(item->wrap.bottom, 1000));
                     }
                     QTextCharFormat of = rf;
                     of.setFontLetterSpacingType(QFont::AbsoluteSpacing);
