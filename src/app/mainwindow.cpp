@@ -19,6 +19,7 @@
 #include "app/ribbon.h"
 #include "app/settings.h"
 #include "app/taskpane.h"
+#include "app/telemetry.h"
 #include "app/widgets.h"
 #include "render/svgexport.h"
 #include "io/epub.h"
@@ -193,7 +194,11 @@ QAction *MainWindow::mk(const QString &id, const QString &text, const QString &i
         a->setToolTip(QStringLiteral("%1 (%2)").arg(QString(text).remove('&'), key.toString(QKeySequence::NativeText)));
     }
     a->setCheckable(checkable);
-    connect(a, &QAction::triggered, this, [fn] { fn(); });
+    // Each command counts by its id for the usage statistics (when they're on).
+    connect(a, &QAction::triggered, this, [fn, id] {
+        telemetry::count(id);
+        fn();
+    });
     addAction(a);
     m_actions.insert(id, a);
     return a;
@@ -284,6 +289,7 @@ bool MainWindow::openFile(const QString &path)
     if (doc->props.title.isEmpty()) doc->props.title = QFileInfo(path).completeBaseName();
     m_ed->setDocument(std::move(doc), path);
     Settings::get().addRecentFile(path);
+    telemetry::count(fromPub ? QStringLiteral("file.open.pub") : QStringLiteral("file.open.jpub"));
     hideBackstage();
     if (fromPub && !rep.warnings.isEmpty())
         statusBar()->showMessage(QStringLiteral("Opened .pub file. %1").arg(rep.warnings.first()), 8000);
@@ -333,6 +339,7 @@ bool MainWindow::saveTo(const QString &pathIn)
     m_ed->setFilePath(path);
     m_ed->markSaved();
     Settings::get().addRecentFile(path);
+    telemetry::count(path.endsWith(QLatin1String(".pub"), Qt::CaseInsensitive) ? QStringLiteral("file.save.pub") : QStringLiteral("file.save.jpub"));
     updateTitle();
     statusBar()->showMessage(QStringLiteral("Saved %1").arg(QFileInfo(path).fileName()), 4000);
     return true;

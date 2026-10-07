@@ -45,6 +45,7 @@ Features JeffPub 79 has that Publisher never did, then the ones planned before v
 - [x] Checked against Publisher itself: Publisher 2021 opened and exported all 284 publications of a real collection, and opened every one of them after JeffPub saved it as `.pub`. Against Publisher's own pictures of their 375 pages, JeffPub's differ by a median blurred-pixel difference of 0.86 (over half the publications under 1), and 95% of their text boxes break into the same words *(the rest differ by a word or two at a box's end; a booklet, folded card or envelope layout is read from `.pub` but not yet saved to it)*
 - [x] Objects in text (Publisher's "inline" pictures, shapes and text boxes): opened from and saved to `.pub`, and kept in `.jpub`; each sits on its line's baseline inside its wrap distances and a tall one makes its line taller, as in Publisher *(measured against Publisher to the pixel; Publisher showed a JeffPub-saved copy of its sample exactly as its own file)*
 - [x] Page numbers in `.pub` text: read as page number fields and saved as Publisher's own *(Publisher numbered the pages of a JeffPub-saved newsletter)*
+- [x] Anonymous usage statistics, with a choice in Windows setup and when JeffPub 79 first starts, and a switch in File > Options: once a day, the version, operating system, language and how often each command is used; never files or their contents (see README, Privacy)
 - [x] Save, Save As, AutoRecover, and backup on save
 - [x] Close and prompt to save changes
 

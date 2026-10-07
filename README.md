@@ -27,6 +27,12 @@ JeffPub 79 was started in response. It gives the people, small businesses, schoo
 - Rulers, guides, a pages pane, zoom, and a two-page spread view.
 - **Microsoft Publisher files.** Opens `.pub` files from Publisher 98 through Publisher 2021, and saves publications back to `.pub` so they can be shared with Publisher users. JeffPub 79 also has its own open format, `.jpub`.
 
+## Privacy
+
+JeffPub 79 checks GitHub for new versions when it starts (you can turn that off in File > Options).
+
+Unless you turn them off, it also sends anonymous usage statistics once a day while it's in use: a random number made up when it was installed (it says nothing about you or your computer), its version, your operating system and its version, the language it's set to, how many times it was started, and how many times each of its commands was used. It never sends your files, their names, or anything in them, and the server doesn't keep IP addresses. You choose in Windows setup or the first time JeffPub 79 starts, and can change it anytime in File > Options. The collector's code is in [server/telemetry](server/telemetry).
+
 ## Built with
 
 - **C++17** and **Qt 6** (Widgets and Graphics View), built with **CMake**

@@ -5,6 +5,7 @@
 #include "app/icons.h"
 #include "app/mainwindow.h"
 #include "app/settings.h"
+#include "app/telemetry.h"
 #include "app/updater.h"
 #include "io/importers.h"
 #include "io/jpubfile.h"
@@ -1515,6 +1516,20 @@ QWidget *Backstage::buildAbout()
     uh->addStretch(1);
     iv->addSpacing(6);
     iv->addLayout(uh);
+    // Anonymous usage statistics.
+    auto *statsBox = new QCheckBox(QStringLiteral("Send anonymous usage statistics"), id);
+    statsBox->setToolTip(QStringLiteral("Once a day: JeffPub 79's version, your operating system and language, and how often each command is used. "
+                                        "Never your files, their names, or anything in them."));
+    statsBox->setChecked(telemetry::enabled());
+    connect(statsBox, &QCheckBox::toggled, this, [](bool on) { telemetry::setEnabled(on); });
+    auto *statsLink = new QLabel(QStringLiteral("<a href=\"https://telemetry-production-9964.up.railway.app/\">What's sent</a>"), id);
+    statsLink->setOpenExternalLinks(true);
+    auto *sh = new QHBoxLayout();
+    sh->setSpacing(10);
+    sh->addWidget(statsBox);
+    sh->addWidget(statsLink);
+    sh->addStretch(1);
+    iv->addLayout(sh);
     ih->addLayout(iv, 1);
     v->addWidget(id);
 

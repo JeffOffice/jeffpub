@@ -85,6 +85,7 @@ VIAddVersionKey "LegalCopyright" "GNU GPL v3"
 
 Function .onInit
   !insertmacro WaitForAppToClose
+  Call PresetStats
 FunctionEnd
 
 Function un.onInit
@@ -98,6 +99,11 @@ Section "${APP} (required)" SecMain
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateShortcut "$SMPROGRAMS\${APP}.lnk" "$INSTDIR\${EXE}"
   WriteRegStr HKCU "Software\JeffPub79" "InstallDir" "$INSTDIR"
+  ; Usage statistics: off unless their section below is chosen, written where
+  ; JeffPub 79 keeps the choice. A silent install leaves it to the program,
+  ; which asks when it first starts.
+  IfSilent +2
+  WriteRegStr HKCU "Software\JeffPub79\JeffPub79\telemetry" "enabled" "false"
   ; Uninstall entry in Settings > Apps.
   WriteRegStr HKCU "${UNKEY}" "DisplayName" "${APP}"
   WriteRegStr HKCU "${UNKEY}" "DisplayVersion" "${VERSION}"
@@ -136,8 +142,22 @@ Section /o "Make ${APP} the default for .pub files" SecPub
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 SectionEnd
 
+Section "Send anonymous usage statistics" SecStats
+  IfSilent +2
+  WriteRegStr HKCU "Software\JeffPub79\JeffPub79\telemetry" "enabled" "true"
+SectionEnd
+
+; An update shows the choice already made: turned off in JeffPub 79, the
+; statistics start unticked.
+Function PresetStats
+  ReadRegStr $0 HKCU "Software\JeffPub79\JeffPub79\telemetry" "enabled"
+  StrCmp $0 "false" 0 +2
+  SectionSetFlags ${SecStats} 0
+FunctionEnd
+
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
   !insertmacro MUI_DESCRIPTION_TEXT ${SecMain} "The program, its fonts and its spelling dictionaries."
+  !insertmacro MUI_DESCRIPTION_TEXT ${SecStats} "Once a day, ${APP} sends its version, your operating system and language, and how often each of its commands is used. Never your files, their names, or anything in them. You can change this later in File > Options."
   !insertmacro MUI_DESCRIPTION_TEXT ${SecDesktop} "Adds a shortcut to your desktop."
   !insertmacro MUI_DESCRIPTION_TEXT ${SecJpub} "Double-clicking a .jpub file opens it in ${APP}."
   !insertmacro MUI_DESCRIPTION_TEXT ${SecPub} "Double-clicking a .pub file opens it in ${APP} instead of the program that opens it now. Leave this off to keep that program as the default; ${APP} is always available under Open with."

@@ -7,6 +7,7 @@
 //                                         render the window to a PNG and quit
 //                                         (works with QT_QPA_PLATFORM=offscreen)
 
+#include "app/telemetry.h"
 #include "app/editor.h"
 #include "app/mainwindow.h"
 #include "app/ribbon.h"
@@ -147,6 +148,7 @@ int main(int argc, char **argv)
     auto *up = new jp::Updater(w);
     jp::setUpdater(up);
     up->checkOnStartup();
+    jp::telemetry::start(w);
     if (cli.isSet(stageOpt)) w->showBackstage(cli.value(stageOpt));
     else if (files.isEmpty() && !cli.isSet(templOpt) && jp::Settings::get().value(QStringLiteral("ui/startBackstage"), true).toBool())
         w->showBackstage(QStringLiteral("new"));
