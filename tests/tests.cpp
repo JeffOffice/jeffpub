@@ -2967,6 +2967,40 @@ private Q_SLOTS:
         QVERIFY2(info[0].rect.left() < 10, qPrintable(QString::number(info[0].rect.left())));   // not pushed right of the object
     }
 
+    // A .pub page number field is a "#" whose character run has 00 = 5 (low
+    // byte) and 22 = -1, as Publisher writes it; JeffPub showed the "#".
+    void pubPageNumberField()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792));
+        doc->addPage();
+        auto t = std::make_shared<TextItem>();
+        t->rect = QRectF(72, 72, 200, 40);
+        t->storyId = doc->createStory(QStringLiteral("Page "));
+        QTextCursor c(doc->storyDoc(t->storyId));
+        c.movePosition(QTextCursor::End);
+        QTextCharFormat ff;
+        ff.setProperty(tp::Field, QStringLiteral("page"));
+        c.insertText(QString(QChar::ObjectReplacementCharacter), ff);
+        doc->masters[0]->items.push_back(t);   // on every page
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("pn.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        const QByteArray q = cfb::readStream(path, QStringLiteral("Quill/QuillSub/CONTENTS"));
+        // The story text holds "#" where the number goes (UTF-16LE).
+        QVERIFY(q.contains(QByteArray(reinterpret_cast<const char *>(u"Page #"), 12)));
+        auto back = importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QVERIFY(!back->masters.isEmpty() && !back->masters[0]->items.empty());
+        auto *bt = dynamic_cast<TextItem *>(back->masters[0]->items[0].get());
+        QVERIFY(bt);
+        QTextCursor bc(back->storyDoc(bt->storyId));
+        bc.movePosition(QTextCursor::End);   // charFormat() is the character before
+        QCOMPARE(bc.charFormat().stringProperty(tp::Field), QStringLiteral("page"));
+        QCOMPARE(back->storyDoc(bt->storyId)->toPlainText(), QStringLiteral("Page ") + QChar(QChar::ObjectReplacementCharacter));
+    }
+
     // A .pub story marks an object set in its text with U+FFFC. Publisher
     // shows nothing there when the object doesn't come through; JeffPub
     // drew the font's "OBJ" box.

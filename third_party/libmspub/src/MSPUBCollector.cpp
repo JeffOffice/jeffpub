@@ -1987,6 +1987,9 @@ librevenge::RVNGPropertyList MSPUBCollector::getCharStyleProps(const CharacterSt
     ret.insert("fo:letter-spacing", double(style.letterSpacingEmu) / EMUS_IN_INCH);
   if (style.trackingPerMille && style.trackingPerMille != 1000)
     ret.insert("jp:tracking", style.trackingPerMille / 10.0);
+  // JeffPub patch: the run is the page number field.
+  if ((style.jpField & 0xff) == 5 && style.jpFieldArg == -1)
+    ret.insert("jp:field", "page");
   switch (style.superSubType)
   {
   case SUPERSCRIPT:

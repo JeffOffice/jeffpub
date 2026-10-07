@@ -1785,6 +1785,15 @@ CharacterStyle MSPUBParser::getCharacterStyle(librevenge::RVNGInputStream *input
     case 0x1B:
       style.letterSpacingEmu = int(info.data);
       break;
+    // JeffPub patch: a field (checked against fields inserted in Publisher).
+    case 0x00:
+      if (info.type == 0x12)
+        style.jpField = int(info.data);
+      break;
+    case 0x22:
+      if (info.type == 0x22)
+        style.jpFieldArg = int(info.data);
+      break;
     case 0x1F:
       style.trackingPerMille = int(info.data);
       break;

@@ -481,6 +481,19 @@ letters end shows it: 2019 cover 45°, 2026 cover 68°, both as computed). The
 path runs about 0.31 cap heights above the baseline (0.305 and 0.32), so the
 letters reach past the frame.
 
+### Fields
+
+A page number is a "#" in the story text whose character run has `00:12`
+with low byte 5 and `22:22` saying which page: -1 the current page, -7 the
+next, -6 the previous (Publisher's fields.pub, Oct 7, made with
+`InsertPageNumber` 1-3). Older files store `00:12` as 0xFF05 rather than
+0x0005 (a 2006 newsletter), so only the low byte counts. JeffPub reads the
+current page number and writes it the same way; Publisher showed "Page 2"
+on page 2 of a newsletter saved by JeffPub (Oct 7). Next and previous page
+numbers aren't read yet (they show "#"). Dates and times live in TOKN
+sections of the text stream; JeffPub writes its date, time and page-count
+fields as their text.
+
 ### Paragraph and character settings
 
 Right to left: a sample made in Publisher (Oct 6) holds two paragraph

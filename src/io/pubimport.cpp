@@ -559,6 +559,8 @@ public:
         const QString lang = str(p["fo:language"]), country = str(p["fo:country"]);
         if (!lang.isEmpty()) cf.setProperty(tp::Language, country.isEmpty() ? lang : lang + '-' + country);
         m_span = cf;
+        // A field: the page number Publisher shows in place of the run's "#".
+        m_spanField = str(p["jp:field"]);
         if (!m_styleFromSpan.isEmpty()) {
             for (TextStyle &st : m_doc.styles)
                 if (st.name == m_styleFromSpan) {
@@ -569,7 +571,11 @@ public:
             m_styleFromSpan.clear();
         }
     }
-    void closeSpan() override { m_span = QTextCharFormat(); }
+    void closeSpan() override
+    {
+        m_span = QTextCharFormat();
+        m_spanField.clear();
+    }
     void openLink(const RVNGPropertyList &p) override { m_link = str(p["xlink:href"]); }
     void closeLink() override { m_link.clear(); }
 
@@ -851,6 +857,16 @@ private:
         if (t.isEmpty()) {
             // A bare paragraph mark still sizes an empty paragraph.
             if (m_cursor.block().length() <= 1) m_cursor.setBlockCharFormat(cf);
+            return;
+        }
+        // A page number field: its "#" becomes JeffPub's field.
+        if (!m_spanField.isEmpty() && t.contains(QLatin1Char('#'))) {
+            QTextCharFormat ff = cf;
+            ff.setProperty(tp::Field, m_spanField);
+            const int at = int(t.indexOf(QLatin1Char('#')));
+            if (at > 0) m_cursor.insertText(t.left(at), cf);
+            m_cursor.insertText(QString(QChar::ObjectReplacementCharacter), ff);
+            if (at + 1 < t.size()) m_cursor.insertText(t.mid(at + 1), cf);
             return;
         }
         m_cursor.insertText(t, cf);
@@ -1234,6 +1250,7 @@ private:
     std::shared_ptr<TextItem> m_text;
     QTextCursor m_cursor;
     QTextCharFormat m_span;
+    QString m_spanField;   // the open span is this field ("page")
     QString m_link;
     bool m_firstPara = true;
     QSet<QString> m_stylesRead;   // named styles met so far

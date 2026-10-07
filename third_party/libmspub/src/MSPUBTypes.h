@@ -146,6 +146,10 @@ struct CharacterStyle
   // percent (0x1F, 1000 = normal).
   bool strike = false;
   int letterSpacingEmu = 0;
+  // JeffPub patch: a field in the text (00 low byte 5 with 22 = -1: the page
+  // number; -7 the next page's, -6 the previous page's).
+  int jpField = 0;
+  int jpFieldArg = 0;
   int trackingPerMille = 0;
   boost::optional<unsigned> lcid;
 };

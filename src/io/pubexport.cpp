@@ -984,6 +984,26 @@ void PubWriter::addStory(int textId, const QVector<const QTextDocument *> &docs,
             QString t = fr.text();
             t.replace(QChar::LineSeparator, QChar(0x0b));
             t.replace(QChar(0x2029), QChar('\r'));
+            const QString field = fr.charFormat().stringProperty(tp::Field);
+            if (field == QLatin1String("page") || field.startsWith(QLatin1String("page:"))) {
+                // The page number: a "#" whose run is the field (00 = 5, 22 =
+                // -1), as Publisher writes it.
+                for (int k = 0; k < t.size(); ++k) putU16(m_text, '#');
+                QVector<B> blocks = charBlocks(fr.charFormat(), styleChr);
+                blocks << u16(0x00, 5, 0x12) << u32(0x22, 0xffffffffu, 0x22);
+                std::sort(blocks.begin(), blocks.end(), [](const B &a, const B &b) { return a.id < b.id; });
+                m_charRuns << Run{quint32(512 + m_text.size()), lengthPrefixed(blocks)};
+                last = fr.charFormat();
+                continue;
+            }
+            if (!field.isEmpty()) {
+                // Other fields as the text they show now (a date, a business
+                // detail, a note's number).
+                FieldContext fc;
+                fc.doc = &m_doc;
+                t = QString();
+                for (int k = 0; k < fr.text().size(); ++k) t += fc.resolve(field);
+            }
             for (QChar c : t) putU16(m_text, c.unicode());
             m_charRuns << Run{quint32(512 + m_text.size()), charProps(fr.charFormat(), styleChr)};
             last = fr.charFormat();
