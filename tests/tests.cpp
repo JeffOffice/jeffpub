@@ -2797,6 +2797,11 @@ private Q_SLOTS:
             {"pt-BR", "latinolátrico", "2,4,6,11"},
             {"pt-PT", "exemplarismo", "5,7,10"},
             {"en-US", "children's", "4"},
+            // English breaks with two letters after the hyphen, as Publisher's
+            // own layout does (nev-er, locat-ed: 37 of 494 breaks it made).
+            {"en-US", "never", "3"},
+            {"en-US", "located", "2,5"},
+            {"en-US", "recently", "2,6"},
             {"fr-FR", "aujourd'hui", "2,6"},
             {"ja-JP", "hyphenation", ""},
         };

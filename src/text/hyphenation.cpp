@@ -184,7 +184,8 @@ Patterns *patternsFor(const QString &code)
 QVector<int> hyphenationPoints(const QString &word, const QString &language)
 {
     QMutexLocker lock(&mutex());
-    Patterns *p = patternsFor(dict::match(language));
+    const QString code = dict::match(language);
+    Patterns *p = patternsFor(code);
     if (!p || p->second.map.isEmpty()) return {};
     const QString lower = word.toLower();
     if (lower.size() != word.size() || lower.isEmpty()) return {};   // positions wouldn't map back
@@ -192,7 +193,11 @@ QVector<int> hyphenationPoints(const QString &word, const QString &language)
     if (hit != p->cache.constEnd()) return *hit;
     // libhyphen's hnj_hyphen_hyphenate3, with LibreOffice's defaults: at
     // least two letters before and after a hyphen, more if the file says so.
-    const int left = std::max(2, p->left), right = std::max(2, p->right);
+    const int left = std::max(2, p->left);
+    // English: two letters after the hyphen, where LibreOffice's file asks
+    // for three. Publisher's own layout breaks nev-er, locat-ed and
+    // recent-ly (37 of the 494 breaks in 29 publications it laid out).
+    const int right = code.startsWith(QLatin1String("en")) ? 2 : std::max(2, p->right);
     const int cl = std::max(2, p->compoundLeft), cr = std::max(2, p->compoundRight);
     QVector<int> gaps = hyph(*p, true, lower, cl, cr, true, true);
     leftMin(gaps, left);
