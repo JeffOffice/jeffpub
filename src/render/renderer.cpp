@@ -1,6 +1,7 @@
 #include "render/renderer.h"
 
 #include "render/metafile.h"
+#include "render/pdfpage.h"
 #include "render/shapes.h"
 #include "render/textart.h"
 #include "core/fonts.h"
@@ -619,7 +620,8 @@ static void paintPicture(QPainter *p, const PaintContext &ctx, const PictureItem
         p->setClipPath(mask, Qt::IntersectClip);
         p->setRenderHint(QPainter::SmoothPixmapTransform);
         if (pic.transparency > 0) p->setOpacity(p->opacity() * (1 - pic.transparency));
-        // Vector clip art prints as vectors when it needs no color adjustment.
+        // Vector clip art and PDF pages print as vectors when they need no
+        // color adjustment.
         const ImageData data = ctx.doc->images.value(pic.imageId);
         const bool plain = !pic.brightness && !pic.contrast && !pic.recolor && !pic.hasTransparentColor;
         Metafile mf;
@@ -628,6 +630,8 @@ static void paintPicture(QPainter *p, const PaintContext &ctx, const PictureItem
             mf.play(p, pic.imgRect);
         } else if (ctx.opt.output && plain && data.format == QLatin1String("svg") && svg.load(data.bytes)) {
             svg.render(p, pic.imgRect);
+        } else if (ctx.opt.output && plain && data.format == QLatin1String("pdf") && PdfDocument::shared(data.bytes)->isValid()) {
+            PdfDocument::shared(data.bytes)->play(p, 0, pic.imgRect);
         } else {
             p->drawImage(pic.imgRect, Renderer::processedImage(*ctx.doc, pic, dev));
         }

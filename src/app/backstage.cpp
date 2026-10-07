@@ -1605,13 +1605,28 @@ QWidget *Backstage::buildAbout()
         {"Lucide icons", "https://lucide.dev/", "Interface icons, Insert > Icons", "ISC", "https://lucide.dev/license"},
         {"Open fonts", "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/fonts/README.md", "Fonts and substitutes",
          "SIL OFL 1.1, GUST, Bitstream Vera", "https://openfontlicense.org/"},
-        {"zlib", "https://zlib.net/", "Compression", "zlib license", "https://zlib.net/zlib_license.html"},
+        {"zlib", "https://zlib.net/", "Compression (also in PDFium)", "zlib license", "https://zlib.net/zlib_license.html"},
+        // PDFium and what's built into it; the texts ship with the program
+        // (third_party/pdfium/licenses).
+        {"PDFium", "https://pdfium.googlesource.com/pdfium/", "Placing PDF pages", "BSD-3-Clause; parts Apache-2.0", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/pdfium.txt"},
+        {"pdfium-binaries", "https://github.com/bblanchon/pdfium-binaries", "PDFium, built", "MIT", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/pdfium-binaries.txt"},
+        {"FreeType (in PDFium)", "https://freetype.org/", "Fonts in PDF pages", "FreeType License", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/freetype.txt"},
+        {"HarfBuzz (in PDFium)", "https://harfbuzz.github.io/", "Text in PDF pages", "Old MIT", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/harfbuzz.txt"},
+        {"Little CMS (in PDFium)", "https://www.littlecms.com/", "Color in PDF pages", "MIT", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/lcms.txt"},
+        {"libjpeg-turbo (in PDFium)", "https://libjpeg-turbo.org/", "JPEG pictures in PDF pages", "IJG and BSD-3-Clause", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/libjpeg_turbo.md"},
+        {"OpenJPEG (in PDFium)", "https://www.openjpeg.org/", "JPEG 2000 pictures in PDF pages", "BSD-2-Clause", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/libopenjpeg.txt"},
+        {"libpng (in PDFium)", "http://www.libpng.org/pub/png/libpng.html", "PNG pictures in PDF pages", "PNG Reference Library License v2", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/libpng.txt"},
+        {"Abseil (in PDFium)", "https://abseil.io/", "Support code", "Apache-2.0", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/abseil.txt"},
+        {"Anti-Grain Geometry 2.3 (in PDFium)", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/agg23.txt", "Drawing", "AGG 2.3 license", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/agg23.txt"},
+        {"dragonbox (in PDFium)", "https://github.com/jk-jeon/dragonbox", "Numbers", "Apache-2.0 with LLVM Exceptions or BSL-1.0", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/dragonbox-Boost.txt"},
+        {"fast_float (in PDFium)", "https://github.com/fastfloat/fast_float", "Numbers", "MIT", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/fast_float.txt"},
+        {"simdutf (in PDFium)", "https://github.com/simdutf/simdutf", "Unicode text", "MIT", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/simdutf.txt"},
+        {"LLVM libc (in PDFium)", "https://libc.llvm.org/", "Support code", "Apache-2.0 with LLVM Exceptions", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/llvm-libc.txt"},
+        {"ICU", "https://icu.unicode.org/", "Unicode text support (in PDFium; with Qt in the Linux packages)", "Unicode License v3", "https://www.unicode.org/license.txt"},
 #ifdef Q_OS_WIN
         {"MinGW-w64 runtime", "https://www.mingw-w64.org/", "C++ runtime", "GPL-3.0 with GCC Runtime Library Exception; MIT",
          "https://www.gnu.org/licenses/gcc-exception-3.1.html"},
         {"NSIS", "https://nsis.sourceforge.io/", "Installer", "zlib/libpng license", "https://nsis.sourceforge.io/License"},
-#else
-        {"ICU", "https://icu.unicode.org/", "Unicode text support (in the packages)", "Unicode License", "https://www.unicode.org/license.txt"},
 #endif
         {"LibreTranslate", "https://libretranslate.com/", "Translate (opens in your browser)", "AGPL-3.0", "https://www.gnu.org/licenses/agpl-3.0.html"},
         {"ISBN range table", "https://www.isbn-international.org/", "ISBN hyphens (downloaded from the International ISBN Agency)", "The agency's terms",

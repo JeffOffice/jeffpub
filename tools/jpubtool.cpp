@@ -3,12 +3,15 @@
 //   jpubtool render <file> <outdir> [dpi]
 //   jpubtool convert <file.pub> <file.jpub>
 //   jpubtool template <id|all> <outdir> [dpi]   render built-in templates
+//   jpubtool pdfcheck <file.pdf> <outdir> [pages] compare a PDF's pages drawn as
+//                                                 vectors with PDFium's raster
 
 #include "core/fonts.h"
 #include "io/cfb.h"
 #include "io/importers.h"
 #include "io/jpubfile.h"
 #include "io/pubimport.h"
+#include "render/pdfpage.h"
 #include "render/renderer.h"
 #include "templates/templates.h"
 #include "io/pubshapes.h"
@@ -39,6 +42,50 @@ int main(int argc, char **argv)
         return 2;
     }
     const QString cmd = args[1], in = args[2];
+    if (cmd == "pdfcheck") {
+        QFile f(in);
+        if (!f.open(QIODevice::ReadOnly)) return 1;
+        const PdfDocument doc(f.readAll());
+        if (!doc.isValid()) {
+            out << "not a PDF\n";
+            return 1;
+        }
+        QDir().mkpath(args[3]);
+        const int pages = std::min(doc.pageCount(), args.size() > 4 ? args[4].toInt() : 5);
+        for (int pg = 0; pg < pages; ++pg) {
+            const QSizeF pt = doc.pageSize(pg);
+            const QSize px = (pt * 100.0 / 72.0).toSize();
+            QElapsedTimer t;
+            t.start();
+            const QImage ref = doc.render(pg, px).convertToFormat(QImage::Format_ARGB32);
+            const qint64 rasterMs = t.restart();
+            QImage played(px, QImage::Format_ARGB32);
+            played.fill(Qt::transparent);
+            {
+                QPainter p(&played);
+                doc.play(&p, pg, QRectF(QPointF(0, 0), QSizeF(px)));
+            }
+            const qint64 playMs = t.elapsed();
+            auto over = [](QRgb c) { const int a = qAlpha(c); return QColor(255 - a + qRed(c) * a / 255, 255 - a + qGreen(c) * a / 255, 255 - a + qBlue(c) * a / 255); };
+            int differ = 0, inked = 0;
+            QImage both(px.width() * 2, px.height(), QImage::Format_RGB32);
+            both.fill(Qt::white);
+            for (int y = 0; y < px.height(); ++y)
+                for (int x = 0; x < px.width(); ++x) {
+                    const QColor a = over(ref.pixel(x, y)), b = over(played.pixel(x, y));
+                    if (a != Qt::white) ++inked;
+                    if (std::abs(a.red() - b.red()) + std::abs(a.green() - b.green()) + std::abs(a.blue() - b.blue()) > 120) ++differ;
+                    both.setPixelColor(x, y, a);
+                    both.setPixelColor(px.width() + x, y, b);
+                }
+            t.restart();
+            const double share = doc.rasterShare(pg);
+            out << QStringLiteral("page %1: %2 of %3 inked pixels differ (%4%), raster %5 ms, vectors %6 ms; check %7 ms finds %8% for the raster\n")
+                       .arg(pg + 1).arg(differ).arg(inked).arg(inked ? 100.0 * differ / inked : 0, 0, 'f', 2).arg(rasterMs).arg(playMs).arg(t.elapsed()).arg(100 * share, 0, 'f', 1);
+            both.save(QStringLiteral("%1/page%2.png").arg(args[3]).arg(pg + 1));
+        }
+        return 0;
+    }
     if (cmd == "shapecheck") {
         // shapecheck <tmpdir> <w>x<h> [preset...]: save each preset shape to
         // .pub, read it back, and score how well the outlines overlap.

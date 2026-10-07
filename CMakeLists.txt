@@ -9,6 +9,7 @@ set(CMAKE_AUTORCC ON)
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Svg PrintSupport Network Test)
 
 add_subdirectory(third_party)
+include(cmake/pdfium.cmake)
 
 file(GLOB_RECURSE JP_CORE_SOURCES CONFIGURE_DEPENDS
   src/core/*.cpp src/core/*.h
@@ -23,12 +24,16 @@ file(GLOB_RECURSE JP_UI_SOURCES CONFIGURE_DEPENDS
 # Everything except main() lives in a library so the tests can link it.
 add_library(jpcore STATIC ${JP_CORE_SOURCES} ${JP_UI_SOURCES} resources/resources.qrc)
 target_include_directories(jpcore PUBLIC src)
-target_link_libraries(jpcore PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Svg Qt6::PrintSupport Qt6::Network PRIVATE jp_libmspub jp_hunspell jp_zlib)
+target_link_libraries(jpcore PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Svg Qt6::PrintSupport Qt6::Network PRIVATE jp_libmspub jp_hunspell jp_zlib pdfium)
 target_compile_definitions(jpcore PUBLIC JP_VERSION="${PROJECT_VERSION}" QT_NO_KEYWORDS PRIVATE JP_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_compile_options(jpcore PUBLIC -Wall -Wextra -Wno-unused-parameter)
 if(WIN32)
   # The system Save dialog (filedialogs.cpp).
   target_link_libraries(jpcore PRIVATE ole32 uuid shell32)
+endif()
+if(WIN32)
+  # Programs find pdfium.dll beside them.
+  file(COPY ${JP_PDFIUM_LIBRARY} DESTINATION ${CMAKE_BINARY_DIR})
 endif()
 if(MINGW)
   # Large translation units exceed the default COFF section limit.

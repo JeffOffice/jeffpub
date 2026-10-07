@@ -1039,7 +1039,7 @@ void compressPicturesDialog(QWidget *parent, Editor *ed)
     ed->change(QStringLiteral("Compress Pictures"), [&] {
         for (PictureItem *p : pics) {
             ImageData &data = ed->doc()->images[p->imageId];
-            if (data.format == "svg" || data.format == "wmf" || data.format == "emf") continue;
+            if (data.format == "svg" || data.format == "wmf" || data.format == "emf" || data.format == "pdf") continue;
             QImage img = data.image();
             if (img.isNull()) continue;
             const double wantW = p->imgRect.width() / 72.0 * ppi;

@@ -134,6 +134,10 @@ jobs:
           Copy-Item LICENSE, README.md dist/JeffPub79/
           Copy-Item -Recurse resources/fonts dist/JeffPub79/fonts
           Copy-Item -Recurse resources/dict dist/JeffPub79/dict
+          # PDFium, and its license texts and those of the libraries in it.
+          Copy-Item build/pdfium.dll dist/JeffPub79/
+          New-Item -ItemType Directory -Force dist/JeffPub79/licenses | Out-Null
+          Copy-Item -Recurse third_party/pdfium/licenses dist/JeffPub79/licenses/pdfium
 
       - name: Installer (Windows)
         if: runner.os == 'Windows'
@@ -158,6 +162,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force dev-tools | Out-Null
           Copy-Item build/jpubtool.exe dev-tools/
+          Copy-Item build/pdfium.dll dev-tools/
 
       - uses: actions/upload-artifact@v4
         if: runner.os == 'Windows'
@@ -185,6 +190,9 @@ jobs:
           mkdir deb-check && dpkg-deb -x linux-packages/*.deb deb-check
           env -u LD_LIBRARY_PATH QT_QPA_PLATFORM=offscreen deb-check/opt/jeffpub79/bin/JeffPub79 --template flyer-announce --export-pdf deb-check/check.pdf
           test -s deb-check/check.pdf
+          # PDFium is in the package, with the license texts.
+          test -f deb-check/opt/jeffpub79/lib/libpdfium.so
+          test -f deb-check/usr/share/doc/jeffpub79/pdfium/pdfium.txt
 
       - uses: actions/upload-artifact@v4
         if: runner.os == 'Linux'
@@ -199,11 +207,21 @@ jobs:
           mkdir -p dist macos-dmg
           cp -R build/JeffPub79.app dist/
           "$QT_ROOT_DIR/bin/macdeployqt" dist/JeffPub79.app
+          # PDFium beside the Qt frameworks, where the program finds it,
+          # and its license texts and those of the libraries in it.
+          fw=dist/JeffPub79.app/Contents/Frameworks
+          test -f "$fw/libpdfium.dylib" || cp build/_deps/pdfium/lib/libpdfium.dylib "$fw/"
+          # The build's own path to it isn't for shipping (and would hide a
+          # missing copy from the check below).
+          install_name_tool -delete_rpath "$PWD/build/_deps/pdfium/lib" dist/JeffPub79.app/Contents/MacOS/JeffPub79 || true
+          otool -l dist/JeffPub79.app/Contents/MacOS/JeffPub79 | grep -A2 LC_RPATH | grep path || true
+          mkdir -p dist/JeffPub79.app/Contents/Resources/licenses
+          cp -R third_party/pdfium/licenses dist/JeffPub79.app/Contents/Resources/licenses/pdfium
           # Not yet signed with a developer certificate: an ad-hoc signature
           # lets it run on Apple silicon.
           codesign --force --deep --sign - dist/JeffPub79.app
           lipo -archs dist/JeffPub79.app/Contents/MacOS/JeffPub79
-          # The packaged program must start on its own bundled Qt.
+          # The packaged program must start on its own bundled Qt (and PDFium).
           QT_QPA_PLATFORM=offscreen dist/JeffPub79.app/Contents/MacOS/JeffPub79 --template flyer-announce --export-pdf dist/check.pdf
           test -s dist/check.pdf && rm dist/check.pdf
           mkdir dmg-root && cp -R dist/JeffPub79.app LICENSE README.md dmg-root/ && ln -s /Applications dmg-root/Applications

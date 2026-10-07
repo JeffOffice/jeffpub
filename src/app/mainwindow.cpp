@@ -27,6 +27,7 @@
 #include "io/jpubfile.h"
 #include "io/pubimport.h"
 #include "render/metafile.h"
+#include "render/pdfpage.h"
 #include "text/storyio.h"
 #include "text/textprops.h"
 
@@ -49,6 +50,8 @@
 #include <QImageReader>
 #include <QInputDialog>
 #include <QLabel>
+#include <QVBoxLayout>
+#include <QListWidget>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPainter>
@@ -908,10 +911,56 @@ void MainWindow::printPublication()
 // ---------------- pictures ----------------
 static QString imageFilter()
 {
-    return QStringLiteral("All Pictures (*.png *.jpg *.jpeg *.gif *.bmp *.tif *.tiff *.webp *.svg *.wmf *.emf *.ico);;All Files (*)");
+    return QStringLiteral("All Pictures (*.png *.jpg *.jpeg *.gif *.bmp *.tif *.tiff *.webp *.svg *.wmf *.emf *.ico *.pdf);;All Files (*)");
 }
 
-static bool readPicture(const QString &path, QByteArray *bytes, QString *fmt, QSize *px)
+// Which page of a PDF to place: the only one, or the one chosen from
+// pictures of them all. -1 when cancelled.
+static int choosePdfPage(QWidget *parent, const PdfDocument &pdf, const QString &name)
+{
+    const int pages = pdf.pageCount();
+    if (pages <= 1) return pages == 1 ? 0 : -1;
+    QDialog dlg(parent);
+    dlg.setWindowTitle(QStringLiteral("Insert PDF Page"));
+    auto *lay = new QVBoxLayout(&dlg);
+    lay->addWidget(new QLabel(QStringLiteral("%1 has %2 pages. Choose the page to insert:").arg(name).arg(pages)));
+    auto *list = new QListWidget;
+    list->setViewMode(QListView::IconMode);
+    list->setIconSize(QSize(120, 120));
+    list->setResizeMode(QListView::Adjust);
+    list->setMovement(QListView::Static);
+    list->setMinimumSize(560, 380);
+    // Pictures for the first 200 pages; the rest by number.
+    for (int i = 0; i < pages; ++i) {
+        QIcon icon;
+        if (i < 200) {
+            const QSizeF pt = pdf.pageSize(i);
+            QSize px = pt.scaled(120, 120, Qt::KeepAspectRatio).toSize().expandedTo(QSize(1, 1));
+            QImage img(px, QImage::Format_ARGB32_Premultiplied);
+            img.fill(Qt::white);
+            QPainter p(&img);
+            p.drawImage(0, 0, pdf.render(i, px));
+            p.setPen(QColor(160, 160, 160));
+            p.drawRect(img.rect().adjusted(0, 0, -1, -1));
+            p.end();
+            icon = QIcon(QPixmap::fromImage(img));
+        }
+        auto *item = new QListWidgetItem(icon, QStringLiteral("Page %1").arg(i + 1));
+        item->setData(Qt::UserRole, i);
+        list->addItem(item);
+    }
+    list->setCurrentRow(0);
+    lay->addWidget(list);
+    auto *bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    lay->addWidget(bb);
+    QObject::connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    QObject::connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    QObject::connect(list, &QListWidget::itemDoubleClicked, &dlg, &QDialog::accept);
+    if (dlg.exec() != QDialog::Accepted || !list->currentItem()) return -1;
+    return list->currentItem()->data(Qt::UserRole).toInt();
+}
+
+static bool readPicture(QWidget *parent, const QString &path, QByteArray *bytes, QString *fmt, QSize *px)
 {
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) return false;
@@ -919,6 +968,17 @@ static bool readPicture(const QString &path, QByteArray *bytes, QString *fmt, QS
     *fmt = QFileInfo(path).suffix().toLower();
     if (*fmt == "jpeg") *fmt = "jpg";
     if (*fmt == "tiff") *fmt = "tif";
+    if (*fmt == "pdf" || PdfDocument::looksLikePdf(*bytes)) {
+        // A PDF page is kept as a PDF of that page alone; its size in
+        // points, given at 96 pixels an inch like other pictures.
+        const PdfDocument pdf(*bytes);
+        const int page = pdf.isValid() ? choosePdfPage(parent, pdf, QFileInfo(path).fileName()) : -1;
+        if (page < 0) return false;
+        *bytes = pdf.extractPage(page);
+        *fmt = QStringLiteral("pdf");
+        *px = (pdf.pageSize(page) * 96.0 / 72.0).toSize();
+        return !bytes->isEmpty() && px->isValid();
+    }
     if (*fmt == "wmf" || *fmt == "emf" || Metafile::looksLikeMetafile(*bytes)) {
         Metafile m;
         if (!m.load(*bytes)) return false;
@@ -943,7 +1003,7 @@ void MainWindow::insertPictureFromFile(const QString &replaceItemId, const QPoin
         QByteArray bytes;
         QString fmt;
         QSize px;
-        if (!pic || !readPicture(paths.first(), &bytes, &fmt, &px)) return;
+        if (!pic || !readPicture(this, paths.first(), &bytes, &fmt, &px)) return;
         m_ed->change(QStringLiteral("Change Picture"), [&] {
             pic->imageId = m_ed->doc()->addImage(bytes, fmt, paths.first());
             pic->fitImage(m_ed->doc()->imageSize(pic->imageId), true);
@@ -979,13 +1039,13 @@ void MainWindow::insertFiles(const QStringList &paths, const QPointF &atIn)
         QByteArray bytes;
         QString fmt;
         QSize px;
-        if (!readPicture(path, &bytes, &fmt, &px)) continue;
+        if (!readPicture(this, path, &bytes, &fmt, &px)) continue;
         auto pic = std::make_shared<PictureItem>();
         pic->imageId = d->addImage(bytes, fmt, path);
         // Natural size from the picture's resolution (96 dpi if unknown), limited to the page.
         QImageReader r(path);
         double dpi = 96;
-        if (fmt != "svg" && fmt != "wmf" && fmt != "emf") {
+        if (fmt != "svg" && fmt != "wmf" && fmt != "emf" && fmt != "pdf") {
             const QImage probe = r.read();
             if (!probe.isNull() && probe.dotsPerMeterX() > 0) dpi = probe.dotsPerMeterX() * 0.0254;
             if (dpi < 30 || dpi > 2400) dpi = 96;

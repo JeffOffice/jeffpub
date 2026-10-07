@@ -24,6 +24,9 @@ mkdir -p "$app/usr/share/jeffpub79"
 cp -r "$src/resources/fonts" "$src/resources/dict" "$app/usr/share/jeffpub79/"
 install -Dm644 "$src/LICENSE" "$app/usr/share/doc/jeffpub79/copyright"
 install -Dm644 "$src/README.md" "$app/usr/share/doc/jeffpub79/README.md"
+# PDFium's license texts and those of the libraries built into it.
+mkdir -p "$app/usr/share/doc/jeffpub79/pdfium"
+cp "$src/third_party/pdfium/licenses/"* "$app/usr/share/doc/jeffpub79/pdfium/"
 install -Dm644 "$here/jeffpub79.desktop" "$app/usr/share/applications/jeffpub79.desktop"
 install -Dm644 "$src/resources/app.png" "$app/usr/share/icons/hicolor/256x256/apps/jeffpub79.png"
 install -Dm644 "$here/jeffpub79-mime.xml" "$app/usr/share/mime/packages/jeffpub79.xml"
@@ -32,13 +35,14 @@ install -Dm644 "$here/jeffpub79-mime.xml" "$app/usr/share/mime/packages/jeffpub7
 ln -s JeffPub79 "$app/usr/bin/jeffpub79"
 
 # 2. linuxdeploy copies Qt, its plugins and the other libraries the program
-#    needs into the AppDir, then writes the AppImage.
+#    needs (PDFium among them) into the AppDir, then writes the AppImage.
 ld=${LINUXDEPLOY:-linuxdeploy}
 export EXTRA_QT_MODULES="svg"
 # Wayland desktops, and offscreen for command-line PDF export without a display.
 export EXTRA_PLATFORM_PLUGINS="libqoffscreen.so;libqwayland-egl.so;libqwayland-generic.so"
 ( cd "$out" && LDAI_OUTPUT="JeffPub79-$ver-x86_64.AppImage" "$ld" --appdir "$app" \
     --executable "$app/usr/bin/JeffPub79" \
+    --library "$build/_deps/pdfium/lib/libpdfium.so" \
     --desktop-file "$app/usr/share/applications/jeffpub79.desktop" \
     --icon-file "$app/usr/share/icons/hicolor/256x256/apps/jeffpub79.png" \
     --plugin qt --output appimage )

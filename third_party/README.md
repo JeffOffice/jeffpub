@@ -5,8 +5,32 @@
 | `libmspub/` | [libmspub](https://wiki.documentfoundation.org/DLP/Libraries/libmspub), the `.pub` file parser | MPL-2.0 | see `libmspub/VERSION` |
 | `librevenge/` | [librevenge](https://sourceforge.net/p/libwpd/librevenge/), document interfaces and OLE2 streams | MPL-2.0 or LGPL-2.1+ | 0.0.5 |
 | `compat/` | JeffPub 79's minimal stand-ins for the Boost headers these libraries use | GPL-3.0 (this project) | — |
+| `pdfium/licenses/` | The license texts of [PDFium](https://pdfium.googlesource.com/pdfium/) and of the libraries built into it, shipped with every package | see below | chromium/8086 (157.0.8086.0) |
 
 zlib is downloaded at build time when the system has none.
+
+## PDFium
+
+PDFium places PDF pages as pictures (`src/render/pdfpage.cpp`). The build downloads the prebuilt library from [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries) release `chromium/8086` and checks it against its SHA-256 (`cmake/pdfium.cmake`); it isn't modified. The texts in `pdfium/licenses/` come from that release (`LICENSE`, saved as `pdfium-binaries.txt`, and `licenses/`); update them with the version.
+
+| Component | License | Text |
+|---|---|---|
+| PDFium | BSD-3-Clause; parts Apache-2.0 | `pdfium.txt` |
+| pdfium-binaries (the build) | MIT | `pdfium-binaries.txt` |
+| FreeType | FreeType License | `freetype.txt` |
+| HarfBuzz | Old MIT | `harfbuzz.txt` |
+| ICU | Unicode License v3 | `icu.txt` |
+| Little CMS | MIT | `lcms.txt` |
+| libjpeg-turbo | IJG and BSD-3-Clause | `libjpeg_turbo.md`, `libjpeg_turbo.ijg` |
+| OpenJPEG | BSD-2-Clause | `libopenjpeg.txt` |
+| libpng | PNG Reference Library License v2 | `libpng.txt` |
+| zlib | zlib | `zlib.txt` |
+| Abseil | Apache-2.0 | `abseil.txt` |
+| Anti-Grain Geometry 2.3 | AGG 2.3 license (permissive) | `agg23.txt` |
+| dragonbox | Apache-2.0 with LLVM Exceptions, or Boost Software License 1.0 | `dragonbox-Apache2-LLVM.txt`, `dragonbox-Boost.txt` |
+| fast_float | MIT | `fast_float.txt` |
+| simdutf | MIT | `simdutf.txt` |
+| LLVM libc | Apache-2.0 with LLVM Exceptions | `llvm-libc.txt` |
 
 ## JeffPub 79 changes
 

@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "render/metafile.h"
+#include "render/pdfpage.h"
 #include "text/storyio.h"
 #include "text/textprops.h"
 
@@ -105,6 +106,16 @@ QImage ImageData::image() const
     if (format == QLatin1String("wmf") || format == QLatin1String("emf") || Metafile::looksLikeMetafile(bytes)) {
         Metafile m;
         if (m.load(bytes)) cache = m.toImage(1600);
+        return cache;
+    }
+    if (format == QLatin1String("pdf")) {
+        // A PDF page: PDFium's drawing of it, about 2,400 pixels on its long side.
+        const auto pdf = PdfDocument::shared(bytes);
+        const QSizeF pt = pdf->pageSize(0);
+        if (!pt.isEmpty()) {
+            const double scale = std::min(300.0 / 72.0, 2400.0 / std::max(pt.width(), pt.height()));
+            cache = pdf->render(0, QSize(std::max(1, qRound(pt.width() * scale)), std::max(1, qRound(pt.height() * scale))));
+        }
         return cache;
     }
     if (format == QLatin1String("svg")) {

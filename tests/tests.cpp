@@ -25,6 +25,8 @@
 #include "io/importers.h"
 #include "io/zip.h"
 #include "io/qtpdf.h"
+#include "render/pdfpage.h"
+#include <QPdfWriter>
 #include <QPrinter>
 #include "app/icons.h"
 #include <QTabBar>
@@ -3454,6 +3456,178 @@ private Q_SLOTS:
     // its booklet as its own (layout, spreads, masters) and pictured it the
     // same (Oct 7). On opening, the parts make one two-page master, and every
     // page comes back (pages marked 0 counted as special: one page did).
+    // A PDF page placed as a picture: shown from PDFium's raster, exported
+    // to PDF as vectors, kept as a PDF in .jpub and as a picture in .pub.
+    void pdfPagePlacedAsPicture()
+    {
+        using namespace jp;
+        QByteArray pdf;
+        {
+            QBuffer buf(&pdf);
+            buf.open(QIODevice::WriteOnly);
+            QPdfWriter w(&buf);
+            w.setPageSize(QPageSize(QSizeF(300, 200), QPageSize::Point));
+            w.setPageMargins(QMarginsF(0, 0, 0, 0));
+            w.setResolution(72);
+            QPainter p(&w);
+            p.fillRect(QRectF(0, 0, 300, 200), Qt::blue);
+            w.newPage();
+            p.fillRect(QRectF(20, 20, 260, 160), QColor(220, 0, 0));
+            p.end();
+        }
+        const QByteArray page2 = PdfDocument(pdf).extractPage(1);
+        QVERIFY(!page2.isEmpty());
+
+        auto doc = Document::blank(QSizeF(612, 792));
+        const QString id = doc->addImage(page2, QStringLiteral("pdf"));
+        const QImage shown = doc->image(id);
+        QVERIFY(!shown.isNull());
+        QCOMPARE(QColor(shown.pixel(shown.width() / 2, shown.height() / 2)), QColor(220, 0, 0));
+        QVERIFY(qAlpha(shown.pixel(2, 2)) == 0);   // no page behind it
+        auto pic = std::make_shared<PictureItem>();
+        pic->imageId = id;
+        pic->rect = QRectF(100, 100, 300, 200);
+        pic->imgRect = QRectF(0, 0, 300, 200);
+        doc->pages[0]->items.push_back(pic);
+
+        QTemporaryDir dir;
+        QString err;
+        // .jpub keeps the PDF.
+        const QString jpub = dir.filePath(QStringLiteral("pdf.jpub"));
+        QVERIFY2(savePublication(*doc, jpub, QImage(), &err), qPrintable(err));
+        auto back = loadPublication(jpub, &err);
+        QVERIFY(back);
+        QCOMPARE(back->images.value(id).format, QStringLiteral("pdf"));
+        QCOMPARE(back->images.value(id).bytes, page2);
+        // .pub has no PDF pictures: a PNG of it.
+        const QString pub = dir.filePath(QStringLiteral("pdf.pub"));
+        QVERIFY2(exportPublisher(*doc, pub, &err), qPrintable(err));
+        auto fromPub = importPublisherFile(pub, &err);
+        QVERIFY(fromPub);
+        QCOMPARE(fromPub->images.size(), 1);
+        QCOMPARE(fromPub->images.first().format, QStringLiteral("png"));
+
+        // Exported to PDF it's a filled area, not a picture.
+        MainWindow w;
+        w.editor()->setDocument(std::move(doc));
+        const QString path = dir.filePath(QStringLiteral("placed.pdf"));
+        MainWindow::PdfSettings ps;
+        ps.preset = MainWindow::PdfSettings::HighQuality;
+        QVERIFY(w.exportPdfTo(path, ps));
+        QtPdf parsed;
+        QVERIFY(parsed.load(path));
+        for (const auto &o : parsed.objects) QVERIFY(!QtPdf::dictOf(o.body).contains("/Subtype /Image"));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const PdfDocument out(f.readAll());
+        QVERIFY(out.isValid());
+        const QImage page = out.render(0, QSize(612, 792));
+        QCOMPARE(QColor(page.pixel(250, 200)), QColor(220, 0, 0));
+    }
+
+    // A PDF page drawn as vectors looks like PDFium's own raster of it: text
+    // (as glyph outlines), filled and dashed shapes, and a picture.
+    void pdfPagePlaysLikeItsRaster()
+    {
+        QByteArray pdf;
+        {
+            QBuffer buf(&pdf);
+            buf.open(QIODevice::WriteOnly);
+            QPdfWriter w(&buf);
+            w.setPageSize(QPageSize(QSizeF(200, 100), QPageSize::Point));
+            w.setPageMargins(QMarginsF(0, 0, 0, 0));
+            w.setResolution(72);
+            QPainter p(&w);
+            p.fillRect(QRectF(10, 10, 60, 40), QColor(200, 30, 30));
+            // (Square caps would give the line's last, empty dash a square
+            // in PDF readers but not in Qt; the check catches that, below.)
+            p.setPen(QPen(Qt::blue, 3, Qt::DashLine, Qt::FlatCap));
+            p.drawLine(QPointF(10, 70), QPointF(190, 70));
+            QFont f(QStringLiteral("DejaVu Sans"));
+            f.setPixelSize(24);
+            p.setFont(f);
+            p.setPen(Qt::black);
+            p.drawText(QPointF(80, 40), QStringLiteral("Hgx"));
+            p.save();
+            p.translate(30, 95);
+            p.rotate(-20);
+            p.drawText(QPointF(0, 0), QStringLiteral("ab"));
+            p.restore();
+            QImage img(8, 8, QImage::Format_RGB32);
+            img.fill(Qt::green);
+            p.drawImage(QRectF(150, 10, 30, 30), img);
+            w.newPage();
+            p.fillRect(QRectF(0, 0, 50, 50), Qt::yellow);
+            p.end();
+        }
+        jp::PdfDocument doc(pdf);
+        QVERIFY(doc.isValid());
+        QCOMPARE(doc.pageCount(), 2);
+        QCOMPARE(doc.pageSize(0).toSize(), QSize(200, 100));
+        const QSize px(800, 400);
+        const QImage ref = doc.render(0, px).convertToFormat(QImage::Format_ARGB32);
+        QVERIFY(!ref.isNull());
+        QImage played(px, QImage::Format_ARGB32);
+        played.fill(Qt::transparent);
+        {
+            QPainter p(&played);
+            doc.play(&p, 0, QRectF(QPointF(0, 0), QSizeF(px)));
+        }
+        // Over white, pixels differing by more than an edge's antialiasing.
+        auto over = [](QRgb c) { const int a = qAlpha(c); return QColor(255 - a + qRed(c) * a / 255, 255 - a + qGreen(c) * a / 255, 255 - a + qBlue(c) * a / 255); };
+        int differ = 0, inked = 0;
+        for (int y = 0; y < px.height(); ++y)
+            for (int x = 0; x < px.width(); ++x) {
+                const QColor a = over(ref.pixel(x, y)), b = over(played.pixel(x, y));
+                if (a != Qt::white) ++inked;
+                if (std::abs(a.red() - b.red()) + std::abs(a.green() - b.green()) + std::abs(a.blue() - b.blue()) > 120) ++differ;
+            }
+        if (qEnvironmentVariableIsSet("JP_PDF_DEBUG")) {
+            ref.save(qEnvironmentVariable("JP_PDF_DEBUG") + QStringLiteral("/ref.png"));
+            played.save(qEnvironmentVariable("JP_PDF_DEBUG") + QStringLiteral("/played.png"));
+            QFile out(qEnvironmentVariable("JP_PDF_DEBUG") + QStringLiteral("/t.pdf"));
+            if (out.open(QIODevice::WriteOnly)) out.write(pdf);
+        }
+        QVERIFY(inked > 20000);
+        QVERIFY2(differ < inked / 50, qPrintable(QStringLiteral("%1 of %2 inked pixels differ").arg(differ).arg(inked)));
+        // The check finds nothing for the raster to draw.
+        QCOMPARE(doc.rasterShare(0), 0.0);
+
+        // In SVG the text is paths and only the picture is an image.
+        QByteArray svg;
+        {
+            QBuffer buf(&svg);
+            QSvgGenerator gen;
+            gen.setOutputDevice(&buf);
+            gen.setSize(QSize(200, 100));
+            QPainter p(&gen);
+            doc.play(&p, 0, QRectF(0, 0, 200, 100));
+        }
+        QCOMPARE(svg.count("<image"), 1);
+        QVERIFY(svg.count("<path") >= 4);
+
+        // One page taken out is a PDF of its own.
+        jp::PdfDocument second(doc.extractPage(1));
+        QVERIFY(second.isValid());
+        QCOMPARE(second.pageCount(), 1);
+        QCOMPARE(second.pageSize(0).toSize(), QSize(200, 100));
+        QVERIFY(jp::PdfDocument::looksLikePdf(doc.extractPage(0)));
+        QVERIFY(!jp::PdfDocument(QByteArray("not a pdf")).isValid());
+        QVERIFY(doc.extractPage(5).isEmpty());
+        // Cut short or scrambled, it's drawn as far as it goes, or not at all.
+        for (const QByteArray &bad : {pdf.left(pdf.size() / 2), QByteArray(pdf).replace("obj", "jbo"), QByteArray("%PDF-1.4\n%%EOF")}) {
+            jp::PdfDocument d(bad);
+            QImage img(200, 100, QImage::Format_ARGB32_Premultiplied);
+            QPainter p(&img);
+            for (int i = -1; i <= d.pageCount(); ++i) {
+                d.render(i, QSize(200, 100));
+                d.play(&p, i, QRectF(0, 0, 200, 100));
+                d.extractPage(i);
+                QVERIFY(d.rasterShare(i) >= 0);
+            }
+        }
+    }
+
     void pubBookletRoundTrip()
     {
         using namespace jp;
