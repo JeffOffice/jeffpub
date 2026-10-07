@@ -207,7 +207,13 @@ jobs:
           QT_QPA_PLATFORM=offscreen dist/JeffPub79.app/Contents/MacOS/JeffPub79 --template flyer-announce --export-pdf dist/check.pdf
           test -s dist/check.pdf && rm dist/check.pdf
           mkdir dmg-root && cp -R dist/JeffPub79.app LICENSE README.md dmg-root/ && ln -s /Applications dmg-root/Applications
-          hdiutil create -volname "JeffPub 79" -srcfolder dmg-root -ov -format UDZO macos-dmg/JeffPub79-$ver.dmg
+          # hdiutil now and then fails with "Resource busy" on the hosted
+          # runners; a few tries a little apart get past it.
+          for try in 1 2 3 4 5; do
+            hdiutil create -volname "JeffPub 79" -srcfolder dmg-root -ov -format UDZO macos-dmg/JeffPub79-$ver.dmg && break
+            if [ "$try" = 5 ]; then exit 1; fi
+            sleep 10
+          done
           ls -la macos-dmg
 
       - uses: actions/upload-artifact@v4
