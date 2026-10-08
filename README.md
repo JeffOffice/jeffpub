@@ -10,7 +10,7 @@ Microsoft is retiring Publisher. Microsoft 365 subscribers lost access to Publis
 
 JeffPub 79 was started in response. It gives the people, small businesses, schools and publishers who built years of work in Publisher a free, open-source program that keeps opening, editing and printing those `.pub` files, on Windows and Linux, without a subscription and without depending on any one company's product plans.
 
-> **Status:** early preview. Test builds are on the [Releases page](https://github.com/jeffsteinport/jeffpub79/releases): a Windows installer, and for Linux a `.deb` package (Debian, Ubuntu and their relatives) and an AppImage that runs on most other distributions. Opening `.pub` files works; saving back to `.pub` is not available yet.
+> **Status:** beta (0.5): the features are in place and are being polished. Downloads are on the [Releases page](https://github.com/jeffsteinport/jeffpub79/releases): a Windows installer, a Mac disk image (not yet signed, so macOS asks before opening it the first time), and for Linux a `.deb` package (Debian, Ubuntu and their relatives) and an AppImage that runs on most other distributions. JeffPub 79 opens and saves `.pub` files from Publisher 98 to 2021.
 >
 > On Debian or Ubuntu, install the package with `sudo apt install ./jeffpub79_<version>_amd64.deb`. For the AppImage, make the file executable and run it.
 
