@@ -62,14 +62,14 @@ static const QHash<QString, QString> &table()
         {"Times New Roman", "Tinos"}, {"Times", "Tinos"}, {"Liberation Serif", "Tinos"},
         {"Courier New", "Cousine"}, {"Courier", "Cousine"}, {"Liberation Mono", "Cousine"}, {"Lucida Console", "Cousine"},
         {"Calibri", "Carlito"}, {"Calibri Light", "Carlito"}, {"Cambria", "Caladea"}, {"Georgia", "Gelasio"},
-        {"Segoe UI", "Open Sans"}, {"Comic Sans MS", "Comic Neue"}, {"Garamond", "EB Garamond"},
+        {"Segoe UI", "Selawik"}, {"Segoe UI Light", "Selawik Light"}, {"Segoe UI Semilight", "Selawik Semilight"}, {"Segoe UI Semibold", "Selawik Semibold"}, {"Comic Sans MS", "Comic Relief"}, {"Garamond", "EB Garamond"},
         {"Book Antiqua", "TeX Gyre Pagella"}, {"Palatino Linotype", "TeX Gyre Pagella"}, {"Palatino", "TeX Gyre Pagella"},
         {"Bookman Old Style", "TeX Gyre Bonum"}, {"Century Schoolbook", "TeX Gyre Schola"}, {"Century Gothic", "TeX Gyre Adventor"},
         {"Gill Sans MT", "Cabin"}, {"Gill Sans", "Cabin"}, {"Abadi", "Cabin"}, {"Abadi MT Condensed Light", "Archivo Narrow"},
         {"Tw Cen MT", "Jost"}, {"Futura", "Jost"}, {"AG_Futura", "Jost"}, {"Futura Md BT", "Jost"}, {"Futura Bk BT", "Jost"},
         {"Franklin Gothic Book", "Libre Franklin"}, {"Franklin Gothic Medium", "Libre Franklin"}, {"Franklin Gothic Demi", "Libre Franklin"},
         {"Franklin Gothic Demi Cond", "Libre Franklin"}, {"Franklin Gothic Medium Cond", "Libre Franklin"},
-        {"Arial Narrow", "Arimo"}, {"Arial Black", "Archivo Black"}, {"Impact", "Anton"},
+        {"Arial Narrow", "Liberation Sans Narrow"}, {"Arial Black", "Archivo Black"}, {"Impact", "Anton"},
         {"Verdana", "DejaVu Sans"}, {"Tahoma", "DejaVu Sans"}, {"Trebuchet MS", "PT Sans"}, {"Corbel", "Open Sans"}, {"Candara", "Cabin"},
         {"Constantia", "Gelasio"}, {"Sylfaen", "Gelasio"}, {"Consolas", "IBM Plex Mono"},
         {"Rockwell", "Arvo"}, {"Rockwell Condensed", "Roboto Slab"}, {"Rockwell Extra Bold", "Alfa Slab One"},
@@ -89,7 +89,7 @@ static const QHash<QString, QString> &table()
 static const QHash<QString, int> &stretches()
 {
     static const QHash<QString, int> t{
-        {"Arial Narrow", 82}, {"Lucida Handwriting", 114}, {"Juice ITC", 80}, {"Franklin Gothic Demi Cond", 75}, {"Franklin Gothic Medium Cond", 75}, {"Rockwell Condensed", 72},
+        {"Lucida Handwriting", 114}, {"Juice ITC", 80}, {"Franklin Gothic Demi Cond", 75}, {"Franklin Gothic Medium Cond", 75}, {"Rockwell Condensed", 72},
         {"Abadi MT Condensed Light", 85}, {"Gill Sans MT Condensed", 75}, {"Tw Cen MT Condensed", 75}, {"Bernard MT Condensed", 90},
     };
     return t;
@@ -102,6 +102,7 @@ QString interchangeFontName(const QString &family)
     static const QHash<QString, QString> t{
         {"Arimo", "Arial"}, {"Tinos", "Times New Roman"}, {"Cousine", "Courier New"},
         {"Carlito", "Calibri"}, {"Caladea", "Cambria"}, {"Gelasio", "Georgia"},
+        {"Comic Relief", "Comic Sans MS"}, {"Selawik", "Segoe UI"}, {"Liberation Sans Narrow", "Arial Narrow"},
     };
     return t.value(family, family);
 }

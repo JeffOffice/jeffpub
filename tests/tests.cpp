@@ -1022,6 +1022,37 @@ private Q_SLOTS:
         QVERIFY(std::abs(spacing(old) - spacing(loose)) < 0.001);
     }
 
+    // Comic Sans MS, Segoe UI and Arial Narrow, when missing, are drawn by
+    // fonts made to their character widths (Comic Relief, Selawik, Liberation
+    // Sans Narrow): a phrase is as wide as in the originals (their widths read
+    // from the fonts on Windows). Comic Neue had run 8.6% narrower, Open Sans
+    // 5.2% wider.
+    void exactWidthStandIns()
+    {
+        const QString text = QStringLiteral("Defense Force volunteers serve their state");
+        struct Case { const char *family; bool bold; double ems; };
+        for (const Case &c : {Case{"Comic Sans MS", false, 20.312}, Case{"Comic Sans MS", true, 21.142}, Case{"Segoe UI", false, 18.393},
+                              Case{"Arial Narrow", false, 15.454}, Case{"Arial Narrow", true, 16.544}}) {
+            if (QFontDatabase::hasFamily(QString::fromLatin1(c.family))) continue;   // the original itself
+            jp::LayoutEnv env;
+            QTextCharFormat f;
+            f.setFontFamilies(QStringList{QString::fromLatin1(c.family)});
+            // At 100 pt, as text is laid out (at 8 times its size), so Qt's
+            // rounding of each advance to the pixel doesn't add up.
+            f.setFontPointSize(100);
+            if (c.bold) f.setFontWeight(QFont::Bold);
+            const QTextCharFormat r = jp::resolveCharFormat(f, env);
+            QTextLayout tl(text, r.font());
+            tl.beginLayout();
+            QTextLine line = tl.createLine();
+            line.setLineWidth(100000);
+            tl.endLayout();
+            const double width = line.naturalTextWidth();
+            QVERIFY2(std::abs(width - c.ems * 100) < c.ems * 100 * 0.002,
+                     qPrintable(QStringLiteral("%1%2: %3 pt, not %4").arg(QLatin1String(c.family), c.bold ? QStringLiteral(" bold") : QString()).arg(width).arg(c.ems * 100)));
+        }
+    }
+
     // A missing Gill Sans MT is drawn by Cabin to Gill Sans MT's widths, its
     // bold too: Cabin's letters run 5% wider than the regular's and 10%
     // narrower than the bold's, and its spaces 24% narrower (widths of the
