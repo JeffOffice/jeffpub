@@ -7502,6 +7502,28 @@ private Q_SLOTS:
 
     // Edit Wrap Points: start from the outline, drag a point, add one on an
     // edge, delete it, and text wraps around the new outline.
+    // A line may break after a hyphen before a digit, as in Publisher:
+    // "(555) 012-" then "3456" (Qt's own rules keep the number whole).
+    void breakAfterHyphenBeforeDigit()
+    {
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<TextItem>();
+        t->storyId = doc->createStory(QStringLiteral("Call us at (555) 012-3456 today"));
+        doc->pages[0]->items.push_back(t);
+        LayoutCache cache;
+        RenderOptions opt;
+        auto firstLine = [&](double width) {
+            t->rect = QRectF(72, 72, width, 200);
+            QString s = cache.textFrame(*doc, *t, 1, opt).layout->lineInfo(0).value(0).text;
+            return s.remove(QChar(0x00AD)).remove(QChar(0x200B)).trimmed();
+        };
+        // Just too narrow for the whole number: the line ends at its hyphen.
+        double w = 40;
+        while (w < 400 && !firstLine(w).contains(QLatin1String("012-"))) w += 1;
+        QCOMPARE(firstLine(w), QStringLiteral("Call us at (555) 012-"));
+        QVERIFY(!firstLine(w).contains(QLatin1String("3456")));
+    }
+
     // A text box that only touches another pushes none of its text aside
     // (Publisher's designs butt boxes together, their wrap distances
     // reaching past each other's insets): a name in a short box lost its

@@ -873,35 +873,40 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
             if (start < text.size()) {
                 const QString raw = text.mid(start);
                 QString shown;
+                // Places a line may break that Qt's own rules leave out, each
+                // with the character that marks it in the displayed text.
+                QVector<QPair<int, QChar>> cuts;
                 if (hyphenate) {
                     // Automatic hyphenation: soft hyphens (shown only where a line
                     // breaks) at the allowed points of words of five letters or more.
                     static const QRegularExpression wordRe(QStringLiteral("\\p{L}{5,}"));
                     const QString language = cf.stringProperty(tp::Language);   // empty: US English
-                    int piece = 0;
                     auto it = wordRe.globalMatch(raw);
                     while (it.hasNext()) {
                         const auto m = it.next();
                         const QString w = m.captured();
                         if (w == w.toUpper()) continue;   // leave all-caps words whole
                         if (!hyphenationKnows(w, language)) continue;   // names and coined words stay whole
-                        for (int pt : hyphenationPoints(w, language)) {
-                            const int cut = int(m.capturedStart()) + pt;
-                            const int n = cut - piece;
-                            B->map << Seg{rel + start + piece, n, int(B->disp.size() + shown.size()), n};
-                            shown += raw.mid(piece, n);
-                            B->map << Seg{rel + start + cut, 0, int(B->disp.size() + shown.size()), 1};
-                            shown += QChar(0x00AD);
-                            piece = cut;
-                        }
+                        for (int pt : hyphenationPoints(w, language)) cuts.append({int(m.capturedStart()) + pt, QChar(0x00AD)});
                     }
-                    const int n = int(raw.size()) - piece;
-                    B->map << Seg{rel + start + piece, n, int(B->disp.size() + shown.size()), n};
-                    shown += raw.mid(piece);
-                } else {
-                    shown = raw;
-                    B->map << Seg{rel + start, int(raw.size()), int(B->disp.size()), int(raw.size())};
                 }
+                // After a hyphen before a digit ("012-3456", "pages 4-12"):
+                // Publisher breaks there, Qt's rules keep the number whole.
+                for (int i = 1; i + 1 < int(raw.size()); ++i)
+                    if (raw[i] == QLatin1Char('-') && raw[i - 1].isLetterOrNumber() && raw[i + 1].isDigit()) cuts.append({i + 1, QChar(0x200B)});
+                std::sort(cuts.begin(), cuts.end(), [](const auto &x, const auto &y) { return x.first < y.first; });
+                int piece = 0;
+                for (const auto &[cut, mark] : cuts) {
+                    const int n = cut - piece;
+                    B->map << Seg{rel + start + piece, n, int(B->disp.size() + shown.size()), n};
+                    shown += raw.mid(piece, n);
+                    B->map << Seg{rel + start + cut, 0, int(B->disp.size() + shown.size()), 1};
+                    shown += mark;
+                    piece = cut;
+                }
+                const int n = int(raw.size()) - piece;
+                B->map << Seg{rel + start + piece, n, int(B->disp.size() + shown.size()), n};
+                shown += raw.mid(piece);
                 // All capitals (or all lowercase): Qt ignores these in a
                 // layout's format ranges, so the letters are changed here, one
                 // for one so positions still map. That is deliberate: a letter
