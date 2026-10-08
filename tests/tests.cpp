@@ -7938,6 +7938,21 @@ private Q_SLOTS:
         QVERIFY(QFile::exists(to + "/Templates/club.jpub"));
     }
 
+    // Publisher's numbering "(none)" (list kind 255) is no list: the sample
+    // newsletter's paragraph with it took a number.
+    void pubNoneNumberingIsNoList()
+    {
+        QFile f(QStringLiteral(JP_TEST_DATA "/pub/poi-SampleNewsletter.pub"));
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        auto doc = importPublisher(f.readAll(), nullptr);
+        QVERIFY(doc);
+        int numbered = 0;
+        for (const auto &st : doc->stories)
+            for (QTextBlock b = st->doc->begin(); b.isValid(); b = b.next())
+                if (b.textList() && !jp::isBulletList(b.textList()->format().style())) ++numbered;
+        QCOMPARE(numbered, 0);
+    }
+
     void metafileWmfRenders()
     {
         QFile f(QStringLiteral(JP_TEST_DATA "/pub/poi-SampleBrochure.pub"));

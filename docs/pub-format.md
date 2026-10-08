@@ -603,7 +603,8 @@ Publisher with one of each).
 
 Lists (FDPP): `57:8a {00:22 kind, 01:22 bullet character, 02:22 0}` where
 kind 23 is a bulleted list (0xB7 = the Symbol font's round bullet) and
-otherwise the numbering style (0 1 2 3, 1 I II, 2 i ii, 3 A B, 4 a b);
+otherwise the numbering style (0 1 2 3, 1 I II, 2 i ii, 3 A B, 4 a b;
+255 is numbering "(none)", no list);
 numbered lists add `58:22` with the punctuation in the high half (2 "1.",
 0 "1)", 1 "(1)"). Publisher also writes `02:22` (the bullet or number's
 size, EMU; usually the text size), `03:1a` (the bullet's font, its place in

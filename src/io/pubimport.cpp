@@ -522,6 +522,10 @@ public:
             return;
         }
         const int kind = p["jp:list-kind"]->getInt();
+        if (kind == 255) {   // Publisher's numbering "(none)": not a list item
+            m_list = nullptr;
+            return;
+        }
         const int ch = p["jp:list-char"] ? p["jp:list-char"]->getInt() : 0;
         const int delim = p["jp:list-delim"] ? p["jp:list-delim"]->getInt() : -1;
         const double size = p["jp:list-size"] ? p["jp:list-size"]->getDouble() : 0;

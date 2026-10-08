@@ -66,6 +66,29 @@ int main(int argc, char **argv)
             out << c << "\t" << (c == QLatin1Char(' ') && space > 0 ? space * 1000 : fm.horizontalAdvance(c)) << "\n";
         return 0;
     }
+    if (cmd == "fontmap") {
+        // fontmap <file with one family per line> x: how each font is drawn
+        // here: the family drawn, whether JeffPub ships it, its stand-in,
+        // the stand-in's width settings and the single line height (ems).
+        QFile list(in);
+        if (!list.open(QIODevice::ReadOnly | QIODevice::Text)) return 1;
+        const QStringList bundled = bundledFamilies();
+        out << "family\tdrawn\tbundled\tsubstitute\tstretch r/b/i/bi\tspace r/b\tweight\tline r/b\n";
+        for (QString fam : QString::fromUtf8(list.readAll()).split(QLatin1Char('\n'))) {
+            fam = fam.trimmed();
+            if (fam.isEmpty()) continue;
+            QFont f(fam);
+            f.setFamilies({fam});
+            f.setPointSizeF(100);
+            QFont b = f;
+            b.setBold(true);
+            out << fam << "\t" << QFontInfo(f).family() << "\t" << (bundled.contains(fam, Qt::CaseInsensitive) ? "yes" : "no") << "\t"
+                << substituteFor(fam) << "\t" << substituteStretch(fam) << "/" << substituteStretch(fam, true) << "/" << substituteStretch(fam, false, true) << "/"
+                << substituteStretch(fam, true, true) << "\t" << substituteSpaceEm(fam) << "/" << substituteSpaceEm(fam, true) << "\t" << substituteWeight(fam)
+                << "\t" << naturalLineEm(f, fam) << "/" << naturalLineEm(b, fam) << "\n";
+        }
+        return 0;
+    }
     if (cmd == "lineem") {
         // lineem <family>[,<family>...] x: the single line height (ems) and
         // the font drawn, regular and bold, for each family.
