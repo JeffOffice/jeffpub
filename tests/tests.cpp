@@ -8268,6 +8268,42 @@ private Q_SLOTS:
             QVERIFY(painted > 10);
         }
         QVERIFY(wmf > 0);
+        // Recolored, a metafile changes every color it draws (border art's
+        // tinted pieces): nothing comes out but the new color.
+        const auto first = std::find_if(doc->images.cbegin(), doc->images.cend(), [](const ImageData &d) { return d.format == "wmf"; });
+        Metafile m;
+        QVERIFY(m.load(first->bytes));
+        QImage img(200, 200, QImage::Format_ARGB32);
+        img.fill(Qt::transparent);
+        {
+            QPainter p(&img);
+            m.play(&p, QRectF(0, 0, 200, 200), [](const QColor &c) { return QColor(0, 128, 128, c.alpha()); });
+        }
+        int teal = 0, other = 0;
+        for (int y = 0; y < img.height(); ++y)
+            for (int x = 0; x < img.width(); ++x) {
+                const QRgb c = img.pixel(x, y);
+                if (qAlpha(c) < 250) continue;
+                (qRed(c) < 10 && std::abs(qGreen(c) - 128) < 10 && std::abs(qBlue(c) - 128) < 10 ? teal : other)++;
+            }
+        QVERIFY2(teal > 100 && other == 0, qPrintable(QStringLiteral("%1 %2").arg(teal).arg(other)));
+        // And a recolored metafile prints as vectors, not as a picture.
+        auto one = Document::blank(QSizeF(300, 300));
+        auto pic = std::make_shared<PictureItem>();
+        pic->imageId = one->addImage(first->bytes, QStringLiteral("wmf"));
+        pic->rect = pic->imgRect = QRectF(20, 20, 200, 200);
+        pic->imgRect.moveTo(0, 0);
+        pic->recolor = PictureItem::ColorTint;
+        pic->recolorColor = ColorRef::rgb(QColor(0, 128, 128));
+        one->pages[0]->items.push_back(pic);
+        MainWindow w;
+        w.editor()->setDocument(std::move(one));
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("tinted.pdf"));
+        QVERIFY(w.exportPdfTo(path, MainWindow::PdfSettings()));
+        QtPdf parsed;
+        QVERIFY(parsed.load(path));
+        for (const auto &o : parsed.objects) QVERIFY(!QtPdf::dictOf(o.body).contains("/Subtype /Image"));
     }
     void colorRefRoundTrip()
     {

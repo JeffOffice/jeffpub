@@ -151,14 +151,18 @@ class Player {
 public:
     Player(QPainter *p, bool emf) : m_p(p), m_emf(emf) {}
     QTransform base;           // device space -> target
+    std::function<QColor(const QColor &)> recolor;   // every color drawn, changed (or none)
     QRectF wmfWindowFallback;  // placeable bbox
 
     void play(const QByteArray &data)
     {
+        if (recolor) { m_dc.textColor = recolor(m_dc.textColor); m_dc.bkColor = recolor(m_dc.bkColor); }
         if (m_emf) playEmf(data); else playWmf(data);
     }
 
 private:
+    QColor mapped(const QColor &c) const { return recolor ? recolor(c) : c; }
+    QColor col(quint32 v) const { return mapped(colorRef(v)); }
     QPainter *m_p;
     bool m_emf;
     DC m_dc;
@@ -258,9 +262,9 @@ private:
         if (m_emf && (idx & 0x80000000u)) {
             switch (idx & 0x7FFFFFFF) {
             case 0: m_dc.brush = QBrush(Qt::white); break;
-            case 1: m_dc.brush = QBrush(QColor(192, 192, 192)); break;
-            case 2: m_dc.brush = QBrush(QColor(128, 128, 128)); break;
-            case 3: m_dc.brush = QBrush(QColor(64, 64, 64)); break;
+            case 1: m_dc.brush = QBrush(mapped(QColor(192, 192, 192))); break;
+            case 2: m_dc.brush = QBrush(mapped(QColor(128, 128, 128))); break;
+            case 3: m_dc.brush = QBrush(mapped(QColor(64, 64, 64))); break;
             case 4: m_dc.brush = QBrush(Qt::black); break;
             case 5: m_dc.brush = Qt::NoBrush; break;
             case 6: m_dc.pen = QPen(Qt::white, 0); break;
@@ -364,7 +368,18 @@ private:
         m_p->setRenderHint(QPainter::SmoothPixmapTransform);
         QRectF s = src.isNull() ? QRectF(img.rect()) : src;
         // DIBs are bottom-up; QImage already flipped them. Source y counts from the top here.
-        m_p->drawImage(dst.normalized(), img, s);
+        QImage shown = img;
+        if (recolor) {
+            shown = img.convertToFormat(QImage::Format_ARGB32);
+            for (int y = 0; y < shown.height(); ++y) {
+                QRgb *line = reinterpret_cast<QRgb *>(shown.scanLine(y));
+                for (int x = 0; x < shown.width(); ++x) {
+                    const QColor c = recolor(QColor::fromRgb(line[x]));
+                    line[x] = qRgba(c.red(), c.green(), c.blue(), qAlpha(line[x]));
+                }
+            }
+        }
+        m_p->drawImage(dst.normalized(), shown, s);
         m_p->restore();
     }
 
@@ -387,24 +402,24 @@ private:
             case 0x020B: { const double y = a.s16(), x = a.s16(); m_dc.winOrg = QPointF(x, y); break; }
             case 0x020C: { const double h = a.s16(), w = a.s16(); m_dc.winExt = QSizeF(w, h); m_dc.winExtSet = true; break; }
             case 0x0103: m_dc.mapMode = a.s16(); break;
-            case 0x0201: m_dc.bkColor = colorRef(a.u32()); break;
+            case 0x0201: m_dc.bkColor = col(a.u32()); break;
             case 0x0102: m_dc.bkMode = a.u16(); break;
             case 0x0106: m_dc.fill = a.u16() == 2 ? Qt::WindingFill : Qt::OddEvenFill; break;
-            case 0x0209: m_dc.textColor = colorRef(a.u32()); break;
+            case 0x0209: m_dc.textColor = col(a.u32()); break;
             case 0x012E: m_dc.textAlign = a.u16(); break;
             case 0x001E: m_stack.push_back(m_dc); m_p->save(); break;
             case 0x0127: if (!m_stack.isEmpty()) { m_dc = m_stack.takeLast(); m_p->restore(); } break;
             case 0x02FA: {
                 Obj o; o.kind = Obj::Pen;
                 const quint16 style = a.u16(); const qint16 w = a.s16(); a.s16();
-                o.pen = makePen(style, w, colorRef(a.u32()));
+                o.pen = makePen(style, w, col(a.u32()));
                 m_objs.size(); setSlot(newSlot(), o);
                 break;
             }
             case 0x02FC: {
                 Obj o; o.kind = Obj::Brush;
                 const quint16 style = a.u16(); const quint32 c = a.u32(); const quint16 hatch = a.u16();
-                o.brush = makeBrush(style, colorRef(c), hatch);
+                o.brush = makeBrush(style, col(c), hatch);
                 setSlot(newSlot(), o);
                 break;
             }
@@ -573,8 +588,8 @@ private:
             case 18: m_dc.bkMode = a.u32(); break;
             case 19: m_dc.fill = a.u32() == 2 ? Qt::WindingFill : Qt::OddEvenFill; break;
             case 22: m_dc.textAlign = a.u32(); break;
-            case 24: m_dc.textColor = colorRef(a.u32()); break;
-            case 25: m_dc.bkColor = colorRef(a.u32()); break;
+            case 24: m_dc.textColor = col(a.u32()); break;
+            case 25: m_dc.bkColor = col(a.u32()); break;
             case 27: m_dc.cur = pt32(); if (m_inPath) m_path.moveTo(m_dc.cur); break;
             case 33: m_stack.push_back(m_dc); m_p->save(); break;
             case 34: {
@@ -601,7 +616,7 @@ private:
             case 38: {
                 const quint32 ih = a.u32(), style = a.u32();
                 const double w = a.s32(); a.s32();
-                Obj o; o.kind = Obj::Pen; o.pen = makePen(style, w, colorRef(a.u32()));
+                Obj o; o.kind = Obj::Pen; o.pen = makePen(style, w, col(a.u32()));
                 setSlot(ih, o);
                 break;
             }
@@ -610,13 +625,13 @@ private:
                 a.u32(); a.u32(); a.u32(); a.u32();
                 const quint32 style = a.u32(), w = a.u32(); a.u32();
                 const quint32 color = a.u32();
-                Obj o; o.kind = Obj::Pen; o.pen = makePen(style, (style & 0x10000) ? w : 0, colorRef(color));
+                Obj o; o.kind = Obj::Pen; o.pen = makePen(style, (style & 0x10000) ? w : 0, col(color));
                 setSlot(ih, o);
                 break;
             }
             case 39: {
                 const quint32 ih = a.u32(), style = a.u32(), c = a.u32(), hatch = a.u32();
-                Obj o; o.kind = Obj::Brush; o.brush = makeBrush(style, colorRef(c), hatch);
+                Obj o; o.kind = Obj::Brush; o.brush = makeBrush(style, col(c), hatch);
                 setSlot(ih, o);
                 break;
             }
@@ -861,7 +876,7 @@ bool Metafile::load(const QByteArray &data)
 
 QSizeF Metafile::naturalSize() const { return m_sizePt; }
 
-void Metafile::play(QPainter *p, const QRectF &target) const
+void Metafile::play(QPainter *p, const QRectF &target, const std::function<QColor(const QColor &)> &recolor) const
 {
     if (!m_valid) return;
     p->save();
@@ -869,6 +884,7 @@ void Metafile::play(QPainter *p, const QRectF &target) const
     p->setRenderHint(QPainter::TextAntialiasing);
     p->setClipRect(target, Qt::IntersectClip);
     Player pl(p, m_emf);
+    pl.recolor = recolor;
     const QTransform outer = p->transform();
     if (m_emf) {
         QTransform t;

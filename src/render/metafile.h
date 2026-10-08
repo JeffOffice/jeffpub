@@ -3,7 +3,10 @@
 // clip art is stored in these formats; this draws them as vectors through
 // QPainter so they stay sharp on screen, in print and in PDFs.
 
+#include <functional>
+
 #include <QByteArray>
+#include <QColor>
 #include <QImage>
 #include <QRectF>
 
@@ -17,7 +20,9 @@ public:
     bool isValid() const { return m_valid; }
     bool isEmf() const { return m_emf; }
     QSizeF naturalSize() const;          // points
-    void play(QPainter *p, const QRectF &target) const;
+    // `recolor`, when given, changes every color the picture draws (a
+    // picture's recoloring, kept as vectors).
+    void play(QPainter *p, const QRectF &target, const std::function<QColor(const QColor &)> &recolor = {}) const;
     QImage toImage(int maxSide = 1600) const;
 
     static bool looksLikeMetafile(const QByteArray &data);

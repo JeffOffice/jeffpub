@@ -428,6 +428,25 @@ QPainterPath Renderer::silhouette(const Document &doc, const Item &it)
 }
 
 // ---------- pictures ----------
+// A picture's recoloring of one color (0-255 a channel), as the picture
+// settings dialog offers it.
+static void recolorRgb(PictureItem::Recolor kind, const QColor &tint, double &r, double &g, double &b)
+{
+    const double lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    switch (kind) {
+    case PictureItem::Grayscale: r = g = b = lum; break;
+    case PictureItem::Sepia: { const double tr = 0.393 * r + 0.769 * g + 0.189 * b, tg = 0.349 * r + 0.686 * g + 0.168 * b, tb = 0.272 * r + 0.534 * g + 0.131 * b; r = tr; g = tg; b = tb; break; }
+    case PictureItem::Washout: r = 255 - (255 - r) * 0.25 + 30; g = 255 - (255 - g) * 0.25 + 30; b = 255 - (255 - b) * 0.25 + 30; break;
+    case PictureItem::BlackWhite: r = g = b = lum >= 128 ? 255 : 0; break;
+    case PictureItem::ColorTint: {
+        const double k = 1 - std::clamp(lum, 0.0, 255.0) / 255.0;
+        r = 255 + (tint.red() - 255) * k; g = 255 + (tint.green() - 255) * k; b = 255 + (tint.blue() - 255) * k;
+        break;
+    }
+    default: break;
+    }
+}
+
 QImage Renderer::processedImage(const Document &doc, const PictureItem &pic, const QSizeF &deviceSize)
 {
     static QCache<QString, QImage> cache(256 * 1024);   // KB
@@ -461,19 +480,7 @@ QImage Renderer::processedImage(const Document &doc, const PictureItem &pic, con
                 r = (r - 128) * cf * cf + 128 + bright;
                 g = (g - 128) * cf * cf + 128 + bright;
                 b = (b - 128) * cf * cf + 128 + bright;
-                const double lum = 0.299 * r + 0.587 * g + 0.114 * b;
-                switch (pic.recolor) {
-                case PictureItem::Grayscale: r = g = b = lum; break;
-                case PictureItem::Sepia: { const double tr = 0.393 * r + 0.769 * g + 0.189 * b, tg = 0.349 * r + 0.686 * g + 0.168 * b, tb = 0.272 * r + 0.534 * g + 0.131 * b; r = tr; g = tg; b = tb; break; }
-                case PictureItem::Washout: r = 255 - (255 - r) * 0.25 + 30; g = 255 - (255 - g) * 0.25 + 30; b = 255 - (255 - b) * 0.25 + 30; break;
-                case PictureItem::BlackWhite: r = g = b = lum >= 128 ? 255 : 0; break;
-                case PictureItem::ColorTint: {
-                    const double k = 1 - std::clamp(lum, 0.0, 255.0) / 255.0;
-                    r = 255 + (tint.red() - 255) * k; g = 255 + (tint.green() - 255) * k; b = 255 + (tint.blue() - 255) * k;
-                    break;
-                }
-                default: break;
-                }
+                recolorRgb(pic.recolor, tint, r, g, b);
                 line[x] = qRgba(std::clamp(int(r), 0, 255), std::clamp(int(g), 0, 255), std::clamp(int(b), 0, 255), a);
             }
         }
@@ -649,7 +656,19 @@ static void paintPicture(QPainter *p, const PaintContext &ctx, const PictureItem
         const bool plain = !pic.brightness && !pic.contrast && !pic.recolor && !pic.hasTransparentColor;
         Metafile mf;
         QSvgRenderer svg;
-        if (ctx.opt.output && plain && (data.format == QLatin1String("wmf") || data.format == QLatin1String("emf")) && mf.load(data.bytes)) {
+        // Recolored clip art (border art's tinted pieces among it) plays as
+        // vectors too, every color changed as the picture's pixels would be:
+        // made into a small picture first, its hairlines were lost.
+        const bool onlyRecolored = pic.recolor && !pic.brightness && !pic.contrast && !pic.hasTransparentColor;
+        const bool metafile = data.format == QLatin1String("wmf") || data.format == QLatin1String("emf");
+        if (metafile && onlyRecolored && mf.load(data.bytes)) {
+            const QColor tint = pic.recolorColor.resolve(cs);
+            mf.play(p, pic.imgRect, [kind = pic.recolor, tint](const QColor &c) {
+                double r = c.red(), g = c.green(), b = c.blue();
+                recolorRgb(kind, tint, r, g, b);
+                return QColor(std::clamp(int(r), 0, 255), std::clamp(int(g), 0, 255), std::clamp(int(b), 0, 255), c.alpha());
+            });
+        } else if (ctx.opt.output && plain && metafile && mf.load(data.bytes)) {
             mf.play(p, pic.imgRect);
         } else if (ctx.opt.output && plain && data.format == QLatin1String("svg") && svg.load(data.bytes)) {
             svg.render(p, pic.imgRect);
