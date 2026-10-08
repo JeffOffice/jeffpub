@@ -1029,6 +1029,11 @@ private Q_SLOTS:
     void standInWidthsMatchOriginals()
     {
         if (QFontDatabase::hasFamily(QStringLiteral("Gill Sans MT"))) QSKIP("Gill Sans MT is installed: its own widths are used");
+        {
+            QFont drawn(QStringLiteral("Gill Sans MT"));
+            drawn.setFamilies({QStringLiteral("Gill Sans MT")});
+            if (QFontInfo(drawn).family() != QLatin1String("Cabin")) QSKIP("Gill Sans MT is drawn by this system's own Gill Sans, at its own widths");
+        }
         const QString text = QStringLiteral("Defense Force volunteers serve their state");
         // The phrase's width in Gill Sans MT (ems), regular and bold.
         for (const auto &[bold, ems] : {std::pair{false, 17.388}, std::pair{true, 19.855}}) {
