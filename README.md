@@ -2,15 +2,15 @@
 
 > **JeffPub is an independent project. It is not affiliated with, endorsed by, sponsored by, or supported by Microsoft Corporation.** See [Legal notices](#legal-notices).
 
-JeffPub is a free, open-source desktop publishing app for **Windows, macOS and Linux**. Its features are modeled on those of Microsoft Publisher 2021, and it opens Publisher files. Use it to lay out flyers, newsletters, brochures, business cards, certificates, and other print pieces on a page. Text, pictures, shapes, and tables sit in frames that you can move and resize wherever you like.
+JeffPub is a free, open-source desktop publishing app for **Windows, macOS and Linux**. Its features are modeled on those of Microsoft Publisher, and it opens Publisher files. Use it to lay out flyers, newsletters, brochures, business cards, certificates, and other print pieces on a page. Text, pictures, shapes, and tables sit in frames that you can move and resize wherever you like.
 
 ## Why JeffPub exists
 
-Microsoft is retiring Publisher. Microsoft 365 subscribers lost access to Publisher on October 1, 2026, and support for the standalone Publisher 2021 ends on October 13, 2026 ([Microsoft's announcement](https://support.microsoft.com/en-us/publisher/microsoft-publisher-will-no-longer-be-supported-after-october-2026)). Microsoft suggests converting existing publications to PDF or Word before then.
+Microsoft is retiring Publisher. Microsoft 365 subscribers lost access to Publisher on October 1, 2026, and support for the last standalone version ends on October 13, 2026 ([Microsoft's announcement](https://support.microsoft.com/en-us/publisher/microsoft-publisher-will-no-longer-be-supported-after-october-2026)). Microsoft suggests converting existing publications to PDF or Word before then.
 
 JeffPub was started in response. It gives the people, small businesses, schools and publishers who built years of work in Publisher a free, open-source program that keeps opening, editing and printing those `.pub` files, on Windows and Linux, without a subscription and without depending on any one company's product plans.
 
-> **Status:** beta (0.5): the features are in place and are being polished. Downloads are on the [Releases page](https://github.com/JeffOffice/jeffpub/releases): a Windows installer, a Mac disk image (not yet signed, so macOS asks before opening it the first time), and for Linux a `.deb` package (Debian, Ubuntu and their relatives) and an AppImage that runs on most other distributions. JeffPub opens and saves `.pub` files from Publisher 98 to 2021.
+> **Status:** beta (0.5): the features are in place and are being polished. Downloads are on the [Releases page](https://github.com/JeffOffice/jeffpub/releases): a Windows installer, a Mac disk image (not yet signed, so macOS asks before opening it the first time), and for Linux a `.deb` package (Debian, Ubuntu and their relatives) and an AppImage that runs on most other distributions. JeffPub opens and saves Publisher's `.pub` files, from Publisher 98 on.
 >
 > On Debian or Ubuntu, install the package with `sudo apt install ./jeffpub_<version>_amd64.deb`. For the AppImage, make the file executable and run it.
 
@@ -25,7 +25,7 @@ JeffPub was started in response. It gives the people, small businesses, schools 
 - **Design Checker**, which finds text that doesn't fit its box, objects that run off the page, and low-resolution pictures.
 - **Print and export** to PDF and PNG.
 - Rulers, guides, a pages pane, zoom, and a two-page spread view.
-- **Microsoft Publisher files.** Opens `.pub` files from Publisher 98 through Publisher 2021, and saves publications back to `.pub` so they can be shared with Publisher users. JeffPub also has its own open format, `.jpub`.
+- **Microsoft Publisher files.** Opens `.pub` files from every version of Publisher since Publisher 98, and saves publications back to `.pub` so they can be shared with Publisher users. JeffPub also has its own open format, `.jpub`.
 
 ## Privacy
 
