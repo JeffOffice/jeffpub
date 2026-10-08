@@ -1,4 +1,4 @@
-"""JeffPub 79's anonymous usage statistics: the collector and its stats page.
+"""JeffPub's anonymous usage statistics: the collector and its stats page.
 
 The app sends at most one ping a day (see src/app/telemetry.cpp), unless the
 person using it turned this off:
@@ -117,19 +117,19 @@ def record(ping):
         )
 
 
-ABOUT = """<!doctype html><meta charset="utf-8"><title>JeffPub 79 usage statistics</title>
+ABOUT = """<!doctype html><meta charset="utf-8"><title>JeffPub usage statistics</title>
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:40em;margin:2em auto;padding:0 1em}</style>
-<h1>JeffPub 79 usage statistics</h1>
-<p>Unless you turn it off (in setup, when JeffPub 79 first starts, or under File &gt; Options),
-JeffPub 79 sends this once a day while it's in use, and once more the day it's updated:</p>
+<h1>JeffPub usage statistics</h1>
+<p>Unless you turn it off (in setup, when JeffPub first starts, or under File &gt; Options),
+JeffPub sends this once a day while it's in use, and once more the day it's updated:</p>
 <ul><li>a random number made up when it was installed, which says nothing about you or your computer;</li>
-<li>JeffPub 79's version, your operating system and its version, and the language it's set to;</li>
+<li>JeffPub's version, your operating system and its version, and the language it's set to;</li>
 <li>how many times it was started, and how many times each of its commands was used
 (for example "opened a .pub file" or "exported a PDF").</li></ul>
 <p>Never your files, their names, or anything in them. Your IP address isn't kept.
-The numbers show how many people use JeffPub 79 and which parts matter most to them.</p>
-<p>The program that collects them is part of JeffPub 79's source:
-<a href="https://github.com/jeffsteinport/jeffpub79/tree/main/server/telemetry">server/telemetry</a>.</p>
+The numbers show how many people use JeffPub and which parts matter most to them.</p>
+<p>The program that collects them is part of JeffPub's source:
+<a href="https://github.com/JeffOffice/jeffpub/tree/main/server/telemetry">server/telemetry</a>.</p>
 """
 
 
@@ -174,12 +174,12 @@ def stats_page():
         for i, d in enumerate(days))
     chart = f'<svg viewBox="0 0 {w * 60} 125" width="100%" role="img" aria-label="Active installs per day">{bars}</svg>'
     return f"""<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JeffPub 79 usage</title>
+<title>JeffPub usage</title>
 <style>body{{font:15px/1.45 system-ui,sans-serif;max-width:56em;margin:1.5em auto;padding:0 1em;color:#1E2430}}
 table{{border-collapse:collapse;margin-bottom:1em}}td,th{{padding:3px 10px;border-bottom:1px solid #dde;text-align:left}}
 td:nth-child(n+2){{text-align:right}}.cards{{display:flex;gap:1em;flex-wrap:wrap}}
 .card{{background:#F2F5F9;border-radius:8px;padding:.6em 1em}}.card b{{display:block;font-size:1.6em}}</style>
-<h1>JeffPub 79 usage</h1>
+<h1>JeffPub usage</h1>
 <p>Installs that sent statistics (each counted once per period). Times are UTC.</p>
 <div class="cards">{''.join(f'<div class="card"><b>{n}</b>{e(label)}</div>' for label, n in totals)}</div>
 <h2>Active installs, last 60 days</h2>{chart}
@@ -230,7 +230,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send(200, ABOUT.encode(), "text/html; charset=utf-8")
         elif path == "/stats":
             if not self.authorized():
-                self.send(401, b"Password needed", extra=[("WWW-Authenticate", 'Basic realm="JeffPub 79 usage"')])
+                self.send(401, b"Password needed", extra=[("WWW-Authenticate", 'Basic realm="JeffPub usage"')])
                 return
             self.send(200, stats_page().encode(), "text/html; charset=utf-8", extra=[("Cache-Control", "no-store")])
         else:

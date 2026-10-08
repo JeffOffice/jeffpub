@@ -75,7 +75,7 @@ void readNBytes(librevenge::RVNGInputStream *input, unsigned long length, std::v
 unsigned long getLength(librevenge::RVNGInputStream *input);
 
 void appendCharacters(librevenge::RVNGString &text, const std::vector<unsigned char> &characters, const char *encoding);
-// JeffPub 79: a number with a fixed count of decimals, always with a '.'
+// JeffPub: a number with a fixed count of decimals, always with a '.'
 // (printf's %f follows the system's locale, which writes ',' in many
 // languages, and readers of these strings expect '.').
 librevenge::RVNGString fixedNumber(double v, unsigned decimals);

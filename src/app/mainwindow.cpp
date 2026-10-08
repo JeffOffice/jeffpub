@@ -216,7 +216,7 @@ QAction *MainWindow::mk(const QString &id, const QString &text, const QString &i
 
 void MainWindow::updateTitle()
 {
-    setWindowTitle(QStringLiteral("%1%2 - JeffPub 79").arg(m_ed->displayName(), m_ed->isModified() ? QStringLiteral("*") : QString()));
+    setWindowTitle(QStringLiteral("%1%2 - JeffPub").arg(m_ed->displayName(), m_ed->isModified() ? QStringLiteral("*") : QString()));
 }
 
 void MainWindow::resizeEvent(QResizeEvent *e)
@@ -276,7 +276,7 @@ bool MainWindow::openFile(const QString &path)
 {
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) {
-        QMessageBox::warning(this, QStringLiteral("Open"), QStringLiteral("JeffPub 79 can't open \"%1\".\n%2").arg(QFileInfo(path).fileName(), f.errorString()));
+        QMessageBox::warning(this, QStringLiteral("Open"), QStringLiteral("JeffPub can't open \"%1\".\n%2").arg(QFileInfo(path).fileName(), f.errorString()));
         return false;
     }
     const QByteArray bytes = f.readAll();
@@ -293,7 +293,7 @@ bool MainWindow::openFile(const QString &path)
     }
     QApplication::restoreOverrideCursor();
     if (!doc) {
-        QMessageBox::warning(this, QStringLiteral("Open"), QStringLiteral("JeffPub 79 can't open \"%1\".\n%2").arg(QFileInfo(path).fileName(), err));
+        QMessageBox::warning(this, QStringLiteral("Open"), QStringLiteral("JeffPub can't open \"%1\".\n%2").arg(QFileInfo(path).fileName(), err));
         return false;
     }
     if (doc->props.title.isEmpty()) doc->props.title = QFileInfo(path).completeBaseName();
@@ -342,7 +342,7 @@ bool MainWindow::saveTo(const QString &pathIn)
         m_ed->doc()->props.modified = QDateTime::currentDateTime();
         if (m_ed->doc()->props.author.isEmpty()) m_ed->doc()->props.author = Settings::get().userName();
         if (!savePublication(*m_ed->doc(), path, thumb, &err)) {
-            QMessageBox::warning(this, QStringLiteral("Save"), QStringLiteral("JeffPub 79 couldn't save \"%1\".\n%2%3").arg(QFileInfo(path).fileName(), err, saveFailureHint(err)));
+            QMessageBox::warning(this, QStringLiteral("Save"), QStringLiteral("JeffPub couldn't save \"%1\".\n%2%3").arg(QFileInfo(path).fileName(), err, saveFailureHint(err)));
             return false;
         }
     }
@@ -385,7 +385,7 @@ bool MainWindow::maybeSave()
 {
     m_ed->flushTyping();
     if (!m_ed->isModified()) return true;
-    const auto r = QMessageBox::question(this, QStringLiteral("JeffPub 79"), QStringLiteral("Do you want to save changes to %1?").arg(m_ed->displayName()),
+    const auto r = QMessageBox::question(this, QStringLiteral("JeffPub"), QStringLiteral("Do you want to save changes to %1?").arg(m_ed->displayName()),
                                          QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Save);
     if (r == QMessageBox::Cancel) return false;
     if (r == QMessageBox::Save) return save();
@@ -633,7 +633,7 @@ static QByteArray pdfX4Profile(QWidget *parent, const PdfXCondition &c, const QS
     const QUrl url(c.profileUrl);
     if (QMessageBox::question(parent, QStringLiteral("Create PDF"),
                               QStringLiteral("A PDF/X-4 file carries the color profile of its printing condition, \"%1\". The European Color Initiative, "
-                                             "which makes it, lets anyone use it and put it in PDFs but not pass it on, so it doesn't come with JeffPub 79.\n\n"
+                                             "which makes it, lets anyone use it and put it in PDFs but not pass it on, so it doesn't come with JeffPub.\n\n"
                                              "Download it from %2 now? (%3, once.)")
                                   .arg(c.info, url.host(), c.profileSize),
                               QMessageBox::Yes | QMessageBox::Cancel) != QMessageBox::Yes) {
@@ -642,7 +642,7 @@ static QByteArray pdfX4Profile(QWidget *parent, const PdfXCondition &c, const QS
     }
     QNetworkAccessManager net;
     QNetworkRequest req(url);
-    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("JeffPub79/%1").arg(QStringLiteral(JP_VERSION)));
+    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("JeffPub/%1").arg(QStringLiteral(JP_VERSION)));
     QNetworkReply *r = net.get(req);
     QProgressDialog progress(QStringLiteral("Downloading %1…").arg(c.info), QStringLiteral("Cancel"), 0, 0, parent);
     progress.setWindowModality(Qt::WindowModal);
@@ -684,7 +684,7 @@ static QByteArray pdfXmp(const DocProps &pr, const QString &title)
     if (!pr.author.isEmpty()) x += "<dc:creator><rdf:Seq><rdf:li>" + esc(pr.author) + "</rdf:li></rdf:Seq></dc:creator>\n";
     if (!pr.subject.isEmpty()) x += "<dc:description><rdf:Alt><rdf:li xml:lang=\"x-default\">" + esc(pr.subject) + "</rdf:li></rdf:Alt></dc:description>\n";
     if (!pr.keywords.isEmpty()) x += "<pdf:Keywords>" + esc(pr.keywords) + "</pdf:Keywords>\n";
-    x += "<xmp:CreatorTool>JeffPub 79</xmp:CreatorTool>\n</rdf:Description>\n</rdf:RDF></x:xmpmeta>\n<?xpacket end=\"w\"?>";
+    x += "<xmp:CreatorTool>JeffPub</xmp:CreatorTool>\n</rdf:Description>\n</rdf:RDF></x:xmpmeta>\n<?xpacket end=\"w\"?>";
     return x;
 }
 
@@ -716,13 +716,13 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
             if (!x4Profile.isValid() || x4Profile.colorModel() != QColorSpace::ColorModel::Cmyk) why = QStringLiteral("the color profile isn't one for printing in CMYK");
         }
         if (!why.isEmpty()) {
-            if (isVisible()) QMessageBox::warning(this, QStringLiteral("Create PDF"), QStringLiteral("JeffPub 79 couldn't make the PDF/X-4: %1.").arg(why));
+            if (isVisible()) QMessageBox::warning(this, QStringLiteral("Create PDF"), QStringLiteral("JeffPub couldn't make the PDF/X-4: %1.").arg(why));
             else qWarning("Create PDF: no PDF/X-4: %s", qPrintable(why));
             return false;
         }
     }
     QPdfWriter pdf(path);
-    pdf.setCreator(QStringLiteral("JeffPub 79"));
+    pdf.setCreator(QStringLiteral("JeffPub"));
     const QString title = d->props.title.isEmpty() ? m_ed->displayName() : d->props.title;
     pdf.setTitle(title);
     if (s.pdfx) s.archival = false;
@@ -760,7 +760,7 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
     pdf.setResolution(1200);
     QPainter p;
     if (!p.begin(&pdf)) {
-        QMessageBox::warning(this, QStringLiteral("Create PDF"), QStringLiteral("JeffPub 79 couldn't write \"%1\".%2").arg(path, saveFailureHint(QStringLiteral("access denied"))));
+        QMessageBox::warning(this, QStringLiteral("Create PDF"), QStringLiteral("JeffPub couldn't write \"%1\".%2").arg(path, saveFailureHint(QStringLiteral("access denied"))));
         return false;
     }
     QApplication::setOverrideCursor(Qt::WaitCursor);

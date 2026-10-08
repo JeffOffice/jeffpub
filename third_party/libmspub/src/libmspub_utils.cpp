@@ -380,7 +380,7 @@ unsigned long getLength(librevenge::RVNGInputStream *const input)
 #define SURROGATE_VALUE(h,l) (((h) - 0xd800) * 0x400 + (l) - 0xdc00 + 0x10000)
 
 
-// JeffPub 79: UTF-16LE and windows-1252 are decoded here; other legacy
+// JeffPub: UTF-16LE and windows-1252 are decoded here; other legacy
 // codepages go through a host-supplied hook (Qt) instead of ICU.
 static DecodeHook g_decodeHook = nullptr;
 void setDecodeHook(DecodeHook hook)

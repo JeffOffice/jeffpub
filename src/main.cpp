@@ -1,9 +1,9 @@
-// JeffPub 79 entry point.
+// JeffPub entry point.
 //
-//   JeffPub79 [file ...]                  open publications (.jpub, .pub, ...)
-//   JeffPub79 --template <id>             start from a built-in template
-//   JeffPub79 --backstage <page>          open on a File page (new, open, print, ...)
-//   JeffPub79 --screenshot <png> [--size WxH]
+//   JeffPub [file ...]                  open publications (.jpub, .pub, ...)
+//   JeffPub --template <id>             start from a built-in template
+//   JeffPub --backstage <page>          open on a File page (new, open, print, ...)
+//   JeffPub --screenshot <png> [--size WxH]
 //                                         render the window to a PNG and quit
 //                                         (works with QT_QPA_PLATFORM=offscreen)
 
@@ -69,15 +69,16 @@ void applyTheme(QApplication &app)
 int main(int argc, char **argv)
 {
     Q_INIT_RESOURCE(resources);   // the icons live in the static jpcore library
-    QApplication::setApplicationName(QStringLiteral("JeffPub 79"));
-    QApplication::setOrganizationName(QStringLiteral("JeffPub"));
+    QApplication::setApplicationName(QStringLiteral("JeffPub"));
+    QApplication::setOrganizationName(QStringLiteral("JeffOffice"));
     QApplication::setApplicationVersion(QStringLiteral(JP_VERSION));
     QApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
     QApplication app(argc, argv);
     QApplication::setWindowIcon(QIcon(QStringLiteral(":/app.png")));
+    jp::moveFromJeffPub79();   // settings and files kept under the old name
 
     QCommandLineParser cli;
-    cli.setApplicationDescription(QStringLiteral("JeffPub 79 desktop publishing"));
+    cli.setApplicationDescription(QStringLiteral("JeffPub desktop publishing"));
     cli.addHelpOption();
     cli.addVersionOption();
     QCommandLineOption shotOpt(QStringLiteral("screenshot"), QStringLiteral("Save a screenshot of the window and quit."), QStringLiteral("png"));
@@ -141,8 +142,8 @@ int main(int argc, char **argv)
     }
 
 #ifdef Q_OS_WIN
-    // Lets the installer see that JeffPub 79 is running and ask to close it first.
-    CreateMutexW(nullptr, FALSE, L"JeffPub79Running");
+    // Lets the installer see that JeffPub is running and ask to close it first.
+    CreateMutexW(nullptr, FALSE, L"JeffPubRunning");
 #endif
     w->show();
     auto *up = new jp::Updater(w);

@@ -52,7 +52,7 @@ namespace libmspub
 
 namespace
 {
-// JeffPub 79: UTF-16 text from a drawing property, up to its closing zero.
+// JeffPub: UTF-16 text from a drawing property, up to its closing zero.
 static librevenge::RVNGString utf8(const std::vector<unsigned char> &d)
 {
   librevenge::RVNGString out;
@@ -83,7 +83,7 @@ static librevenge::RVNGString utf8(const std::vector<unsigned char> &d)
   return out;
 }
 
-// JeffPub 79: JP_PUB_TRACE, read once (it is checked inside loops).
+// JeffPub: JP_PUB_TRACE, read once (it is checked inside loops).
 bool jpTraceOn()
 {
   static const bool on = getenv("JP_PUB_TRACE") != nullptr;
@@ -160,7 +160,7 @@ Alignment readAlignment(const unsigned value)
     return RIGHT;
   case JUSTIFY:
     return JUSTIFY;
-  // JeffPub 79: codes 3-5 are also justified text (seen as 3 in Publisher's own
+  // JeffPub: codes 3-5 are also justified text (seen as 3 in Publisher's own
   // templates, whose PDFs show it justified); upstream turned them into left.
   case 3:
   case 4:
@@ -305,7 +305,7 @@ bool MSPUBParser::parse()
   if (!m_input->isStructured())
     return false;
   // No check: metadata are not important enough to fail if they can't be parsed
-  // JeffPub 79: that includes exceptions from damaged summary streams.
+  // JeffPub: that includes exceptions from damaged summary streams.
   try
   {
     parseMetaData();
@@ -808,7 +808,7 @@ bool MSPUBParser::parsePageChunk(librevenge::RVNGInputStream *input, const Conte
   {
     m_collector->addPage(chunk.seqNum);
   }
-  // JeffPub 79: the first byte of field 06 says what kind of page this is
+  // JeffPub: the first byte of field 06 says what kind of page this is
   // (see MSPUBCollector::go()); special pages' sequence numbers vary, so the
   // fixed list above misses some in older files.
   int kindByte = -1;
@@ -1025,7 +1025,7 @@ bool MSPUBParser::parseShape(librevenge::RVNGInputStream *input,
                   case 0x04:
                     currentCell.m_endColumn = subInfo.data;
                     break;
-                  // JeffPub 79: 0x0a-0x0d are the cell's left, right, top and bottom margins.
+                  // JeffPub: 0x0a-0x0d are the cell's left, right, top and bottom margins.
                   case 0x0a:
                   case 0x0b:
                   case 0x0c:
@@ -1326,7 +1326,7 @@ bool MSPUBParser::parseQuill(librevenge::RVNGInputStream *input)
       if (jpTraceOn()) fprintf(stderr, "STSH #%d at %lu len %lu\n", whichStsh, (unsigned long)i->offset, (unsigned long)i->length);
       if (whichStsh == 0)
       {
-        // JeffPub 79: the first sheet names the styles.
+        // JeffPub: the first sheet names the styles.
         input->seek(i->offset, librevenge::RVNG_SEEK_SET);
         parseStyleNames(input, *i);
       }
@@ -1577,7 +1577,7 @@ void MSPUBParser::parseFonts(librevenge::RVNGInputStream *input, const QuillChun
   }
 }
 
-// JeffPub 79: style names. Each entry is a u16 length in characters, the
+// JeffPub: style names. Each entry is a u16 length in characters, the
 // name in UTF-16, then an id: negative for Publisher's built-in styles (no
 // name; -1 is Normal), zero for a named one.
 void MSPUBParser::parseStyleNames(librevenge::RVNGInputStream *input, const QuillChunkReference &chunk)
@@ -1750,7 +1750,7 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
       ret.m_align = readAlignment(info.data); // Is this correct?
       ret.m_alignRaw = int(info.data & 0xff);
       break;
-    case 0x3A: // JeffPub 79: Publisher writes 0xF3FF on a right-to-left paragraph (with 0x06 = 0)
+    case 0x3A: // JeffPub: Publisher writes 0xF3FF on a right-to-left paragraph (with 0x06 = 0)
       ret.m_direction = int(info.data & 0xffff);
       break;
     case PARAGRAPH_DEFAULT_CHAR_STYLE:
@@ -1802,7 +1802,7 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
             MSPUBBlockInfo tabEntryInfo = parseBlock(input, true);
             if (tabEntryInfo.type == GENERAL_CONTAINER)
             {
-              // JeffPub 79: 00 position, 01 alignment (low byte), 02 the
+              // JeffPub: 00 position, 01 alignment (low byte), 02 the
               // leader character (absent for none); read them all.
               input->seek(tabEntryInfo.dataOffset + 4, librevenge::RVNG_SEEK_SET);
               unsigned position = 0;
@@ -1843,7 +1843,7 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
         MSPUBBlockInfo listSubInfo = parseBlock(input, true);
         switch (listSubInfo.id)
         {
-        // JeffPub 79: the values are the sub-blocks' (upstream read the container's).
+        // JeffPub: the values are the sub-blocks' (upstream read the container's).
         case PARAGRAPH_LIST_NUMBERING_TYPE:
           numberingType = readNumberingType(listSubInfo.data);
           ret.m_listKind = int(listSubInfo.data);
@@ -1865,11 +1865,11 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
       ret.m_listDelim = int(info.data >> 16);
       break;
     case 0x03:
-      // JeffPub 79: the bullet's font, an index into the font table.
+      // JeffPub: the bullet's font, an index into the font table.
       ret.m_listFontIndex = int(info.data);
       break;
     case 0x02:
-      // JeffPub 79: a list's bullet or number size (EMU).
+      // JeffPub: a list's bullet or number size (EMU).
       ret.m_listSizeEmu = info.data;
       break;
     case PARAGRAPH_DROP_CAP_LINES:
@@ -1932,7 +1932,7 @@ CharacterStyle MSPUBParser::getCharacterStyle(librevenge::RVNGInputStream *input
     case UNDERLINE_ID:
       style.underline = readUnderline(info.data);
       break;
-    // JeffPub 79: strikethrough, letter spacing and tracking.
+    // JeffPub: strikethrough, letter spacing and tracking.
     case 0x10:
       style.strike = true;
       break;
@@ -1995,7 +1995,7 @@ CharacterStyle MSPUBParser::getCharacterStyle(librevenge::RVNGInputStream *input
     case LOCALE_ID:
       style.lcid = info.data;
       break;
-    case 0x59: // JeffPub 79: text outline ("line") container
+    case 0x59: // JeffPub: text outline ("line") container
     {
       const unsigned long here = input->tell();
       input->seek(info.dataOffset + 4, librevenge::RVNG_SEEK_SET);
@@ -2052,7 +2052,7 @@ CharacterStyle MSPUBParser::getCharacterStyle(librevenge::RVNGInputStream *input
   return style;
 }
 
-// JeffPub 79: a run keeps a font per script, each in a container whose id is
+// JeffPub: a run keeps a font per script, each in a container whose id is
 // the slot; slot 0 is the one for Latin text (Publisher sets 0-5 and 0x2a
 // together). A run with fonts for other scripts only takes its Latin font
 // from its style, as Publisher shows it; upstream took the first slot's.
@@ -2333,7 +2333,7 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
         if (findEscherContainer(input, sp, cFopt, OFFICE_ART_FOPT))
         {
           FOPTValues foptValues = extractFOPTValues(input, cFopt);
-          // JeffPub 79: Text Art's words and settings.
+          // JeffPub: Text Art's words and settings.
           if (st >= TEXT_PLAIN_TEXT && st <= TEXT_CAN_DOWN && !foptValues.m_complexValues[0xC0C0].empty())
           {
             librevenge::RVNGPropertyList ta;
@@ -2404,7 +2404,7 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
                                       foptValues.m_scalarValues, FIELDID_GEOM_BOOL_PROPS);
           bool useLine = lineExistsByFlagPointer(
                            ptr_lineFlags, ptr_geomFlags);
-          // JeffPub 79: a box can have a border on some sides only (a rule
+          // JeffPub: a box can have a border on some sides only (a rule
           // above a caption) while its overall line is off; read those sides.
           if (!useLine && bool(maybe_tertiaryFoptValues))
           {
@@ -2582,7 +2582,7 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
             }
             fprintf(stderr, "\n");
           }
-          // JeffPub 79: text direction lives in the primary or tertiary property table.
+          // JeffPub: text direction lives in the primary or tertiary property table.
           unsigned *ptr_textFlow = getIfExists(foptValues.m_scalarValues, FIELDID_TEXT_FLOW);
           if (!ptr_textFlow && bool(maybe_tertiaryFoptValues))
             ptr_textFlow = getIfExists(maybe_tertiaryFoptValues.get(), FIELDID_TEXT_FLOW);
@@ -2760,7 +2760,7 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
   }
   else
   {
-    // JeffPub 79: a shape with no page placement whose client anchor names a
+    // JeffPub: a shape with no page placement whose client anchor names a
     // table carries one cell fill or border of that table.
     input->seek(sp.contentsOffset, librevenge::RVNG_SEEK_SET);
     const bool hasAnchor = findEscherContainer(input, sp, cAnchor, OFFICE_ART_CLIENT_ANCHOR);
@@ -2812,7 +2812,7 @@ std::shared_ptr<Fill> MSPUBParser::getNewFill(const std::map<unsigned short, uns
     const unsigned *ptr_fillColor = getIfExists_const(foptProperties, FIELDID_FILL_COLOR);
     const unsigned *ptr_fieldStyleProps = getIfExists_const(foptProperties, FIELDID_FIELD_STYLE_BOOL_PROPS);
     skipIfNotBg = ptr_fieldStyleProps && (*ptr_fieldStyleProps & 0xF0) == 0;
-    // JeffPub 79: a shape marked filled (fUsefFilled and fFilled) with no
+    // JeffPub: a shape marked filled (fUsefFilled and fFilled) with no
     // fill color uses the drawing format's default, white.
     const bool filledByDefault = !ptr_fillColor && ptr_fieldStyleProps && (*ptr_fieldStyleProps & 0x00100010) == 0x00100010;
     if ((ptr_fillColor || filledByDefault) && !skipIfNotBg)
@@ -3163,7 +3163,7 @@ FOPTValues MSPUBParser::extractFOPTValues(librevenge::RVNGInputStream *input, co
     {
       continue;
     }
-    // JeffPub 79: text values (Text Art words and font, picture and shape
+    // JeffPub: text values (Text Art words and font, picture and shape
     // names) are plain bytes of the stated length, not arrays.
     switch (id & 0x3FFF)
     {

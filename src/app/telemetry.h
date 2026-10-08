@@ -1,6 +1,6 @@
 #pragma once
 // Anonymous usage statistics. Once a day (and right away after an update),
-// while JeffPub 79 runs and unless
+// while JeffPub runs and unless
 // the person using it turned them off (in setup, when it first starts, or
 // in File > Options), it sends a random install id made up here, its version,
 // the operating system and language, how many times it was started, and how

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare JeffPub 79's rendering of .pub files with reference PDFs of the same publications.
+"""Compare JeffPub's rendering of .pub files with reference PDFs of the same publications.
 
 Finds every .pub under FOLDER that has a PDF beside it (same name, or a name
 starting with the .pub's name) that JeffPub did not make and which

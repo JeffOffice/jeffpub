@@ -28,12 +28,12 @@ struct CellInfo
   unsigned m_startRow;
   unsigned m_endRow;
   unsigned m_startColumn;
-  // JeffPub 79: inner margins in EMUs (left, right, top, bottom); -1 = Publisher's default.
+  // JeffPub: inner margins in EMUs (left, right, top, bottom); -1 = Publisher's default.
   long m_margins[4] = {-1, -1, -1, -1};
   unsigned m_endColumn;
 };
 
-// JeffPub 79: a cell fill or border from the table's formatting shapes.
+// JeffPub: a cell fill or border from the table's formatting shapes.
 // Publisher keeps these as drawing shapes with no page placement; their
 // client anchor names the table (field 2) and the cells:
 //   kind 0 (field 1 absent): fill of the cell at column field 3, row field 4.

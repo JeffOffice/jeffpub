@@ -301,7 +301,7 @@ private:
             m_status->clear();
             return true;
         }
-        m_status->setText(QStringLiteral("JeffPub 79 finished searching the publication. \"%1\" was not found.").arg(q));
+        m_status->setText(QStringLiteral("JeffPub finished searching the publication. \"%1\" was not found.").arg(q));
         return false;
     }
     void replaceOne()
@@ -333,7 +333,7 @@ private:
                 }
             }
         });
-        m_status->setText(QStringLiteral("JeffPub 79 made %1 replacement(s).").arg(n));
+        m_status->setText(QStringLiteral("JeffPub made %1 replacement(s).").arg(n));
     }
     MainWindow *m_win;
     QLineEdit *m_find, *m_replace;
@@ -788,7 +788,7 @@ public:
         m_out = new QListWidget(this);
         m_out->setWordWrap(true);
         v->addWidget(m_out, 1);
-        auto *note = new QLabel(QStringLiteral("JeffPub 79 looks up words in its offline thesaurus. It does not send your text to online services."), this);
+        auto *note = new QLabel(QStringLiteral("JeffPub looks up words in its offline thesaurus. It does not send your text to online services."), this);
         note->setWordWrap(true);
         v->addWidget(note);
         connect(go, &QPushButton::clicked, this, &ResearchPane::lookUp);

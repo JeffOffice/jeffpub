@@ -4,7 +4,7 @@
 |---|---|---|---|
 | `libmspub/` | [libmspub](https://wiki.documentfoundation.org/DLP/Libraries/libmspub), the `.pub` file parser | MPL-2.0 | see `libmspub/VERSION` |
 | `librevenge/` | [librevenge](https://sourceforge.net/p/libwpd/librevenge/), document interfaces and OLE2 streams | MPL-2.0 or LGPL-2.1+ | 0.0.5 |
-| `compat/` | JeffPub 79's minimal stand-ins for the Boost headers these libraries use | GPL-3.0 (this project) | — |
+| `compat/` | JeffPub's minimal stand-ins for the Boost headers these libraries use | GPL-3.0 (this project) | — |
 | `pdfium/licenses/` | The license texts of [PDFium](https://pdfium.googlesource.com/pdfium/) and of the libraries built into it, shipped with every package | see below | chromium/8086 (157.0.8086.0) |
 
 zlib is downloaded at build time when the system has none.
@@ -32,9 +32,9 @@ PDFium places PDF pages as pictures (`src/render/pdfpage.cpp`). The build downlo
 | simdutf | MIT | `simdutf.txt` |
 | LLVM libc | Apache-2.0 with LLVM Exceptions | `llvm-libc.txt` |
 
-## JeffPub 79 changes
+## JeffPub changes
 
-These are the only modifications to the upstream sources. Each is marked with a `JeffPub 79` comment.
+These are the only modifications to the upstream sources. Each is marked with a `JeffPub` comment.
 
 - **Latin font slot.** `MSPUBParser.cpp` (`getFontIndex`) reads a run's font from slot 0 of its font container (0x24), the slot for Latin text; a run with fonts for other scripts only takes its font from its style. Upstream took the first slot, so text in older newsletters whose runs list Courier New and Sendnya for other scripts came in as Courier New where Publisher shows Gill Sans MT. Publisher 2000 and 98 files hold each slot's font number directly instead of in a container per slot; upstream skipped those, so their runs all came in as the first font in the table (Times New Roman where Publisher shows Arial or Arial Rounded MT Bold).
 - **Linked box order.** `MSPUBParser.cpp` reads each text box's place in its story's chain (shape block 0x28; the first box has none) and `MSPUBCollector.cpp` passes it on as `jp:text-chain-index`. Upstream links boxes in the order the file draws them, so a story could start in its second or third box (columns of a newsletter in the wrong order).

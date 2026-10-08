@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(JeffPub79 VERSION 0.5.0 LANGUAGES CXX)
+project(JeffPub VERSION 0.5.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -40,12 +40,12 @@ if(MINGW)
   target_compile_options(jpcore PUBLIC -Wa,-mbig-obj -D_USE_MATH_DEFINES)
 endif()
 
-qt_add_executable(jeffpub79 WIN32 MACOSX_BUNDLE src/main.cpp)
+qt_add_executable(jeffpub WIN32 MACOSX_BUNDLE src/main.cpp)
 if(APPLE)
   # A macOS app: an icon made from the 256-pixel picture, document types for
   # .jpub and .pub, and the fonts and dictionaries in Contents/Resources.
-  set(JP_ICONSET ${CMAKE_BINARY_DIR}/JeffPub79.iconset)
-  set(JP_ICNS ${CMAKE_BINARY_DIR}/JeffPub79.icns)
+  set(JP_ICONSET ${CMAKE_BINARY_DIR}/JeffPub.iconset)
+  set(JP_ICNS ${CMAKE_BINARY_DIR}/JeffPub.icns)
   add_custom_command(OUTPUT ${JP_ICNS}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${JP_ICONSET}
     COMMAND sips -z 16 16 ${CMAKE_SOURCE_DIR}/resources/app.png --out ${JP_ICONSET}/icon_16x16.png
@@ -59,23 +59,23 @@ if(APPLE)
     DEPENDS ${CMAKE_SOURCE_DIR}/resources/app.png
     VERBATIM)
   set_source_files_properties(${JP_ICNS} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
-  target_sources(jeffpub79 PRIVATE ${JP_ICNS})
-  set_target_properties(jeffpub79 PROPERTIES
+  target_sources(jeffpub PRIVATE ${JP_ICNS})
+  set_target_properties(jeffpub PROPERTIES
     MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/packaging/macos/Info.plist.in
-    MACOSX_BUNDLE_GUI_IDENTIFIER io.github.jeffsteinport.jeffpub79
-    MACOSX_BUNDLE_ICON_FILE JeffPub79.icns
+    MACOSX_BUNDLE_GUI_IDENTIFIER com.jeffoffice.jeffpub
+    MACOSX_BUNDLE_ICON_FILE JeffPub.icns
     MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
     MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION})
-  add_custom_command(TARGET jeffpub79 POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/resources/fonts $<TARGET_BUNDLE_CONTENT_DIR:jeffpub79>/Resources/fonts
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/resources/dict $<TARGET_BUNDLE_CONTENT_DIR:jeffpub79>/Resources/dict
+  add_custom_command(TARGET jeffpub POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/resources/fonts $<TARGET_BUNDLE_CONTENT_DIR:jeffpub>/Resources/fonts
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/resources/dict $<TARGET_BUNDLE_CONTENT_DIR:jeffpub>/Resources/dict
     VERBATIM)
 endif()
 if(WIN32 AND EXISTS ${CMAKE_SOURCE_DIR}/resources/app.ico)
-  target_sources(jeffpub79 PRIVATE resources/app.rc)
+  target_sources(jeffpub PRIVATE resources/app.rc)
 endif()
-target_link_libraries(jeffpub79 PRIVATE jpcore)
-set_target_properties(jeffpub79 PROPERTIES OUTPUT_NAME "JeffPub79")
+target_link_libraries(jeffpub PRIVATE jpcore)
+set_target_properties(jeffpub PROPERTIES OUTPUT_NAME "JeffPub")
 
 enable_testing()
 qt_add_executable(jptests tests/tests.cpp)
@@ -86,7 +86,7 @@ set_target_properties(jptests PROPERTIES WIN32_EXECUTABLE OFF)
 add_test(NAME jptests COMMAND jptests)
 set_tests_properties(jptests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-install(TARGETS jeffpub79 RUNTIME DESTINATION bin BUNDLE DESTINATION .)
+install(TARGETS jeffpub RUNTIME DESTINATION bin BUNDLE DESTINATION .)
 
 # Developer tool for rendering and converting publications from the command line.
 qt_add_executable(jpubtool tools/jpubtool.cpp)

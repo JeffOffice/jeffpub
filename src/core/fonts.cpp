@@ -26,7 +26,7 @@ QStringList bundledFontDirs()
     const QString app = QCoreApplication::applicationDirPath();
     // Beside the program (Windows), the Linux packages' share folder, and a
     // macOS app's Resources folder.
-    QStringList dirs{app + "/fonts", app + "/../share/jeffpub79/fonts", app + "/../fonts", app + "/../Resources/fonts"};
+    QStringList dirs{app + "/fonts", app + "/../share/jeffpub/fonts", app + "/../fonts", app + "/../Resources/fonts"};
 #ifdef JP_SOURCE_DIR
     dirs << QStringLiteral(JP_SOURCE_DIR) + "/resources/fonts";
 #endif

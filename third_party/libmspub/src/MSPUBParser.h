@@ -71,7 +71,7 @@ public:
 protected:
   virtual unsigned getColorIndexByQuillEntry(unsigned entry);
 
-  // JeffPub 79: positions in the text stream are 32-bit. As 16-bit values
+  // JeffPub: positions in the text stream are 32-bit. As 16-bit values
   // they wrapped past 64 KB, so every story after the first ~32,000
   // characters of a long publication came out empty.
   struct TextSpanReference

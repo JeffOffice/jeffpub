@@ -128,7 +128,7 @@ public:
 	Header();
 	void compute_block_size()
 	{
-		// JeffPub 79: damaged headers make the file invalid instead of asserting.
+		// JeffPub: damaged headers make the file invalid instead of asserting.
 		if (m_shift_bbat >= 31 || m_shift_sbat >= 31)
 		{
 			m_threshold = 0;

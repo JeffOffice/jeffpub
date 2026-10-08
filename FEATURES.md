@@ -1,12 +1,12 @@
 # Feature list
 
-The features a complete desktop publishing program needs, and where JeffPub 79 stands on each. A box is checked only when the feature works in JeffPub 79. Last reviewed October 6, 2026.
+The features a complete desktop publishing program needs, and where JeffPub stands on each. A box is checked only when the feature works in JeffPub. Last reviewed October 6, 2026.
 
-Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missing) · **(alt)** the usual way to do this depends on a proprietary online service, so JeffPub 79 provides an open replacement with the same purpose.
+Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missing) · **(alt)** the usual way to do this depends on a proprietary online service, so JeffPub provides an open replacement with the same purpose.
 
 ## Beyond Publisher
 
-Features JeffPub 79 has that Publisher never did, then the ones planned before version 1.
+Features JeffPub has that Publisher never did, then the ones planned before version 1.
 
 - [x] Runs on Linux as well as Windows; Publisher only ever ran on Windows
 - [x] Free and open source (GPL-3.0): no license fee, subscription or account
@@ -46,7 +46,7 @@ Features JeffPub 79 has that Publisher never did, then the ones planned before v
 - [x] Booklets in `.pub`: saved as Publisher saves them (spreads, two-page masters), and Publisher 2021's own booklets open with all their pages *(Publisher read JeffPub's booklets as booklets, with the same spreads and masters, and pictured them the same)*
 - [x] Objects in text (Publisher's "inline" pictures, shapes and text boxes): Wrap Text > In Line with Text moves an object over a text box into its text, and choosing another wrap with the object selected in the text moves it back out; opened from and saved to `.pub`, and kept in `.jpub`; each sits on its line's baseline inside its wrap distances and a tall one makes its line taller, as in Publisher *(measured against Publisher to the pixel; Publisher showed a JeffPub-saved copy of its sample exactly as its own file)*
 - [x] Fields and hyperlinks in `.pub` text: page numbers (this page's, and the next or previous linked box's), dates and times in Publisher's 17 formats (they update, as in Publisher), and hyperlinks are read and saved as Publisher's own *(Publisher counted the same fields and links in JeffPub's copies of its samples as in its own files, and pictured them the same)*
-- [x] Anonymous usage statistics, with a choice in Windows setup and when JeffPub 79 first starts, and a switch in File > Options: once a day (and on the day of an update), the version, operating system, language and how often each command is used; never files or their contents (see README, Privacy)
+- [x] Anonymous usage statistics, with a choice in Windows setup and when JeffPub first starts, and a switch in File > Options: once a day (and on the day of an update), the version, operating system, language and how often each command is used; never files or their contents (see README, Privacy)
 - [x] Save, Save As, AutoRecover, and backup on save
 - [x] Close and prompt to save changes
 
@@ -65,7 +65,7 @@ Features JeffPub 79 has that Publisher never did, then the ones planned before v
 - [x] Web page export (single-file HTML)
 - [x] Pack and Go: Save for a Commercial Printer, Save for Another Computer (bundle fonts and linked pictures)
 - [x] Save for a Photo Printer
-- [x] **(alt)** Email: send the current page as a picture, or the publication as an attachment. JeffPub 79 creates a ready-to-send `.eml`, PDF, or HTML file instead of sending through a mail program.
+- [x] **(alt)** Email: send the current page as a picture, or the publication as an attachment. JeffPub creates a ready-to-send `.eml`, PDF, or HTML file instead of sending through a mail program.
 
 ### Options
 - [x] General (user name and initials, UI theme), Proofing (AutoCorrect of common misspellings, symbols, sentence capitals and two initial capitals; smart quotes; spelling options), Save (AutoRecover interval and location, backup copies), Language, and Advanced (auto-select entire word, drag-and-drop text, hyphenation in new text boxes, automatic hyphenation zone, measurement units, recent file count, nudge amount, print and display options)

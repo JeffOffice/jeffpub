@@ -36,7 +36,7 @@
 namespace jp {
 
 namespace {
-const char *kReleases = "https://api.github.com/repos/jeffsteinport/jeffpub79/releases?per_page=10";
+const char *kReleases = "https://api.github.com/repos/JeffOffice/jeffpub/releases?per_page=10";
 Updater *g_updater = nullptr;
 
 // (major, minor, patch, preview); a final release sorts after its previews.
@@ -65,7 +65,7 @@ bool Updater::trustedInstaller(const QString &url, const QString &tag, const QSt
 {
     static const QRegularExpression tagChars(QStringLiteral("^[A-Za-z0-9._-]{1,40}$"));
     static const QRegularExpression sha(QStringLiteral("^sha256:[0-9a-fA-F]{64}$"));
-    return url.startsWith(QLatin1String("https://github.com/jeffsteinport/jeffpub79/releases/download/")) && tagChars.match(tag).hasMatch() &&
+    return url.startsWith(QLatin1String("https://github.com/JeffOffice/jeffpub/releases/download/")) && tagChars.match(tag).hasMatch() &&
            sha.match(digest).hasMatch();
 }
 
@@ -85,7 +85,7 @@ void Updater::check(bool interactive)
     if (m_busy) return;
     m_busy = true;
     QNetworkRequest req{QUrl(QString::fromLatin1(kReleases))};
-    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("JeffPub79/%1").arg(QStringLiteral(JP_VERSION)));
+    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("JeffPub/%1").arg(QStringLiteral(JP_VERSION)));
     req.setRawHeader("Accept", "application/vnd.github+json");
     req.setTransferTimeout(15000);
     QNetworkReply *r = m_net.get(req);
@@ -95,7 +95,7 @@ void Updater::check(bool interactive)
         if (r->error() != QNetworkReply::NoError) {
             if (interactive)
                 QMessageBox::warning(m_win, QStringLiteral("Check for Updates"),
-                                     QStringLiteral("JeffPub 79 couldn't reach the update server. Check your internet connection and try again.\n\n%1").arg(r->errorString()));
+                                     QStringLiteral("JeffPub couldn't reach the update server. Check your internet connection and try again.\n\n%1").arg(r->errorString()));
             return;
         }
         Settings::get().setValue(QStringLiteral("updates/lastCheck"), QDate::currentDate());
@@ -131,7 +131,7 @@ void Updater::check(bool interactive)
         }
         if (interactive)
             QMessageBox::information(m_win, QStringLiteral("Check for Updates"),
-                                     QStringLiteral("You have the latest version of JeffPub 79 (%1).").arg(QStringLiteral(JP_VERSION)));
+                                     QStringLiteral("You have the latest version of JeffPub (%1).").arg(QStringLiteral(JP_VERSION)));
     });
 }
 
@@ -163,7 +163,7 @@ QDialog *Updater::offerDialog(QWidget *parent, const QString &version, const QSt
     icon->setPixmap(QApplication::windowIcon().pixmap(QSize(56, 56)));
     icon->setAlignment(Qt::AlignTop);
     icon->setVisible(!icon->pixmap().isNull());
-    auto *title = new QLabel(QStringLiteral("JeffPub 79 %1 is available").arg(version.toHtmlEscaped()), d);
+    auto *title = new QLabel(QStringLiteral("JeffPub %1 is available").arg(version.toHtmlEscaped()), d);
     QFont tf = title->font();
     tf.setPointSizeF(tf.pointSizeF() * 1.4);
     tf.setBold(true);
@@ -245,12 +245,12 @@ void Updater::offer(const QString &tag, const QString &notes, const QString &pag
 void Updater::downloadAndRun(const QString &url, const QString &tag, const QString &digest, const QString &pageUrl)
 {
     if (!trustedInstaller(url, tag, digest)) return;
-    const QString dest = QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation)).filePath(QStringLiteral("JeffPub79-Setup-%1.exe").arg(tag));
+    const QString dest = QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation)).filePath(QStringLiteral("JeffPub-Setup-%1.exe").arg(tag));
     QNetworkRequest req{QUrl(url)};
-    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("JeffPub79/%1").arg(QStringLiteral(JP_VERSION)));
+    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("JeffPub/%1").arg(QStringLiteral(JP_VERSION)));
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     QNetworkReply *r = m_net.get(req);
-    auto *progress = new QProgressDialog(QStringLiteral("Downloading JeffPub 79 %1…").arg(tag), QStringLiteral("Cancel"), 0, 100, m_win);
+    auto *progress = new QProgressDialog(QStringLiteral("Downloading JeffPub %1…").arg(tag), QStringLiteral("Cancel"), 0, 100, m_win);
     progress->setWindowTitle(QStringLiteral("Update"));
     progress->setMinimumDuration(0);
     progress->setAutoClose(false);
@@ -278,14 +278,14 @@ void Updater::downloadAndRun(const QString &url, const QString &tag, const QStri
         }
         QSaveFile f(dest);
         if (!f.open(QIODevice::WriteOnly) || f.write(bytes) != bytes.size() || !f.commit()) {
-            QMessageBox::warning(m_win, QStringLiteral("Update"), QStringLiteral("JeffPub 79 couldn't save the installer to %1.").arg(QDir::toNativeSeparators(dest)));
+            QMessageBox::warning(m_win, QStringLiteral("Update"), QStringLiteral("JeffPub couldn't save the installer to %1.").arg(QDir::toNativeSeparators(dest)));
             return;
         }
         // Give every window a chance to save, then hand over to the installer.
         for (QWidget *w : QApplication::topLevelWidgets())
             if (w->inherits("jp::MainWindow") && w->isVisible() && !w->close()) return;
         if (!QProcess::startDetached(dest, {})) {
-            QMessageBox::warning(m_win, QStringLiteral("Update"), QStringLiteral("JeffPub 79 couldn't start the installer. You can run it yourself from %1.").arg(QDir::toNativeSeparators(dest)));
+            QMessageBox::warning(m_win, QStringLiteral("Update"), QStringLiteral("JeffPub couldn't start the installer. You can run it yourself from %1.").arg(QDir::toNativeSeparators(dest)));
             return;
         }
         QApplication::quit();

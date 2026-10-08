@@ -592,7 +592,7 @@ void mergeToEmailFiles(QWidget *parent, Editor *ed)
     auto *subject = new QLineEdit(d.props.title.isEmpty() ? ed->displayName() : d.props.title, &dlg);
     form->addRow(QStringLiteral("To:"), to);
     form->addRow(QStringLiteral("Subject:"), subject);
-    form->addRow(new QLabel(QStringLiteral("JeffPub 79 creates one ready-to-send email file (.eml) per recipient, with the publication as an inline picture.\n"
+    form->addRow(new QLabel(QStringLiteral("JeffPub creates one ready-to-send email file (.eml) per recipient, with the publication as an inline picture.\n"
                                            "Open them with your email program to send."), &dlg));
     auto *bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
     form->addRow(bb);

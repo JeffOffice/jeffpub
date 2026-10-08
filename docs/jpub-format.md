@@ -1,8 +1,8 @@
 # The .jpub file format
 
-A `.jpub` file is JeffPub 79's own publication format. It is open: this
+A `.jpub` file is JeffPub's own publication format. It is open: this
 document describes every part of it, so any program can read or write one.
-This describes format version 1, which JeffPub 79 has written since its
+This describes format version 1, which JeffPub has written since its
 first preview.
 
 ## At a glance

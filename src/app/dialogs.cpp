@@ -606,7 +606,7 @@ void fontDialog(QWidget *p, Editor *ed)
     const QList<QCheckBox *> boxes{sup, sub, strike, smallcaps, allcaps, shadow, outline, emboss, engrave};
     for (int i = 0; i < boxes.size(); ++i) eg->addWidget(boxes[i], i / 3, i % 3);
     dlg.v->addWidget(effects);
-    auto *preview = new QLabel(QStringLiteral("JeffPub 79 sample text"), &dlg.d);
+    auto *preview = new QLabel(QStringLiteral("JeffPub sample text"), &dlg.d);
     preview->setMinimumHeight(48);
     preview->setAlignment(Qt::AlignCenter);
     preview->setFrameShape(QFrame::StyledPanel);
@@ -2075,7 +2075,7 @@ void wordCountDialog(QWidget *p, Editor *ed)
 void optionsDialog(QWidget *p, Editor *ed)
 {
     Settings &st = Settings::get();
-    Dlg dlg(p, QStringLiteral("JeffPub 79 Options"));
+    Dlg dlg(p, QStringLiteral("JeffPub Options"));
     auto *tabs = new QTabWidget(&dlg.d);
     auto *gen = new QWidget();
     auto *gf = new QFormLayout(gen);

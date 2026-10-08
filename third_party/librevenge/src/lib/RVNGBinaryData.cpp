@@ -46,7 +46,7 @@ struct DataImpl
 	std::unique_ptr<RVNGMemoryInputStream> m_stream;
 };
 
-// JeffPub 79: plain base64 instead of boost::archive iterators.
+// JeffPub: plain base64 instead of boost::archive iterators.
 void convertFromBase64(std::vector<unsigned char> &result, const std::string &source)
 {
 	static const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

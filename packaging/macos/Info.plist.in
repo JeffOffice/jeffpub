@@ -9,9 +9,9 @@
     <key>CFBundleIdentifier</key>
     <string>${MACOSX_BUNDLE_GUI_IDENTIFIER}</string>
     <key>CFBundleName</key>
-    <string>JeffPub 79</string>
+    <string>JeffPub</string>
     <key>CFBundleDisplayName</key>
-    <string>JeffPub 79</string>
+    <string>JeffPub</string>
     <key>CFBundleIconFile</key>
     <string>${MACOSX_BUNDLE_ICON_FILE}</string>
     <key>CFBundlePackageType</key>
@@ -29,14 +29,14 @@
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSHumanReadableCopyright</key>
-    <string>Free software under the GNU General Public License v3.0</string>
+    <string>Copyright © 2026 JeffOffice LLC. Free software under the GNU General Public License v3.0.</string>
     <!-- JeffPub publications are JeffPub's own type; .pub files are opened
          and saved too. -->
     <key>UTExportedTypeDeclarations</key>
     <array>
         <dict>
             <key>UTTypeIdentifier</key>
-            <string>io.github.jeffsteinport.jeffpub79.jpub</string>
+            <string>com.jeffoffice.jeffpub.jpub</string>
             <key>UTTypeDescription</key>
             <string>JeffPub Publication</string>
             <key>UTTypeConformsTo</key>
@@ -57,7 +57,7 @@
     <array>
         <dict>
             <key>UTTypeIdentifier</key>
-            <string>io.github.jeffsteinport.jeffpub79.pub</string>
+            <string>com.jeffoffice.jeffpub.pub</string>
             <key>UTTypeDescription</key>
             <string>Publication (.pub)</string>
             <key>UTTypeConformsTo</key>
@@ -85,7 +85,7 @@
             <string>Owner</string>
             <key>LSItemContentTypes</key>
             <array>
-                <string>io.github.jeffsteinport.jeffpub79.jpub</string>
+                <string>com.jeffoffice.jeffpub.jpub</string>
             </array>
         </dict>
         <dict>
@@ -97,7 +97,7 @@
             <string>Alternate</string>
             <key>LSItemContentTypes</key>
             <array>
-                <string>io.github.jeffsteinport.jeffpub79.pub</string>
+                <string>com.jeffoffice.jeffpub.pub</string>
             </array>
         </dict>
     </array>

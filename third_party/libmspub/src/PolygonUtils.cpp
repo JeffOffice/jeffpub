@@ -5880,7 +5880,7 @@ librevenge::RVNGPropertyList calcClipPath(const std::vector<Vertex> &verts, doub
   librevenge::RVNGString clipString;
   Vector2D vector(x + scaleX * verts[0].m_x, y + scaleY * verts[0].m_y);
   vector = transform.transformWithOrigin(vector, center);
-  // JeffPub 79: numbers written with '.' whatever the system's language.
+  // JeffPub: numbers written with '.' whatever the system's language.
   clipString.append("M ");
   clipString.append(fixedNumber(vector.m_x, 6));
   clipString.append(" ");

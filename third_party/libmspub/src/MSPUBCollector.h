@@ -53,7 +53,7 @@ public:
   typedef std::list<ContentChunkReference>::const_iterator ccr_iterator_t;
 
   MSPUBCollector(librevenge::RVNGDrawingInterface *painter);
-  // JeffPub 79: table cell fills and borders (see TableCellFormat).
+  // JeffPub: table cell fills and borders (see TableCellFormat).
   void addTableCellFormat(unsigned tableSeqNum, const TableCellFormat &format) { m_tableCellFormats[tableSeqNum].push_back(format); }
   virtual ~MSPUBCollector();
 
@@ -203,7 +203,7 @@ private:
   std::vector<std::vector<unsigned char> > m_fonts;
   std::vector<CharacterStyle> m_defaultCharStyles;
   std::vector<ParagraphStyle> m_defaultParaStyles;
-  std::vector<librevenge::RVNGString> m_styleNames;   // JeffPub 79: by style index
+  std::vector<librevenge::RVNGString> m_styleNames;   // JeffPub: by style index
   std::map<unsigned, unsigned> m_shapeTypesBySeqNum;
   std::set<unsigned> m_notHyphenated; // JeffPub patch: text ids of stories without automatic hyphenation
   std::map<unsigned, unsigned> m_autofit; // JeffPub patch: text id -> AutoFit Text (1 best fit, 2 shrink, 3 grow)
@@ -232,7 +232,7 @@ private:
   std::set<unsigned> m_masterPages;
   std::set<unsigned> m_shapesWithCoordinatesRotated90;
   std::map<unsigned, unsigned> m_masterPagesByPageSeqNum;
-  std::map<unsigned, int> m_pageKinds;   // JeffPub 79: first byte of each page's field 06
+  std::map<unsigned, int> m_pageKinds;   // JeffPub: first byte of each page's field 06
   std::map<unsigned, std::vector<unsigned> > m_tableCellTextEndsByTextId;
   std::map<unsigned, unsigned> m_stringOffsetsByTextId;
   mutable std::vector<bool> m_calculationValuesSeen;

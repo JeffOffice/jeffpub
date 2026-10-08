@@ -111,7 +111,7 @@ QByteArray pageSvg(const PaintContext &ctx, int pageIndex, const QString &title)
     gen.setSize(size.toSize());
     gen.setViewBox(QRectF(QPointF(0, 0), size));
     gen.setTitle(title);
-    gen.setDescription(QStringLiteral("Made with JeffPub 79"));
+    gen.setDescription(QStringLiteral("Made with JeffPub"));
     {
         QPainter out(&gen);
         OutlineDevice dev(&out, size.toSize());

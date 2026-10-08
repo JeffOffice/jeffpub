@@ -710,7 +710,7 @@ std::unique_ptr<Document> greetingCard(const TemplateOptions &o, int variant)
            {C(variant == 0 ? QStringLiteral("Wishing you a year full of good surprises.") : QStringLiteral("Your kindness meant more than you know."), 16, Accent1, 1, true),
             C(QStringLiteral("— {biz:person}"), 11, Main, 1)}, VAlign::Middle);
     b.onPage(3);
-    b.text(QRectF(36, ps.height() - 70, ps.width() - 72, 36), {C(QStringLiteral("Made with JeffPub 79"), 8, Accent4, 1)}, VAlign::Bottom);
+    b.text(QRectF(36, ps.height() - 70, ps.width() - 72, 36), {C(QStringLiteral("Made with JeffPub"), 8, Accent4, 1)}, VAlign::Bottom);
     return d;
 }
 

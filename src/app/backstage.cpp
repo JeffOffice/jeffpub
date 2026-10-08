@@ -383,7 +383,7 @@ Backstage::Backstage(MainWindow *win) : QWidget(win), m_win(win)
         bf.setPixelSize(13);
         p.setFont(bf);
         p.setPen(Qt::white);
-        p.drawText(QRectF(0, 0, 30, 30), Qt::AlignCenter, QStringLiteral("79"));
+        p.drawText(QRectF(0, 0, 30, 30), Qt::AlignCenter, QStringLiteral("JP"));
         p.end();
         badge->setPixmap(pm);
     }
@@ -1475,27 +1475,27 @@ QWidget *Backstage::buildAbout()
         bf.setPixelSize(24);
         p.setFont(bf);
         p.setPen(Qt::white);
-        p.drawText(QRectF(0, 0, 56, 56), Qt::AlignCenter, QStringLiteral("79"));
+        p.drawText(QRectF(0, 0, 56, 56), Qt::AlignCenter, QStringLiteral("JP"));
         p.end();
         badge->setPixmap(pm);
     }
     ih->addWidget(badge, 0, Qt::AlignTop);
     auto *iv = new QVBoxLayout();
     iv->setSpacing(3);
-    auto *name = new QLabel(QStringLiteral("JeffPub 79"), id);
+    auto *name = new QLabel(QStringLiteral("JeffPub"), id);
     QFont nf = name->font();
     nf.setWeight(QFont::DemiBold);
     nf.setPointSizeF(nf.pointSizeF() * 1.35);
     name->setFont(nf);
     iv->addWidget(name);
     iv->addWidget(mutedLabel(QStringLiteral("Version %1 · Built with Qt %2").arg(QStringLiteral(JP_VERSION), QString::fromLatin1(qVersion())), id));
-    auto *tag = new QLabel(QStringLiteral("Free, open-source desktop publishing for Windows and Linux."), id);
+    auto *tag = new QLabel(QStringLiteral("Free, open-source desktop publishing for Windows, macOS and Linux."), id);
     tag->setWordWrap(true);
     fitHeight(tag);
     iv->addWidget(tag);
-    auto *links = new QLabel(QStringLiteral("<a href=\"https://github.com/jeffsteinport/jeffpub79\">Source code</a> &nbsp;·&nbsp; "
-                                            "<a href=\"https://github.com/jeffsteinport/jeffpub79/releases\">Downloads</a> &nbsp;·&nbsp; "
-                                            "<a href=\"https://github.com/jeffsteinport/jeffpub79/issues\">Report a problem</a>"),
+    auto *links = new QLabel(QStringLiteral("<a href=\"https://github.com/JeffOffice/jeffpub\">Source code</a> &nbsp;·&nbsp; "
+                                            "<a href=\"https://github.com/JeffOffice/jeffpub/releases\">Downloads</a> &nbsp;·&nbsp; "
+                                            "<a href=\"https://github.com/JeffOffice/jeffpub/issues\">Report a problem</a>"),
                              id);
     links->setOpenExternalLinks(true);
     iv->addWidget(links);
@@ -1518,7 +1518,7 @@ QWidget *Backstage::buildAbout()
     iv->addLayout(uh);
     // Anonymous usage statistics.
     auto *statsBox = new QCheckBox(QStringLiteral("Send anonymous usage statistics"), id);
-    statsBox->setToolTip(QStringLiteral("Once a day, and the day it's updated: JeffPub 79's version, your operating system and language, and how often each command is used. "
+    statsBox->setToolTip(QStringLiteral("Once a day, and the day it's updated: JeffPub's version, your operating system and language, and how often each command is used. "
                                         "Never your files, their names, or anything in them."));
     statsBox->setChecked(telemetry::enabled());
     connect(statsBox, &QCheckBox::toggled, this, [](bool on) { telemetry::setEnabled(on); });
@@ -1562,11 +1562,12 @@ QWidget *Backstage::buildAbout()
     lh->setFont(yf);
     lv->addWidget(lh);
     auto *lt = mutedLabel(QStringLiteral(
-                              "JeffPub 79 is free software under the "
-                              "<a href=\"https://github.com/jeffsteinport/jeffpub79/blob/main/LICENSE\">GNU General Public License v3.0</a>. "
+                              "Copyright © 2026 JeffOffice LLC.<br><br>"
+                              "JeffPub is free software under the "
+                              "<a href=\"https://github.com/JeffOffice/jeffpub/blob/main/LICENSE\">GNU General Public License v3.0</a>. "
                               "It comes with ABSOLUTELY NO WARRANTY; see the license for details. "
                               "<a href=\"https://www.gnu.org/licenses/gpl-3.0.html\">Read the license on gnu.org</a>.<br><br>"
-                              "JeffPub 79 is an independent open-source project. It is not affiliated with, endorsed by or supported by any other "
+                              "JeffPub is an independent open-source project. It is not affiliated with, endorsed by or supported by any other "
                               "software company. Product names are trademarks of their owners."),
                           legal, 0.75);
     lt->setWordWrap(true);
@@ -1583,45 +1584,45 @@ QWidget *Backstage::buildAbout()
         {"Hunspell", "https://hunspell.github.io/", "Spelling checker", "MPL-1.1, GPL-2.0+ or LGPL-2.1+", "https://www.mozilla.org/MPL/1.1/"},
         // The dictionaries, from LibreOffice's (resources/dict/README.md).
         {"English dictionaries (SCOWL; UK)", "http://wordlist.aspell.net/", "Spelling", "SCOWL license; LGPL (UK)",
-         "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/dict/en/README_en_US.txt"},
-        {"English hyphenation patterns", "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/dict/en/README_hyph_en_US.txt", "Hyphenation", "BSD-style",
-         "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/dict/en/README_hyph_en_US.txt"},
+         "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/en/README_en_US.txt"},
+        {"English hyphenation patterns", "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/en/README_hyph_en_US.txt", "Hyphenation", "BSD-style",
+         "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/en/README_hyph_en_US.txt"},
         {"WordNet", "https://wordnet.princeton.edu/", "Thesaurus", "WordNet license",
-         "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/dict/en/WordNet_license.txt"},
-        {"Spanish dictionaries", "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/dict/es/README_hunspell_es.txt", "Spelling and hyphenation", "GPL-3.0+, LGPL-3.0+ or MPL-1.1+",
-         "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/dict/es/LICENSE.md"},
+         "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/en/WordNet_license.txt"},
+        {"Spanish dictionaries", "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/es/README_hunspell_es.txt", "Spelling and hyphenation", "GPL-3.0+, LGPL-3.0+ or MPL-1.1+",
+         "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/es/LICENSE.md"},
         {"French dictionary (Grammalecte)", "https://grammalecte.net/", "Spelling and hyphenation", "MPL-2.0; patterns LGPL",
-         "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/dict/fr_FR/README_dict_fr.txt"},
+         "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/fr_FR/README_dict_fr.txt"},
         {"German dictionary (igerman98)", "https://www.j3e.de/ispell/igerman98/", "Spelling and hyphenation", "GPL-2.0 or GPL-3.0; patterns LGPL-2.0+",
-         "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/dict/de/README_de_DE_frami.txt"},
-        {"Italian dictionary", "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/dict/it_IT/README_it_IT.txt", "Spelling and hyphenation", "GPL-3.0; patterns LGPL",
-         "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/dict/it_IT/README_it_IT.txt"},
+         "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/de/README_de_DE_frami.txt"},
+        {"Italian dictionary", "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/it_IT/README_it_IT.txt", "Spelling and hyphenation", "GPL-3.0; patterns LGPL",
+         "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/it_IT/README_it_IT.txt"},
         {"Dutch dictionary (OpenTaal)", "https://www.opentaal.org/", "Spelling and hyphenation", "BSD or CC BY 3.0",
-         "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/dict/nl_NL/LICENSE.txt"},
+         "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/nl_NL/LICENSE.txt"},
         {"Brazilian Portuguese dictionary (VERO)", "http://pt-br.libreoffice.org/projetos/projeto-vero-verificador-ortografico/", "Spelling and hyphenation",
-         "LGPL-3.0 or MPL", "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/dict/pt_BR/README_en.txt"},
-        {"European Portuguese dictionary", "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/dict/pt_PT/README_pt_PT.txt", "Spelling and hyphenation", "GPL-2.0+",
-         "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/dict/pt_PT/LICENSES.txt"},
+         "LGPL-3.0 or MPL", "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/pt_BR/README_en.txt"},
+        {"European Portuguese dictionary", "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/pt_PT/README_pt_PT.txt", "Spelling and hyphenation", "GPL-2.0+",
+         "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/pt_PT/LICENSES.txt"},
         {"Lucide icons", "https://lucide.dev/", "Interface icons, Insert > Icons", "ISC", "https://lucide.dev/license"},
-        {"Open fonts", "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/fonts/README.md", "Fonts and substitutes",
-         "SIL OFL 1.1, GUST, Bitstream Vera, GPL v2 + font exceptions", "https://github.com/jeffsteinport/jeffpub79/blob/main/resources/fonts/README.md"},
+        {"Open fonts", "https://github.com/JeffOffice/jeffpub/blob/main/resources/fonts/README.md", "Fonts and substitutes",
+         "SIL OFL 1.1, GUST, Bitstream Vera, GPL v2 + font exceptions", "https://github.com/JeffOffice/jeffpub/blob/main/resources/fonts/README.md"},
         {"zlib", "https://zlib.net/", "Compression (also in PDFium)", "zlib license", "https://zlib.net/zlib_license.html"},
         // PDFium and what's built into it; the texts ship with the program
         // (third_party/pdfium/licenses).
-        {"PDFium", "https://pdfium.googlesource.com/pdfium/", "Placing PDF pages", "BSD-3-Clause; parts Apache-2.0", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/pdfium.txt"},
-        {"pdfium-binaries", "https://github.com/bblanchon/pdfium-binaries", "PDFium, built", "MIT", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/pdfium-binaries.txt"},
-        {"FreeType (in PDFium)", "https://freetype.org/", "Fonts in PDF pages", "FreeType License", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/freetype.txt"},
-        {"HarfBuzz (in PDFium)", "https://harfbuzz.github.io/", "Text in PDF pages", "Old MIT", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/harfbuzz.txt"},
-        {"Little CMS (in PDFium)", "https://www.littlecms.com/", "Color in PDF pages", "MIT", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/lcms.txt"},
-        {"libjpeg-turbo (in PDFium)", "https://libjpeg-turbo.org/", "JPEG pictures in PDF pages", "IJG and BSD-3-Clause", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/libjpeg_turbo.md"},
-        {"OpenJPEG (in PDFium)", "https://www.openjpeg.org/", "JPEG 2000 in PDF pages", "BSD-2-Clause", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/libopenjpeg.txt"},
-        {"libpng (in PDFium)", "http://www.libpng.org/pub/png/libpng.html", "PNG pictures in PDF pages", "libpng License v2", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/libpng.txt"},
-        {"Abseil (in PDFium)", "https://abseil.io/", "Support code", "Apache-2.0", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/abseil.txt"},
-        {"Anti-Grain Geometry 2.3 (in PDFium)", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/agg23.txt", "Drawing", "AGG 2.3 license", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/agg23.txt"},
-        {"dragonbox (in PDFium)", "https://github.com/jk-jeon/dragonbox", "Numbers", "Apache-2.0 (LLVM) or BSL-1.0", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/dragonbox-Boost.txt"},
-        {"fast_float (in PDFium)", "https://github.com/fastfloat/fast_float", "Numbers", "MIT", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/fast_float.txt"},
-        {"simdutf (in PDFium)", "https://github.com/simdutf/simdutf", "Unicode text", "MIT", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/simdutf.txt"},
-        {"LLVM libc (in PDFium)", "https://libc.llvm.org/", "Support code", "Apache-2.0 (LLVM)", "https://github.com/jeffsteinport/jeffpub79/blob/main/third_party/pdfium/licenses/llvm-libc.txt"},
+        {"PDFium", "https://pdfium.googlesource.com/pdfium/", "Placing PDF pages", "BSD-3-Clause; parts Apache-2.0", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/pdfium.txt"},
+        {"pdfium-binaries", "https://github.com/bblanchon/pdfium-binaries", "PDFium, built", "MIT", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/pdfium-binaries.txt"},
+        {"FreeType (in PDFium)", "https://freetype.org/", "Fonts in PDF pages", "FreeType License", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/freetype.txt"},
+        {"HarfBuzz (in PDFium)", "https://harfbuzz.github.io/", "Text in PDF pages", "Old MIT", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/harfbuzz.txt"},
+        {"Little CMS (in PDFium)", "https://www.littlecms.com/", "Color in PDF pages", "MIT", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/lcms.txt"},
+        {"libjpeg-turbo (in PDFium)", "https://libjpeg-turbo.org/", "JPEG pictures in PDF pages", "IJG and BSD-3-Clause", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/libjpeg_turbo.md"},
+        {"OpenJPEG (in PDFium)", "https://www.openjpeg.org/", "JPEG 2000 in PDF pages", "BSD-2-Clause", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/libopenjpeg.txt"},
+        {"libpng (in PDFium)", "http://www.libpng.org/pub/png/libpng.html", "PNG pictures in PDF pages", "libpng License v2", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/libpng.txt"},
+        {"Abseil (in PDFium)", "https://abseil.io/", "Support code", "Apache-2.0", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/abseil.txt"},
+        {"Anti-Grain Geometry 2.3 (in PDFium)", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/agg23.txt", "Drawing", "AGG 2.3 license", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/agg23.txt"},
+        {"dragonbox (in PDFium)", "https://github.com/jk-jeon/dragonbox", "Numbers", "Apache-2.0 (LLVM) or BSL-1.0", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/dragonbox-Boost.txt"},
+        {"fast_float (in PDFium)", "https://github.com/fastfloat/fast_float", "Numbers", "MIT", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/fast_float.txt"},
+        {"simdutf (in PDFium)", "https://github.com/simdutf/simdutf", "Unicode text", "MIT", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/simdutf.txt"},
+        {"LLVM libc (in PDFium)", "https://libc.llvm.org/", "Support code", "Apache-2.0 (LLVM)", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/llvm-libc.txt"},
         {"ICU", "https://icu.unicode.org/", "Unicode text (in PDFium; with Qt on Linux)", "Unicode License v3", "https://www.unicode.org/license.txt"},
 #ifdef Q_OS_WIN
         {"MinGW-w64 runtime", "https://www.mingw-w64.org/", "C++ runtime", "GPL-3.0 with GCC Runtime Library Exception; MIT",

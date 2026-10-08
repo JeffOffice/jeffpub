@@ -1,4 +1,4 @@
-; JeffPub 79 Windows installer (NSIS). Built by CI from dist\JeffPub79.
+; JeffPub Windows installer (NSIS). Built by CI from dist\JeffPub.
 ; Per-user install: no administrator rights needed.
 Unicode true
 ManifestDPIAware true
@@ -8,21 +8,26 @@ ManifestDPIAware true
 !ifndef VERSION
   !define VERSION "0.1.0"
 !endif
-!define APP "JeffPub 79"
-!define EXE "JeffPub79.exe"
-!define UNKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\JeffPub79"
+!define APP "JeffPub"
+!define EXE "JeffPub.exe"
+!define UNKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\JeffPub"
+; JeffPub was called JeffPub 79 through version 0.5.0; setup replaces that install.
+!define OLDKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\JeffPub79"
+; Where JeffPub keeps its settings (QSettings: organization JeffOffice).
+!define SETKEY "Software\JeffOffice\JeffPub"
 
 Name "${APP}"
-OutFile "JeffPub79-Setup.exe"
+OutFile "JeffPub-Setup.exe"
 RequestExecutionLevel user
 InstallDir "$LOCALAPPDATA\Programs\${APP}"
-InstallDirRegKey HKCU "Software\JeffPub79" "InstallDir"
+InstallDirRegKey HKCU "Software\JeffOffice" "JeffPubInstallDir"
 BrandingText "${APP} ${VERSION}"
 VIProductVersion "${VERSION}.0"
 VIAddVersionKey "ProductName" "${APP}"
 VIAddVersionKey "FileDescription" "${APP} installer"
 VIAddVersionKey "FileVersion" "${VERSION}"
-VIAddVersionKey "LegalCopyright" "GNU GPL v3"
+VIAddVersionKey "CompanyName" "JeffOffice LLC"
+VIAddVersionKey "LegalCopyright" "Copyright (c) 2026 JeffOffice LLC. Free software under the GNU GPL v3."
 
 !define MUI_ICON "..\..\resources\app.ico"
 !define MUI_UNICON "..\..\resources\app.ico"
@@ -57,17 +62,22 @@ VIAddVersionKey "LegalCopyright" "GNU GPL v3"
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "English"
 
-; Files in use can't be replaced, so JeffPub 79 must be closed first. Since
+; Files in use can't be replaced, so JeffPub must be closed first. Since
 ; 0.1.6 it holds a named mutex while it runs; any version keeps its .exe
 ; locked, which catches older ones too.
 !macro WaitForAppToClose
   check_running:
     StrCpy $R9 0
-    System::Call 'kernel32::OpenMutexW(i 0x00100000, i 0, w "JeffPub79Running") p .r1'
+    System::Call 'kernel32::OpenMutexW(i 0x00100000, i 0, w "JeffPubRunning") p .r1'
     IntCmp $1 0 no_mutex
       System::Call 'kernel32::CloseHandle(p r1)'
       StrCpy $R9 1
   no_mutex:
+    System::Call 'kernel32::OpenMutexW(i 0x00100000, i 0, w "JeffPub79Running") p .r1'
+    IntCmp $1 0 no_old_mutex
+      System::Call 'kernel32::CloseHandle(p r1)'
+      StrCpy $R9 1
+  no_old_mutex:
     IfFileExists "$INSTDIR\${EXE}" 0 decide
       ClearErrors
       FileOpen $2 "$INSTDIR\${EXE}" a
@@ -94,33 +104,34 @@ FunctionEnd
 
 Section "${APP} (required)" SecMain
   SectionIn RO
+  Call RemoveJeffPub79
   SetOutPath "$INSTDIR"
-  File /r "..\..\dist\JeffPub79\*.*"
+  File /r "..\..\dist\JeffPub\*.*"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateShortcut "$SMPROGRAMS\${APP}.lnk" "$INSTDIR\${EXE}"
-  WriteRegStr HKCU "Software\JeffPub79" "InstallDir" "$INSTDIR"
+  WriteRegStr HKCU "Software\JeffOffice" "JeffPubInstallDir" "$INSTDIR"
   ; Usage statistics: off unless their section below is chosen, written where
-  ; JeffPub 79 keeps the choice. A silent install leaves it to the program,
+  ; JeffPub keeps the choice. A silent install leaves it to the program,
   ; which asks when it first starts.
   IfSilent +2
-  WriteRegStr HKCU "Software\JeffPub79\JeffPub79\telemetry" "enabled" "false"
+  WriteRegStr HKCU "${SETKEY}\telemetry" "enabled" "false"
   ; Uninstall entry in Settings > Apps.
   WriteRegStr HKCU "${UNKEY}" "DisplayName" "${APP}"
   WriteRegStr HKCU "${UNKEY}" "DisplayVersion" "${VERSION}"
-  WriteRegStr HKCU "${UNKEY}" "Publisher" "JeffPub 79 contributors"
+  WriteRegStr HKCU "${UNKEY}" "Publisher" "JeffOffice LLC"
   WriteRegStr HKCU "${UNKEY}" "DisplayIcon" "$INSTDIR\${EXE}"
   WriteRegStr HKCU "${UNKEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegStr HKCU "${UNKEY}" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "${UNKEY}" "URLInfoAbout" "https://github.com/jeffsteinport/jeffpub79"
+  WriteRegStr HKCU "${UNKEY}" "URLInfoAbout" "https://github.com/JeffOffice/jeffpub"
   WriteRegDWORD HKCU "${UNKEY}" "NoModify" 1
   WriteRegDWORD HKCU "${UNKEY}" "NoRepair" 1
   ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
   WriteRegDWORD HKCU "${UNKEY}" "EstimatedSize" $0
   ; .pub files list JeffPub under "Open with" without becoming the default.
-  WriteRegStr HKCU "Software\Classes\JeffPub79.PubFile" "" ".pub publication"
-  WriteRegStr HKCU "Software\Classes\JeffPub79.PubFile\DefaultIcon" "" "$INSTDIR\${EXE},0"
-  WriteRegStr HKCU "Software\Classes\JeffPub79.PubFile\shell\open\command" "" '"$INSTDIR\${EXE}" "%1"'
-  WriteRegStr HKCU "Software\Classes\.pub\OpenWithProgids" "JeffPub79.PubFile" ""
+  WriteRegStr HKCU "Software\Classes\JeffPub.PubFile" "" ".pub publication"
+  WriteRegStr HKCU "Software\Classes\JeffPub.PubFile\DefaultIcon" "" "$INSTDIR\${EXE},0"
+  WriteRegStr HKCU "Software\Classes\JeffPub.PubFile\shell\open\command" "" '"$INSTDIR\${EXE}" "%1"'
+  WriteRegStr HKCU "Software\Classes\.pub\OpenWithProgids" "JeffPub.PubFile" ""
   WriteRegStr HKCU "Software\Classes\Applications\${EXE}\SupportedTypes" ".pub" ""
   WriteRegStr HKCU "Software\Classes\Applications\${EXE}\SupportedTypes" ".jpub" ""
 SectionEnd
@@ -130,29 +141,62 @@ Section "Desktop shortcut" SecDesktop
 SectionEnd
 
 Section "Open JeffPub publications (.jpub) with ${APP}" SecJpub
-  WriteRegStr HKCU "Software\Classes\.jpub" "" "JeffPub79.Publication"
-  WriteRegStr HKCU "Software\Classes\JeffPub79.Publication" "" "JeffPub publication"
-  WriteRegStr HKCU "Software\Classes\JeffPub79.Publication\DefaultIcon" "" "$INSTDIR\${EXE},0"
-  WriteRegStr HKCU "Software\Classes\JeffPub79.Publication\shell\open\command" "" '"$INSTDIR\${EXE}" "%1"'
+  WriteRegStr HKCU "Software\Classes\.jpub" "" "JeffPub.Publication"
+  WriteRegStr HKCU "Software\Classes\JeffPub.Publication" "" "JeffPub publication"
+  WriteRegStr HKCU "Software\Classes\JeffPub.Publication\DefaultIcon" "" "$INSTDIR\${EXE},0"
+  WriteRegStr HKCU "Software\Classes\JeffPub.Publication\shell\open\command" "" '"$INSTDIR\${EXE}" "%1"'
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 SectionEnd
 
 Section /o "Make ${APP} the default for .pub files" SecPub
-  WriteRegStr HKCU "Software\Classes\.pub" "" "JeffPub79.PubFile"
+  WriteRegStr HKCU "Software\Classes\.pub" "" "JeffPub.PubFile"
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 SectionEnd
 
 Section "Send anonymous usage statistics" SecStats
   IfSilent +2
-  WriteRegStr HKCU "Software\JeffPub79\JeffPub79\telemetry" "enabled" "true"
+  WriteRegStr HKCU "${SETKEY}\telemetry" "enabled" "true"
 SectionEnd
 
-; An update shows the choice already made: turned off in JeffPub 79, the
+; An update shows the choice already made: turned off in JeffPub, the
 ; statistics start unticked.
 Function PresetStats
-  ReadRegStr $0 HKCU "Software\JeffPub79\JeffPub79\telemetry" "enabled"
+  ReadRegStr $0 HKCU "${SETKEY}\telemetry" "enabled"
+  StrCmp $0 "" 0 +2
+    ReadRegStr $0 HKCU "Software\JeffPub79\JeffPub79\telemetry" "enabled"
   StrCmp $0 "false" 0 +2
   SectionSetFlags ${SecStats} 0
+FunctionEnd
+
+; Takes away JeffPub 79 (0.5.0 and earlier): its program folder, shortcuts,
+; file types and Settings > Apps entry. Its settings stay: JeffPub copies them
+; the first time it starts. A .pub default that pointed at JeffPub 79 moves
+; over, and so does a desktop shortcut.
+Function RemoveJeffPub79
+  ReadRegStr $0 HKCU "${OLDKEY}" "InstallLocation"
+  StrCmp $0 "" types
+  ; Only a folder that really holds JeffPub 79 is deleted.
+  IfFileExists "$0\JeffPub79.exe" 0 entries
+    StrCmp $0 $INSTDIR +2
+      RMDir /r "$0"
+  entries:
+  Delete "$SMPROGRAMS\JeffPub 79.lnk"
+  IfFileExists "$DESKTOP\JeffPub 79.lnk" 0 +3
+    Delete "$DESKTOP\JeffPub 79.lnk"
+    CreateShortcut "$DESKTOP\${APP}.lnk" "$INSTDIR\${EXE}"
+  DeleteRegKey HKCU "${OLDKEY}"
+  types:
+  ReadRegStr $1 HKCU "Software\Classes\.pub" ""
+  StrCmp $1 "JeffPub79.PubFile" 0 +2
+    WriteRegStr HKCU "Software\Classes\.pub" "" "JeffPub.PubFile"
+  ReadRegStr $1 HKCU "Software\Classes\.jpub" ""
+  StrCmp $1 "JeffPub79.Publication" 0 +2
+    WriteRegStr HKCU "Software\Classes\.jpub" "" "JeffPub.Publication"
+  DeleteRegValue HKCU "Software\Classes\.pub\OpenWithProgids" "JeffPub79.PubFile"
+  DeleteRegKey HKCU "Software\Classes\JeffPub79.PubFile"
+  DeleteRegKey HKCU "Software\Classes\JeffPub79.Publication"
+  DeleteRegKey HKCU "Software\Classes\Applications\JeffPub79.exe"
+  DeleteRegValue HKCU "Software\JeffPub79" "InstallDir"
 FunctionEnd
 
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
@@ -168,16 +212,19 @@ Section "Uninstall"
   Delete "$DESKTOP\${APP}.lnk"
   RMDir /r "$INSTDIR"
   ReadRegStr $0 HKCU "Software\Classes\.pub" ""
-  StrCmp $0 "JeffPub79.PubFile" 0 +2
+  StrCmp $0 "JeffPub.PubFile" 0 +2
     DeleteRegValue HKCU "Software\Classes\.pub" ""
   ReadRegStr $0 HKCU "Software\Classes\.jpub" ""
-  StrCmp $0 "JeffPub79.Publication" 0 +2
+  StrCmp $0 "JeffPub.Publication" 0 +2
     DeleteRegKey HKCU "Software\Classes\.jpub"
-  DeleteRegValue HKCU "Software\Classes\.pub\OpenWithProgids" "JeffPub79.PubFile"
-  DeleteRegKey HKCU "Software\Classes\JeffPub79.PubFile"
-  DeleteRegKey HKCU "Software\Classes\JeffPub79.Publication"
+  DeleteRegValue HKCU "Software\Classes\.pub\OpenWithProgids" "JeffPub.PubFile"
+  DeleteRegKey HKCU "Software\Classes\JeffPub.PubFile"
+  DeleteRegKey HKCU "Software\Classes\JeffPub.Publication"
   DeleteRegKey HKCU "Software\Classes\Applications\${EXE}"
   DeleteRegKey HKCU "${UNKEY}"
+  DeleteRegKey HKCU "${SETKEY}"
+  DeleteRegValue HKCU "Software\JeffOffice" "JeffPubInstallDir"
+  DeleteRegKey /ifempty HKCU "Software\JeffOffice"
   DeleteRegKey HKCU "Software\JeffPub79"
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 SectionEnd

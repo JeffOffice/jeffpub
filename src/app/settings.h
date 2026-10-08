@@ -10,6 +10,17 @@ namespace jp {
 
 enum class Unit { Inch, Centimeter, Millimeter, Point, Pica };
 
+// JeffPub was called JeffPub 79 through version 0.5.0, and kept its settings
+// and files under that name. Brings them over the first time the renamed
+// program starts: settings it doesn't have yet (setup may already have
+// written the statistics choice), and the folder of templates, building
+// blocks, AutoRecover copies and downloads. The old settings stay behind.
+void moveFromJeffPub79();
+// The two halves, for tests: copies the keys `to` lacks, and moves the
+// folder unless `to` already exists.
+void copyMissingSettings(const QSettings &from, QSettings &to);
+bool moveDataFolder(const QString &from, const QString &to);
+
 class Settings {
 public:
     static Settings &get();

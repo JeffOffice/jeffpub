@@ -1,5 +1,5 @@
 #pragma once
-// Update check: asks GitHub's public releases list for a newer JeffPub 79 and
+// Update check: asks GitHub's public releases list for a newer JeffPub and
 // offers to download and run its installer. Sends nothing about the user.
 
 #include <QNetworkAccessManager>
@@ -17,7 +17,7 @@ public:
     explicit Updater(QWidget *window);
     // interactive: also report "up to date" and errors (Check for Updates button).
     void check(bool interactive);
-    // Check each time JeffPub 79 starts, if automatic checks are on.
+    // Check each time JeffPub starts, if automatic checks are on.
     void checkOnStartup();
     static bool checksOnStartup();
 

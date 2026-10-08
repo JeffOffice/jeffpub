@@ -7729,10 +7729,10 @@ private Q_SLOTS:
     void updateOfferNotes()
     {
         const QString body = QStringLiteral(
-            "**Early preview for testing. Not finished software.** JeffPub 79 is an independent open-source project.\r\n\r\n"
-            "### Install\r\n- **Windows:** download **JeffPub79-Setup.exe** and run it.\r\n"
-            "- **Debian:** run `sudo apt install ./jeffpub79_0.1.19_amd64.deb`.\r\n\r\n"
-            "JeffPub 79 checks for new versions once a day.\r\n\r\n"
+            "**Early preview for testing. Not finished software.** JeffPub is an independent open-source project.\r\n\r\n"
+            "### Install\r\n- **Windows:** download **JeffPub-Setup.exe** and run it.\r\n"
+            "- **Debian:** run `sudo apt install ./jeffpub_0.1.19_amd64.deb`.\r\n\r\n"
+            "JeffPub checks for new versions once a day.\r\n\r\n"
             "### New in preview 19\r\n- **The New Publication page opens categories at once.** Thumbnails fill in.\r\n- Banners are quicker.\r\n");
         const QString h = jp::Updater::releaseHighlights(body);
         QVERIFY(h.startsWith(QLatin1String("**New in preview 19**")));
@@ -7748,7 +7748,7 @@ private Q_SLOTS:
         qApp->setStyleSheet(jp::modernStyleSheet());
         Q_INIT_RESOURCE(resources);   // the app icon lives in the static jpcore library
         QApplication::setWindowIcon(QIcon(QStringLiteral(":/app.png")));
-        std::unique_ptr<QDialog> d(jp::Updater::offerDialog(nullptr, QStringLiteral("0.1.19"), h, true, QStringLiteral("https://github.com/jeffsteinport/jeffpub79/releases/tag/v0.1.19")));
+        std::unique_ptr<QDialog> d(jp::Updater::offerDialog(nullptr, QStringLiteral("0.1.19"), h, true, QStringLiteral("https://github.com/JeffOffice/jeffpub/releases/tag/v0.1.19")));
         d->show();
         QApplication::processEvents();
         auto *notes = d->findChild<QTextBrowser *>();
@@ -7775,11 +7775,11 @@ private Q_SLOTS:
         QVERIFY(jp::Updater::isNewer("v0.1.0-preview5", "v0.1.0-preview4"));
         // An installer runs only from this project's releases, with a plain
         // version tag and the SHA-256 GitHub publishes.
-        const QString url = QStringLiteral("https://github.com/jeffsteinport/jeffpub79/releases/download/v0.1.17/JeffPub79-Setup.exe");
+        const QString url = QStringLiteral("https://github.com/JeffOffice/jeffpub/releases/download/v0.1.17/JeffPub-Setup.exe");
         const QString digest = QStringLiteral("sha256:63e329c3c1a9aea0f90af5e2519c9315af365cb424a7bd00abb3ad9d201573e7");
         QVERIFY(jp::Updater::trustedInstaller(url, QStringLiteral("v0.1.17"), digest));
-        QVERIFY(!jp::Updater::trustedInstaller(QStringLiteral("https://example.com/JeffPub79-Setup.exe"), QStringLiteral("v0.1.17"), digest));
-        QVERIFY(!jp::Updater::trustedInstaller(QStringLiteral("http://github.com/jeffsteinport/jeffpub79/releases/download/v0.1.17/x.exe"), QStringLiteral("v0.1.17"), digest));
+        QVERIFY(!jp::Updater::trustedInstaller(QStringLiteral("https://example.com/JeffPub-Setup.exe"), QStringLiteral("v0.1.17"), digest));
+        QVERIFY(!jp::Updater::trustedInstaller(QStringLiteral("http://github.com/JeffOffice/jeffpub/releases/download/v0.1.17/x.exe"), QStringLiteral("v0.1.17"), digest));
         QVERIFY(!jp::Updater::trustedInstaller(url, QStringLiteral("../../Startup/evil"), digest));   // the tag names the saved file
         QVERIFY(!jp::Updater::trustedInstaller(url, QStringLiteral("v0.1.17"), QString()));          // nothing to check against
         QVERIFY(jp::Updater::isNewer("0.1.10", "0.1.9"));
@@ -7787,6 +7787,38 @@ private Q_SLOTS:
         QVERIFY(!jp::Updater::isNewer("v0.1.6", "0.1.6"));
         QVERIFY(!jp::Updater::isNewer("v0.1.0-preview5", "0.1.6"));
         QVERIFY(jp::Updater::isNewer("v0.1.0", "v0.1.0-preview5"));
+    }
+
+    void movesJeffPub79Settings()
+    {
+        // JeffPub 79's settings come over, except what setup already chose.
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        QSettings old(dir.filePath("old.ini"), QSettings::IniFormat), now(dir.filePath("new.ini"), QSettings::IniFormat);
+        old.setValue("telemetry/install", "6f1c2d3e-0000-4000-8000-000000000079");
+        old.setValue("telemetry/enabled", true);
+        old.setValue("recent", QStringList{"/home/a/flyer.jpub", "/home/a/menu.pub"});
+        now.setValue("telemetry/enabled", false);
+        jp::copyMissingSettings(old, now);
+        QCOMPARE(now.value("telemetry/install").toString(), QStringLiteral("6f1c2d3e-0000-4000-8000-000000000079"));
+        QCOMPARE(now.value("recent").toStringList(), (QStringList{"/home/a/flyer.jpub", "/home/a/menu.pub"}));
+        QCOMPARE(now.value("telemetry/enabled").toBool(), false);
+
+        // Its folder of templates and building blocks moves to the new name.
+        const QString from = dir.filePath("JeffPub/JeffPub 79"), to = dir.filePath("JeffOffice/JeffPub");
+        QVERIFY(QDir().mkpath(from + "/Templates") && QDir().mkpath(from + "/BuildingBlocks"));
+        for (const QString f : {QStringLiteral("/Templates/club.jpub"), QStringLiteral("/BuildingBlocks/logo.json")}) {
+            QFile file(from + f);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write("kept");
+        }
+        QVERIFY(jp::moveDataFolder(from, to));
+        QVERIFY(QFile::exists(to + "/Templates/club.jpub") && QFile::exists(to + "/BuildingBlocks/logo.json"));
+        QVERIFY(!QFileInfo::exists(from));
+        // Never over a folder the renamed program already has.
+        QVERIFY(QDir().mkpath(from));
+        QVERIFY(!jp::moveDataFolder(from, to));
+        QVERIFY(QFile::exists(to + "/Templates/club.jpub"));
     }
 
     void metafileWmfRenders()

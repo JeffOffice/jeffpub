@@ -133,9 +133,9 @@ QString saveFailureHint(const QString &error)
     const bool blocked = error.contains(QLatin1String("cannot find"), Qt::CaseInsensitive) || error.contains(QLatin1String("not found"), Qt::CaseInsensitive)
                          || error.contains(QLatin1String("denied"), Qt::CaseInsensitive) || error.contains(QLatin1String("permission"), Qt::CaseInsensitive);
     if (blocked)
-        return QStringLiteral("\n\nWindows is probably blocking JeffPub 79 from saving in this folder. Windows Security's "
+        return QStringLiteral("\n\nWindows is probably blocking JeffPub from saving in this folder. Windows Security's "
                               "\"Controlled folder access\" protects folders such as Documents and Desktop from programs it doesn't recognize yet.\n\n"
-                              "To allow JeffPub 79: open Windows Security, choose Virus & threat protection, then Manage ransomware protection, "
+                              "To allow JeffPub: open Windows Security, choose Virus & threat protection, then Manage ransomware protection, "
                               "then Allow an app through Controlled folder access. Choose Add an allowed app, then Browse all apps, and select:\n%1\n\n"
                               "Or save to a folder that isn't protected.")
             .arg(QDir::toNativeSeparators(QCoreApplication::applicationFilePath()));

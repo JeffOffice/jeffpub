@@ -138,10 +138,10 @@ struct CharacterStyle
   bool emboss;
   bool engrave;
   boost::optional<double> textScale;
-  // JeffPub 79: text outline (character "line" container 0x59): color index and width in EMUs.
+  // JeffPub: text outline (character "line" container 0x59): color index and width in EMUs.
   int outlineColorIndex = -1;
   unsigned outlineWidthEmu = 0;
-  // JeffPub 79: strikethrough (0x10), spacing added between letters in EMUs
+  // JeffPub: strikethrough (0x10), spacing added between letters in EMUs
   // (0x1B, "kerning" in Publisher's dialog) and tracking in tenths of a
   // percent (0x1F, 1000 = normal).
   bool strike = false;
@@ -178,7 +178,7 @@ struct ParagraphStyle
   boost::optional<Alignment> m_align;
   boost::optional<unsigned> m_defaultCharStyleIndex;
   boost::optional<LineSpacingInfo> m_lineSpacing;
-  int m_alignRaw = -1;   // JeffPub 79: the raw alignment code, for diagnostics
+  int m_alignRaw = -1;   // JeffPub: the raw alignment code, for diagnostics
   boost::optional<unsigned> m_spaceBeforeEmu;
   boost::optional<unsigned> m_spaceAfterEmu;
   boost::optional<int> m_firstLineIndentEmu;
@@ -186,7 +186,7 @@ struct ParagraphStyle
   boost::optional<unsigned> m_rightIndentEmu;
   boost::optional<ListInfo> m_listInfo;
   std::vector<unsigned> m_tabStopsInEmu;
-  // JeffPub 79: each tab's alignment (0 left, 1 right, 2 center, 3 decimal),
+  // JeffPub: each tab's alignment (0 left, 1 right, 2 center, 3 decimal),
   // and the list as Publisher stores it: kind (23 bullet, else a numbering
   // style), bullet character, and number punctuation (high half of 0x58).
   std::vector<int> m_tabAligns;
@@ -198,7 +198,7 @@ struct ParagraphStyle
   int m_listFontIndex = -1;     // the bullet's font in the font table (0x03)
   boost::optional<unsigned> m_dropCapLines;
   boost::optional<unsigned> m_dropCapLetters;
-  int m_direction = -1;   // JeffPub 79: 0x3A, 0xF3FF on a right-to-left paragraph
+  int m_direction = -1;   // JeffPub: 0x3A, 0xF3FF on a right-to-left paragraph
   ParagraphStyle() :
     m_align(), m_defaultCharStyleIndex(), m_lineSpacing(), m_spaceBeforeEmu(),
     m_spaceAfterEmu(), m_firstLineIndentEmu(), m_leftIndentEmu(),

@@ -1,5 +1,5 @@
 // Minimal boost::optional on top of std::optional, enough for libmspub.
-// Part of JeffPub 79's vendoring of libmspub without Boost.
+// Part of JeffPub's vendoring of libmspub without Boost.
 #pragma once
 #include <optional>
 #include <utility>

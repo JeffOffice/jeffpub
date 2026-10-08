@@ -1,6 +1,6 @@
 # Bundled fonts
 
-These open fonts ship with JeffPub 79 so publications look the same on Linux and Windows, and so `.pub` files that name common proprietary fonts render with matching widths. Each font remains under its own license. None is covered by JeffPub 79's GPL.
+These open fonts ship with JeffPub so publications look the same on Linux and Windows, and so `.pub` files that name common proprietary fonts render with matching widths. Each font remains under its own license. None is covered by JeffPub's GPL.
 
 | Fonts | License |
 |---|---|

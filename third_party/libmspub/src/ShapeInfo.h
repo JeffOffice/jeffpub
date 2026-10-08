@@ -53,12 +53,12 @@ struct ShapeInfo
   boost::optional<unsigned> m_wrap;   // JeffPub patch: text wrapping (0 none, 1 square, 2 tight, 3 through, 4 top and bottom)
   boost::optional<unsigned> m_inlineNum;   // JeffPub patch: an object set in text, by the number its story's EOBJ gives it
   boost::optional<std::array<int, 4> > m_wrapDistances; // JeffPub patch: EMU left, top, right, bottom
-  boost::optional<std::pair<unsigned, unsigned> > m_glueStart, m_glueEnd;   // JeffPub 79: the box's place among the boxes sharing its story
+  boost::optional<std::pair<unsigned, unsigned> > m_glueStart, m_glueEnd;   // JeffPub: the box's place among the boxes sharing its story
   std::map<unsigned, int> m_adjustValuesByIndex;
   std::vector<int> m_adjustValues;
   boost::optional<double> m_rotation;
   boost::optional<std::pair<bool, bool> > m_flips;
-  // JeffPub 79: Text Art (words, font, size, spacing, alignment, settings).
+  // JeffPub: Text Art (words, font, size, spacing, alignment, settings).
   boost::optional<librevenge::RVNGPropertyList> m_textArt;
   boost::optional<Margins> m_margins;
   boost::optional<BorderPosition> m_borderPosition; // Irrelevant except for rectangular shapes
@@ -69,7 +69,7 @@ struct ShapeInfo
   boost::optional<Dash> m_dash;
   boost::optional<TableInfo> m_tableInfo;
   boost::optional<unsigned> m_numColumns;
-  boost::optional<unsigned> m_textFlow;   // JeffPub 79: txflTextFlow (text direction)
+  boost::optional<unsigned> m_textFlow;   // JeffPub: txflTextFlow (text direction)
   unsigned m_columnSpacing;
   boost::optional<Arrow> m_beginArrow;
   boost::optional<Arrow> m_endArrow;

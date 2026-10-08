@@ -33,7 +33,7 @@
 namespace
 {
 
-// JeffPub 79: replaces the Boost.Spirit grammar with a hand parser.
+// JeffPub: replaces the Boost.Spirit grammar with a hand parser.
 bool findDouble(const librevenge::RVNGString &str, double &res, librevenge::RVNGUnit &unit)
 {
 	if (str.empty())

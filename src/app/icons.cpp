@@ -38,7 +38,7 @@ QColor uiAccent()
 // chevrons to the temp folder once per color.
 static QString chevronFile(const QString &dir, const QColor &c)
 {
-    const QString path = QDir(QDir::tempPath()).filePath(QStringLiteral("jeffpub79-chevron-%1-%2.svg").arg(dir, c.name().mid(1)));
+    const QString path = QDir(QDir::tempPath()).filePath(QStringLiteral("jeffpub-chevron-%1-%2.svg").arg(dir, c.name().mid(1)));
     if (!QFile::exists(path)) {
         const QString d = dir == "up" ? QStringLiteral("M6 15l6-6 6 6") : dir == "check" ? QStringLiteral("M5 12.5l4.5 4.5L19 7.5") : QStringLiteral("M6 9l6 6 6-6");
         QFile f(path);

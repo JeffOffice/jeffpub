@@ -1,6 +1,6 @@
 # The .pub file format: notes for the writer
 
-What JeffPub 79 has learned about `.pub` files (versions 2003 and later), from
+What JeffPub has learned about `.pub` files (versions 2003 and later), from
 libmspub's reader and from comparing small sample files that differ in one
 thing. `tools/pubdump.py FILE.pub` prints every structure described here.
 

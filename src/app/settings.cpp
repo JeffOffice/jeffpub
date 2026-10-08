@@ -1,7 +1,13 @@
 #include "app/settings.h"
 
+#include <QCoreApplication>
+#include <QDir>
+#include <QDirIterator>
+#include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QRegularExpression>
+#include <QStandardPaths>
 
 namespace jp {
 
@@ -11,7 +17,51 @@ Settings &Settings::get()
     return s;
 }
 
-Settings::Settings() : m_s(QStringLiteral("JeffPub79"), QStringLiteral("JeffPub79"))
+void copyMissingSettings(const QSettings &from, QSettings &to)
+{
+    for (const QString &key : from.allKeys())
+        if (!to.contains(key)) to.setValue(key, from.value(key));
+}
+
+bool moveDataFolder(const QString &from, const QString &to)
+{
+    if (!QFileInfo(from).isDir() || QFileInfo::exists(to)) return false;
+    QDir().mkpath(QFileInfo(to).path());
+    if (QDir().rename(from, to)) return true;
+    // Another drive, or a file held open: copy, and leave the old folder.
+    QDirIterator it(from, QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+    bool ok = QDir().mkpath(to);
+    while (it.hasNext()) {
+        const QFileInfo fi = it.nextFileInfo();
+        const QString dest = to + QLatin1Char('/') + QDir(from).relativeFilePath(fi.filePath());
+        ok = (fi.isDir() ? QDir().mkpath(dest) : QFile::copy(fi.filePath(), dest)) && ok;
+    }
+    return ok;
+}
+
+void moveFromJeffPub79()
+{
+    const QString marker = QStringLiteral("migration/jeffpub79");
+    QSettings now(QStringLiteral("JeffOffice"), QStringLiteral("JeffPub"));
+    if (now.value(marker).toBool()) return;
+    {
+        const QSettings old(QStringLiteral("JeffPub79"), QStringLiteral("JeffPub79"));
+        copyMissingSettings(old, now);
+    }
+    // The old folder is where QStandardPaths put it under the old names.
+    const QString org = QCoreApplication::organizationName(), app = QCoreApplication::applicationName();
+    QCoreApplication::setOrganizationName(QStringLiteral("JeffPub"));
+    QCoreApplication::setApplicationName(QStringLiteral("JeffPub 79"));
+    const QString oldData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QCoreApplication::setOrganizationName(org);
+    QCoreApplication::setApplicationName(app);
+    const QString newData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (!oldData.isEmpty() && !newData.isEmpty() && oldData != newData && moveDataFolder(oldData, newData))
+        QDir().rmdir(QFileInfo(oldData).path());   // the old "JeffPub" folder, if now empty
+    now.setValue(marker, true);
+}
+
+Settings::Settings() : m_s(QStringLiteral("JeffOffice"), QStringLiteral("JeffPub"))
 {
     m_unit = Unit(m_s.value("units", 0).toInt());
 }

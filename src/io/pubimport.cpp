@@ -1427,7 +1427,7 @@ std::unique_ptr<Document> importPublisher(const QByteArray &data, QString *error
     }
     librevenge::RVNGStringStream input(reinterpret_cast<const unsigned char *>(data.constData()), (unsigned)data.size());
     if (!libmspub::MSPUBDocument::isSupported(&input)) {
-        if (error) *error = QStringLiteral("JeffPub 79 can't read this version of .pub file.");
+        if (error) *error = QStringLiteral("JeffPub can't read this version of .pub file.");
         return nullptr;
     }
     auto doc = std::make_unique<Document>();
@@ -1448,7 +1448,7 @@ std::unique_ptr<Document> importPublisher(const QByteArray &data, QString *error
     // Saving back to .pub keeps these names as they are.
     doc->pubFonts = rep.fontsUsed;
     if (!ok) {
-        if (error) *error = QStringLiteral("JeffPub 79 could not read this .pub file. It may be damaged or use features that aren't supported yet.");
+        if (error) *error = QStringLiteral("JeffPub could not read this .pub file. It may be damaged or use features that aren't supported yet.");
         return nullptr;
     }
     doc->props.created = QDateTime::currentDateTime();

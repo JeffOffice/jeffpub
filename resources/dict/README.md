@@ -1,6 +1,6 @@
 # Bundled dictionaries
 
-JeffPub 79 checks spelling and hyphenates with these dictionaries from the [LibreOffice dictionaries project](https://github.com/LibreOffice/dictionaries), one folder per language as LibreOffice lays them out. The files are unchanged. Each remains under its own license, recorded in the README and license files beside it. None is covered by JeffPub 79's GPL.
+JeffPub checks spelling and hyphenates with these dictionaries from the [LibreOffice dictionaries project](https://github.com/LibreOffice/dictionaries), one folder per language as LibreOffice lays them out. The files are unchanged. Each remains under its own license, recorded in the README and license files beside it. None is covered by JeffPub's GPL.
 
 | Folder | Contents | License |
 |---|---|---|

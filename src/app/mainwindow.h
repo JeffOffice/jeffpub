@@ -1,5 +1,5 @@
 #pragma once
-// The JeffPub 79 window: ribbon, pages pane, workspace, task panes, status
+// The JeffPub window: ribbon, pages pane, workspace, task panes, status
 // bar and the File backstage. Commands live in mainwindow_actions.cpp and the
 // ribbon layout in mainwindow_ribbon.cpp.
 

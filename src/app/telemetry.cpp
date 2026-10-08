@@ -56,7 +56,7 @@ void send(QNetworkAccessManager *net)
     const QDate today = QDate::currentDate();
     QNetworkRequest req{QUrl(QString::fromLatin1(kUrl))};
     req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
-    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("JeffPub79/%1").arg(QStringLiteral(JP_VERSION)));
+    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("JeffPub/%1").arg(QStringLiteral(JP_VERSION)));
     req.setTransferTimeout(15000);
     const QJsonObject sent = payload();
     QNetworkReply *r = net->post(req, QJsonDocument(sent).toJson(QJsonDocument::Compact));
@@ -79,14 +79,14 @@ void send(QNetworkAccessManager *net)
     });
 }
 
-// Asked once, when JeffPub 79 first starts (unless setup already asked).
+// Asked once, when JeffPub first starts (unless setup already asked).
 void ask(QWidget *window)
 {
     QDialog d(window);
-    d.setWindowTitle(QStringLiteral("Help improve JeffPub 79"));
+    d.setWindowTitle(QStringLiteral("Help improve JeffPub"));
     auto *v = new QVBoxLayout(&d);
     auto *text = new QLabel(QStringLiteral(
-        "JeffPub 79 can send anonymous usage statistics once a day (and when it's updated): its version, your operating system and language, "
+        "JeffPub can send anonymous usage statistics once a day (and when it's updated): its version, your operating system and language, "
         "and how often each of its commands is used. That shows how many people use it and which parts matter most.<br><br>"
         "It never sends your files, their names, or anything in them. <a href=\"%1\">What's sent</a><br><br>"
         "You can change this anytime in File &gt; Options.").arg(QString::fromLatin1(kAbout)), &d);
@@ -175,7 +175,7 @@ void start(QWidget *window)
         if (!decided()) ask(w);
         if (enabled()) Settings::get().setValue(kLaunches, Settings::get().value(kLaunches).toInt() + 1);
         QTimer::singleShot(20000, net, [net] { send(net); });
-        // A day that turns over while JeffPub 79 is open gets its ping too.
+        // A day that turns over while JeffPub is open gets its ping too.
         auto *hourly = new QTimer(net);
         QObject::connect(hourly, &QTimer::timeout, net, [net] { send(net); });
         hourly->start(60 * 60 * 1000);

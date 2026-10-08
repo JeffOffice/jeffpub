@@ -43,7 +43,7 @@ namespace libmspub
 
 namespace
 {
-// JeffPub 79: JP_PUB_TRACE, read once (it is checked for every shape and paragraph).
+// JeffPub: JP_PUB_TRACE, read once (it is checked for every shape and paragraph).
 bool jpTraceOn()
 {
   static const bool on = getenv("JP_PUB_TRACE") != nullptr;
@@ -341,7 +341,7 @@ void fillUnderline(librevenge::RVNGPropertyList &props, const Underline underlin
   }
 }
 
-// JeffPub 79: a small LCID table replaces ICU's uloc_getLocaleForLCID.
+// JeffPub: a small LCID table replaces ICU's uloc_getLocaleForLCID.
 void fillLocale(librevenge::RVNGPropertyList &props, const unsigned lcid)
 {
   static const struct { unsigned id; const char *lang; const char *country; } table[] =
@@ -821,7 +821,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
         graphicsProps.insert("jp:ink-spot", info.m_fillSpot.c_str());
     }
   }
-  // JeffPub 79: Text Art goes to the application as its words and settings
+  // JeffPub: Text Art goes to the application as its words and settings
   // with the unturned frame, instead of as the warp's guide curves.
   if (bool(info.m_textArt))
   {
@@ -1348,7 +1348,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
             if (tableLayout[row][col].m_rowSpan > 1)
               cellProps.insert("table:number-rows-spanned", int(tableLayout[row][col].m_rowSpan));
 
-            // JeffPub 79: the cell's inner margins (Publisher's default is 0.04 in).
+            // JeffPub: the cell's inner margins (Publisher's default is 0.04 in).
             {
               const TableInfo &tinfo = get(info.m_tableInfo);
               const unsigned ci = tableLayout[row][col].m_cell;
@@ -1359,7 +1359,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
                 cellProps.insert(keys[k], m >= 0 ? double(m) / EMUS_IN_INCH : 0.04);
               }
             }
-            // JeffPub 79: fills and borders from the table's formatting shapes.
+            // JeffPub: fills and borders from the table's formatting shapes.
             {
               const TableInfo &tinfo = get(info.m_tableInfo);
               const unsigned r0 = row, r1 = row + std::max(1u, unsigned(tableLayout[row][col].m_rowSpan));
@@ -1453,10 +1453,10 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
         if (ngap > 0)
           props.insert("fo:column-gap", (double)ngap / EMUS_IN_INCH);
       }
-      // JeffPub 79: text direction (0 horizontal, 1/3 top to bottom, 2 bottom to top, 5 stacked).
+      // JeffPub: text direction (0 horizontal, 1/3 top to bottom, 2 bottom to top, 5 stacked).
       if (bool(info.m_textFlow) && get(info.m_textFlow) != 0)
         props.insert("jp:text-flow", (int)get(info.m_textFlow));
-      // JeffPub 79: boxes that share a story carry the same text id.
+      // JeffPub: boxes that share a story carry the same text id.
       if (bool(info.m_textId))
       {
         props.insert("jp:text-id", (int)get(info.m_textId));
@@ -1624,7 +1624,7 @@ const char *MSPUBCollector::getCalculatedEncoding() const
     m_calculatedEncoding = "UTF-16LE";
     return m_calculatedEncoding.get();
   }
-  // JeffPub 79: no ICU charset detection; older files are almost always Western.
+  // JeffPub: no ICU charset detection; older files are almost always Western.
   // Pretty likely to give garbage text, but it's the best we can do.
   m_calculatedEncoding = "windows-1252";
   return m_calculatedEncoding.get();
@@ -1877,13 +1877,13 @@ void MSPUBCollector::addFont(std::vector<unsigned char> name)
 librevenge::RVNGPropertyList MSPUBCollector::getParaStyleProps(const ParagraphStyle &style, boost::optional<unsigned> defaultParaStyleIndex) const
 {
   ParagraphStyle _nothing;
-  // JeffPub 79: a paragraph that names no style uses the Normal style (entry 0),
+  // JeffPub: a paragraph that names no style uses the Normal style (entry 0),
   // which carries the document's default spacing, space after and alignment.
   if (!defaultParaStyleIndex)
     defaultParaStyleIndex = 0u;
   const ParagraphStyle &defaultStyle = bool(defaultParaStyleIndex) && defaultParaStyleIndex.get() < m_defaultParaStyles.size() ? m_defaultParaStyles[defaultParaStyleIndex.get()] : _nothing;
   librevenge::RVNGPropertyList ret;
-  // JeffPub 79: the paragraph's named style.
+  // JeffPub: the paragraph's named style.
   if (defaultParaStyleIndex.get() > 0 && defaultParaStyleIndex.get() < m_styleNames.size() && !m_styleNames[defaultParaStyleIndex.get()].empty())
   {
     ret.insert("jp:style-name", m_styleNames[defaultParaStyleIndex.get()]);
@@ -1912,7 +1912,7 @@ librevenge::RVNGPropertyList MSPUBCollector::getParaStyleProps(const ParagraphSt
     ret.insert("fo:text-align", "left");
     break;
   }
-  // JeffPub 79: a paragraph without its own spacing inherits the document's
+  // JeffPub: a paragraph without its own spacing inherits the document's
   // Normal style (style sheet entry 0), not a flat 1 sp.
   // (An unstyled paragraph already uses entry 0 as defaultStyle above; a
   // paragraph with its own style that sets no spacing gets plain 1 sp.)
@@ -1965,7 +1965,7 @@ librevenge::RVNGPropertyList MSPUBCollector::getParaStyleProps(const ParagraphSt
   {
     ret.insert("fo:margin-right", (double)rightIndentEmu / EMUS_IN_INCH);
   }
-  // JeffPub 79: tab stops with their alignment, and the paragraph's list.
+  // JeffPub: tab stops with their alignment, and the paragraph's list.
   if (!style.m_tabStopsInEmu.empty())
   {
     librevenge::RVNGPropertyListVector tabs;
@@ -2048,7 +2048,7 @@ librevenge::RVNGPropertyList MSPUBCollector::getCharStyleProps(const CharacterSt
     fillUnderline(ret, get(style.underline));
   else if (defaultCharStyle.underline)
     fillUnderline(ret, get(defaultCharStyle.underline));
-  // JeffPub 79: text outline stroke.
+  // JeffPub: text outline stroke.
   const CharacterStyle &ol = style.outlineWidthEmu ? style : defaultCharStyle;
   if (ol.outlineWidthEmu && ol.outlineColorIndex >= 0 && (size_t)ol.outlineColorIndex < m_textColors.size())
   {
@@ -2105,7 +2105,7 @@ librevenge::RVNGPropertyList MSPUBCollector::getCharStyleProps(const CharacterSt
                      getCalculatedEncoding());
     ret.insert("style:font-name", str);
   }
-  // JeffPub 79: strikethrough and letter spacing.
+  // JeffPub: strikethrough and letter spacing.
   if (style.strike)
     ret.insert("style:text-line-through-type", "single");
   if (style.letterSpacingEmu)
@@ -2195,7 +2195,7 @@ void MSPUBCollector::writePage(unsigned pageSeqNum) const
   {
     pageProps.insert("svg:height", m_height);
   }
-  // JeffPub 79: every page is written, even one with no objects of its own;
+  // JeffPub: every page is written, even one with no objects of its own;
   // its master's objects were written once as a master page (see go()), and
   // the page names that master.
   {
@@ -2285,7 +2285,7 @@ bool MSPUBCollector::pageIsMaster(unsigned pageSeqNum) const
 bool MSPUBCollector::go()
 {
   addBlackToPaletteIfNecessary();
-  // JeffPub 79: attach table cell formats to their tables before shapes are set up.
+  // JeffPub: attach table cell formats to their tables before shapes are set up.
   for (const auto &tf : m_tableCellFormats)
   {
     auto it = m_shapeInfosBySeqNum.find(tf.first);
@@ -2305,7 +2305,7 @@ bool MSPUBCollector::go()
     m_painter->defineEmbeddedFont(props);
   }
 
-  // JeffPub 79: master pages, each once, before the pages that use them.
+  // JeffPub: master pages, each once, before the pages that use them.
   for (unsigned masterSeq : m_masterPages)
   {
     if (!hasPage(masterSeq))
@@ -2326,7 +2326,7 @@ bool MSPUBCollector::go()
     writePageShapes(masterSeq);
     m_painter->endMasterPage();
   }
-  // JeffPub 79: pages in order, masters and special pages left out, and pages
+  // JeffPub: pages in order, masters and special pages left out, and pages
   // with no objects of their own kept. Publisher lists its four special
   // pages (envelope, web and the like) after the real ones; walking back from
   // the end, up to four entries are special when each is a known special

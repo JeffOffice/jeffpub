@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure how far JeffPub 79's text baselines are from Publisher's own.
+"""Measure how far JeffPub's text baselines are from Publisher's own.
 
 For the same .pub/PDF pairs as fidelity.py, every laid-out line on page 1
 (jpubtool layout) is matched to the nearest baseline in the PDF's text

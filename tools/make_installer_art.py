@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draws the Windows installer artwork in the JeffPub 79 brand colors.
+"""Draws the Windows installer artwork in the JeffPub brand colors.
 
     tools/make_installer_art.py
 
@@ -24,14 +24,14 @@ def font(name, size):
 
 
 def badge(size, fg=ACCENT, bg=(255, 255, 255)):
-    """The rounded "79" badge from the app icon."""
+    """The rounded "JP" badge from the app icon."""
     s = size * SCALE
     im = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     d.rounded_rectangle((0, 0, s - 1, s - 1), radius=int(s * 0.24), fill=bg)
     f = font("Montserrat-Bold.ttf", int(size * 0.5))
-    box = d.textbbox((0, 0), "79", font=f)
-    d.text(((s - (box[2] - box[0])) / 2 - box[0], (s - (box[3] - box[1])) / 2 - box[1]), "79", font=f, fill=fg)
+    box = d.textbbox((0, 0), "JP", font=f)
+    d.text(((s - (box[2] - box[0])) / 2 - box[0], (s - (box[3] - box[1])) / 2 - box[1]), "JP", font=f, fill=fg)
     return im
 
 
@@ -69,7 +69,7 @@ def welcome():
     def centered(text, f, y, fill):
         box = d.textbbox((0, 0), text, font=f)
         d.text(((W - (box[2] - box[0])) / 2 - box[0], y * SCALE), text, font=f, fill=fill)
-    centered("JeffPub 79", font("Montserrat-Bold.ttf", 34), 228, (255, 255, 255))
+    centered("JeffPub", font("Montserrat-Bold.ttf", 34), 228, (255, 255, 255))
     centered("Desktop publishing,", font("Lato-Regular.ttf", 20), 282, (255, 255, 255, 215))
     centered("free and open.", font("Lato-Regular.ttf", 20), 308, (255, 255, 255, 215))
     im = im.convert("RGB").resize((w, h), Image.LANCZOS)

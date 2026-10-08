@@ -1,4 +1,4 @@
-/* JeffPub 79 addition: lets the host application supply legacy codepage
+/* JeffPub addition: lets the host application supply legacy codepage
  * conversion so libmspub does not need ICU. */
 #ifndef INCLUDED_LIBMSPUB_JP_HOOKS_H
 #define INCLUDED_LIBMSPUB_JP_HOOKS_H

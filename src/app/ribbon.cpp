@@ -429,7 +429,7 @@ protected:
         p.setRenderHint(QPainter::Antialiasing);
         p.fillRect(rect(), headerBg());
         const auto rects = tabRects();
-        // File button: one pill holding the "79" badge, the label and a chevron,
+        // File button: one pill holding the "JP" badge, the label and a chevron,
         // so it reads as a single control that opens the File screen.
         {
             const QRectF pill = QRectF(rects[0]).adjusted(0.5, 0.5, -0.5, -0.5);
@@ -450,7 +450,7 @@ protected:
             bf.setPixelSize(9);
             p.setFont(bf);
             p.setPen(Qt::white);
-            p.drawText(badge, Qt::AlignCenter, QStringLiteral("79"));
+            p.drawText(badge, Qt::AlignCenter, QStringLiteral("JP"));
             QFont lf = font();
             lf.setWeight(QFont::DemiBold);
             p.setFont(lf);
@@ -514,7 +514,7 @@ protected:
         brand.setPointSizeF(brand.pointSizeF() * 0.85);
         p.setFont(brand);
         p.setPen(mutedText());
-        p.drawText(QRect(width() - 80, 1, 74, 16), Qt::AlignLeft | Qt::AlignVCenter, QStringLiteral("JeffPub 79"));
+        p.drawText(QRect(width() - 80, 1, 74, 16), Qt::AlignLeft | Qt::AlignVCenter, QStringLiteral("JeffPub"));
         p.setPen(lineColor());
         p.drawLine(0, height() - 1, width(), height() - 1);
     }

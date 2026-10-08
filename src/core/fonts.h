@@ -7,7 +7,7 @@
 
 namespace jp {
 
-QStringList bundledFontDirs();                // where the fonts that ship with JeffPub 79 are
+QStringList bundledFontDirs();                // where the fonts that ship with JeffPub are
 int loadBundledFonts();                      // returns number of font files loaded
 void installFontSubstitutions();
 QString substituteFor(const QString &family); // empty if none / font available
