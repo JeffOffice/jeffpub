@@ -1029,6 +1029,9 @@ private Q_SLOTS:
     void standInWidthsMatchOriginals()
     {
         if (QFontDatabase::hasFamily(QStringLiteral("Gill Sans MT"))) QSKIP("Gill Sans MT is installed: its own widths are used");
+#ifdef Q_OS_MACOS
+        QSKIP("the Mac keeps the stand-ins' own widths for now");
+#endif
         {
             QFont drawn(QStringLiteral("Gill Sans MT"));
             drawn.setFamilies({QStringLiteral("Gill Sans MT")});

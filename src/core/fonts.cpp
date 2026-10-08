@@ -138,6 +138,13 @@ static const QHash<QString, StandInWidths> &standInWidths()
 // The table's entry for a missing font when its stand-in is the one drawn.
 static const StandInWidths *measuredStandIn(const QString &family)
 {
+#ifdef Q_OS_MACOS
+    // Qt's macOS text engine narrows a font differently (Gill Sans MT's
+    // stand-in came out 6% narrower than on Windows and Linux): until that's
+    // measured there, the Mac keeps the stand-ins' own widths.
+    Q_UNUSED(family);
+    return nullptr;
+#endif
     const auto w = standInWidths().constFind(family);
     if (w == standInWidths().constEnd()) return nullptr;
     static QHash<QString, bool> drawn;   // main thread only, like all layout
