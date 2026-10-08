@@ -2,7 +2,7 @@
 
 > **JeffPub is an independent project. It is not affiliated with, endorsed by, sponsored by, or supported by Microsoft Corporation.** See [Legal notices](#legal-notices).
 
-JeffPub is a free, open-source desktop publishing app for **Linux and Windows**. Its features are modeled on those of Microsoft Publisher 2021, and it opens Publisher files. Use it to lay out flyers, newsletters, brochures, business cards, certificates, and other print pieces on a page. Text, pictures, shapes, and tables sit in frames that you can move and resize wherever you like.
+JeffPub is a free, open-source desktop publishing app for **Windows, macOS and Linux**. Its features are modeled on those of Microsoft Publisher 2021, and it opens Publisher files. Use it to lay out flyers, newsletters, brochures, business cards, certificates, and other print pieces on a page. Text, pictures, shapes, and tables sit in frames that you can move and resize wherever you like.
 
 ## Why JeffPub exists
 
@@ -36,7 +36,7 @@ Unless you turn them off, it also sends anonymous usage statistics once a day wh
 ## Built with
 
 - **C++17** and **Qt 6** (Widgets and Graphics View), built with **CMake**
-- Qt provides the cross-platform UI, the rich-text layout engine, PDF output, and native printing on both Linux and Windows.
+- Qt provides the cross-platform UI, the rich-text layout engine, PDF output, and native printing on Windows, macOS and Linux.
 
 ## License
 
