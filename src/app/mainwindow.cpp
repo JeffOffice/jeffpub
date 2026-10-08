@@ -829,6 +829,7 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
     if (s.pdfx) {
         PdfXOptions xo;
         xo.condition = s.pdfxCondition;
+        xo.overprint = d->print.overprint;
         const QSizeF media = ps + QSizeF(2 * margin, 2 * margin);
         // PDF boxes count from the bottom left; the page sits margin in.
         xo.trim = QRectF(margin, media.height() - margin - ps.height(), ps.width(), ps.height());

@@ -1,5 +1,6 @@
 #include "io/pdfx.h"
 
+#include "io/overprint.h"
 #include "io/qtpdf.h"
 #include "io/zip.h"
 
@@ -219,6 +220,8 @@ bool finishPdfX(const QString &path, const PdfXOptions &opt, bool x4, QString *e
         }
         o.body = body.toLatin1();
     }
+    // Black prints over the inks under it, as the publication says.
+    applyOverprint(pdf, opt.overprint);
     // Everything left is PDF 1.3 (PDF/X-4 stays 1.6).
     if (!x4) pdf.header.replace("%PDF-1.4", "%PDF-1.3");
     for (const QtPdf::Obj &o : pdf.objects)

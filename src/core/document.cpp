@@ -797,7 +797,10 @@ QJsonObject Document::toJson() const
     QJsonArray spots;
     for (int i = 0; i < print.spotColors.size(); ++i)
         spots.append(QJsonObject{{"name", print.spotName(i)}, {"color", colorToString(print.spotColors[i])}});
-    o["print"] = QJsonObject{{"model", int(print.model)}, {"spots", spots}, {"embedFonts", print.embedFonts}};
+    o["print"] = QJsonObject{{"model", int(print.model)}, {"spots", spots}, {"embedFonts", print.embedFonts},
+                            {"overprint", QJsonObject{{"text", print.overprint.text}, {"textBelow", print.overprint.textBelow},
+                                                      {"lines", print.overprint.lines}, {"fills", print.overprint.fills},
+                                                      {"threshold", print.overprint.threshold}}}};
     return o;
 }
 
@@ -879,6 +882,15 @@ void Document::fromJson(const QJsonObject &o)
         }
     }
     print.embedFonts = pr["embedFonts"].toBool(true);
+    {
+        const QJsonObject op = pr["overprint"].toObject();
+        const OverprintSettings def;
+        print.overprint.text = op["text"].toBool(def.text);
+        print.overprint.textBelow = std::clamp(op["textBelow"].toDouble(def.textBelow), 0.0, 1638.0);
+        print.overprint.lines = op["lines"].toBool(def.lines);
+        print.overprint.fills = op["fills"].toBool(def.fills);
+        print.overprint.threshold = std::clamp(op["threshold"].toInt(def.threshold), 1, 100);
+    }
     if (masters.isEmpty()) resetDefaults();
 }
 

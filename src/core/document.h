@@ -153,6 +153,19 @@ struct DocProps {
     static DocProps fromJson(const QJsonObject &o);
 };
 
+// Black overprinting in files for a printer (io/overprint applies it).
+struct OverprintSettings {
+    bool text = true;          // black text below textBelow points
+    double textBelow = 24;
+    bool lines = true;         // black lines and outlines
+    bool fills = false;        // black fills
+    int threshold = 95;        // a black of at least this percent counts
+    bool any() const { return text || lines || fills; }
+    bool operator==(const OverprintSettings &b) const {
+        return text == b.text && textBelow == b.textBelow && lines == b.lines && fills == b.fills && threshold == b.threshold;
+    }
+};
+
 struct PrintInfo {
     enum ColorModel { RGB, SingleSpot, SpotColors, ProcessCMYK, ProcessPlusSpot };
     ColorModel model = RGB;
@@ -161,6 +174,7 @@ struct PrintInfo {
     bool usesSpots() const { return model == SingleSpot || model == SpotColors || model == ProcessPlusSpot; }
     QString spotName(int i) const { return i < spotNames.size() && !spotNames[i].isEmpty() ? spotNames[i] : QStringLiteral("Spot color %1").arg(i + 1); }
     bool embedFonts = true;
+    OverprintSettings overprint;
 };
 
 class Document {

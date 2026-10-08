@@ -3661,6 +3661,123 @@ private Q_SLOTS:
     // PDF/X-4 with the printer's own color profile: transparency kept,
     // pictures in CMYK with their see-through parts, the profile in the
     // output intent, the PDF/X-4 identification in the metadata.
+    // Black overprints in a file for a printer, as the publication's
+    // overprinting settings say (Publisher's defaults: text below 24 pt and
+    // lines; not fills): the black ink prints over the colors under it,
+    // which then show no white edge where the plates don't line up.
+    void pdfXOverprint()
+    {
+        auto doc = Document::blank(QSizeF(400, 300));
+        auto addText = [&](const QString &s, double pt, const QColor &c, const QRectF &r) {
+            auto t = std::make_shared<TextItem>();
+            t->rect = r;
+            t->storyId = doc->createStory(s);
+            QTextCursor cur(doc->storyDoc(t->storyId));
+            cur.select(QTextCursor::Document);
+            QTextCharFormat f;
+            f.setFontPointSize(pt);
+            f.setForeground(c);
+            cur.mergeCharFormat(f);
+            doc->pages[0]->items.push_back(t);
+        };
+        auto red = std::make_shared<ShapeItem>();
+        red->shape = QStringLiteral("rect");
+        red->rect = QRectF(20, 20, 360, 260);
+        red->fill = Fill::solid(ColorRef::rgb(QColor(220, 30, 40)));
+        red->stroke.color = ColorRef::none();
+        doc->pages[0]->items.push_back(red);
+        addText(QStringLiteral("small"), 10, Qt::black, QRectF(40, 40, 150, 30));
+        addText(QStringLiteral("BIG"), 36, Qt::black, QRectF(40, 90, 200, 60));
+        auto line = std::make_shared<LineItem>();
+        line->p1 = QPointF(40, 180);
+        line->p2 = QPointF(300, 180);
+        line->stroke.color = ColorRef::rgb(Qt::black);
+        line->stroke.width = 2;
+        doc->pages[0]->items.push_back(line);
+        auto blackBox = std::make_shared<ShapeItem>();
+        blackBox->shape = QStringLiteral("rect");
+        blackBox->rect = QRectF(40, 200, 60, 40);
+        blackBox->fill = Fill::solid(ColorRef::rgb(Qt::black));
+        blackBox->stroke.color = ColorRef::none();
+        doc->pages[0]->items.push_back(blackBox);
+
+        // Saved with the publication.
+        doc->print.overprint.textBelow = 30;
+        {
+            Document again;
+            again.fromJson(doc->toJson());
+            QVERIFY(again.print.overprint == doc->print.overprint);
+        }
+        doc->print.overprint = OverprintSettings();
+
+        MainWindow w;
+        w.editor()->setDocument(std::move(doc));
+        Document *d = w.editor()->doc();
+        QTemporaryDir dir;
+        // The page's drawing, and the PDF still PDF/X that PDFium opens.
+        auto drawing = [&](const QString &name) {
+            const QString path = dir.filePath(name);
+            MainWindow::PdfSettings ps;
+            ps.pdfx = true;
+            if (!w.exportPdfTo(path, ps)) return QByteArray();
+            if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+                QFile::remove(qEnvironmentVariable("JP_SHOT_DIR") + "/overprint-" + name);
+                QFile::copy(path, qEnvironmentVariable("JP_SHOT_DIR") + "/overprint-" + name);
+            }
+            QFile f(path);
+            if (!f.open(QIODevice::ReadOnly)) return QByteArray();
+            const QByteArray bytes = f.readAll();
+            if (!bytes.startsWith("%PDF-1.3") || !PdfDocument(bytes).isValid()) return QByteArray();
+            QtPdf parsed;
+            parsed.load(path);
+            QByteArray content;
+            for (const auto &o : parsed.objects) {
+                const QByteArray dict = QtPdf::dictOf(o.body);
+                bool ok = false;
+                if (QtPdf::isStream(o.body) && dict.contains("/FlateDecode") && !dict.contains("/Length1") && !dict.contains("/Subtype"))
+                    content += parsed.streamData(o, &ok);
+                if (dict.contains("/Type /ExtGState") && dict.contains("/OP true")) content += "\n%switch " + dict + "\n";
+            }
+            return content;
+        };
+        auto between = [](const QByteArray &c, const QByteArray &from, const QByteArray &to) {
+            const qsizetype a = c.indexOf(from);
+            return a < 0 ? QByteArray() : c.mid(a, c.indexOf(to, a) - a);
+        };
+        const QByteArray smallText = "/F11 80 Tf", bigText = "/F11 288 Tf", lineStart = "40 180 m", boxStart = "666.666666 3333.33333 m";
+
+        // Publisher's defaults: the 10-point black text and the black line
+        // overprint; the 36-point text and the black box knock out.
+        QByteArray c = drawing(QStringLiteral("defaults.pdf"));
+        QVERIFY(!c.isEmpty());
+        QVERIFY2(between(c, smallText, "ET").contains("/JPop2 gs"), c.constData());
+        QVERIFY(!between(c, bigText, "ET").contains("/JPop"));
+        QVERIFY(c.contains("/JPop1 gs\n" + lineStart));
+        QVERIFY(c.contains(boxStart) && !c.mid(c.indexOf(boxStart) - 12, 12).contains("/JPop"));
+        QVERIFY(c.contains("/OPM 1"));
+        // The colored background never overprints.
+        QVERIFY(!c.contains("/JPop3"));
+
+        // Fills too; then a 90% black box counts only from a threshold below it.
+        d->print.overprint.fills = true;
+        c = drawing(QStringLiteral("fills.pdf"));
+        QVERIFY(c.contains("/JPop2 gs\n" + boxStart));
+        blackBox->fill = Fill::solid(ColorRef::rgb(QColor(25, 25, 25)));
+        c = drawing(QStringLiteral("gray.pdf"));
+        QVERIFY(c.contains(boxStart) && !c.mid(c.indexOf(boxStart) - 12, 12).contains("/JPop"));
+        d->print.overprint.threshold = 85;
+        c = drawing(QStringLiteral("gray85.pdf"));
+        QVERIFY(c.contains("/JPop2 gs\n" + boxStart));
+        // Text up to 40 points: the big text too.
+        d->print.overprint.textBelow = 40;
+        c = drawing(QStringLiteral("big.pdf"));
+        QVERIFY(between(c, bigText, "ET").contains("/JPop2 gs"));
+        // All off: nothing overprints.
+        d->print.overprint.text = d->print.overprint.lines = d->print.overprint.fills = false;
+        c = drawing(QStringLiteral("off.pdf"));
+        QVERIFY(!c.isEmpty() && !c.contains("/JPop"));
+    }
+
     void pdfX4WithOwnProfile()
     {
         const QByteArray icc = testCmykProfile();

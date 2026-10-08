@@ -15,6 +15,8 @@
 // downloaded on first use (its terms let anyone use and embed it but not
 // pass it on), or the printer's own.
 
+#include "core/document.h"
+
 #include <QByteArray>
 #include <QRectF>
 #include <QString>
@@ -45,6 +47,7 @@ struct PdfXOptions {
     int condition = 0;   // index into pdfXConditions()
     QRectF trim;         // PDF points, from each page's bottom left
     QRectF bleed;        // contains trim, inside the page
+    OverprintSettings overprint;   // the publication's black overprinting
 };
 
 // Rewrites the PDF at path in place. False, with the reason, when something

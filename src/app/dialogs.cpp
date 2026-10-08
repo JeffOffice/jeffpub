@@ -2326,6 +2326,42 @@ void documentPropertiesDialog(QWidget *p, Editor *ed, int tab)
     QObject::connect(model, &QComboBox::currentIndexChanged, &dlg.d, showSpots);
     showSpots();
     pf->addRow(embed);
+    // Black overprinting in files for a printer (PDF/X): black prints over
+    // the inks under it, so a shifted plate leaves no white edge.
+    const OverprintSettings op0 = ed->doc()->print.overprint;
+    auto *opBox = new QGroupBox(QStringLiteral("Overprint black in files for a printer (PDF/X)"), print);
+    auto *og = new QGridLayout(opBox);
+    auto *opText = new QCheckBox(QStringLiteral("Text below:"), opBox);
+    auto *opSize = new QDoubleSpinBox(opBox);
+    opSize->setRange(1, 1638);
+    opSize->setDecimals(1);
+    opSize->setSuffix(QStringLiteral(" pt"));
+    auto *opLines = new QCheckBox(QStringLiteral("Lines"), opBox);
+    auto *opFills = new QCheckBox(QStringLiteral("Fills"), opBox);
+    auto *opThreshold = new QSpinBox(opBox);
+    opThreshold->setRange(1, 100);
+    opThreshold->setSuffix(QStringLiteral("%"));
+    auto *opReset = new QPushButton(QStringLiteral("Reset All"), opBox);
+    auto showOverprint = [=](const OverprintSettings &v) {
+        opText->setChecked(v.text);
+        opSize->setValue(v.textBelow);
+        opLines->setChecked(v.lines);
+        opFills->setChecked(v.fills);
+        opThreshold->setValue(v.threshold);
+    };
+    showOverprint(op0);
+    QObject::connect(opText, &QCheckBox::toggled, opSize, &QWidget::setEnabled);
+    opSize->setEnabled(op0.text);
+    QObject::connect(opReset, &QPushButton::clicked, opBox, [=] { showOverprint(OverprintSettings()); });
+    og->addWidget(opText, 0, 0);
+    og->addWidget(opSize, 0, 1);
+    og->addWidget(opLines, 1, 0);
+    og->addWidget(opFills, 2, 0);
+    og->addWidget(new QLabel(QStringLiteral("Black counts from:"), opBox), 3, 0);
+    og->addWidget(opThreshold, 3, 1);
+    og->addWidget(opReset, 4, 0);
+    og->setColumnStretch(2, 1);
+    pf->addRow(opBox);
     tabs->addTab(print, QStringLiteral("Commercial Print"));
     tabs->setCurrentIndex(std::clamp(tab, 0, 1));
     dlg.v->addWidget(tabs);
@@ -2336,6 +2372,12 @@ void documentPropertiesDialog(QWidget *p, Editor *ed, int tab)
         d.company = company->text(); d.category = category->text(); d.keywords = keywords->text(); d.comments = comments->toPlainText();
         ed->doc()->print.model = PrintInfo::ColorModel(model->currentIndex());
         ed->doc()->print.embedFonts = embed->isChecked();
+        OverprintSettings &op = ed->doc()->print.overprint;
+        op.text = opText->isChecked();
+        op.textBelow = opSize->value();
+        op.lines = opLines->isChecked();
+        op.fills = opFills->isChecked();
+        op.threshold = opThreshold->value();
         ed->doc()->print.spotColors = spotColors;
         ed->doc()->print.spotNames = spotNames;
     });
