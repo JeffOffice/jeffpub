@@ -272,6 +272,16 @@ static double standInSpaceEm(QFont f)
 QTextCharFormat resolveCharFormat(const QTextCharFormat &f, const LayoutEnv &env)
 {
     QTextCharFormat r = f;
+    // A run that doesn't say it's bold isn't: a paragraph's text layout
+    // fills what a run leaves unsaid from its own font, the first run's, so
+    // after a bold, underlined lead-in the whole paragraph came out bold and
+    // underlined (.pub runs state only what they turn on).
+    if (!f.hasProperty(QTextFormat::FontWeight)) r.setFontWeight(QFont::Normal);
+    if (!f.hasProperty(QTextFormat::FontItalic)) r.setFontItalic(false);
+    if (!f.hasProperty(QTextFormat::FontUnderline) && !f.hasProperty(QTextFormat::TextUnderlineStyle)) r.setFontUnderline(false);
+    if (!f.hasProperty(QTextFormat::FontStrikeOut)) r.setFontStrikeOut(false);
+    if (!f.hasProperty(QTextFormat::FontOverline)) r.setFontOverline(false);
+    if (!f.hasProperty(QTextFormat::FontCapitalization)) r.setFontCapitalization(QFont::MixedCase);
     if (!f.hasProperty(QTextFormat::FontFamilies)) {
         const QString theme = f.stringProperty(tp::ThemeFont);
         r.setFontFamilies(QStringList{theme == QLatin1String("major") ? env.fonts.heading : env.fonts.body});
@@ -491,6 +501,11 @@ static KnownMetrics knownMetrics(const QString &family, bool bold = false)
     if (f == "castellar") return {(1878.0 + 571) / 2048, 571.0 / 2048};                  // hhea
     if (f == "imprint mt shadow") return {(1903.0 + 510) / 2048, 510.0 / 2048};          // hhea
     if (f == "abadi") return {(1817.0 + 504) / 2048, 504.0 / 2048};                      // hhea
+    if (f == "eras medium itc") return {(1825.0 + 512) / 2048, 512.0 / 2048};            // hhea
+    if (f == "tw cen mt condensed") return {(1694.0 + 494) / 2048, 494.0 / 2048};        // hhea
+    if (f == "calisto mt") return {(1894.0 + 470) / 2048, 470.0 / 2048};                 // hhea
+    if (f == "lucida sans typewriter") return {(1974.0 + 432) / 2048, 432.0 / 2048};     // hhea
+    if (f == "rockwell") return {(1937.0 + 468) / 2048, 468.0 / 2048};                   // hhea
     return {};
 }
 static bool isSubstituted(const QString &family) { return !substituteFor(family).isEmpty() || substituteStretch(family) != 100; }

@@ -121,6 +121,12 @@ QVector<QPolygonF> Renderer::wrapObstacles(const Document &doc, const TextItem &
             return;
         }
         if (o->id == frame.id || o->wrap.mode == Wrap::None) return;
+        // A text box pushes this box's text aside only if its own frame
+        // reaches into the text area; then the wrap distance widens the gap.
+        // Publisher's designs butt boxes together, their distances (2.88 pt)
+        // reaching past their insets (2.85): a name in a 12.7-pt-high box
+        // lost its only line to a box beside it.
+        if (o->type() == ItemType::Text && !o->bounds().adjusted(1, 1, -1, -1).intersects(fb.marginsRemoved(frame.insets))) return;
         const Wrap &w = o->wrap;
         QPainterPath pagePath;
         if (w.mode == Wrap::Square || w.mode == Wrap::TopBottom) {
@@ -236,23 +242,40 @@ LayoutCache::FrameLayout LayoutCache::textFrame(const Document &doc, const TextI
     env.fonts = doc.fonts;
     sig += env.key();
     const bool autofit = chain.size() == 1 && (head->autofit == TextItem::BestFit || head->autofit == TextItem::ShrinkOnOverflow);
-    if (autofit) sig += QStringLiteral("|fit%1").arg(int(head->autofit));
+    if (autofit) sig += QStringLiteral("|fit%1%2").arg(int(head->autofit)).arg(head->fitAsStored ? "s" : "");
     const QString key = head->id + QStringLiteral("@") + (doc.find(head->id).page < 0 ? QString::number(pageNumber) : QString());
     Entry &e = m_entries[key];
     if (e.sig != sig || !e.layout) {
         auto lay = std::make_shared<StoryLayout>();
         double scale = 1.0;
         if (autofit) {
+            // Text fits when none is left over and the box holds its lines:
+            // a line taller than the box (a banner's headline grown to fill
+            // its width) doesn't fit, though the layout still places it.
+            auto overflows = [&] {
+                if (lay->overflow()) return true;
+                for (int f = 0; f < specs.size(); ++f) {
+                    const auto lines = lay->lineInfo(f);
+                    if (lines.isEmpty()) continue;
+                    double top = lines.first().rect.top(), bottom = lines.first().rect.bottom();
+                    for (const auto &li : lines) {
+                        top = std::min(top, li.rect.top());
+                        bottom = std::max(bottom, li.rect.bottom());
+                    }
+                    if (bottom - top > specs[f].size.height() - specs[f].insets.top() - specs[f].insets.bottom() + 0.5) return true;
+                }
+                return false;
+            };
             // Binary search the largest font scale that fits.
-            double lo = 0.05, hi = head->autofit == TextItem::BestFit ? 8.0 : 1.0;
+            double lo = 0.05, hi = head->autofit == TextItem::BestFit && !head->fitAsStored ? 8.0 : 1.0;
             env.fontScale = hi;
             lay->build(story->doc.get(), specs, env);
-            if (lay->overflow()) {
+            if (overflows()) {
                 for (int it = 0; it < 14; ++it) {
                     const double mid = (lo + hi) / 2;
                     env.fontScale = mid;
                     lay->build(story->doc.get(), specs, env);
-                    if (lay->overflow()) hi = mid; else lo = mid;
+                    if (overflows()) hi = mid; else lo = mid;
                 }
                 scale = lo;
                 env.fontScale = lo;

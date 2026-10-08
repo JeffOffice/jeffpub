@@ -1969,7 +1969,8 @@ CharacterStyle MSPUBParser::getCharacterStyle(librevenge::RVNGInputStream *input
       fontIndex = getFontIndex(input, info);
       break;
     case SUPER_SUB_TYPE_ID:
-      style.superSubType = readSuperSubType(info.data);
+      // JeffPub: Publisher keeps flags in the high byte (0xF001 is superscript).
+      style.superSubType = readSuperSubType(info.data & 0xff);
       break;
     case OUTLINE_ID:
       style.outline = true;

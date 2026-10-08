@@ -991,6 +991,7 @@ void MainWindow::createActions()
         if (!t) return;
         ed->change(QStringLiteral("Text Fit"), [ed, t, f] {
             t->autofit = f;
+            t->fitAsStored = false;   // fitted here from now on
             if (f == TextItem::GrowBox) ed->autoGrowText(t);
         });
     };

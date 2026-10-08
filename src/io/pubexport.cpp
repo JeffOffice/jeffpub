@@ -1550,10 +1550,13 @@ QByteArray PubWriter::write(QStringList *skipped)
             if (stops.first().transparency > 0.001) opt << Prop{0x0182, opacity(stops.first().transparency)};
             if (stops.last().transparency > 0.001) opt << Prop{0x0184, opacity(stops.last().transparency)};
             if (type == 7) {
-                const double a = std::fmod(std::fmod(f.angle - 90, 360.0) + 360.0, 360.0);
+                const double a = std::fmod(std::fmod(f.angle - 270, 360.0) + 360.0, 360.0);   // as pubimport reads it
                 opt << Prop{0x018b, quint32(std::llround(a)) << 16};
-            } else if (type == 5) {
-                opt << Prop{0x018d, 32768} << Prop{0x018e, 32768} << Prop{0x018f, 32768} << Prop{0x0190, 32768};
+            } else {
+                // From the center or along the outline, focus 100 puts the
+                // first color at the center (as Publisher's own designs do).
+                opt << Prop{0x018c, 100};
+                if (type == 5) opt << Prop{0x018d, 32768} << Prop{0x018e, 32768} << Prop{0x018f, 32768} << Prop{0x0190, 32768};
             }
             // Two end stops need only the two colors (each with its own
             // transparency); more stops add the list: count, count, 8, then

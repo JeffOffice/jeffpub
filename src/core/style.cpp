@@ -58,6 +58,18 @@ QBrush Fill::brush(const QRectF &r, const ColorScheme &s, const ImageLookup &img
             g.setStops(gs);
             return QBrush(g);
         }
+        if (gradType == PathGrad) {
+            // Along the outline: the outside color is reached at the frame's
+            // edge, in an ellipse of the frame's proportions.
+            QRadialGradient pg(QPointF(0, 0), 1.0);
+            pg.setStops(gs);
+            QBrush pb(pg);
+            QTransform t;
+            t.translate(r.center().x(), r.center().y());
+            t.scale(std::max(r.width(), 1e-3) / 2, std::max(r.height(), 1e-3) / 2);
+            pb.setTransform(t);
+            return pb;
+        }
         const double rad = std::hypot(r.width(), r.height()) / 2;
         QRadialGradient g(r.center(), gradType == Rectangular ? std::max(r.width(), r.height()) / 2 * 1.15 : rad);
         g.setStops(gs);

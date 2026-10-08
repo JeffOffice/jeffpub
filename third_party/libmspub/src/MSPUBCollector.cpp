@@ -1983,18 +1983,27 @@ librevenge::RVNGPropertyList MSPUBCollector::getParaStyleProps(const ParagraphSt
     }
     ret.insert("style:tab-stops", tabs);
   }
-  if (style.m_listKind >= 0)
   {
-    ret.insert("jp:list-kind", style.m_listKind);
-    ret.insert("jp:list-char", style.m_listChar);
-    ret.insert("jp:list-delim", style.m_listDelim);
-    if (style.m_listSizeEmu)
-      ret.insert("jp:list-size", double(style.m_listSizeEmu) / 12700.0, librevenge::RVNG_GENERIC);   // points
-    if (style.m_listFontIndex >= 0 && unsigned(style.m_listFontIndex) < m_fonts.size())
+    // JeffPub: a paragraph's list is its own 57 property, else its named style's;
+    // the bullet's size, font and the number's punctuation are separate
+    // properties that each fall back on the style's too.
+    const ParagraphStyle &lk = style.m_listKind >= 0 ? style : defaultStyle;
+    if (lk.m_listKind >= 0)
     {
-      librevenge::RVNGString font;
-      appendCharacters(font, m_fonts[style.m_listFontIndex], getCalculatedEncoding());
-      ret.insert("jp:list-font", font);
+      const int listDelim = style.m_listDelim >= 0 ? style.m_listDelim : defaultStyle.m_listDelim;
+      const unsigned listSizeEmu = style.m_listSizeEmu ? style.m_listSizeEmu : defaultStyle.m_listSizeEmu;
+      const int listFontIndex = style.m_listFontIndex >= 0 ? style.m_listFontIndex : defaultStyle.m_listFontIndex;
+      ret.insert("jp:list-kind", lk.m_listKind);
+      ret.insert("jp:list-char", lk.m_listChar);
+      ret.insert("jp:list-delim", listDelim);
+      if (listSizeEmu)
+        ret.insert("jp:list-size", double(listSizeEmu) / 12700.0, librevenge::RVNG_GENERIC);   // points
+      if (listFontIndex >= 0 && unsigned(listFontIndex) < m_fonts.size())
+      {
+        librevenge::RVNGString font;
+        appendCharacters(font, m_fonts[listFontIndex], getCalculatedEncoding());
+        ret.insert("jp:list-font", font);
+      }
     }
   }
   unsigned dropCapLines = style.m_dropCapLines.get_value_or(
@@ -2077,10 +2086,12 @@ librevenge::RVNGPropertyList MSPUBCollector::getCharStyleProps(const CharacterSt
   else if (defaultCharStyle.colorIndex >= 0 && (size_t)defaultCharStyle.colorIndex < m_textColors.size())
   {
     ret.insert("fo:color", getColorString(m_textColors[defaultCharStyle.colorIndex].getFinalColor(m_paletteColors)));
+    ret.insert("jp:color-default", true);   // JeffPub: the style's color, not the run's own
   }
   else
   {
     ret.insert("fo:color", getColorString(Color(0, 0, 0)));  // default color is black
+    ret.insert("jp:color-default", true);   // JeffPub: no color of its own (links show theirs)
   }
   if (bool(style.fontIndex) &&
       style.fontIndex.get() < m_fonts.size())
@@ -2450,6 +2461,11 @@ void MSPUBCollector::setBorderImageOffset(unsigned index, unsigned offset)
   }
   BorderArtInfo &bai = m_borderImages[index];
   bai.m_offsets.push_back(offset);
+  // JeffPub: the ordered list numbers the distinct pictures; a picture used
+  // for several sides or corners is listed once (a triangle border drew one
+  // side only, its later pictures numbered past the end).
+  if (std::find(bai.m_offsetsOrdered.begin(), bai.m_offsetsOrdered.end(), offset) != bai.m_offsetsOrdered.end())
+    return;
   bool added = false;
   for (auto i = bai.m_offsetsOrdered.begin();
        i != bai.m_offsetsOrdered.end(); ++i)

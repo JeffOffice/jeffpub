@@ -382,6 +382,7 @@ public:
         if (p["jp:autofit"]) {
             const int fit = p["jp:autofit"]->getInt();
             if (fit >= TextItem::BestFit && fit <= TextItem::GrowBox) t->autofit = TextItem::Autofit(fit);
+            t->fitAsStored = t->autofit == TextItem::BestFit;
         }
         m_skipText = false;
         // Boxes sharing a story become a linked chain.
@@ -618,6 +619,7 @@ public:
         const QString lang = str(p["fo:language"]), country = str(p["fo:country"]);
         if (!lang.isEmpty()) cf.setProperty(tp::Language, country.isEmpty() ? lang : lang + '-' + country);
         m_span = cf;
+        m_spanColorDefault = p["jp:color-default"] != nullptr;
         // A field: the page number Publisher shows in place of the run's "#",
         // or a date (Publisher's format: "pubdate:dddd, MMMM d, yyyy"),
         // whose text is what it showed last; a date over several runs has
@@ -640,6 +642,7 @@ public:
     void closeSpan() override
     {
         m_span = QTextCharFormat();
+        m_spanColorDefault = false;
         m_spanField.clear();
         m_spanFieldCont = false;
         m_spanInline = -1;
@@ -950,6 +953,8 @@ private:
         if (!m_link.isEmpty()) {
             cf.setAnchor(true);
             cf.setAnchorHref(m_link);
+            // A link without a color of its own shows as a link (blue).
+            if (m_spanColorDefault) cf.clearProperty(tp::ColorRefP);
         }
         // .pub text keeps each paragraph's own mark (\r) in the text; paragraphs are
         // already delimited by openParagraph, so the mark must not make another.
@@ -1031,14 +1036,24 @@ private:
         if (f == "gradient") {
             Fill g;
             g.type = Fill::Gradient;
-            g.angle = 90 - (m_style["draw:angle"] ? m_style["draw:angle"]->getDouble() : 0);
+            // Publisher runs the first color toward 270 + a (libmspub's
+            // angle a): checked against its own pictures of 113 gradients
+            // in its built-in designs, horizontal, vertical and diagonal.
+            g.angle = 270 - (m_style["draw:angle"] ? m_style["draw:angle"]->getDouble() : 0);
             const QString shade = str(m_style["libmspub:shade"]);
-            if (shade == "center" || shade == "shape") g.gradType = Fill::Radial;
+            if (shade == "center") g.gradType = Fill::Radial;
+            if (shade == "shape") g.gradType = Fill::PathGrad;   // follows the outline
             if (const RVNGPropertyListVector *stops = m_style.child("svg:linearGradient")) {
                 for (unsigned long i = 0; i < stops->count(); ++i) {
                     const RVNGPropertyList &s = (*stops)[i];
                     g.stops << GradientStop{percent(s["svg:offset"], 0), ColorRef::rgb(color(s["svg:stop-color"])), 1 - percent(s["svg:stop-opacity"], 1)};
                 }
+            }
+            // From the center or along the outline, libmspub's first stop is
+            // the outside; JeffPub's is the center.
+            if (g.gradType != Fill::Linear) {
+                for (auto &st : g.stops) st.pos = 1 - st.pos;
+                std::reverse(g.stops.begin(), g.stops.end());
             }
             if (g.stops.size() >= 2) {
                 g.color = g.stops.first().color;
@@ -1273,10 +1288,20 @@ private:
         s->fill = fill;
         s->stroke = stroke;
         s->wrap.mode = Wrap::None;
+        // A linear gradient runs in the shape's own frame: mirrored with its
+        // flips and turned with its rotation (a preset carries both itself).
+        const bool linear = s->fill.type == Fill::Gradient && s->fill.gradType == Fill::Linear;
+        auto frameAngle = [&](double a) {
+            if (m_style["jp:frame-flip-h"] && m_style["jp:frame-flip-h"]->getInt()) a = 180 - a;
+            if (m_style["jp:frame-flip-v"] && m_style["jp:frame-flip-v"]->getInt()) a = -a;
+            if (m_style["jp:frame-rotation"]) a += m_style["jp:frame-rotation"]->getDouble();
+            return std::fmod(std::fmod(a, 360.0) + 360.0, 360.0);
+        };
         if (isRect) {
             s->shape = QStringLiteral("rect");
             s->rect = QRectF(center.x() - rw / 2, center.y() - rh / 2, rw, rh);
             s->rotation = rot;
+            if (linear) s->fill.angle = std::fmod(frameAngle(s->fill.angle) - rot + 360.0, 360.0);
         } else if (preset) {
             s->shape = preset->shape;
             s->rect = preset->rect;
@@ -1287,6 +1312,7 @@ private:
             s->shape = QStringLiteral("rect");
             s->rect = b.width() < 0.5 || b.height() < 0.5 ? b.adjusted(-0.25, -0.25, 0.25, 0.25) : b;
             s->customPath = pathIn.translated(-s->rect.topLeft());
+            if (linear) s->fill.angle = frameAngle(s->fill.angle);
             if (open) s->fill = Fill::none();
         }
         applyShadow(*s);
@@ -1382,6 +1408,7 @@ private:
         if (!m_cursor.isNull()) m_cursor.beginEditBlock();
     }
     QTextCharFormat m_span;
+    bool m_spanColorDefault = false;   // the run's black is libmspub's fallback
     QString m_spanField;   // the open span is this field ("page")
     int m_spanInline = -1; // the open span is the object set in text with this number
     bool m_spanFieldCont = false;   // the open span is a later run of a date field

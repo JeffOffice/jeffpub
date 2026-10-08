@@ -7474,6 +7474,35 @@ private Q_SLOTS:
 
     // Edit Wrap Points: start from the outline, drag a point, add one on an
     // edge, delete it, and text wraps around the new outline.
+    // A text box that only touches another pushes none of its text aside
+    // (Publisher's designs butt boxes together, their wrap distances
+    // reaching past each other's insets): a name in a short box lost its
+    // only line. One that overlaps still does.
+    void touchingTextBoxesDontWrap()
+    {
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto box = [&](const QRectF &r, const QString &text) {
+            auto t = std::make_shared<TextItem>();
+            t->rect = r;
+            t->insets = QMarginsF(2.85, 2.85, 2.85, 2.85);
+            t->storyId = doc->createStory(text);
+            QTextCursor c(doc->storyDoc(t->storyId));
+            c.select(QTextCursor::Document);
+            QTextCharFormat f;
+            f.setFontPointSize(8);
+            c.mergeCharFormat(f);
+            doc->pages[0]->items.push_back(t);
+            return t;
+        };
+        auto name = box(QRectF(72, 100, 150, 12.7), QStringLiteral("Jeff"));
+        auto above = box(QRectF(72, 80, 150, 20), QStringLiteral("Title"));   // touches the name's top
+        LayoutCache cache;
+        RenderOptions opt;
+        QCOMPARE(cache.textFrame(*doc, *name, 1, opt).layout->lineInfo(0).size(), 1);
+        above->rect.moveTop(84);   // now 4 points into the name's text area
+        QCOMPARE(cache.textFrame(*doc, *name, 1, opt).layout->lineInfo(0).size(), 0);
+    }
+
     void editWrapPoints()
     {
         jp::MainWindow w;
@@ -7938,6 +7967,216 @@ private Q_SLOTS:
         QVERIFY(QFile::exists(to + "/Templates/club.jpub"));
     }
 
+    // Gradients keep their direction and colors through a .pub: Publisher
+    // runs the first color toward 270 + the file's angle (its own pictures
+    // of 113 gradients), and from the center the first color is the center.
+    void pubGradientsRoundTrip()
+    {
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto add = [&](Fill::GradType type, double angle, double x) {
+            auto s = std::make_shared<ShapeItem>();
+            s->shape = QStringLiteral("rect");
+            s->rect = QRectF(x, 72, 80, 120);
+            s->stroke.color = ColorRef::none();
+            s->fill.type = Fill::Gradient;
+            s->fill.gradType = type;
+            s->fill.angle = angle;
+            s->fill.stops = {GradientStop{0, ColorRef::rgb(QColor(200, 0, 0)), 0}, GradientStop{1, ColorRef::rgb(QColor(0, 0, 200)), 0}};
+            s->fill.color = s->fill.stops.first().color;
+            s->fill.color2 = s->fill.stops.last().color;
+            doc->pages[0]->items.push_back(s);
+        };
+        const double angles[] = {0, 90, 180, 270};
+        for (int i = 0; i < 4; ++i) add(Fill::Linear, angles[i], 36 + 90 * i);
+        add(Fill::Radial, 0, 400);
+        add(Fill::PathGrad, 0, 490);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("grad.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        auto back = importPublisher(f.readAll(), nullptr);
+        QVERIFY(back);
+        QVector<const ShapeItem *> got;
+        for (const auto &it : back->pages[0]->items)
+            if (auto *s = dynamic_cast<const ShapeItem *>(it.get()); s && s->fill.type == Fill::Gradient) got << s;
+        std::sort(got.begin(), got.end(), [](auto *a, auto *b) { return a->rect.x() < b->rect.x(); });
+        QCOMPARE(got.size(), 6);
+        for (int i = 0; i < 4; ++i) {
+            QCOMPARE(got[i]->fill.gradType, Fill::Linear);
+            QVERIFY2(std::abs(std::remainder(got[i]->fill.angle - angles[i], 360.0)) < 0.5, qPrintable(QString::number(got[i]->fill.angle)));
+        }
+        QCOMPARE(got[4]->fill.gradType, Fill::Radial);
+        QCOMPARE(got[5]->fill.gradType, Fill::PathGrad);
+        for (int i : {4, 5}) {
+            const auto &st = got[i]->fill.stops;
+            QVERIFY(st.size() >= 2);
+            QCOMPARE(st.first().color.rgbValue(), QColor(200, 0, 0));   // the center
+            QCOMPARE(st.last().color.rgbValue(), QColor(0, 0, 200));
+        }
+    }
+
+    // Best fit grows text only as far as the box holds it: a banner's short
+    // headline grew to fill the width, its one line three times taller than
+    // the box (Publisher's banner designs fit theirs inside).
+    void bestFitStaysInsideBox()
+    {
+        auto doc = Document::blank(QSizeF(4320, 612));
+        auto t = std::make_shared<TextItem>();
+        t->rect = QRectF(528, 155, 3263, 301);
+        t->autofit = TextItem::BestFit;
+        t->storyId = doc->createStory(QStringLiteral("Register Here"));
+        {
+            QTextCursor c(doc->storyDoc(t->storyId));
+            c.select(QTextCursor::Document);
+            QTextCharFormat big;
+            big.setFontPointSize(72);
+            c.mergeCharFormat(big);
+        }
+        doc->pages[0]->items.push_back(t);
+        LayoutCache cache;
+        RenderOptions opt;
+        const auto fl = cache.textFrame(*doc, *t, 1, opt);
+        QVERIFY(fl.layout && !fl.layout->overflow());
+        const auto lines = fl.layout->lineInfo(0);
+        QVERIFY(!lines.isEmpty());
+        const double room = t->rect.height();
+        for (const auto &li : lines) QVERIFY2(li.rect.bottom() <= room + 0.5, qPrintable(QString::number(li.rect.bottom())));
+        // And it still grows: the line fills most of the box's height.
+        QVERIFY2(lines.last().rect.bottom() - lines.first().rect.top() > 0.6 * room, qPrintable(QString::number(fl.fitScale)));
+
+        // From a .pub, the text keeps the size the file stores (Publisher
+        // fitted it): no growing, and shrinking only when it doesn't fit.
+        t->fitAsStored = true;
+        {
+            TextItem copy;
+            copy.fromJson(t->toJson());
+            QVERIFY(copy.fitAsStored);
+        }
+        QCOMPARE(cache.textFrame(*doc, *t, 1, opt).fitScale, 1.0);
+        t->rect = QRectF(528, 155, 250, 100);   // two lines of 72 points don't fit
+        const double shrunk = cache.textFrame(*doc, *t, 1, opt).fitScale;
+        QVERIFY2(shrunk < 1.0, qPrintable(QString::number(shrunk)));
+    }
+
+    // A run that doesn't say it's bold isn't, whatever the paragraph's first
+    // run is: after a bold lead-in, the rest of a .pub paragraph (its runs
+    // state only what they turn on) came out bold and underlined.
+    void runsDontInheritFirstRun()
+    {
+        auto doc = Document::blank(QSizeF(612, 792));
+        const QString text = QStringLiteral("and the rest of this paragraph is plain text that wraps across several lines of a narrow box");
+        auto box = [&](bool explicitPlain, double y) {
+            auto t = std::make_shared<TextItem>();
+            t->rect = QRectF(72, y, 220, 200);
+            t->storyId = doc->createStory();
+            QTextCursor c(doc->storyDoc(t->storyId));
+            QTextCharFormat lead;
+            lead.setFontFamilies({QStringLiteral("Carlito")});
+            lead.setFontPointSize(12);
+            lead.setFontWeight(QFont::Bold);
+            lead.setFontUnderline(true);
+            c.insertText(QStringLiteral("NOTE: "), lead);
+            QTextCharFormat rest;
+            rest.setFontFamilies({QStringLiteral("Carlito")});
+            rest.setFontPointSize(12);
+            if (explicitPlain) {
+                rest.setFontWeight(QFont::Normal);
+                rest.setFontUnderline(false);
+            }
+            c.insertText(text, rest);
+            doc->pages[0]->items.push_back(t);
+            return t;
+        };
+        auto unsaid = box(false, 72), said = box(true, 400);
+        LayoutCache cache;
+        RenderOptions opt;
+        auto lines = [&](const std::shared_ptr<TextItem> &t) {
+            QStringList out;
+            for (const auto &li : cache.textFrame(*doc, *t, 1, opt).layout->lineInfo(0)) out << li.text;
+            return out;
+        };
+        const QStringList a = lines(unsaid), b = lines(said);
+        QVERIFY(b.size() >= 3);
+        QCOMPARE(a, b);
+    }
+
+    // Publisher's superscript keeps flags in the high byte (0xF001): "5th"
+    // read back from such a file keeps its raised letters.
+    void pubSuperscriptHighByte()
+    {
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<TextItem>();
+        t->rect = QRectF(72, 72, 300, 100);
+        t->storyId = doc->createStory(QStringLiteral("5th"));
+        QTextCursor c(doc->storyDoc(t->storyId));
+        c.setPosition(1);
+        c.setPosition(3, QTextCursor::KeepAnchor);
+        QTextCharFormat up;
+        up.setVerticalAlignment(QTextCharFormat::AlignSuperScript);
+        c.mergeCharFormat(up);
+        doc->pages[0]->items.push_back(t);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("sup.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        cfb::File file;
+        QVERIFY(cfb::read(f.readAll(), &file));
+        f.close();
+        QByteArray q = file.stream(QStringLiteral("Quill/QuillSub/CONTENTS"));
+        const QByteArray mark("\x0f\x12\x01\x00", 4);
+        QCOMPARE(q.count(mark), 1);
+        q.replace(mark, QByteArray("\x0f\x12\x01\xf0", 4));
+        QVERIFY(file.setStream(QStringLiteral("Quill/QuillSub/CONTENTS"), q));
+        auto back = importPublisher(cfb::write(file), nullptr);
+        QVERIFY(back);
+        bool raised = false;
+        for (const auto &st : back->stories)
+            for (QTextBlock b = st->doc->begin(); b.isValid(); b = b.next())
+                for (auto it = b.begin(); !it.atEnd(); ++it)
+                    if (it.fragment().text().startsWith(QStringLiteral("th")))
+                        raised = it.fragment().charFormat().verticalAlignment() == QTextCharFormat::AlignSuperScript;
+        QVERIFY(raised);
+    }
+
+    // A link with no color of its own shows as a link: the .pub reader's
+    // fallback black made e-mail links black where Publisher shows them blue.
+    void pubLinkKeepsLinkColor()
+    {
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<TextItem>();
+        t->rect = QRectF(72, 72, 300, 100);
+        t->storyId = doc->createStory(QStringLiteral("Write to us"));
+        QTextCursor c(doc->storyDoc(t->storyId));
+        c.setPosition(9);
+        c.setPosition(11, QTextCursor::KeepAnchor);
+        QTextCharFormat link;
+        link.setAnchor(true);
+        link.setAnchorHref(QStringLiteral("mailto:office@example.com"));
+        c.mergeCharFormat(link);
+        doc->pages[0]->items.push_back(t);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("link.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        auto back = importPublisher(f.readAll(), nullptr);
+        QVERIFY(back);
+        int links = 0;
+        for (const auto &st : back->stories)
+            for (QTextBlock b = st->doc->begin(); b.isValid(); b = b.next())
+                for (auto it = b.begin(); !it.atEnd(); ++it)
+                    if (it.fragment().charFormat().isAnchor()) {
+                        ++links;
+                        QVERIFY2(!it.fragment().charFormat().hasProperty(tp::ColorRefP), qPrintable(it.fragment().charFormat().stringProperty(tp::ColorRefP)));
+                    }
+        QVERIFY(links > 0);
+    }
+
     // Publisher's numbering "(none)" (list kind 255) is no list: the sample
     // newsletter's paragraph with it took a number.
     void pubNoneNumberingIsNoList()
@@ -7951,6 +8190,13 @@ private Q_SLOTS:
             for (QTextBlock b = st->doc->begin(); b.isValid(); b = b.next())
                 if (b.textList() && !jp::isBulletList(b.textList()->format().style())) ++numbered;
         QCOMPARE(numbered, 0);
+        // Its bulleted paragraphs take their bullet from their paragraph
+        // style (they have no list of their own), as in Publisher.
+        int bulleted = 0;
+        for (const auto &st : doc->stories)
+            for (QTextBlock b = st->doc->begin(); b.isValid(); b = b.next())
+                if (b.textList() && jp::isBulletList(b.textList()->format().style()) && !b.text().trimmed().isEmpty()) ++bulleted;
+        QCOMPARE(bulleted, 6);   // 3 with a list of their own, 3 from their style
     }
 
     void metafileWmfRenders()
