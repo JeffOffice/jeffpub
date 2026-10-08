@@ -29,6 +29,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QFontInfo>
+#include <QFontMetricsF>
 #include <QGuiApplication>
 #include <QTextStream>
 
@@ -45,6 +46,26 @@ int main(int argc, char **argv)
         return 2;
     }
     const QString cmd = args[1], in = args[2];
+    if (cmd == "advances") {
+        // advances <family> <b|i|bi|r> <characters>: each character's advance
+        // in thousandths of an em as drawn here (a missing font's stand-in,
+        // narrowed or widened as for layout), one per line.
+        const QString style = args.size() > 3 ? args[3] : QStringLiteral("r");
+        QFont f(in);
+        f.setFamilies({in});
+        f.setBold(style.contains(QLatin1Char('b')));
+        f.setItalic(style.contains(QLatin1Char('i')));
+        const int st = substituteStretch(in, f.bold(), f.italic());
+        if (st != 100) f.setStretch(st);
+        const int wt = substituteWeight(in);
+        if (wt > 0 && !f.bold()) f.setWeight(QFont::Weight(wt));
+        f.setPixelSize(1000);
+        const QFontMetricsF fm(f);
+        const double space = substituteSpaceEm(in, f.bold(), f.italic());
+        for (const QChar c : args.size() > 4 ? args[4] : QString())
+            out << c << "\t" << (c == QLatin1Char(' ') && space > 0 ? space * 1000 : fm.horizontalAdvance(c)) << "\n";
+        return 0;
+    }
     if (cmd == "lineem") {
         // lineem <family>[,<family>...] x: the single line height (ems) and
         // the font drawn, regular and bold, for each family.

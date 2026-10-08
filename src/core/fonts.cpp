@@ -105,16 +105,59 @@ QString interchangeFontName(const QString &family)
     return t.value(family, family);
 }
 
-int substituteStretch(const QString &family)
+// Stand-ins drawn to the originals' widths, for each style (regular, bold,
+// italic, bold italic; 0 where nothing was measured, which takes the
+// regular or bold one): the letters narrowed or widened (percent) and the
+// word space (ems). Measured from the character widths of the fonts embedded
+// in Publisher's PDFs of 284 publications, weighted by how often each
+// character appears in them, against the stand-ins (Oct 7): Cabin's letters
+// run 5% wider than Gill Sans MT's and 10% narrower than its bold, and its
+// spaces 24% narrower.
+struct StandInWidths { int stretch[4]; double space[4]; };
+static const QHash<QString, StandInWidths> &standInWidths()
 {
-    const int s = stretches().value(family, 100);
-    if (s == 100 || QFontDatabase::hasFamily(family)) return 100;
-    return s;
+    static const QHash<QString, StandInWidths> t{
+        {"Gill Sans MT", {{95, 109, 92, 103}, {0.278, 0.278, 0.278, 0.278}}},
+        {"Franklin Gothic Book", {{89, 0, 85, 0}, {0.25, 0, 0.25, 0}}},
+        {"Franklin Gothic Demi", {{89, 0, 88, 0}, {0.25, 0, 0.25, 0}}},
+        // (Agency FB's letters stay: asked to narrow, its stand-in Saira
+        // Condensed switches to a narrower face of its own instead.)
+        {"Agency FB", {{0, 0, 0, 0}, {0.196, 0.206, 0, 0}}},
+        {"Garamond", {{0, 101, 88, 0}, {0.25, 0.25, 0.25, 0}}},
+        {"Imprint MT Shadow", {{110, 0, 0, 0}, {0.25, 0, 0, 0}}},
+        {"Castellar", {{116, 0, 0, 0}, {0.36, 0, 0, 0}}},
+        {"Arial Rounded MT Bold", {{104, 0, 0, 0}, {0.25, 0, 0, 0}}},
+        {"Abadi", {{0, 0, 0, 0}, {0.302, 0, 0, 0}}},
+    };
+    return t;
 }
 
-double substituteSpaceEm(const QString &family)
+// A style's measured value: bold italic falls back to bold, then italic or
+// bold to regular.
+template <class T>
+static T byStyle(const T (&v)[4], bool bold, bool italic)
+{
+    const int i = (bold ? 1 : 0) + (italic ? 2 : 0);
+    if (v[i]) return v[i];
+    if (i == 3 && v[1]) return v[1];
+    return v[0];
+}
+
+int substituteStretch(const QString &family, bool bold, bool italic)
+{
+    if (QFontDatabase::hasFamily(family)) return 100;
+    const auto w = standInWidths().constFind(family);
+    if (w != standInWidths().constEnd())
+        if (const int s = byStyle(w->stretch, bold, italic)) return s;
+    return stretches().value(family, 100);
+}
+
+double substituteSpaceEm(const QString &family, bool bold, bool italic)
 {
     if (QFontDatabase::hasFamily(family)) return 0;
+    const auto w = standInWidths().constFind(family);
+    if (w != standInWidths().constEnd())
+        if (const double em = byStyle(w->space, bold, italic); em > 0) return em;
     // AG_Futura's spaces are half an em (word gaps in reference PDFs of
     // book covers at 11, 16 and 36 pt); its stand-in Jost's are 0.3 em.
     if (family.compare(QLatin1String("AG_Futura"), Qt::CaseInsensitive) == 0) return 0.5;

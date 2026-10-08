@@ -11,7 +11,7 @@ QStringList bundledFontDirs();                // where the fonts that ship with 
 int loadBundledFonts();                      // returns number of font files loaded
 void installFontSubstitutions();
 QString substituteFor(const QString &family); // empty if none / font available
-int substituteStretch(const QString &family);
+int substituteStretch(const QString &family, bool bold = false, bool italic = false);
 // The name to write in files other programs read: a bundled font that is
 // metric-compatible with a standard one (Arimo, Carlito...) is written as
 // that standard font, which every Windows computer has.
@@ -21,7 +21,7 @@ QString interchangeFontName(const QString &family);  // horizontal scale (percen
 int substituteWeight(const QString &family);
 // The width (ems) of a space in a missing font whose stand-in's spaces are
 // narrower or wider; 0 when the font is installed or the stand-in matches.
-double substituteSpaceEm(const QString &family);
+double substituteSpaceEm(const QString &family, bool bold = false, bool italic = false);
 QStringList bundledFamilies();
 
 // Symbol fonts (Symbol, Wingdings) give their pictures their own character

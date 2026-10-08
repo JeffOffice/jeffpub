@@ -1022,6 +1022,34 @@ private Q_SLOTS:
         QVERIFY(std::abs(spacing(old) - spacing(loose)) < 0.001);
     }
 
+    // A missing Gill Sans MT is drawn by Cabin to Gill Sans MT's widths, its
+    // bold too: Cabin's letters run 5% wider than the regular's and 10%
+    // narrower than the bold's, and its spaces 24% narrower (widths of the
+    // fonts in Publisher's PDFs). Lines broke at other words than Publisher's.
+    void standInWidthsMatchOriginals()
+    {
+        if (QFontDatabase::hasFamily(QStringLiteral("Gill Sans MT"))) QSKIP("Gill Sans MT is installed: its own widths are used");
+        const QString text = QStringLiteral("Defense Force volunteers serve their state");
+        // The phrase's width in Gill Sans MT (ems), regular and bold.
+        for (const auto &[bold, ems] : {std::pair{false, 17.388}, std::pair{true, 19.855}}) {
+            jp::LayoutEnv env;
+            QTextCharFormat f;
+            f.setFontFamilies(QStringList{QStringLiteral("Gill Sans MT")});
+            f.setFontPointSize(10);
+            if (bold) f.setFontWeight(QFont::Bold);
+            const QTextCharFormat r = jp::resolveCharFormat(f, env);
+            QTextLayout tl(text, r.font());
+            tl.beginLayout();
+            QTextLine line = tl.createLine();
+            line.setLineWidth(10000);
+            tl.endLayout();
+            const double width = line.naturalTextWidth();
+            QVERIFY2(std::abs(width - ems * 10) < ems * 10 * 0.015, qPrintable(QStringLiteral("%1: %2 pt, not %3").arg(bold ? "bold" : "regular").arg(width).arg(ems * 10)));
+            const double space = line.cursorToX(8) - line.cursorToX(7);
+            QVERIFY2(std::abs(space - 2.78) < 0.1, qPrintable(QString::number(space)));
+        }
+    }
+
     // A missing AG_Futura keeps its own half-em spaces with its stand-in
     // Jost, whose spaces are 0.3 em (word gaps measured in Publisher's PDFs).
     void substituteSpaceWidth()
@@ -7716,6 +7744,7 @@ private Q_SLOTS:
         QVERIFY(!jp::Updater::trustedInstaller(url, QStringLiteral("../../Startup/evil"), digest));   // the tag names the saved file
         QVERIFY(!jp::Updater::trustedInstaller(url, QStringLiteral("v0.1.17"), QString()));          // nothing to check against
         QVERIFY(jp::Updater::isNewer("0.1.10", "0.1.9"));
+        QVERIFY(jp::Updater::isNewer("v0.5.0", "0.1.39"));   // the beta after the 0.1 previews
         QVERIFY(!jp::Updater::isNewer("v0.1.6", "0.1.6"));
         QVERIFY(!jp::Updater::isNewer("v0.1.0-preview5", "0.1.6"));
         QVERIFY(jp::Updater::isNewer("v0.1.0", "v0.1.0-preview5"));

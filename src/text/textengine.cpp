@@ -280,7 +280,7 @@ QTextCharFormat resolveCharFormat(const QTextCharFormat &f, const LayoutEnv &env
     if (f.hasProperty(QTextFormat::FontFamilies) && !f.hasProperty(QTextFormat::FontStretch)) {
         const QStringList fams = f.fontFamilies().toStringList();
         if (!fams.isEmpty()) {
-            const int st = substituteStretch(fams.first());
+            const int st = substituteStretch(fams.first(), f.fontWeight() >= QFont::DemiBold, f.fontItalic());
             if (st != 100) r.setFontStretch(st);
             // "Medium", "Demi", "Black"... in a missing font's name become a real weight.
             const int wt = substituteWeight(fams.first());
@@ -313,7 +313,7 @@ QTextCharFormat resolveCharFormat(const QTextCharFormat &f, const LayoutEnv &env
     // A missing font's word spaces, where its stand-in's differ.
     if (f.hasProperty(QTextFormat::FontFamilies) && !f.hasProperty(QTextFormat::FontWordSpacing)) {
         const QStringList fams = f.fontFamilies().toStringList();
-        if (const double want = fams.isEmpty() ? 0 : substituteSpaceEm(fams.first()); want > 0) {
+        if (const double want = fams.isEmpty() ? 0 : substituteSpaceEm(fams.first(), f.fontWeight() >= QFont::DemiBold, f.fontItalic()); want > 0) {
             const QFont rf = r.font();
             const double em = rf.pointSizeF() / fontPointFactor();
             r.setFontWordSpacing((want - standInSpaceEm(rf)) * em);
