@@ -68,7 +68,7 @@ static const QHash<QString, QString> &table()
         {"Gill Sans MT", "Cabin"}, {"Gill Sans", "Cabin"}, {"Abadi", "Cabin"}, {"Abadi MT Condensed Light", "Archivo Narrow"},
         {"Tw Cen MT", "Jost"}, {"Futura", "Jost"}, {"AG_Futura", "Jost"}, {"Futura Md BT", "Jost"}, {"Futura Bk BT", "Jost"},
         {"Franklin Gothic Book", "Libre Franklin"}, {"Franklin Gothic Medium", "Libre Franklin"}, {"Franklin Gothic Demi", "Libre Franklin"},
-        {"Franklin Gothic Demi Cond", "Libre Franklin"}, {"Franklin Gothic Medium Cond", "Libre Franklin"},
+        {"Franklin Gothic Demi Cond", "Libre Franklin"}, {"Franklin Gothic Medium Cond", "Libre Franklin"}, {"Franklin Gothic Heavy", "Libre Franklin"},
         {"Arial Narrow", "Liberation Sans Narrow"}, {"Arial Black", "Archivo Black"}, {"Impact", "Anton"},
         {"Verdana", "DejaVu Sans"}, {"Tahoma", "DejaVu Sans"}, {"Trebuchet MS", "PT Sans"}, {"Corbel", "Open Sans"}, {"Candara", "Cabin"},
         {"Constantia", "Gelasio"}, {"Sylfaen", "Gelasio"}, {"Consolas", "IBM Plex Mono"},
@@ -124,6 +124,9 @@ static const QHash<QString, StandInWidths> &standInWidths()
         {"Gill Sans MT", {"Cabin", {95, 109, 92, 103}, {0.278, 0.278, 0.278, 0.278}}},
         {"Franklin Gothic Book", {"Libre Franklin", {89, 0, 85, 0}, {0.25, 0, 0.25, 0}}},
         {"Franklin Gothic Demi", {"Libre Franklin", {89, 0, 88, 0}, {0.25, 0, 0.25, 0}}},
+        // Heavy against Libre Franklin ExtraBold: 3.4% wider over a sample
+        // of ordinary text (Oct 8, the Windows font's advances).
+        {"Franklin Gothic Heavy", {"Libre Franklin", {97, 0, 0, 0}, {0, 0, 0, 0}}},
         // (Agency FB's letters stay: asked to narrow, its stand-in Saira
         // Condensed switches to a narrower face of its own instead.)
         {"Agency FB", {"Saira Condensed", {0, 0, 0, 0}, {0.196, 0.206, 0, 0}}},
@@ -199,6 +202,7 @@ int substituteWeight(const QString &family)
         // Franklin Gothic's weights run heavy: its Medium looks like a SemiBold.
         if (f.startsWith("franklin gothic") && f.contains("medium")) w = 600;
         else if (f.startsWith("franklin gothic") && f.contains("demi")) w = 700;
+        else if (f.startsWith("franklin gothic") && f.contains("heavy")) w = 800;   // Libre Franklin ExtraBold
         else if (f.contains("black") || f.contains("heavy")) w = 900;
         else if (f.contains("extrabold") || f.contains("ultra bold")) w = 800;
         else if (f.contains("demi") || f.contains("semibold") || f.contains("semi bold")) w = 600;

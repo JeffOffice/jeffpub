@@ -1089,6 +1089,34 @@ private Q_SLOTS:
         }
     }
 
+    // Franklin Gothic Heavy, the missing font Publisher's own designs use
+    // most, is drawn in Libre Franklin ExtraBold, narrowed to its width
+    // (98.30 ems for this sample in the Windows font).
+    void franklinGothicHeavyStandIn()
+    {
+        if (QFontDatabase::hasFamily(QStringLiteral("Franklin Gothic Heavy"))) QSKIP("Franklin Gothic Heavy is installed");
+#ifdef Q_OS_MACOS
+        QSKIP("the Mac keeps the stand-ins' own widths for now");
+#endif
+        const QString sample = QStringLiteral("The quick brown fox jumps over the lazy dog. Pack my box with five dozen liquor jugs! Sphinx of black quartz, "
+                                              "judge my vow. How vexingly quick daft zebras jump; 2026 Annual Report: Newsletter, Spring Edition.");
+        jp::LayoutEnv env;
+        QTextCharFormat f;
+        f.setFontFamilies(QStringList{QStringLiteral("Franklin Gothic Heavy")});
+        f.setFontPointSize(10);
+        const QTextCharFormat r = jp::resolveCharFormat(f, env);
+        const QFontInfo info(r.font());
+        QCOMPARE(info.family(), QStringLiteral("Libre Franklin"));
+        QVERIFY2(info.weight() >= 750, qPrintable(info.styleName()));
+        QTextLayout tl(sample, r.font());
+        tl.beginLayout();
+        QTextLine line = tl.createLine();
+        line.setLineWidth(100000);
+        tl.endLayout();
+        const double width = line.naturalTextWidth(), want = 98.3008 * 10;
+        QVERIFY2(std::abs(width - want) < want * 0.01, qPrintable(QStringLiteral("%1 pt, not %2").arg(width).arg(want)));
+    }
+
     // A missing AG_Futura keeps its own half-em spaces with its stand-in
     // Jost, whose spaces are 0.3 em (word gaps measured in Publisher's PDFs).
     void substituteSpaceWidth()
