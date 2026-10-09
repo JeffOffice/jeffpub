@@ -5,6 +5,7 @@
 #include "core/document.h"
 #include "core/svg.h"
 
+#include <QCoreApplication>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFile>
@@ -76,10 +77,10 @@ public:
 QStringList pickIcons(QWidget *parent)
 {
     QDialog dlg(parent);
-    dlg.setWindowTitle(QStringLiteral("Insert Icons"));
+    dlg.setWindowTitle(QCoreApplication::translate("IconPicker", "Insert Icons"));
     auto *v = new QVBoxLayout(&dlg);
     auto *search = new QLineEdit(&dlg);
-    search->setPlaceholderText(QStringLiteral("Search icons (for example: arrow, mail, star)"));
+    search->setPlaceholderText(QCoreApplication::translate("IconPicker", "Search icons (for example: arrow, mail, star)"));
     search->setClearButtonEnabled(true);
     v->addWidget(search);
     auto *list = new QListWidget(&dlg);
@@ -106,7 +107,7 @@ QStringList pickIcons(QWidget *parent)
     v->addWidget(hint);
     auto *bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
     QPushButton *insert = bb->button(QDialogButtonBox::Ok);
-    insert->setText(QStringLiteral("Insert"));
+    insert->setText(QCoreApplication::translate("IconPicker", "Insert"));
     v->addWidget(bb);
 
     auto update = [&] {
@@ -118,13 +119,13 @@ QStringList pickIcons(QWidget *parent)
         }
         insert->setEnabled(!chosen.isEmpty());
         if (chosen.isEmpty()) {
-            hint->setText(shown ? QStringLiteral("%1 icons. Ctrl+click or Shift+click to choose several.").arg(shown)
-                                : QStringLiteral("No icons match. Try another word."));
+            hint->setText(shown ? QCoreApplication::translate("IconPicker", "%1 icons. Ctrl+click or Shift+click to choose several.").arg(shown)
+                                : QCoreApplication::translate("IconPicker", "No icons match. Try another word."));
             return;
         }
-        QString names = chosen.size() > 3 ? chosen.mid(0, 3).join(QStringLiteral(", ")) + QStringLiteral(" and %1 more").arg(chosen.size() - 3)
+        QString names = chosen.size() > 3 ? QCoreApplication::translate("IconPicker", "%1 and %2 more").arg(chosen.mid(0, 3).join(QStringLiteral(", ")), QString::number(chosen.size() - 3))
                                           : chosen.join(QStringLiteral(", "));
-        hint->setText(QStringLiteral("Chosen: %1").arg(names));
+        hint->setText(QCoreApplication::translate("IconPicker", "Chosen: %1").arg(names));
     };
     // Every word typed must begin a word of the icon's name or of one of its tags.
     QObject::connect(search, &QLineEdit::textChanged, &dlg, [&](const QString &text) {
@@ -179,7 +180,7 @@ void insertIcons(Editor *ed, const QStringList &names)
     const int perRow = std::max(1, int(ps.width() * 0.8 / step)), n = int(names.size());
     const int rows = (n + perRow - 1) / perRow;
     QStringList made;
-    ed->beginChange(names.size() == 1 ? QStringLiteral("Insert Icon") : QStringLiteral("Insert Icons"));
+    ed->beginChange(names.size() == 1 ? QCoreApplication::translate("IconPicker", "Insert Icon") : QCoreApplication::translate("IconPicker", "Insert Icons"));
     for (int i = 0; i < n; ++i) {
         const int row = i / perRow, inRow = std::min(perRow, n - row * perRow);
         const QPointF c(ps.width() / 2 + (i % perRow - (inRow - 1) / 2.0) * step, ps.height() / 2 + (row - (rows - 1) / 2.0) * step);

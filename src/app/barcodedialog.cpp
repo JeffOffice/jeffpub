@@ -12,6 +12,7 @@
 #include <functional>
 
 #include <QButtonGroup>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -163,36 +164,36 @@ void barcodeDialog(QWidget *p, Editor *ed)
         return was.isEmpty() ? st.value(QStringLiteral("barcode/") + QLatin1String(key), def) : was.value(QLatin1String(key)).toVariant();
     };
     QDialog dlg(p);
-    dlg.setWindowTitle(editing ? QStringLiteral("Edit Barcode") : QStringLiteral("Insert Barcode"));
+    dlg.setWindowTitle(editing ? QCoreApplication::translate("BarcodeDialog", "Edit Barcode") : QCoreApplication::translate("BarcodeDialog", "Insert Barcode"));
     auto *v = new QVBoxLayout(&dlg);
     auto *form = new QFormLayout();
     auto *type = new QComboBox(&dlg);
-    type->addItems({QStringLiteral("Book (ISBN)"), QStringLiteral("EAN-13"), QStringLiteral("UPC-A"), QStringLiteral("EAN-8"),
-                    QStringLiteral("Code 128 (letters and digits)"), QStringLiteral("Code 39 (capitals and digits)")});
+    type->addItems({QCoreApplication::translate("BarcodeDialog", "Book (ISBN)"), QStringLiteral("EAN-13"), QStringLiteral("UPC-A"), QStringLiteral("EAN-8"),
+                    QCoreApplication::translate("BarcodeDialog", "Code 128 (letters and digits)"), QCoreApplication::translate("BarcodeDialog", "Code 39 (capitals and digits)")});
     type->setCurrentIndex(std::clamp(setting("type", 0).toInt(), 0, 5));
-    form->addRow(QStringLiteral("Type:"), type);
+    form->addRow(QCoreApplication::translate("BarcodeDialog", "Type:"), type);
     auto *data = new QLineEdit(&dlg);
     data->setText(setting("data", QString()).toString());
     data->setMinimumWidth(260);
-    form->addRow(QStringLiteral("ISBN:"), data);
+    form->addRow(QCoreApplication::translate("BarcodeDialog", "ISBN:"), data);
     auto *addOn = new QLineEdit(&dlg);
-    addOn->setPlaceholderText(QStringLiteral("none, or 2 or 5 digits"));
-    form->addRow(QStringLiteral("Add-on:"), addOn);
+    addOn->setPlaceholderText(QCoreApplication::translate("BarcodeDialog", "none, or 2 or 5 digits"));
+    form->addRow(QCoreApplication::translate("BarcodeDialog", "Add-on:"), addOn);
     v->addLayout(form);
 
     // A book's price add-on.
-    auto *price = new QGroupBox(QStringLiteral("Price add-on"), &dlg);
+    auto *price = new QGroupBox(QCoreApplication::translate("BarcodeDialog", "Price add-on"), &dlg);
     auto *pv = new QVBoxLayout(price);
-    auto *noAddOn = new QRadioButton(QStringLiteral("No add-on"), price);
-    auto *withPrice = new QRadioButton(QStringLiteral("Price:"), price);
-    auto *noPrice = new QRadioButton(QStringLiteral("No suggested price (90000)"), price);
+    auto *noAddOn = new QRadioButton(QCoreApplication::translate("BarcodeDialog", "No add-on"), price);
+    auto *withPrice = new QRadioButton(QCoreApplication::translate("BarcodeDialog", "Price:"), price);
+    auto *noPrice = new QRadioButton(QCoreApplication::translate("BarcodeDialog", "No suggested price (90000)"), price);
     auto *group = new QButtonGroup(price);
     group->addButton(noAddOn, 0);
     group->addButton(withPrice, 1);
     group->addButton(noPrice, 2);
     auto *currency = new QComboBox(price);
-    currency->addItems({QStringLiteral("US dollars"), QStringLiteral("Canadian dollars"), QStringLiteral("British pounds"), QStringLiteral("Australian dollars"),
-                        QStringLiteral("New Zealand dollars")});
+    currency->addItems({QCoreApplication::translate("BarcodeDialog", "US dollars"), QCoreApplication::translate("BarcodeDialog", "Canadian dollars"), QCoreApplication::translate("BarcodeDialog", "British pounds"), QCoreApplication::translate("BarcodeDialog", "Australian dollars"),
+                        QCoreApplication::translate("BarcodeDialog", "New Zealand dollars")});
     currency->setCurrentIndex(std::clamp(setting("currency", 0).toInt(), 0, 4));
     auto *amount = new QDoubleSpinBox(price);
     amount->setRange(0, 99.99);
@@ -209,28 +210,28 @@ void barcodeDialog(QWidget *p, Editor *ed)
     group->button(std::clamp(setting("priceMode", 1).toInt(), 0, 2))->setChecked(true);
     v->addWidget(price);
 
-    auto *size = new QGroupBox(QStringLiteral("Size"), &dlg);
+    auto *size = new QGroupBox(QCoreApplication::translate("BarcodeDialog", "Size"), &dlg);
     auto *sf = new QFormLayout(size);
     auto *mag = new QSpinBox(size);
     mag->setRange(50, 300);
     mag->setSuffix(QStringLiteral("%"));
     mag->setValue(setting("magnification", 100).toInt());
-    mag->setToolTip(QStringLiteral("100% is the standard size; books usually print at 80% to 100%."));
+    mag->setToolTip(QCoreApplication::translate("BarcodeDialog", "100% is the standard size; books usually print at 80% to 100%."));
     mag->setFixedWidth(110);
     auto *height = new QSpinBox(size);
     height->setRange(40, 100);
     height->setSuffix(QStringLiteral("%"));
     height->setValue(setting("height", 100).toInt());
-    height->setToolTip(QStringLiteral("Shorter bars save room; scanners need most of the standard height."));
+    height->setToolTip(QCoreApplication::translate("BarcodeDialog", "Shorter bars save room; scanners need most of the standard height."));
     height->setFixedWidth(110);
-    sf->addRow(QStringLiteral("Magnification:"), mag);
-    sf->addRow(QStringLiteral("Bar height:"), height);
+    sf->addRow(QCoreApplication::translate("BarcodeDialog", "Magnification:"), mag);
+    sf->addRow(QCoreApplication::translate("BarcodeDialog", "Bar height:"), height);
     v->addWidget(size);
-    auto *showText = new QCheckBox(QStringLiteral("Print the digits"), &dlg);
+    auto *showText = new QCheckBox(QCoreApplication::translate("BarcodeDialog", "Print the digits"), &dlg);
     showText->setChecked(setting("text", true).toBool());
-    auto *white = new QCheckBox(QStringLiteral("White background (the clear space scanners need)"), &dlg);
+    auto *white = new QCheckBox(QCoreApplication::translate("BarcodeDialog", "White background (the clear space scanners need)"), &dlg);
     white->setChecked(setting("white", true).toBool());
-    auto *check39 = new QCheckBox(QStringLiteral("Add a check character"), &dlg);
+    auto *check39 = new QCheckBox(QCoreApplication::translate("BarcodeDialog", "Add a check character"), &dlg);
     check39->setChecked(setting("check39", false).toBool());
     addOn->setText(setting("addOn", QString()).toString());
     v->addWidget(showText);
@@ -248,7 +249,7 @@ void barcodeDialog(QWidget *p, Editor *ed)
     problem->setWordWrap(true);
     v->addWidget(problem);
     auto *bb = new QDialogButtonBox(QDialogButtonBox::Cancel, &dlg);
-    QPushButton *insert = bb->addButton(editing ? QStringLiteral("Update") : QStringLiteral("Insert"), QDialogButtonBox::AcceptRole);
+    QPushButton *insert = bb->addButton(editing ? QCoreApplication::translate("BarcodeDialog", "Update") : QCoreApplication::translate("BarcodeDialog", "Insert"), QDialogButtonBox::AcceptRole);
     QObject::connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
     QObject::connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
     v->addWidget(bb);
@@ -275,9 +276,9 @@ void barcodeDialog(QWidget *p, Editor *ed)
     auto update = [&] {
         const Type t = Type(type->currentIndex());
         const bool book = t == Type::Isbn, ean = t == Type::Ean13 || t == Type::UpcA || t == Type::Ean8;
-        static const char *const kWhat[] = {"ISBN:", "Digits:", "Digits:", "Digits:", "Text:", "Text:"};
-        if (auto *lab = qobject_cast<QLabel *>(form->labelForField(data))) lab->setText(QString::fromLatin1(kWhat[int(t)]));
-        data->setPlaceholderText(book ? QStringLiteral("978-1-23456-789-7 or a 10-digit ISBN") : ean ? QStringLiteral("with or without the check digit") : QString());
+        if (auto *lab = qobject_cast<QLabel *>(form->labelForField(data)))
+            lab->setText(book ? QCoreApplication::translate("BarcodeDialog", "ISBN:") : ean ? QCoreApplication::translate("BarcodeDialog", "Digits:") : QCoreApplication::translate("BarcodeDialog", "Text:"));
+        data->setPlaceholderText(book ? QCoreApplication::translate("BarcodeDialog", "978-1-23456-789-7 or a 10-digit ISBN") : ean ? QCoreApplication::translate("BarcodeDialog", "with or without the check digit") : QString());
         price->setVisible(book);
         addOn->setVisible(ean);
         form->labelForField(addOn)->setVisible(ean);
@@ -344,7 +345,10 @@ void barcodeDialog(QWidget *p, Editor *ed)
     for (auto it = settings.begin(); it != settings.end(); ++it) st.setValue(QStringLiteral("barcode/") + it.key(), it.value().toVariant());
 
     const Type t = Type(type->currentIndex());
-    const QString what = t == Type::Isbn ? isbnCaption(data->text()) : type->currentText().section(QLatin1Char(' '), 0, 0) + QLatin1Char(' ') + current.encoded;
+    // The description goes into the document, so it names the type in English
+    // whatever language the combo box shows.
+    static const char *const kKind[] = {"", "EAN-13", "UPC-A", "EAN-8", "Code", "Code"};
+    const QString what = t == Type::Isbn ? isbnCaption(data->text()) : QString::fromLatin1(kKind[int(t)]) + QLatin1Char(' ') + current.encoded;
     const QString description = QStringLiteral("Barcode: %1").arg(what);
     if (editing) {
         // In place: the same spot and identity, and one undo step.
@@ -354,7 +358,7 @@ void barcodeDialog(QWidget *p, Editor *ed)
         ItemList &items = ed->surfaceItems();
         for (auto &it : items)
             if (it.get() == editing) {
-                ed->change(QStringLiteral("Edit Barcode"), [&] { it = made; });
+                ed->change(QCoreApplication::translate("BarcodeDialog", "Edit Barcode"), [&] { it = made; });
                 ed->select(made->id);
                 return;
             }
