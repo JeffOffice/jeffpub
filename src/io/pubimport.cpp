@@ -1036,10 +1036,18 @@ private:
         if (f == "gradient") {
             Fill g;
             g.type = Fill::Gradient;
-            // Publisher runs the first color toward 270 + a (libmspub's
-            // angle a): checked against its own pictures of 113 gradients
-            // in its built-in designs, horizontal, vertical and diagonal.
-            g.angle = 270 - (m_style["draw:angle"] ? m_style["draw:angle"]->getDouble() : 0);
+            // Publisher runs the first color toward 270 - a for a stored
+            // angle a of 0 or more and toward 90 - a for a negative one (its
+            // built-in designs store only 0, -45, -90 and -135; its Fill
+            // Effects dialog stores 0-359). Checked in Publisher's pictures
+            // of 113 gradients in its designs and of 30 angles saved both
+            // ways. libmspub's draw:angle gets only the negative ones right.
+            if (m_style["jp:fill-angle"]) {
+                const double a = m_style["jp:fill-angle"]->getDouble();
+                g.angle = a >= 0 ? 270 - a : 90 - a;
+            } else {
+                g.angle = 270 - (m_style["draw:angle"] ? m_style["draw:angle"]->getDouble() : 0);
+            }
             const QString shade = str(m_style["libmspub:shade"]);
             if (shade == "center") g.gradType = Fill::Radial;
             if (shade == "shape") g.gradType = Fill::PathGrad;   // follows the outline
@@ -1087,6 +1095,11 @@ private:
         if (st.width <= 0) st.width = 0.25;
         if (m_style["svg:stroke-opacity"]) st.transparency = 1 - percent(m_style["svg:stroke-opacity"]);
         st.inset = m_style["jp:line-inset"] != nullptr;
+        // Corners as stored (0 bevel, 1 miter, 2 round); none means mitered.
+        if (m_style["jp:line-join"]) {
+            const int j = m_style["jp:line-join"]->getInt();
+            st.join = j == 0 ? Qt::BevelJoin : j == 2 ? Qt::RoundJoin : Qt::MiterJoin;
+        }
         const bool roundEnds = str(m_style["svg:stroke-linecap"]) == "round";
         if (s == "dash") {
             // Publisher's dashing as the reader describes it: a dot has no
@@ -1259,9 +1272,29 @@ private:
             if (fill.imageId.isEmpty()) fill = Fill::solid(ColorRef::rgb(QColor(220, 220, 220)));
         }
         if (fill.type == Fill::Picture) {
-            // A picture in a rectangle or in one of the preset shapes.
+            // A picture in a rectangle or in one of the preset shapes. A
+            // picture keeps its frame's quarter turns, which the outline's
+            // turn (folded within 45 degrees) loses: rotated flowers in a
+            // design came out with their petals a quarter turn off.
+            if (isRect && m_style["jp:frame-rotation"]) {
+                double fr = m_style["jp:frame-rotation"]->getDouble();
+                const bool fh = m_style["jp:frame-flip-h"] && m_style["jp:frame-flip-h"]->getInt();
+                const bool fv = m_style["jp:frame-flip-v"] && m_style["jp:frame-flip-v"]->getInt();
+                if (fh != fv) fr = -fr;
+                const double quarters = (fr - rot) / 90.0;
+                if (std::abs(quarters - std::round(quarters)) < 0.01) {
+                    if (int(std::lround(quarters)) % 2) std::swap(rw, rh);
+                    rot = std::remainder(fr, 360.0);
+                    if (std::abs(rot) < 0.05) rot = 0;
+                }
+            }
             const QRectF r = isRect ? QRectF(center.x() - rw / 2, center.y() - rh / 2, rw, rh) : preset->rect;
             auto pic = makePicture(r, isRect ? rot : preset->rotation, bitmap, mime);
+            // The shape's own solid fill shows through the picture's clear parts.
+            if (m_style["jp:picture-back-color"]) {
+                const QColor bc(str(m_style["jp:picture-back-color"]));
+                if (bc.isValid()) pic->fill = Fill::solid(ColorRef::rgb(bc));
+            }
             pic->stroke = stroke;
             if (preset) {
                 pic->maskShape = preset->shape;
@@ -1289,14 +1322,27 @@ private:
         s->fill = fill;
         s->stroke = stroke;
         s->wrap.mode = Wrap::None;
-        // A linear gradient runs in the shape's own frame: mirrored with its
-        // flips and turned with its rotation (a preset carries both itself).
+        // A linear gradient that turns with its shape (jp:fill-turns, as in
+        // Publisher's designs) runs in the shape's own frame: mirrored with
+        // its flips and turned with its rotation. Otherwise it keeps its
+        // direction on the page whatever the shape does. JeffPub's own
+        // gradients turn with the shape, so a fixed one is turned back by
+        // the item's rotation and flips.
         const bool linear = s->fill.type == Fill::Gradient && s->fill.gradType == Fill::Linear;
+        const bool turns = m_style["jp:fill-turns"] && m_style["jp:fill-turns"]->getInt();
+        const bool frameFlipH = m_style["jp:frame-flip-h"] && m_style["jp:frame-flip-h"]->getInt();
+        const bool frameFlipV = m_style["jp:frame-flip-v"] && m_style["jp:frame-flip-v"]->getInt();
+        auto norm = [](double a) { return std::fmod(std::fmod(a, 360.0) + 360.0, 360.0); };
+        auto flipped = [](double a, bool h, bool v) {
+            if (h) a = 180 - a;
+            if (v) a = -a;
+            return a;
+        };
         auto frameAngle = [&](double a) {
-            if (m_style["jp:frame-flip-h"] && m_style["jp:frame-flip-h"]->getInt()) a = 180 - a;
-            if (m_style["jp:frame-flip-v"] && m_style["jp:frame-flip-v"]->getInt()) a = -a;
+            if (!turns) return norm(a);
+            a = flipped(a, frameFlipH, frameFlipV);
             if (m_style["jp:frame-rotation"]) a += m_style["jp:frame-rotation"]->getDouble();
-            return std::fmod(std::fmod(a, 360.0) + 360.0, 360.0);
+            return norm(a);
         };
         if (isRect) {
             s->shape = QStringLiteral("rect");
@@ -1309,6 +1355,7 @@ private:
             s->rotation = preset->rotation;
             s->flipH = preset->flipH;
             s->flipV = preset->flipV;
+            if (linear && !turns) s->fill.angle = norm(flipped(s->fill.angle - s->rotation, s->flipH, s->flipV));
         } else {
             s->shape = QStringLiteral("rect");
             s->rect = b.width() < 0.5 || b.height() < 0.5 ? b.adjusted(-0.25, -0.25, 0.25, 0.25) : b;

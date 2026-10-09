@@ -5676,8 +5676,10 @@ ShapeElementCommand getCommandFromBinary(unsigned short binary)
 
 double getSpecialIfNecessary(std::function<double(unsigned index)> calculator, int val)
 {
-  bool special = val & 0x80000000;
-  return special ? calculator(val ^ 0x80000000) : val;
+  // JeffPub: only 0x8000nnnn is a formula reference. A coordinate such as
+  // -32000 (0xFFFF8300) has bit 31 set too and is an ordinary number.
+  bool special = (static_cast<unsigned>(val) & 0xFFFF0000u) == 0x80000000u;
+  return special ? calculator(static_cast<unsigned>(val) ^ 0x80000000u) : val;
 }
 
 namespace
@@ -5916,6 +5918,10 @@ void writeCustomShape(unsigned shapeType, librevenge::RVNGPropertyList &graphics
   Vector2D center(x + width / 2, y + height / 2);
   double scaleX = width / shape->m_coordWidth;
   double scaleY = height / shape->m_coordHeight;
+  // JeffPub: a geometry box that doesn't start at 0 (-32000..32000 in
+  // Publisher's freeforms) puts its left and top edge at the frame's.
+  x -= scaleX * shape->m_coordLeft;
+  y -= scaleY * shape->m_coordTop;
   bool allLinesSame = true;
   for (unsigned i = 0; allLinesSame && i + 1< lines.size(); ++i)
   {
@@ -6374,7 +6380,7 @@ bool isShapeTypeRectangle(unsigned type)
 
 std::shared_ptr<const CustomShape> getFromDynamicCustomShape(const DynamicCustomShape &dcs)
 {
-  return std::shared_ptr<const CustomShape>(new CustomShape(
+  CustomShape *cs = new CustomShape(
                                               dcs.m_vertices.empty() ? nullptr : dcs.m_vertices.data(),
                                               dcs.m_vertices.size(),
                                               dcs.m_elements.empty() ? nullptr : dcs.m_elements.data(),
@@ -6390,7 +6396,10 @@ std::shared_ptr<const CustomShape> getFromDynamicCustomShape(const DynamicCustom
                                               dcs.m_gluePoints.empty() ? nullptr : dcs.m_gluePoints.data(),
                                               dcs.m_gluePoints.size(),
                                               dcs.m_adjustShiftMask
-                                            ));
+                                            );
+  cs->m_coordLeft = dcs.m_coordLeft;
+  cs->m_coordTop = dcs.m_coordTop;
+  return std::shared_ptr<const CustomShape>(cs);
 }
 
 }

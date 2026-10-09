@@ -722,6 +722,16 @@ void MSPUBCollector::setupShapeStructures(ShapeGroupElement &elt)
         rot = ptr_info->m_innerRotation.get();
       if (index - 1 < m_images.size())
       {
+        // JeffPub patch: a picture shape's own solid fill shows through the
+        // picture's clear parts (a metafile's gaps), as Publisher paints it;
+        // keep its color before the picture takes the fill's place.
+        if (ptr_info->m_fill)
+        {
+          librevenge::RVNGPropertyList fp;
+          ptr_info->m_fill->getProperties(&fp);
+          if (fp["draw:fill"] && fp["draw:fill"]->getStr() == "solid" && fp["draw:fill-color"])
+            ptr_info->m_pictureBackColor = fp["draw:fill-color"]->getStr();
+        }
         ptr_info->m_fill = std::shared_ptr<const Fill>(new ImgFill(index, this, false, rot));
       }
     }
@@ -797,6 +807,8 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
     const std::pair<bool, bool> flips = info.m_flips.get_value_or(std::pair<bool, bool>(false, false));
     graphicsProps.insert("jp:frame-flip-v", flips.first);
     graphicsProps.insert("jp:frame-flip-h", flips.second);
+    if (info.m_fillTurns)
+      graphicsProps.insert("jp:fill-turns", true);   // JeffPub
     if (bool(info.m_crop))
     {
       const char *names[4] = {"jp:crop-top", "jp:crop-bottom", "jp:crop-left", "jp:crop-right"};
@@ -974,6 +986,8 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
     }
     if (bool(info.m_pictureTransparent))
       graphicsProps.insert("jp:transparent-color", getColorString(info.m_pictureTransparent.get().getFinalColor(m_paletteColors)));
+    if (bool(info.m_pictureBackColor))
+      graphicsProps.insert("jp:picture-back-color", info.m_pictureBackColor.get());   // JeffPub
     bool shadowPropsInserted = false;
     if (bool(info.m_shadow))
     {
@@ -1004,7 +1018,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
     }
     if (bool(info.m_pictureBrightness))
       graphicsProps.remove("draw:luminance");
-    for (const char *k : {"jp:brightness", "jp:contrast", "jp:picture-gray", "jp:picture-bilevel", "jp:transparent-color"})
+    for (const char *k : {"jp:brightness", "jp:contrast", "jp:picture-gray", "jp:picture-bilevel", "jp:transparent-color", "jp:picture-back-color"})
       graphicsProps.remove(k);
     if (shadowPropsInserted)
     {
@@ -1228,8 +1242,11 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
     }
     else
     {
-      Coordinate strokeCoord = isShapeTypeRectangle(type) ?
-                               getFudgedCoordinates(coord, lines, true, borderPosition) : coord;
+      // JeffPub patch: the outline follows the shape's own frame. Upstream
+      // pushed a rectangle's edges out by half of each side's line, and a
+      // plain outline is one line, so only its top edge moved; JeffPub
+      // places the line itself (centered, or inside with jp:line-inset).
+      Coordinate strokeCoord = coord;
       double x, y, height, width;
       x = strokeCoord.getXIn(m_width);
       y = strokeCoord.getYIn(m_height);
@@ -1274,6 +1291,8 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
         graphicsProps.insert("svg:stroke-opacity", info.m_lineOpacity.get(), librevenge::RVNG_PERCENT);
       if (info.m_lineInset)
         graphicsProps.insert("jp:line-inset", true);   // JeffPub
+      if (bool(info.m_lineJoin))
+        graphicsProps.insert("jp:line-join", int(info.m_lineJoin.get()));   // JeffPub
       // JeffPub patch: pass arrowheads on (style 1-5 as stored, size 0-2).
       if (bool(info.m_beginArrow) && info.m_beginArrow.get().m_style != NO_ARROW)
       {
@@ -1693,13 +1712,13 @@ double MSPUBCollector::getSpecialValue(const ShapeInfo &info, const CustomShape 
   switch (arg)
   {
   case PROP_GEO_LEFT:
-    return 0;
+    return shape.m_coordLeft;
   case PROP_GEO_TOP:
-    return 0;
+    return shape.m_coordTop;
   case PROP_GEO_RIGHT:
-    return shape.m_coordWidth;
+    return shape.m_coordLeft + double(shape.m_coordWidth);
   case PROP_GEO_BOTTOM:
-    return shape.m_coordHeight;
+    return shape.m_coordTop + double(shape.m_coordHeight);
   default:
     break;
   }
@@ -1756,7 +1775,7 @@ double MSPUBCollector::getCalculationValue(const ShapeInfo &info, unsigned index
   case 5:
     return std::max(valOne, valTwo);
   case 6:
-    return valOne ? valTwo : valThree;
+    return valOne > 0 ? valTwo : valThree;   // JeffPub: if a > 0 (MS-ODRAW), not if a != 0
   case 7:
     return sqrt(valOne * valTwo * valThree);
   case 8:

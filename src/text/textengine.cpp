@@ -286,12 +286,16 @@ QTextCharFormat resolveCharFormat(const QTextCharFormat &f, const LayoutEnv &env
         const QString theme = f.stringProperty(tp::ThemeFont);
         r.setFontFamilies(QStringList{theme == QLatin1String("major") ? env.fonts.heading : env.fonts.body});
     }
-    // Imitate condensed fonts that are missing on this computer.
-    if (f.hasProperty(QTextFormat::FontFamilies) && !f.hasProperty(QTextFormat::FontStretch)) {
+    // Imitate condensed fonts that are missing on this computer, times the
+    // run's own character scaling. A stated 100% is left unsaid: an
+    // explicit 100 makes font matching pass over a stand-in's narrower faces.
+    if (f.hasProperty(QTextFormat::FontFamilies)) {
         const QStringList fams = f.fontFamilies().toStringList();
         if (!fams.isEmpty()) {
-            const int st = substituteStretch(fams.first(), f.fontWeight() >= QFont::DemiBold, f.fontItalic());
+            const int own = f.hasProperty(QTextFormat::FontStretch) ? f.fontStretch() : 100;
+            const int st = int(std::lround(own * substituteStretch(fams.first(), f.fontWeight() >= QFont::DemiBold, f.fontItalic()) / 100.0));
             if (st != 100) r.setFontStretch(st);
+            else r.clearProperty(QTextFormat::FontStretch);
             // "Medium", "Demi", "Black"... in a missing font's name become a real weight.
             const int wt = substituteWeight(fams.first());
             if (wt > 0 && !(f.hasProperty(QTextFormat::FontWeight) && f.fontWeight() >= QFont::Bold))
@@ -1593,6 +1597,7 @@ QVector<StoryLayout::LineInfo> StoryLayout::lineInfo(int frame) const
             const PtLine l(B->tl->lineAt(i));
             LineInfo li;
             li.rect = B->lines[i].rect;
+            li.below = B->lines[i].below;
             li.baseline = l.y() - frameY(B->lines[i].frame) + l.ascent();
             li.text = B->disp.mid(l.textStart(), l.textLength());
             li.docStart = B->docStart;

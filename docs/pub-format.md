@@ -118,6 +118,9 @@ OPT holds the line props (0x01C0 color, 0x01CB width, 0x01FF 0x00080008,
 0x01CE dashes, 0x01D0/0x01D1 start and end arrowheads with sizes in
 0x01D2-0x01D5) and 0x0303 = 0. Its Contents chunk is type 0x20:
 `02:08, 03:08, 04:10 = 256, 0c, 0d, b7 = 0`, directory version 0x0102.
+Any line or outline can add 0x01D6, its corners: 0 bevel, 1 miter, or 2
+round (Publisher's designs store 2 for many shapes). Without it Publisher
+draws mitered corners, as its own new shapes do.
 
 ### Pictures
 
@@ -168,15 +171,32 @@ These are OPT props on any shape, text box, or Text Art. A solid fill is
 0x0181 (color) with 0x01BF = 0x00100010; 0x0182 is its opacity
 (0x10000 = opaque). A gradient adds 0x0180 = 7 (linear), 5 (from the
 center, with 0x018D-0x0190 = 0x8000), or 6 (along the outline); 0x0181 and
-0x0183 are the end colors, 0x0182 and 0x0184 their opacities, and 0x018B
-is the angle (16.16 degrees). Readers turn a stored angle *a* into a
-direction of 90 + *a* degrees, so a top-to-bottom gradient stores 0. More
+0x0183 are the end colors, 0x0182 and 0x0184 their opacities, 0x018B
+is the angle (16.16 degrees, signed), and 0x018C is the focus. With focus 0
+the gradient runs from 0x0181 to 0x0183; with focus 100 (as Publisher's
+Fill Effects dialog saves it) the two colors trade places. Measured
+clockwise from left-to-right on the page, the gradient runs toward 270 -
+*a* for a stored angle *a* of 0 or more, and toward 90 - *a* for a negative
+one: with focus 0, a stored 0 runs bottom to top, 270 left to right, and
+-90 right to left. Publisher's built-in designs store only 0, -45, -90, and
+-135; its dialog stores 0-359. Checked in Publisher's pictures of 47
+gradients saved by both programs. A linear gradient turns and flips with
+its shape only when the tertiary fill flags (0x01BF in 0xF122) carry 0x20
+with its use bit (0x00600020, as Publisher's designs write it); otherwise
+it keeps its direction on the page however the shape turns. JeffPub writes
+focus 0, the angle 270 - *g* (0-359) for a gradient toward *g*, and the
+tertiary flag, since its gradients turn with their shapes. More
 than two colors go in 0xC197 (complex): count, count, 8, then each color
 and its position (16.16). A picture fill is 0x0180 = 3 (stretched) or 2
 (tiled) with 0x4186 = the store entry. Patterns are saved as a tiled 8 x 8
 picture of the pattern in its colors. Line opacity is 0x01C1. A shadow is
 0x0200 = 0 (offset), 0x0201 color, 0x0204 opacity, 0x0205/0x0206 offsets
-(EMU), and 0x023F = 0x00020002.
+(EMU), and 0x023F = 0x00020002. A color can also name another of the
+shape's colors and change it: the top byte 0x10, the low byte 0xF0 (the
+fill color) or 0xF2 (the line color), the next byte the change (1 darken,
+2 lighten), and the third byte how much (out of 255). Publisher's default
+text box shadow is 0x107F02F2: the line color lightened halfway, gray for
+a black line.
 
 ### Picture settings and picture shapes
 
@@ -191,7 +211,10 @@ the picture (0x0180 = 3); the fill always covers the shape's box, so a
 cropped or adjusted picture is saved as the part that shows, with the
 settings applied. Publisher showed a picture saved with only the grayscale
 or black and white setting in its own colors, so such pictures are saved
-already converted, with the setting kept.
+already converted, with the setting kept. A picture shape can keep a solid
+fill of its own (0x0181, with 0x01BF = 0x001F001C marking it filled, as in
+Publisher's designs); Publisher paints it behind the picture, where it
+shows through a metafile's clear parts.
 
 ### Line spacing
 
@@ -470,6 +493,18 @@ a 0x8000) fill alternately, so holes cut through; a shape whose parts
 merge on screen is written as its merged outline plus, when it has an
 outline, each part twice more (an even number of layers leaves the fill
 alone but draws the inner lines, like a smiley's eyes).
+
+Publisher's own freeforms (shape type 100 in its designs) can take their
+coordinates from formulas. The coordinate space runs from 0x0140/0x0141
+(left, top) to 0x0142/0x0143 (right, bottom), often -32000 to 32000. A
+point coordinate of 0x8000nnnn means formula *n* (other values, negative
+ones included, are plain numbers). The formulas are 0xC156: count, count,
+8, then per formula a 16-bit code (the low byte the operation, as in
+MS-ODRAW's SG formulas; bits 13-15 mark arguments that refer to the
+shape's adjust values, the coordinate space's edges, or earlier formulas)
+and three signed 16-bit arguments. Operation 6 picks the second argument
+when the first is greater than 0. An adjust value used as the angle of a
+sine or cosine is in 16.16 degrees.
 
 ### Spot colors
 

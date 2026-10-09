@@ -88,9 +88,11 @@ class GradientFill : public Fill
   double m_fillTopVal;
   double m_fillRightVal;
   double m_fillBottomVal;
+  double m_storedAngle = 0;   // JeffPub patch: 0x018B as stored
 public:
   GradientFill(const MSPUBCollector *owner, double angle = 0, int type = 7);
   void setFillCenter(double left, double top, double right, double bottom);
+  void setStoredAngle(double a) { m_storedAngle = a; }
   void addColor(ColorReference c, unsigned offsetPercent, double opacity);
   void addColorReverse(ColorReference c, unsigned offsetPercent, double opacity);
   void completeComplexFill();

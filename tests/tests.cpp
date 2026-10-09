@@ -1117,6 +1117,28 @@ private Q_SLOTS:
         QVERIFY2(std::abs(width - want) < want * 0.01, qPrintable(QStringLiteral("%1 pt, not %2").arg(width).arg(want)));
     }
 
+    // A run that states its character scaling, even 100%, still gets its
+    // missing font's stand-in weight and narrowing (times its own scaling):
+    // sign designs' phone numbers in Franklin Gothic Heavy came out thin.
+    void standInWithOwnScaling()
+    {
+        if (QFontDatabase::hasFamily(QStringLiteral("Franklin Gothic Heavy"))) QSKIP("Franklin Gothic Heavy is installed");
+        jp::LayoutEnv env;
+        QTextCharFormat plain;
+        plain.setFontFamilies(QStringList{QStringLiteral("Franklin Gothic Heavy")});
+        plain.setFontPointSize(10);
+        const QTextCharFormat base = jp::resolveCharFormat(plain, env);
+        for (int scale : {100, 80}) {
+            QTextCharFormat f = plain;
+            f.setFontStretch(scale);
+            const QTextCharFormat r = jp::resolveCharFormat(f, env);
+            QCOMPARE(r.fontWeight(), base.fontWeight());
+            const int want = int(std::lround((base.hasProperty(QTextFormat::FontStretch) ? base.fontStretch() : 100) * scale / 100.0));
+            QCOMPARE(r.hasProperty(QTextFormat::FontStretch) ? r.fontStretch() : 100, want);
+            QVERIFY2(QFontInfo(r.font()).weight() >= 750, qPrintable(QFontInfo(r.font()).styleName()));
+        }
+    }
+
     // A missing AG_Futura keeps its own half-em spaces with its stand-in
     // Jost, whose spaces are 0.3 em (word gaps measured in Publisher's PDFs).
     void substituteSpaceWidth()
@@ -7594,6 +7616,43 @@ private Q_SLOTS:
         QCOMPARE(cache.textFrame(*doc, *name, 1, opt).layout->lineInfo(0).size(), 0);
     }
 
+    // An object over a whole text box never pushes its text aside, whatever
+    // its wrap or fill (Publisher's pictures of a box under rectangles with
+    // each wrap); one over part of it does. Sign and newsletter designs
+    // frame their text boxes with an empty rectangle set to wrap Through,
+    // and JeffPub emptied the boxes.
+    void coveringObjectDoesntWrap()
+    {
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<TextItem>();
+        t->id = QStringLiteral("box");
+        t->rect = QRectF(92, 92, 140, 150);
+        t->storyId = doc->createStory(QStringLiteral("The quick brown fox jumps over the lazy dog again and again."));
+        doc->pages[0]->items.push_back(t);
+        auto frame = std::make_shared<ShapeItem>();
+        frame->id = QStringLiteral("frame");
+        frame->shape = QStringLiteral("rect");
+        frame->fill = Fill::none();
+        frame->stroke.color = ColorRef::rgb(Qt::red);
+        doc->pages[0]->items.push_back(frame);
+        // Its text then sits at the top, whatever its vertical alignment
+        // (Publisher's pictures of middle-aligned boxes under each wrap).
+        t->valign = VAlign::Middle;
+        RenderOptions opt;
+        for (Wrap::Mode mode : {Wrap::Square, Wrap::Tight, Wrap::Through, Wrap::TopBottom}) {
+            frame->wrap.mode = mode;
+            frame->rect = QRectF(72, 72, 180, 190);   // all around the box
+            QVERIFY2(jp::Renderer::wrapObstacles(*doc, *t).isEmpty(), qPrintable(QString::number(int(mode))));
+            QCOMPARE(jp::Renderer::frameSpec(*doc, *t, 1, opt).valign, VAlign::Top);
+            frame->rect = QRectF(162, 82, 90, 170);   // over its right half
+            QCOMPARE(jp::Renderer::wrapObstacles(*doc, *t).size(), 1);
+            QCOMPARE(jp::Renderer::frameSpec(*doc, *t, 1, opt).valign, VAlign::Middle);
+        }
+        frame->wrap.mode = Wrap::None;
+        frame->rect = QRectF(72, 72, 180, 190);
+        QCOMPARE(jp::Renderer::frameSpec(*doc, *t, 1, opt).valign, VAlign::Middle);
+    }
+
     void editWrapPoints()
     {
         jp::MainWindow w;
@@ -8146,9 +8205,295 @@ private Q_SLOTS:
         }
     }
 
+    // A picture keeps its quarter turns and its own fill through a .pub:
+    // rotated flowers lost their quarter turns (the outline's turn is folded
+    // within 45 degrees), and pinwheel art lost the colors its shape's fill
+    // shows through the metafile's gaps.
+    void pubPictureTurnsAndFill()
+    {
+        auto doc = Document::blank(QSizeF(612, 792));
+        QImage img(40, 20, QImage::Format_ARGB32);
+        img.fill(Qt::transparent);
+        QPainter(&img).fillRect(0, 0, 20, 20, Qt::blue);
+        QByteArray png;
+        {
+            QBuffer buf(&png);
+            buf.open(QIODevice::WriteOnly);
+            img.save(&buf, "PNG");
+        }
+        const double turns[] = {0, 90, 200, 290};
+        for (int i = 0; i < 4; ++i) {
+            auto pic = std::make_shared<PictureItem>();
+            pic->imageId = doc->addImage(png, QStringLiteral("png"));
+            pic->rect = QRectF(72 + 130 * i, 300, 120, 60);
+            pic->rotation = turns[i];
+            if (i == 1) pic->fill = Fill::solid(ColorRef::rgb(QColor(0x33, 0x66, 0x66)));
+            doc->pages[0]->items.push_back(pic);
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("pics.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        auto back = importPublisher(f.readAll(), nullptr);
+        QVERIFY(back);
+        QVector<const PictureItem *> got;
+        for (const auto &it : back->pages[0]->items)
+            if (auto *p = dynamic_cast<const PictureItem *>(it.get())) got << p;
+        std::sort(got.begin(), got.end(), [](auto *a, auto *b) { return a->rect.center().x() < b->rect.center().x(); });
+        QCOMPARE(got.size(), 4);
+        for (int i = 0; i < 4; ++i) {
+            QVERIFY2(std::abs(std::remainder(got[i]->rotation - turns[i], 360.0)) < 0.5, qPrintable(QStringLiteral("%1: %2").arg(i).arg(got[i]->rotation)));
+            QVERIFY2(std::abs(got[i]->rect.width() - 120) < 0.5 && std::abs(got[i]->rect.height() - 60) < 0.5,
+                     qPrintable(QStringLiteral("%1: %2x%3").arg(i).arg(got[i]->rect.width()).arg(got[i]->rect.height())));
+        }
+        QCOMPARE(got[1]->fill.type, Fill::Solid);
+        QCOMPARE(got[1]->fill.color.rgbValue(), QColor(0x33, 0x66, 0x66));
+        QCOMPARE(got[0]->fill.type, Fill::NoFill);
+    }
+
+    // Publisher's default text box shadow is stored as "the line color,
+    // lightened halfway" (0x107F02F2): gray for a black line. libmspub
+    // lightened the reference's own bytes into pink.
+    void pubShadowFromLineColor()
+    {
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<TextItem>();
+        t->rect = QRectF(72, 72, 200, 100);
+        t->storyId = doc->createStory(QStringLiteral("Shadowed"));
+        t->fill = Fill::solid(ColorRef::rgb(Qt::white));
+        t->stroke.color = ColorRef::rgb(Qt::black);
+        t->stroke.width = 1;
+        t->fx.shadow.on = true;
+        t->fx.shadow.distance = 6;
+        t->fx.shadow.color = ColorRef::rgb(QColor(0x12, 0x34, 0x56));
+        doc->pages[0]->items.push_back(t);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("shadow.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        cfb::File file;
+        QVERIFY(cfb::read(f.readAll(), &file, &err));
+        QByteArray escher = cfb::readStream(path, QStringLiteral("Escher/EscherStm"));
+        auto prop = [](quint16 id, quint32 value) {
+            QByteArray b(6, 0);
+            qToLittleEndian<quint16>(id, b.data());
+            qToLittleEndian<quint32>(value, b.data() + 2);
+            return b;
+        };
+        QCOMPARE(int(escher.count(prop(0x0201, 0x00563412))), 1);
+        escher.replace(prop(0x0201, 0x00563412), prop(0x0201, 0x107F02F2));
+        QVERIFY(file.setStream(QStringLiteral("Escher/EscherStm"), escher));
+        auto back = importPublisher(cfb::write(file), nullptr);
+        QVERIFY(back);
+        const Item *got = nullptr;
+        for (const auto &it : back->pages[0]->items)
+            if (it->fx.shadow.on) got = it.get();
+        QVERIFY(got);
+        const QColor c = got->fx.shadow.color.rgbValue();
+        QVERIFY2(std::abs(c.red() - 128) <= 2 && std::abs(c.green() - 128) <= 2 && std::abs(c.blue() - 128) <= 2, qPrintable(c.name()));
+    }
+
+    // A line's corners go through a .pub: Publisher's designs store round
+    // corners (0x01D6 = 2) and JeffPub drew them mitered.
+    void pubLineCornersRoundTrip()
+    {
+        auto doc = Document::blank(QSizeF(612, 792));
+        const Qt::PenJoinStyle joins[] = {Qt::MiterJoin, Qt::RoundJoin, Qt::BevelJoin};
+        for (int i = 0; i < 3; ++i) {
+            auto s = std::make_shared<ShapeItem>();
+            s->shape = QStringLiteral("triangle");
+            s->rect = QRectF(72 + 160 * i, 100, 120, 100);
+            s->fill = Fill::none();
+            s->stroke.color = ColorRef::rgb(Qt::black);
+            s->stroke.width = 12;
+            s->stroke.join = joins[i];
+            doc->pages[0]->items.push_back(s);
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("joins.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        auto back = importPublisher(f.readAll(), nullptr);
+        QVERIFY(back);
+        QVector<const Item *> got;
+        for (const auto &it : back->pages[0]->items)
+            if (!it->stroke.isNone()) got << it.get();
+        std::sort(got.begin(), got.end(), [](auto *a, auto *b) { return a->rect.x() < b->rect.x(); });
+        QCOMPARE(got.size(), 3);
+        for (int i = 0; i < 3; ++i) QCOMPARE(got[i]->stroke.join, joins[i]);
+    }
+
+    // An empty rectangle's outline comes back on its frame: libmspub moved
+    // the outline's top edge out by half the line (it applies one edge per
+    // side line, and a plain outline is one line), so a sign's 12-pt frame
+    // drawn inside its edge sat 6 pt too high.
+    void pubOutlineKeepsFrame()
+    {
+        auto doc = Document::blank(QSizeF(612, 792));
+        for (bool inset : {false, true}) {
+            auto s = std::make_shared<ShapeItem>();
+            s->shape = QStringLiteral("rect");
+            s->rect = QRectF(inset ? 340 : 72, 100, 200, 150);
+            s->fill = Fill::none();
+            s->stroke.color = ColorRef::rgb(Qt::black);
+            s->stroke.width = 12;
+            s->stroke.inset = inset;
+            doc->pages[0]->items.push_back(s);
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("frame.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        auto back = importPublisher(f.readAll(), nullptr);
+        QVERIFY(back);
+        int n = 0;
+        for (const auto &it : back->pages[0]->items) {
+            if (it->stroke.isNone()) continue;
+            ++n;
+            const QRectF want(it->rect.x() < 300 ? 72 : 340, 100, 200, 150);
+            QVERIFY2(std::abs(it->rect.top() - want.top()) < 0.1 && std::abs(it->rect.bottom() - want.bottom()) < 0.1
+                         && std::abs(it->rect.left() - want.left()) < 0.1 && std::abs(it->rect.right() - want.right()) < 0.1,
+                     qPrintable(QStringLiteral("%1,%2 %3x%4").arg(it->rect.x()).arg(it->rect.y()).arg(it->rect.width()).arg(it->rect.height())));
+        }
+        QCOMPARE(n, 2);
+    }
+
+    // Gradient angles as Publisher reads them (its pictures of JeffPub's
+    // files and of its own): a stored angle a of 0 or more runs the first
+    // color toward 270 - a, a negative one toward 90 - a. A gradient turns
+    // with its shape only when the tertiary fill flags (0x01BF) carry 0x20
+    // with its use bit; otherwise it keeps its direction on the page.
+    // JeffPub saved 45 degrees as 135 (mirrored) and never set the flag.
+    void pubGradientAnglesAsPublisher()
+    {
+        struct Case { double angle, rotation; bool flipH, flipV; };
+        const Case cases[] = {{45, 0, false, false}, {45, 0, true, false}, {45, 0, false, true}, {135, 90, false, false}, {60, 0, false, false}, {300, 30, false, false}};
+        auto doc = Document::blank(QSizeF(792, 612));
+        int i = 0;
+        for (const Case &c : cases) {
+            auto s = std::make_shared<ShapeItem>();
+            s->shape = QStringLiteral("rect");
+            s->rect = QRectF(36 + 120 * i++, 72, 100, 100);
+            s->rotation = c.rotation;
+            s->flipH = c.flipH;
+            s->flipV = c.flipV;
+            s->stroke.color = ColorRef::none();
+            s->fill.type = Fill::Gradient;
+            s->fill.gradType = Fill::Linear;
+            s->fill.angle = c.angle;
+            s->fill.stops = {GradientStop{0, ColorRef::rgb(QColor(200, 0, 0)), 0}, GradientStop{1, ColorRef::rgb(QColor(0, 0, 200)), 0}};
+            s->fill.color = s->fill.stops.first().color;
+            s->fill.color2 = s->fill.stops.last().color;
+            doc->pages[0]->items.push_back(s);
+        }
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("grad.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        auto prop = [](quint16 id, quint32 value) {
+            QByteArray b(6, 0);
+            qToLittleEndian<quint16>(id, b.data());
+            qToLittleEndian<quint32>(value, b.data() + 2);
+            return b;
+        };
+        QByteArray escher = cfb::readStream(path, QStringLiteral("Escher/EscherStm"));
+        QVERIFY(escher.contains(prop(0x018b, 225u << 16)));   // 45 degrees, as Publisher's dialog stores 225
+        QCOMPARE(int(escher.count(prop(0x01bf, 0x00600020))), 6);
+        // Where each first color runs on the page.
+        auto shown = [](const ShapeItem *s) {
+            double a = s->fill.angle;
+            if (s->flipH) a = 180 - a;
+            if (s->flipV) a = -a;
+            return a + s->rotation;
+        };
+        auto read = [&](const QByteArray &bytes) {
+            auto back = importPublisher(bytes, nullptr);
+            QVector<const ShapeItem *> got;
+            if (back) {
+                for (const auto &it : back->pages[0]->items)
+                    if (auto *s = dynamic_cast<const ShapeItem *>(it.get()); s && s->fill.type == Fill::Gradient) got << s;
+                std::sort(got.begin(), got.end(), [](auto *a, auto *b) { return a->rect.center().x() < b->rect.center().x(); });
+            }
+            return std::make_pair(std::move(back), got);
+        };
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QByteArray bytes = f.readAll();
+        {
+            auto [back, got] = read(bytes);
+            QCOMPARE(got.size(), 6);
+            for (int k = 0; k < 6; ++k) {
+                const Case &c = cases[k];
+                double want = c.angle;
+                if (c.flipH) want = 180 - want;
+                if (c.flipV) want = -want;
+                want += c.rotation;
+                QVERIFY2(std::abs(std::remainder(shown(got[k]) - want, 360.0)) < 0.5, qPrintable(QStringLiteral("%1: %2").arg(k).arg(shown(got[k]))));
+            }
+        }
+        // Without the flag Publisher keeps each gradient's stored direction
+        // on the page, whatever the shape's turns and flips.
+        cfb::File file;
+        QVERIFY(cfb::read(bytes, &file, &err));
+        escher.replace(prop(0x01bf, 0x00600020), prop(0x01bf, 0));
+        QVERIFY(file.setStream(QStringLiteral("Escher/EscherStm"), escher));
+        {
+            auto [back, got] = read(cfb::write(file));
+            QCOMPARE(got.size(), 6);
+            for (int k = 0; k < 6; ++k)
+                QVERIFY2(std::abs(std::remainder(shown(got[k]) - cases[k].angle, 360.0)) < 0.5, qPrintable(QStringLiteral("%1: %2").arg(k).arg(shown(got[k]))));
+        }
+    }
+
     // Best fit grows text only as far as the box holds it: a banner's short
     // headline grew to fill the width, its one line three times taller than
     // the box (Publisher's banner designs fit theirs inside).
+    // Best Fit judges a line by its text, not the spacing under it: sign
+    // designs' one-line headlines with 125-130% line spacing shrank to
+    // 0.81-0.84 although Publisher draws them at the size the file stores.
+    void bestFitIgnoresSpacingUnderLastLine()
+    {
+        auto doc = Document::blank(QSizeF(792, 612));
+        auto t = std::make_shared<TextItem>();
+        t->insets = QMarginsF(0, 0, 0, 0);
+        t->autofit = TextItem::BestFit;
+        t->fitAsStored = true;
+        t->storyId = doc->createStory(QStringLiteral("Private"));
+        {
+            QTextCursor c(doc->storyDoc(t->storyId));
+            c.select(QTextCursor::Document);
+            QTextCharFormat big;
+            big.setFontPointSize(100);
+            c.mergeCharFormat(big);
+        }
+        doc->pages[0]->items.push_back(t);
+        LayoutCache cache;
+        RenderOptions opt;
+        // The line's own height, at single spacing in a tall box.
+        t->rect = QRectF(36, 36, 700, 400);
+        const auto single = cache.textFrame(*doc, *t, 1, opt).layout->lineInfo(0);
+        QCOMPARE(single.size(), 1);
+        const double h = single.first().rect.height();
+        {
+            QTextCursor c(doc->storyDoc(t->storyId));
+            c.select(QTextCursor::Document);
+            QTextBlockFormat bf;
+            bf.setLineHeight(130, QTextBlockFormat::ProportionalHeight);
+            c.mergeBlockFormat(bf);
+        }
+        t->rect = QRectF(36, 36, 700, h * 1.1);   // holds the text, not 130% of it
+        const auto fl = cache.textFrame(*doc, *t, 1, opt);
+        QCOMPARE(fl.fitScale, 1.0);
+    }
+
     void bestFitStaysInsideBox()
     {
         auto doc = Document::blank(QSizeF(4320, 612));

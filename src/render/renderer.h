@@ -89,7 +89,7 @@ public:
     static QImage renderItemsToImage(const PaintContext &ctx, const ItemList &items, double scale);
 
     // Wrap obstacles (frame-local polygons) for a text box on a page.
-    static QVector<QPolygonF> wrapObstacles(const Document &doc, const TextItem &frame);
+    static QVector<QPolygonF> wrapObstacles(const Document &doc, const TextItem &frame, bool *covered = nullptr);   // covered: an object in front wraps around the whole box
     static FrameSpec frameSpec(const Document &doc, const TextItem &t, int pageNumber, const RenderOptions &opt);
     // Layout of the text inside a shape or a table cell, with its frame-local origin.
     static const StoryLayout *shapeTextLayout(const PaintContext &ctx, const ShapeItem &s, QPointF *origin);

@@ -137,6 +137,7 @@ void GradientFill::getProperties(librevenge::RVNGPropertyList *out) const
   out->insert("draw:fill", "gradient");
   out->insert("svg:fill-rule", "nonzero");
   out->insert("draw:angle", -m_angle); // draw:angle is clockwise in odf format
+  out->insert("jp:fill-angle", m_storedAngle);   // JeffPub
   switch (m_type)
   {
   case SHADE_CENTER:

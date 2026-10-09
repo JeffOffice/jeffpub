@@ -111,7 +111,7 @@ void Renderer::strokePath(QPainter *p, const QPainterPath &path, const Stroke &s
 }
 
 // ---------- layout cache ----------
-QVector<QPolygonF> Renderer::wrapObstacles(const Document &doc, const TextItem &frame)
+QVector<QPolygonF> Renderer::wrapObstacles(const Document &doc, const TextItem &frame, bool *covered)
 {
     QVector<QPolygonF> out;
     const auto loc = doc.find(frame.id);
@@ -146,8 +146,10 @@ QVector<QPolygonF> Renderer::wrapObstacles(const Document &doc, const TextItem &
         if (o->type() == ItemType::Text && !o->bounds().adjusted(1, 1, -1, -1).intersects(fb.marginsRemoved(frame.insets))) return;
         const Wrap &w = o->wrap;
         QPainterPath pagePath;
+        bool covers = false;
         if (w.mode == Wrap::Square || w.mode == Wrap::TopBottom) {
             QRectF b = o->bounds().adjusted(-w.left, -w.top, w.right, w.bottom);
+            covers = b.contains(fb);
             if (w.mode == Wrap::TopBottom) { b.setLeft(-1e5); b.setRight(1e5); }
             pagePath.addRect(b);
         } else {
@@ -161,9 +163,18 @@ QVector<QPolygonF> Renderer::wrapObstacles(const Document &doc, const TextItem &
                 st.setWidth(d * 2);
                 pagePath = pagePath.united(st.createStroke(pagePath));
             }
+            covers = pagePath.contains(fb);
         }
         const QRectF pb = pagePath.boundingRect();
         if (!pb.intersects(fb)) return;
+        // An object over the whole box never pushes its text aside, whatever
+        // its wrap or fill (as Publisher draws a box under rectangles with
+        // each wrap): designs frame text boxes with empty rectangles. The
+        // box's text then sits at its top, whatever its vertical alignment.
+        if (covers) {
+            if (covered) *covered = true;
+            return;
+        }
         if (w.side == Wrap::LeftOnly) { QPainterPath r; r.addRect(QRectF(pb.left(), pb.top(), 1e5, pb.height())); pagePath = pagePath.united(r); }
         else if (w.side == Wrap::RightOnly) { QPainterPath r; r.addRect(QRectF(-1e5, pb.top(), pb.right() + 1e5, pb.height())); pagePath = pagePath.united(r); }
         else if (w.side == Wrap::Largest) {
@@ -196,7 +207,11 @@ FrameSpec Renderer::frameSpec(const Document &doc, const TextItem &t, int pageNu
         s.baselineGrid = mp->grid.baseline;
         s.baselineOrigin = doc.setup.margins.top() + mp->grid.baselineOffset - t.rect.top();
     }
-    if (!t.vertical) s.obstacles = wrapObstacles(doc, t);
+    if (!t.vertical) {
+        bool covered = false;
+        s.obstacles = wrapObstacles(doc, t, &covered);
+        if (covered) s.valign = VAlign::Top;
+    }
     const auto loc = doc.find(t.id);
     s.ctx.doc = &doc;
     s.ctx.pageNumber = loc.page >= 0 ? loc.page + 1 : pageNumber;
@@ -268,16 +283,18 @@ LayoutCache::FrameLayout LayoutCache::textFrame(const Document &doc, const TextI
         if (autofit) {
             // Text fits when none is left over and the box holds its lines:
             // a line taller than the box (a banner's headline grown to fill
-            // its width) doesn't fit, though the layout still places it.
+            // its width) doesn't fit, though the layout still places it. The
+            // line spacing under the last line doesn't count (Publisher keeps
+            // signs' one-line headlines at 125-130% spacing at their size).
             auto overflows = [&] {
                 if (lay->overflow()) return true;
                 for (int f = 0; f < specs.size(); ++f) {
                     const auto lines = lay->lineInfo(f);
                     if (lines.isEmpty()) continue;
-                    double top = lines.first().rect.top(), bottom = lines.first().rect.bottom();
+                    double top = lines.first().rect.top(), bottom = lines.first().rect.bottom() - lines.first().below;
                     for (const auto &li : lines) {
                         top = std::min(top, li.rect.top());
-                        bottom = std::max(bottom, li.rect.bottom());
+                        bottom = std::max(bottom, li.rect.bottom() - li.below);
                     }
                     if (bottom - top > specs[f].size.height() - specs[f].insets.top() - specs[f].insets.bottom() + 0.5) return true;
                 }

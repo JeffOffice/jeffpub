@@ -2285,6 +2285,13 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
             maybe_tertiaryFoptValues.get();
           const unsigned *ptr_pictureRecolor = getIfExists_const(tertiaryFoptValues,
                                                                  FIELDID_PICTURE_RECOLOR);
+          // JeffPub patch: the fill turns and flips with the shape when the
+          // tertiary fill flags (0x01BF) set 0x20 with its use bit 0x200000,
+          // as in Publisher's own designs; without it the fill stays put on
+          // the page.
+          const unsigned *ptr_fillFlags = getIfExists_const(tertiaryFoptValues, FIELDID_FIELD_STYLE_BOOL_PROPS);
+          if (ptr_fillFlags && ((*ptr_fillFlags) & 0x00200020) == 0x00200020)
+            m_collector->setShapeFillTurns(*shapeSeqNum);
           if (ptr_pictureRecolor)
           {
             m_collector->setShapePictureRecolor(*shapeSeqNum,
@@ -2416,6 +2423,11 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
             if (in)
               m_collector->setShapeLineInset(*shapeSeqNum);
           }
+          // JeffPub patch: the line's corners (lineJoinStyle, 0x01D6: 0
+          // bevel, 1 miter, 2 round). Without it Publisher draws mitered
+          // corners.
+          if (const unsigned *ptr_join = getIfExists(foptValues.m_scalarValues, 0x01D6))
+            m_collector->setShapeLineJoin(*shapeSeqNum, *ptr_join);
           // JeffPub: a box can have a border on some sides only (a rule
           // above a caption) while its overall line is off; read those sides.
           if (!useLine && bool(maybe_tertiaryFoptValues))
@@ -2680,6 +2692,29 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
               unsigned *shadowOffsetY2 = getIfExists(foptValues.m_scalarValues, FIELDID_SHADOW_SECOND_OFFSET_Y);
               unsigned *shadowOriginX = getIfExists(foptValues.m_scalarValues, FIELDID_SHADOW_ORIGIN_X);
               unsigned *shadowOriginY = getIfExists(foptValues.m_scalarValues, FIELDID_SHADOW_ORIGIN_Y);
+              // JeffPub patch: a shadow color given as a change of the
+              // shape's own color (flag 0x10; index 0xF0 its fill, 0xF2 its
+              // line, as Publisher's default text box shadow: its line color
+              // lightened halfway) starts from that color. Upstream changed
+              // the reference's own bytes, so a gray shadow came out pink.
+              unsigned shadowBase = shadowColor ? *shadowColor : 0x00808080;
+              if (shadowColor && ((*shadowColor >> 24) & 0xFF) == 0x10)
+              {
+                const unsigned *ptr_fill = getIfExists(foptValues.m_scalarValues, FIELDID_FILL_COLOR);
+                const unsigned *ptr_line = getIfExists(foptValues.m_scalarValues, FIELDID_LINE_COLOR);
+                switch (*shadowColor & 0xFF)
+                {
+                case 0xF0:
+                  shadowBase = ptr_fill ? *ptr_fill : 0x00FFFFFF;
+                  break;
+                case 0xF2:
+                  shadowBase = ptr_line ? *ptr_line : 0x00000000;
+                  break;
+                default:
+                  shadowBase = 0x00808080;
+                  break;
+                }
+              }
               m_collector->setShapeShadow(*shapeSeqNum, Shadow(shadowType,
                                                                shadowOffsetX ? static_cast<int>(*shadowOffsetX) : 0x6338,
                                                                shadowOffsetY ? static_cast<int>(*shadowOffsetY) : 0x6338,
@@ -2688,7 +2723,7 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
                                                                shadowOriginX ? toFixedPoint(static_cast<int>(*shadowOriginX)) : 0,
                                                                shadowOriginY ? toFixedPoint(static_cast<int>(*shadowOriginY)) : 0,
                                                                toFixedPoint(shadowOpacity ? static_cast<int>(*shadowOpacity) : 0x10000),
-                                                               ColorReference(shadowColor ? *shadowColor : 0x00808080),
+                                                               ColorReference(shadowBase, shadowColor ? *shadowColor : 0x00808080),
                                                                ColorReference(shadowHColor ? *shadowHColor : 0x00CBCBCB)
                                                               ));
 
@@ -2698,15 +2733,26 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
           const std::vector<unsigned char> vertexData = foptValues.m_complexValues[FIELDID_P_VERTICES];
           if (!vertexData.empty())
           {
+            unsigned *p_geoLeft = getIfExists(foptValues.m_scalarValues, 0x0140);
+            unsigned *p_geoTop = getIfExists(foptValues.m_scalarValues, 0x0141);
             unsigned *p_geoRight = getIfExists(foptValues.m_scalarValues,
                                                FIELDID_GEO_RIGHT);
             unsigned *p_geoBottom = getIfExists(foptValues.m_scalarValues,
                                                 FIELDID_GEO_BOTTOM);
             const std::vector<unsigned char> segmentData = foptValues.m_complexValues[FIELDID_P_SEGMENTS];
             const std::vector<unsigned char> guideData = foptValues.m_complexValues[FIELDID_P_GUIDES];
-            m_collector->setShapeCustomPath(*shapeSeqNum, getDynamicCustomShape(vertexData, segmentData,
-                                                                                guideData, p_geoRight ? *p_geoRight : 21600,
-                                                                                p_geoBottom ? *p_geoBottom : 21600));
+            // JeffPub: the geometry box is geoLeft..geoRight by geoTop..geoBottom
+            // (signed; Publisher's freeforms use -32000..32000), not 0..geoRight.
+            const int geoL = p_geoLeft ? int(*p_geoLeft) : 0;
+            const int geoT = p_geoTop ? int(*p_geoTop) : 0;
+            const int geoR = p_geoRight ? int(*p_geoRight) : 21600;
+            const int geoB = p_geoBottom ? int(*p_geoBottom) : 21600;
+            DynamicCustomShape dcs = getDynamicCustomShape(vertexData, segmentData, guideData,
+                                                           geoR > geoL ? unsigned(geoR - geoL) : 21600,
+                                                           geoB > geoT ? unsigned(geoB - geoT) : 21600);
+            dcs.m_coordLeft = geoL;
+            dcs.m_coordTop = geoT;
+            m_collector->setShapeCustomPath(*shapeSeqNum, dcs);
           }
           const std::vector<unsigned char> wrapVertexData = foptValues.m_complexValues[FIELDID_P_WRAPPOLYGONVERTICES];
           if (!wrapVertexData.empty())
@@ -2852,6 +2898,8 @@ std::shared_ptr<Fill> MSPUBParser::getNewFill(const std::map<unsigned short, uns
     const unsigned *ptr_fillFocus = getIfExists_const(foptProperties, FIELDID_FILL_FOCUS);
     short fillFocus = ptr_fillFocus ? int((*ptr_fillFocus << 16) >> 16) : 0;
     angle = ptr_angle ? *ptr_angle : 0;
+    // JeffPub patch: the angle as stored (16.16, signed), passed on whole.
+    const double storedAngle = ptr_angle ? int(*ptr_angle) / 65536.0 : 0;
     angle >>= 16; //it's actually only 16 bits
     // Don't try to figure out what sense the following switch statement makes.
     // The angles are just offset by 90 degrees in the file format in some cases.
@@ -2886,6 +2934,7 @@ std::shared_ptr<Fill> MSPUBParser::getNewFill(const std::map<unsigned short, uns
 
     std::shared_ptr<GradientFill> ret(new GradientFill(m_collector, angle, (int)fillType));
     ret->setFillCenter(fillLeftVal, fillTopVal, fillRightVal, fillBottomVal);
+    ret->setStoredAngle(storedAngle);
 
     const unsigned *ptr_fillGrad = getIfExists_const(foptProperties, FIELDID_FILL_SHADE_COMPLEX);
     if (ptr_fillGrad)
@@ -2997,6 +3046,14 @@ DynamicCustomShape MSPUBParser::getDynamicCustomShape(
   ret.m_vertices = parseVertices(vertexData);
   ret.m_elements = parseSegments(segmentData);
   ret.m_calculations = parseGuides(guideData);
+  // JeffPub: an adjust value used as the angle of a sine or cosine formula
+  // is stored in 16.16 degrees; the built-in shapes mark theirs in the mask.
+  for (const Calculation &c : ret.m_calculations)
+  {
+    const int op = c.m_flags & 0xFF;
+    if ((op == 9 || op == 10) && (c.m_flags & 0x4000) && c.m_argTwo >= PROP_ADJUST_VAL_FIRST && c.m_argTwo <= PROP_ADJUST_VAL_LAST)
+      ret.m_adjustShiftMask |= static_cast<unsigned char>(1u << (c.m_argTwo - PROP_ADJUST_VAL_FIRST));
+  }
   return ret;
 }
 
@@ -3024,12 +3081,31 @@ std::vector<unsigned short> MSPUBParser::parseSegments(
 }
 
 std::vector<Calculation> MSPUBParser::parseGuides(
-  const std::vector<unsigned char> &/* guideData */)
+  const std::vector<unsigned char> &guideData)
 {
+  // JeffPub: pGuides (0x0156) is an array of 8-byte formulas: the sum code
+  // (low byte the operation, bits 13-15 mark which arguments are references
+  // to adjust values, geometry edges or earlier formulas) and three signed
+  // 16-bit arguments. Upstream left this a FIXME, so every coordinate a
+  // freeform takes from a formula came out 0.
   std::vector<Calculation> ret;
-
-  //FIXME : implement this function.
-
+  if (guideData.size() < 6)
+    return ret;
+  const unsigned numEntries = guideData[0] | (guideData[1] << 8);
+  const unsigned entrySize = guideData[4] | (guideData[5] << 8);
+  if (entrySize != 8)
+    return ret;
+  auto s16 = [&](unsigned o) { return int(short(guideData[o] | (guideData[o + 1] << 8))); };
+  unsigned offset = 6;
+  for (unsigned i = 0; i < numEntries && offset + 8 <= guideData.size(); ++i, offset += 8)
+  {
+    Calculation c;
+    c.m_flags = guideData[offset] | (guideData[offset + 1] << 8);
+    c.m_argOne = s16(offset + 2);
+    c.m_argTwo = s16(offset + 4);
+    c.m_argThree = s16(offset + 6);
+    ret.push_back(c);
+  }
   return ret;
 }
 

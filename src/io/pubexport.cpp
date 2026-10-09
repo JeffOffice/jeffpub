@@ -1498,6 +1498,9 @@ QByteArray PubWriter::write(QStringList *skipped)
         static const quint32 kDash[] = {0, 2, 2, 6, 8, 7, 9, 10};
         if (st.dash != Stroke::SolidLine) opt << Prop{0x01ce, kDash[st.dash]};
         if (st.dash == Stroke::RoundDot) opt << Prop{0x01d7, 0};
+        // Corners: Publisher draws mitered ones unless 0x01D6 says 0 bevel or 2 round.
+        if (st.join == Qt::RoundJoin) opt << Prop{0x01d6, 2};
+        else if (st.join == Qt::BevelJoin) opt << Prop{0x01d6, 0};
         auto arrow = [](Arrow a) -> quint32 {
             switch (a) {
             case Arrow::Triangle: return 1;
@@ -1516,8 +1519,9 @@ QByteArray PubWriter::write(QStringList *skipped)
     // Fill: none; solid (with transparency); a gradient (linear as type 7
     // with the angle, radial as 5 from the center, along the outline as 6)
     // with its colors, stops and transparency; or a picture (3 stretched,
-    // 2 tiled). The reader turns a stored angle a into 90 + a, and treats
-    // -45 and -135 specially, so angles are stored minus 90 within 0-360.
+    // 2 tiled). Publisher runs the first color toward 270 - a for a stored
+    // angle a of 0-359 (as its Fill Effects dialog stores them), so a
+    // gradient toward g is stored as 270 - g.
     // A solid fill given as process inks: in the tertiary properties, the
     // color as shown (0x019E) and the inks packed into 0x019F and 0x01A6 as
     // one run of bits, 31 from each: the bits per ink (8), which inks there
@@ -1527,7 +1531,12 @@ QByteArray PubWriter::write(QStringList *skipped)
     // A fill in one of the publication's spot colors also names its ink
     // (0x01A1, UTF-16 "P2,#" + the shown color as four 16-bit hex values + ","
     // + the ink's name), as ten book covers keep PANTONE 2727 C.
-    auto inkProps = [&](QVector<Prop> &topt, const Fill &f) {
+    // A linear gradient turns and flips with its shape, as in JeffPub: the
+    // tertiary fill flags 0x01BF carry 0x20 with its use bit (0x00600020,
+    // as in Publisher's own designs). Without it Publisher keeps the
+    // gradient's direction on the page.
+    auto tertiaryFillProps = [&](QVector<Prop> &topt, const Fill &f) {
+        if (f.type == Fill::Gradient && f.gradType == Fill::Linear) topt << Prop{0x01bf, 0x00600020};
         if (f.type != Fill::Solid || f.color.kind() != ColorRef::Rgb || f.color.rgbValue().spec() != QColor::Cmyk) return;
         const QPair<quint32, quint32> packed = packPubInks(f.color.rgbValue());
         const QColor shown = f.color.resolve(m_doc.colors);
@@ -1554,7 +1563,7 @@ QByteArray PubWriter::write(QStringList *skipped)
             if (stops.first().transparency > 0.001) opt << Prop{0x0182, opacity(stops.first().transparency)};
             if (stops.last().transparency > 0.001) opt << Prop{0x0184, opacity(stops.last().transparency)};
             if (type == 7) {
-                const double a = std::fmod(std::fmod(f.angle - 270, 360.0) + 360.0, 360.0);   // as pubimport reads it
+                const double a = std::fmod(std::fmod(270 - f.angle, 360.0) + 360.0, 360.0);
                 opt << Prop{0x018b, quint32(std::llround(a)) << 16};
             } else {
                 // From the center or along the outline, focus 100 puts the
@@ -1729,7 +1738,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 QVector<Prop> topt = {{0x008d, 73152}, {0x017f, 0x00400040}, {0x01ff, t->stroke.inset ? 0x00400040u : 0x00400000u}, {0x057f, 0x00080000},
                                       {0x05bf, 0x00080000}, {0x05ff, 0x00080000}, {0x063f, 0x00080000}, {0x06ff, 0x00020002}};
                 topt << kSideLines << kShadowFlags;
-                inkProps(topt, t->fill);
+                tertiaryFillProps(topt, t->fill);
                 wrapProps(opt, t);
                 QByteArray sp = spRecord(202, 0x0a00, t) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(r);
                 sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
@@ -1822,7 +1831,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 }
                 QVector<Prop> topt = {{0x01ff, s->stroke.inset ? 0x00400040u : 0x00400000u}, {0x06ff, 0x00020002}};
                 topt << kSideLines << kShadowFlags;
-                if (!open) inkProps(topt, s->fill);
+                if (!open) tertiaryFillProps(topt, s->fill);
                 wrapProps(opt, s);
                 QByteArray sp = spRecord(quint16(st), 0x0a00, s) + escherProps(0xf00b, opt) + escherProps(0xf122, topt) + anchor(box);
                 sp += clientBlocks(0xf011, {ref(0x01, seq, 0x68)});
@@ -2058,7 +2067,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 QVector<Prop> topt = {{0x017f, 0x02000200}, {0x023f, 0x00040000}, {0x057f, 0x00080000}, {0x05bf, 0x00080000},
                                       {0x05ff, 0x00080000}, {0x063f, 0x00080000}, {0x06ff, 0x00020002}};
                 topt << kShadowFlags << kSideLines;
-                inkProps(topt, ta->fill);
+                tertiaryFillProps(topt, ta->fill);
                 wrapProps(opt, ta);
                 QByteArray sp = spRecord(quint16(pubTextArtType(ta->transform_)), 0x0a00, ta) + escherProps(0xf00b, opt) +
                                 escherProps(0xf122, topt) + anchor(r);
@@ -2133,6 +2142,9 @@ QByteArray PubWriter::write(QStringList *skipped)
                 if (pic->recolor == PictureItem::Grayscale) opt << Prop{0x013f, 0x00040004};
                 if (pic->recolor == PictureItem::BlackWhite) opt << Prop{0x013f, 0x00020002};
                 if (pic->hasTransparentColor) opt << Prop{0x0107, bgr(pic->transparentColor)};
+                // A solid fill behind the picture, flagged filled as in
+                // Publisher's own designs; it shows through clear parts.
+                if (pic->fill.type == Fill::Solid) opt << Prop{0x0181, bgr(pic->fill.color.resolve(m_doc.colors))} << Prop{0x01bf, 0x001f001c};
                 shadowProps(opt, pic->fx.shadow);
                 rotationProp(opt, pic);
                 QVector<Prop> topt = {{0x01ff, pic->stroke.inset ? 0x00400040u : 0x00400000u}, {0x06ff, 0x00020002}};
