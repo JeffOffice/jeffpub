@@ -4,6 +4,7 @@
 #include "io/qtpdf.h"
 #include "io/zip.h"
 
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QMap>
 #include <QImage>
@@ -15,13 +16,13 @@ namespace jp {
 const QVector<PdfXCondition> &pdfXConditions()
 {
     static const QVector<PdfXCondition> list{
-        {QStringLiteral("U.S. web offset, coated paper (SWOP)"), QStringLiteral("CGATS TR 001"),
+        {QCoreApplication::translate("Export", "U.S. web offset, coated paper (SWOP)"), QStringLiteral("CGATS TR 001"),
          QStringLiteral("SWOP (Publication) Grade 5 Paper"), QStringLiteral("U.S. Web Coated (SWOP) v2")},
-        {QStringLiteral("European offset, coated paper (FOGRA39)"), QStringLiteral("FOGRA39"),
+        {QCoreApplication::translate("Export", "European offset, coated paper (FOGRA39)"), QStringLiteral("FOGRA39"),
          QStringLiteral("Offset commercial and specialty printing according to ISO 12647-2:2004 / Amd 1, paper type 1 or 2"),
          QStringLiteral("Coated FOGRA39 (ISO 12647-2:2004)")},
         [] {
-            PdfXCondition c{QStringLiteral("Offset, premium coated paper (FOGRA51, PSO Coated v3)"), QStringLiteral("FOGRA51"),
+            PdfXCondition c{QCoreApplication::translate("Export", "Offset, premium coated paper (FOGRA51, PSO Coated v3)"), QStringLiteral("FOGRA51"),
                             QStringLiteral("Commercial and specialty offset printing according to ISO 12647-2:2013, premium coated paper"),
                             QStringLiteral("PSO Coated v3")};
             c.x4 = true;
@@ -33,7 +34,7 @@ const QVector<PdfXCondition> &pdfXConditions()
             return c;
         }(),
         [] {
-            PdfXCondition c{QStringLiteral("Your printer's color profile (an .icc file)"), QStringLiteral("Custom"), QString(), QString()};
+            PdfXCondition c{QCoreApplication::translate("Export", "Your printer's color profile (an .icc file)"), QStringLiteral("Custom"), QString(), QString()};
             c.x4 = true;
             c.ownProfile = true;
             return c;
@@ -49,12 +50,12 @@ QByteArray pdfXProfileFromZip(const PdfXCondition &c, const QByteArray &zip, QSt
         return QByteArray();
     };
     if (QCryptographicHash::hash(zip, QCryptographicHash::Sha256).toHex() != c.zipSha256)
-        return fail(QStringLiteral("the download isn't the file expected"));
+        return fail(QCoreApplication::translate("Export", "the download isn't the file expected"));
     QMap<QString, QByteArray> entries;
-    if (!readZip(zip, entries)) return fail(QStringLiteral("the download couldn't be unpacked"));
+    if (!readZip(zip, entries)) return fail(QCoreApplication::translate("Export", "the download couldn't be unpacked"));
     const QByteArray icc = entries.value(c.profileFile);
     if (QCryptographicHash::hash(icc, QCryptographicHash::Sha256).toHex() != c.profileSha256)
-        return fail(QStringLiteral("the profile in the download isn't the one expected"));
+        return fail(QCoreApplication::translate("Export", "the profile in the download isn't the one expected"));
     return icc;
 }
 
@@ -164,7 +165,7 @@ bool finishPdfX(const QString &path, const PdfXOptions &opt, bool x4, QString *e
             const QByteArray data = pdf.streamData(o, &ok);
             if (!ok || data.contains("/CIDInit")) continue;
             const QString text = QString::fromLatin1(data);
-            if (text.contains(rgbOp) || text.contains(rgbSc)) return fail(QStringLiteral("a color JeffPub couldn't turn into ink amounts"));
+            if (text.contains(rgbOp) || text.contains(rgbSc)) return fail(QCoreApplication::translate("Export", "a color JeffPub couldn't turn into ink amounts"));
             continue;
         }
         QString body = dictString(o.body);
@@ -172,24 +173,24 @@ bool finishPdfX(const QString &path, const PdfXOptions &opt, bool x4, QString *e
         if (!x4 && (body.contains(QLatin1String("/ExtGState")) || body.contains(alpha))) {
             auto it = alpha.globalMatch(body);
             while (it.hasNext())
-                if (it.next().captured(2).toDouble() < 0.999) return fail(QStringLiteral("see-through objects were left unflattened"));
+                if (it.next().captured(2).toDouble() < 0.999) return fail(QCoreApplication::translate("Export", "see-through objects were left unflattened"));
             const auto bm = blend.match(body);
             if (bm.hasMatch() && bm.captured(1) != QLatin1String("Normal") && bm.captured(1) != QLatin1String("Compatible"))
-                return fail(QStringLiteral("a blend mode other than Normal"));
+                return fail(QCoreApplication::translate("Export", "a blend mode other than Normal"));
             if (body.contains(QRegularExpression(QStringLiteral("/SMask\\s*(?!/None)[^\\s/]"))))
-                return fail(QStringLiteral("a soft mask (transparency)"));
+                return fail(QCoreApplication::translate("Export", "a soft mask (transparency)"));
             body.remove(QRegularExpression(QStringLiteral("\\s*/(ca|CA)\\s+[-\\d.]+")));
             body.remove(QRegularExpression(QStringLiteral("\\s*/AIS\\s+(true|false)")));
             body.remove(QRegularExpression(QStringLiteral("\\s*/SMask\\s*/None")));
         }
-        if (!x4 && body.contains(QLatin1String("/S /Transparency"))) return fail(QStringLiteral("a transparency group"));
+        if (!x4 && body.contains(QLatin1String("/S /Transparency"))) return fail(QCoreApplication::translate("Export", "a transparency group"));
         // Qt declares RGB spaces in every resource dictionary; its CMYK
         // output never colors with them but starts each page in one.
         body.replace(QLatin1String("/CSp /DeviceRGB"), QLatin1String("/CSp /DeviceCMYK"));
         if (body.trimmed() == QLatin1String("[/Pattern /DeviceRGB]")) body = QStringLiteral("[/Pattern /DeviceCMYK]\n");
         // Fonts are embedded.
         if (body.contains(QLatin1String("/Type /FontDescriptor")) && !body.contains(QLatin1String("/FontFile")))
-            return fail(QStringLiteral("a font that isn't embedded"));
+            return fail(QCoreApplication::translate("Export", "a font that isn't embedded"));
         // Pages: trim and bleed boxes; no links over the page.
         if (body.contains(QRegularExpression(QStringLiteral("/Type\\s*/Page(?!s)")))) {
             body.remove(QRegularExpression(QStringLiteral("\\s*/(TrimBox|BleedBox|ArtBox)\\s*\\[[^\\]]*\\]")));
@@ -201,7 +202,7 @@ bool finishPdfX(const QString &path, const PdfXOptions &opt, bool x4, QString *e
         }
         // The catalog names the printing condition.
         if (body.contains(QLatin1String("/Type /Catalog")) && !body.contains(QLatin1String("/OutputIntents"))) {
-            if (x4) return fail(QStringLiteral("no output intent (the printing condition)"));
+            if (x4) return fail(QCoreApplication::translate("Export", "no output intent (the printing condition)"));
             const QByteArray intent = "<< /Type /OutputIntent /S /GTS_PDFX /OutputConditionIdentifier " + pdfString(cond.identifier) +
                                       " /OutputCondition " + pdfString(cond.condition) + " /RegistryName (http://www.color.org) /Info " +
                                       pdfString(cond.info) + " >>\n";
@@ -215,7 +216,7 @@ bool finishPdfX(const QString &path, const PdfXOptions &opt, bool x4, QString *e
             body.replace(QRegularExpression(QStringLiteral("/Title\\s*\\(\\)")), QStringLiteral("/Title (Untitled)"));
             if (!body.contains(QLatin1String("/Title"))) body.replace(QLatin1String("<<"), QLatin1String("<< /Title (Untitled)"));
             const qsizetype close = body.lastIndexOf(QLatin1String(">>"));
-            if (close < 0) return fail(QStringLiteral("unexpected PDF layout"));
+            if (close < 0) return fail(QCoreApplication::translate("Export", "unexpected PDF layout"));
             body.insert(close, QLatin1String("/GTS_PDFXVersion (PDF/X-1:2001) /GTS_PDFXConformance (PDF/X-1a:2001) /Trapped /False "));
         }
         o.body = body.toLatin1();
@@ -225,7 +226,7 @@ bool finishPdfX(const QString &path, const PdfXOptions &opt, bool x4, QString *e
     // Everything left is PDF 1.3 (PDF/X-4 stays 1.6).
     if (!x4) pdf.header.replace("%PDF-1.4", "%PDF-1.3");
     for (const QtPdf::Obj &o : pdf.objects)
-        if (QtPdf::dictOf(o.body).contains("/DeviceRGB")) return fail(QStringLiteral("an RGB color space JeffPub couldn't convert"));
+        if (QtPdf::dictOf(o.body).contains("/DeviceRGB")) return fail(QCoreApplication::translate("Export", "an RGB color space JeffPub couldn't convert"));
     return pdf.save(path, error);
 }
 

@@ -1,5 +1,6 @@
 #include "io/zip.h"
 
+#include <QCoreApplication>
 #include <QFile>
 #include <zlib.h>
 
@@ -124,32 +125,32 @@ static quint32 get32(const QByteArray &a, qsizetype at) { return at >= 0 && at +
 
 bool readZip(const QByteArray &zip, QMap<QString, QByteArray> &out, QString *error)
 {
-    auto fail = [&](const char *m) { if (error) *error = QString::fromLatin1(m); return false; };
-    if (zip.size() < 22) return fail("The file is too small to be a publication.");
+    auto fail = [&](const QString &m) { if (error) *error = m; return false; };
+    if (zip.size() < 22) return fail(QCoreApplication::translate("Import", "The file is too small to be a publication."));
     qsizetype eocd = -1;
     for (qsizetype i = zip.size() - 22; i >= std::max<qsizetype>(0, zip.size() - 65557); --i)
         if (get32(zip, i) == 0x06054b50) { eocd = i; break; }
-    if (eocd < 0) return fail("The file is not a JeffPub publication (no ZIP directory).");
+    if (eocd < 0) return fail(QCoreApplication::translate("Import", "The file is not a JeffPub publication (no ZIP directory)."));
     const int count = get16(zip, eocd + 10);
     qsizetype p = get32(zip, eocd + 16);
     for (int i = 0; i < count; ++i) {
-        if (p + 46 > zip.size() || get32(zip, p) != 0x02014b50) return fail("The publication's file directory is damaged.");
+        if (p + 46 > zip.size() || get32(zip, p) != 0x02014b50) return fail(QCoreApplication::translate("Import", "The publication's file directory is damaged."));
         const quint16 method = get16(zip, p + 10);
         const quint32 crc = get32(zip, p + 16), csize = get32(zip, p + 20), usize = get32(zip, p + 24);
         const quint16 nlen = get16(zip, p + 28), xlen = get16(zip, p + 30), clen = get16(zip, p + 32);
         const quint32 local = get32(zip, p + 42);
         // The entry's name, extra field and comment must fit in the file too.
-        if (p + 46 + qsizetype(nlen) + xlen + clen > zip.size()) return fail("The publication's file directory is damaged.");
+        if (p + 46 + qsizetype(nlen) + xlen + clen > zip.size()) return fail(QCoreApplication::translate("Import", "The publication's file directory is damaged."));
         const QString name = QString::fromUtf8(zip.constData() + p + 46, nlen);
         p += 46 + nlen + xlen + clen;
-        if (qsizetype(local) + 30 > zip.size()) return fail("The publication is truncated.");
+        if (qsizetype(local) + 30 > zip.size()) return fail(QCoreApplication::translate("Import", "The publication is truncated."));
         const qsizetype data = local + 30 + get16(zip, local + 26) + get16(zip, local + 28);
-        if (method != 0 && method != 8) return fail("The publication uses a compression method JeffPub cannot read.");
-        if (data + qsizetype(csize) > zip.size()) return fail("The publication is truncated.");
+        if (method != 0 && method != 8) return fail(QCoreApplication::translate("Import", "The publication uses a compression method JeffPub cannot read."));
+        if (data + qsizetype(csize) > zip.size()) return fail(QCoreApplication::translate("Import", "The publication is truncated."));
         if (method == 8) {
             bool ok = false;
             const QByteArray inflated = inflateRaw(zip.mid(data, csize), qsizetype(usize), &ok);
-            if (!ok || crc32(inflated) != crc) return fail("The publication is damaged.");
+            if (!ok || crc32(inflated) != crc) return fail(QCoreApplication::translate("Import", "The publication is damaged."));
             out.insert(name, inflated);
         } else {
             out.insert(name, zip.mid(data, csize));

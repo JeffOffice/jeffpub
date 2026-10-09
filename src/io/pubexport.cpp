@@ -15,6 +15,7 @@
 #include "render/shapes.h"
 #include "text/textprops.h"
 
+#include <QCoreApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QFile>
@@ -2183,7 +2184,7 @@ QByteArray PubWriter::write(QStringList *skipped)
             }
         }
     }
-    if (skipped && skippedCount) *skipped << QStringLiteral("%1 object(s) couldn't be saved to .pub").arg(skippedCount);
+    if (skipped && skippedCount) *skipped << QCoreApplication::translate("Export", "%1 object(s) couldn't be saved to .pub").arg(skippedCount);
     // An object set in text says so (03) and gives its number (0f), with 34
     // = 0, as in Publisher's files (Oct 7); an index lists each number's
     // story and object.

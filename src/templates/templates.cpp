@@ -5,6 +5,7 @@
 #include "text/textprops.h"
 
 #include <QBuffer>
+#include <QCoreApplication>
 #include <QDate>
 #include <QImageReader>
 #include <QLocale>
@@ -19,6 +20,7 @@
 #include <QtMath>
 
 #include <future>
+#include <iterator>
 #include <thread>
 #include <vector>
 
@@ -428,16 +430,16 @@ std::unique_ptr<Document> base(const TemplateOptions &o, QSizeF size, int pages,
     if (fs) d->fonts = *fs;
     BusinessInfo biz = o.business;
     if (biz.name.isEmpty()) {
-        biz.name = QStringLiteral("Riverbend Community Arts");
-        biz.tagline = QStringLiteral("Bringing art to every block");
-        biz.person = QStringLiteral("Dana Whitfield");
-        biz.title = QStringLiteral("Program Director");
-        biz.address = QStringLiteral("1450 Mill Street\nRiverbend, MI 49001");
+        biz.name = QCoreApplication::translate("Templates", "Riverbend Community Arts");
+        biz.tagline = QCoreApplication::translate("Templates", "Bringing art to every block");
+        biz.person = QCoreApplication::translate("Templates", "Dana Whitfield");
+        biz.title = QCoreApplication::translate("Templates", "Program Director");
+        biz.address = QCoreApplication::translate("Templates", "1450 Mill Street\nRiverbend, MI 49001");
         biz.phone = QStringLiteral("(269) 555-0142");
         biz.fax = QStringLiteral("(269) 555-0143");
         biz.email = QStringLiteral("hello@riverbendarts.org");
         biz.web = QStringLiteral("riverbendarts.org");
-        biz.setName = QStringLiteral("Sample business information");
+        biz.setName = QCoreApplication::translate("Templates", "Sample business information");
     }
     d->biz = {biz};
     return d;
@@ -475,15 +477,29 @@ Para W(const QString &t, double size, int align = 1, bool major = false, int wei
     return p;
 }
 
-const QString kLorem1 = QStringLiteral(
-    "Every Saturday this summer, the riverfront lawn turns into an open-air stage. Local bands, a youth orchestra and a jazz trio take turns from late afternoon into the evening. "
-    "Bring a blanket or a lawn chair; food trucks line Mill Street from five o'clock.");
-const QString kLorem2 = QStringLiteral(
-    "The program began twelve years ago with a single folding stage and a borrowed sound system. Today more than forty volunteers set up the lawn each week, and the "
-    "concerts draw neighbors from across the county. Admission is free, and donations go directly to music lessons for students in the district.");
-const QString kLorem3 = QStringLiteral(
-    "Volunteers help with parking, seating, the information table and cleanup. Shifts are two hours long, and no experience is needed. Sign up at the welcome tent or "
-    "on our website, and bring a friend.");
+// Sample paragraphs. Functions, not constants: they are translated when a
+// template is built, after the program has loaded its translation.
+QString lorem1()
+{
+    return QCoreApplication::translate(
+        "Templates",
+        "Every Saturday this summer, the riverfront lawn turns into an open-air stage. Local bands, a youth orchestra and a jazz trio take turns from late afternoon into the evening. "
+        "Bring a blanket or a lawn chair; food trucks line Mill Street from five o'clock.");
+}
+QString lorem2()
+{
+    return QCoreApplication::translate(
+        "Templates",
+        "The program began twelve years ago with a single folding stage and a borrowed sound system. Today more than forty volunteers set up the lawn each week, and the "
+        "concerts draw neighbors from across the county. Admission is free, and donations go directly to music lessons for students in the district.");
+}
+QString lorem3()
+{
+    return QCoreApplication::translate(
+        "Templates",
+        "Volunteers help with parking, seating, the information table and cleanup. Shifts are two hours long, and no experience is needed. Sign up at the welcome tent or "
+        "on our website, and bring a friend.");
+}
 
 // ---------------- templates ----------------
 std::unique_ptr<Document> flyerEvent(const TemplateOptions &o)
@@ -494,15 +510,15 @@ std::unique_ptr<Document> flyerEvent(const TemplateOptions &o)
     b.picture(QRectF(0, 0, ps.width(), ps.height() * 0.48), "sunburst", 3);
     b.shape("rect", QRectF(0, ps.height() * 0.48, ps.width(), ps.height() * 0.52), Fill::solid(ColorRef::scheme(Accent5)));
     b.shape("wave", QRectF(-10, ps.height() * 0.44, ps.width() + 20, 50), Fill::solid(ColorRef::scheme(Accent5)));
-    b.text(QRectF(40, 40, ps.width() - 80, 40), {C(QStringLiteral("{biz:name} presents"), 14, Main, 1, false, 700)});
-    b.textart(QRectF(54, 92, ps.width() - 108, 150), QStringLiteral("SUMMER CONCERTS"), "fill-main", d->fonts.heading);
-    b.text(QRectF(72, ps.height() * 0.53, ps.width() - 144, 90), {C(QStringLiteral("Saturdays · June 6 – August 29"), 26, Accent1, 1, true), C(QStringLiteral("Riverfront Lawn · 5:00 – 9:00 PM · Free admission"), 15, Main, 1)});
+    b.text(QRectF(40, 40, ps.width() - 80, 40), {C(QCoreApplication::translate("Templates", "{biz:name} presents"), 14, Main, 1, false, 700)});
+    b.textart(QRectF(54, 92, ps.width() - 108, 150), QCoreApplication::translate("Templates", "SUMMER CONCERTS"), "fill-main", d->fonts.heading);
+    b.text(QRectF(72, ps.height() * 0.53, ps.width() - 144, 90), {C(QCoreApplication::translate("Templates", "Saturdays · June 6 – August 29"), 26, Accent1, 1, true), C(QCoreApplication::translate("Templates", "Riverfront Lawn · 5:00 – 9:00 PM · Free admission"), 15, Main, 1)});
     b.line(QPointF(160, ps.height() * 0.53 + 96), QPointF(ps.width() - 160, ps.height() * 0.53 + 96), ColorRef::scheme(Accent1), 2);
-    auto body = b.text(QRectF(72, ps.height() * 0.53 + 110, ps.width() - 144, 150), {P(kLorem1, "Body Text"), P(kLorem3, "Body Text")});
+    auto body = b.text(QRectF(72, ps.height() * 0.53 + 110, ps.width() - 144, 150), {P(lorem1(), "Body Text"), P(lorem3(), "Body Text")});
     body->columns = 2;
     body->columnGap = 22;
     b.shapeText("irregularSeal1", QRectF(ps.width() - 200, ps.height() * 0.39, 170, 170), Fill::solid(ColorRef::scheme(Accent1)),
-                {W(QStringLiteral("FREE"), 22, 1, true), W(QStringLiteral("all ages"), 11)});
+                {W(QCoreApplication::translate("Templates", "FREE"), 22, 1, true), W(QCoreApplication::translate("Templates", "all ages"), 11)});
     b.shape("rect", QRectF(0, ps.height() - 72, ps.width(), 72), Fill::solid(ColorRef::scheme(Main)));
     b.text(QRectF(40, ps.height() - 64, ps.width() - 80, 56), {W(QStringLiteral("{biz:name}"), 13, 1, true, 700), W(QStringLiteral("{biz:phone}  ·  {biz:web}"), 11)}, VAlign::Middle);
     return d;
@@ -515,10 +531,10 @@ std::unique_ptr<Document> flyerSale(const TemplateOptions &o)
     const QSizeF ps = d->pageSize();
     b.shape("rect", QRectF(0, 0, ps.width(), ps.height()), Fill::solid(ColorRef::scheme(Accent1)));
     b.shape("rect", QRectF(28, 28, ps.width() - 56, ps.height() - 56), Fill::none(), Stroke::line(ColorRef::rgb(Qt::white), 3));
-    b.textart(QRectF(60, 70, ps.width() - 120, 210), QStringLiteral("SALE"), "fill-main", d->fonts.heading)->fill = Fill::solid(ColorRef::rgb(Qt::white));
+    b.textart(QRectF(60, 70, ps.width() - 120, 210), QCoreApplication::translate("Templates", "SALE"), "fill-main", d->fonts.heading)->fill = Fill::solid(ColorRef::rgb(Qt::white));
     b.shapeText("star24", QRectF(ps.width() / 2 - 160, 290, 320, 300), Fill::solid(ColorRef::scheme(Accent3)),
-                {W(QStringLiteral("UP TO"), 16, 1, true), W(QStringLiteral("50%"), 44, 1, true, 700), W(QStringLiteral("OFF"), 22, 1, true)});
-    b.text(QRectF(70, 594, ps.width() - 140, 76), {W(QStringLiteral("Friday through Sunday only"), 24, 1, true), W(QStringLiteral("Every jacket, sweater and boot in the store"), 16)});
+                {W(QCoreApplication::translate("Templates", "UP TO"), 16, 1, true), W(QStringLiteral("50%"), 44, 1, true, 700), W(QCoreApplication::translate("Templates", "OFF"), 22, 1, true)});
+    b.text(QRectF(70, 594, ps.width() - 140, 76), {W(QCoreApplication::translate("Templates", "Friday through Sunday only"), 24, 1, true), W(QCoreApplication::translate("Templates", "Every jacket, sweater and boot in the store"), 16)});
     b.text(QRectF(70, ps.height() - 116, ps.width() - 140, 72), {W(QStringLiteral("{biz:name}"), 18, 1, true, 700), W(QStringLiteral("{biz:address:oneline}"), 12), W(QStringLiteral("{biz:phone}"), 12)}, VAlign::Bottom);
     return d;
 }
@@ -530,12 +546,12 @@ std::unique_ptr<Document> flyerAnnouncement(const TemplateOptions &o)
     const QSizeF ps = d->pageSize();
     const QRectF c = content(*d);
     b.picture(QRectF(c.left(), c.top(), c.width(), 300), "waves", 2);
-    b.text(QRectF(c.left(), 350, c.width(), 120), {H(QStringLiteral("Now Open on Mill Street"), 40, 0, Accent1), P(QStringLiteral("A new home for classes, studios and community events."), "Subtitle")});
+    b.text(QRectF(c.left(), 350, c.width(), 120), {H(QCoreApplication::translate("Templates", "Now Open on Mill Street"), 40, 0, Accent1), P(QCoreApplication::translate("Templates", "A new home for classes, studios and community events."), "Subtitle")});
     b.line(QPointF(c.left(), 476), QPointF(c.right(), 476), ColorRef::scheme(Accent3), 2);
-    auto body = b.text(QRectF(c.left(), 492, c.width() * 0.62, 220), {P(kLorem2, "Body Text"), P(kLorem3, "Body Text")});
+    auto body = b.text(QRectF(c.left(), 492, c.width() * 0.62, 220), {P(lorem2(), "Body Text"), P(lorem3(), "Body Text")});
     body->wrap.mode = Wrap::Square;
     b.shapeText("rect", QRectF(c.left() + c.width() * 0.66, 492, c.width() * 0.34, 220), Fill::solid(ColorRef::scheme(Accent5)),
-                {C(QStringLiteral("Open House"), 20, Accent1, 1, true), C(QStringLiteral("Saturday, June 13\n10 AM – 4 PM"), 13, Main), C(QStringLiteral("Tours, demos and refreshments"), 11, Main)});
+                {C(QCoreApplication::translate("Templates", "Open House"), 20, Accent1, 1, true), C(QCoreApplication::translate("Templates", "Saturday, June 13\n10 AM – 4 PM"), 13, Main), C(QCoreApplication::translate("Templates", "Tours, demos and refreshments"), 11, Main)});
     b.text(QRectF(c.left(), ps.height() - 100, c.width(), 60), {C(QStringLiteral("{biz:name}  ·  {biz:phone}  ·  {biz:web}"), 11, Accent1, 1)}, VAlign::Bottom);
     return d;
 }
@@ -580,19 +596,19 @@ std::unique_ptr<Document> brochure(const TemplateOptions &o, int variant)
     const double panel = ps.width() / 3;
     // Outside: inside flap, back, cover.
     b.shape("rect", QRectF(0, 0, panel, ps.height()), Fill::solid(ColorRef::scheme(Accent5)));
-    b.text(QRectF(27, 36, panel - 54, ps.height() - 72), {H(QStringLiteral("Classes for every age"), 18, 0, Accent1), P(kLorem3, "Body Text"),
-                                                          H(QStringLiteral("Studio hours"), 14, 0, Accent1), P(QStringLiteral("Monday – Friday\t10 AM – 8 PM\nSaturday\t9 AM – 5 PM\nSunday\tClosed"), "Body Text")});
+    b.text(QRectF(27, 36, panel - 54, ps.height() - 72), {H(QCoreApplication::translate("Templates", "Classes for every age"), 18, 0, Accent1), P(lorem3(), "Body Text"),
+                                                          H(QCoreApplication::translate("Templates", "Studio hours"), 14, 0, Accent1), P(QCoreApplication::translate("Templates", "Monday – Friday\t10 AM – 8 PM\nSaturday\t9 AM – 5 PM\nSunday\tClosed"), "Body Text")});
     b.logo(QRectF(panel + panel / 2 - 45, ps.height() * 0.55 - 100, 90, 90), o);
     b.text(QRectF(panel + 27, ps.height() * 0.55, panel - 54, ps.height() * 0.35), {C(QStringLiteral("{biz:name}"), 13, Accent1, 1, true, 700), C(QStringLiteral("{biz:address}"), 10, Main, 1),
-                                                                                    C(QStringLiteral("Phone: {biz:phone}"), 10, Main, 1), C(QStringLiteral("{biz:email}"), 10, Main, 1)});
+                                                                                    C(QCoreApplication::translate("Templates", "Phone: {biz:phone}"), 10, Main, 1), C(QStringLiteral("{biz:email}"), 10, Main, 1)});
     b.picture(QRectF(2 * panel, 0, panel, ps.height() * 0.58), variant == 0 ? "waves" : "bokeh", 4);
     b.shape("rect", QRectF(2 * panel, ps.height() * 0.58, panel, ps.height() * 0.42), Fill::solid(ColorRef::scheme(Accent1)));
     b.text(QRectF(2 * panel + 24, ps.height() * 0.62, panel - 48, ps.height() * 0.3), {W(QStringLiteral("{biz:name}"), 24, 0, true, 700), W(QStringLiteral("{biz:tagline}"), 12, 0)});
     // Inside: three panels of linked text.
     b.onPage(1);
-    b.text(QRectF(27, 30, ps.width() - 54, 74), {H(QStringLiteral("Make something this season"), 28, 1, Accent1)});
-    auto t1 = b.text(QRectF(27, 110, panel - 54, ps.height() - 146), {H(QStringLiteral("Painting"), 15, 0, Accent2), P(kLorem2, "Body Text"), H(QStringLiteral("Ceramics"), 15, 0, Accent2), P(kLorem1, "Body Text"),
-                                                                     H(QStringLiteral("Printmaking"), 15, 0, Accent2), P(kLorem3, "Body Text"), P(kLorem2, "Body Text")});
+    b.text(QRectF(27, 30, ps.width() - 54, 74), {H(QCoreApplication::translate("Templates", "Make something this season"), 28, 1, Accent1)});
+    auto t1 = b.text(QRectF(27, 110, panel - 54, ps.height() - 146), {H(QCoreApplication::translate("Templates", "Painting"), 15, 0, Accent2), P(lorem2(), "Body Text"), H(QCoreApplication::translate("Templates", "Ceramics"), 15, 0, Accent2), P(lorem1(), "Body Text"),
+                                                                     H(QCoreApplication::translate("Templates", "Printmaking"), 15, 0, Accent2), P(lorem3(), "Body Text"), P(lorem2(), "Body Text")});
     auto t2 = std::make_shared<TextItem>();
     t2->rect = QRectF(panel + 27, 110, panel - 54, ps.height() * 0.45);
     t2->storyId = t1->storyId;
@@ -619,7 +635,7 @@ std::unique_ptr<Document> newsletter(const TemplateOptions &o, int variant)
         Page tmp;
         b.pg = &tmp;
         b.line(QPointF(c.left(), ps.height() - 40), QPointF(c.right(), ps.height() - 40), ColorRef::scheme(Accent4), 0.75);
-        b.text(QRectF(c.left(), ps.height() - 36, c.width(), 20), {C(QStringLiteral("{biz:name} Newsletter\tPage {page}"), 8.5, Accent4, 0)});
+        b.text(QRectF(c.left(), ps.height() - 36, c.width(), 20), {C(QCoreApplication::translate("Templates", "{biz:name} Newsletter\tPage {page}"), 8.5, Accent4, 0)});
         auto &mi = d->masters.first()->items;
         for (auto &it : tmp.items) mi.push_back(it);
         // Right-aligned tab for the page number.
@@ -635,23 +651,23 @@ std::unique_ptr<Document> newsletter(const TemplateOptions &o, int variant)
     b.shape("rect", QRectF(0, 0, ps.width(), 150), Fill::solid(ColorRef::scheme(Accent1)));
     b.text(QRectF(c.left(), 36, c.width() - (wantsLogo(o) ? 100 : 0), 70), {W(QStringLiteral("{biz:name}"), 34, 0, true, 700)})->autofit = TextItem::ShrinkOnOverflow;
     b.logo(QRectF(c.right() - 84, 24, 84, 76), o);
-    b.text(QRectF(c.left(), 104, c.width() / 2, 24), {W(QStringLiteral("Volume 3, Issue 6"), 10, 0)});
+    b.text(QRectF(c.left(), 104, c.width() / 2, 24), {W(QCoreApplication::translate("Templates", "Volume 3, Issue 6"), 10, 0)});
     b.text(QRectF(c.left() + c.width() / 2, 104, c.width() / 2, 24), {W(QStringLiteral("{date:MMMM yyyy}"), 10, 2)});
     const double colW = (c.width() - 2 * 14) / 3;
     // Sidebar.
     b.shapeText("rect", QRectF(c.left(), 170, colW, 300), Fill::solid(ColorRef::scheme(Accent5)),
-                {C(QStringLiteral("Inside this issue"), 14, Accent1, 0, true, 700), C(QStringLiteral("Summer concert lineup\t1\nVolunteer spotlight\t2\nNew studio classes\t2\nCalendar\t2"), 10, Main, 0)});
+                {C(QCoreApplication::translate("Templates", "Inside this issue"), 14, Accent1, 0, true, 700), C(QCoreApplication::translate("Templates", "Summer concert lineup\t1\nVolunteer spotlight\t2\nNew studio classes\t2\nCalendar\t2"), 10, Main, 0)});
     if (auto *s = dynamic_cast<ShapeItem *>(b.pg->items.back().get())) { s->valign = VAlign::Top; s->insets = QMarginsF(10, 10, 10, 10); }
     // Lead story across two columns, continued on page 2.
-    b.text(QRectF(c.left() + colW + 14, 170, 2 * colW + 14, 60), {H(QStringLiteral("Concert season opens on the river"), 22, 0, Accent1)})->autofit = TextItem::ShrinkOnOverflow;
+    b.text(QRectF(c.left() + colW + 14, 170, 2 * colW + 14, 60), {H(QCoreApplication::translate("Templates", "Concert season opens on the river"), 22, 0, Accent1)})->autofit = TextItem::ShrinkOnOverflow;
     b.picture(QRectF(c.left() + colW + 14, 236, 2 * colW + 14, 180), "skyline", 5);
-    b.text(QRectF(c.left() + colW + 14, 417, 2 * colW + 14, 24), {P(QStringLiteral("The riverfront lawn at dusk, before the first concert of the season."), "Caption")});
+    b.text(QRectF(c.left() + colW + 14, 417, 2 * colW + 14, 24), {P(QCoreApplication::translate("Templates", "The riverfront lawn at dusk, before the first concert of the season."), "Caption")});
     auto lead = b.text(QRectF(c.left() + colW + 14, 444, 2 * colW + 14, c.bottom() - 444 - 40),
-                       {P(kLorem1, "Body Text"), P(kLorem2, "Body Text"), P(kLorem3, "Body Text"), P(kLorem1, "Body Text"), P(kLorem2, "Body Text"), P(kLorem3, "Body Text")});
+                       {P(lorem1(), "Body Text"), P(lorem2(), "Body Text"), P(lorem3(), "Body Text"), P(lorem1(), "Body Text"), P(lorem2(), "Body Text"), P(lorem3(), "Body Text")});
     lead->columns = 2;
     lead->columnGap = 14;
     lead->continuedOn = true;
-    b.text(QRectF(c.left(), 490, colW, c.bottom() - 530), {P(QStringLiteral("“The lawn fills up by six. Come early and bring a blanket.”"), "Quote"), P(QStringLiteral("— A regular since the first season"), "Caption")}, VAlign::Middle);
+    b.text(QRectF(c.left(), 490, colW, c.bottom() - 530), {P(QCoreApplication::translate("Templates", "“The lawn fills up by six. Come early and bring a blanket.”"), "Quote"), P(QCoreApplication::translate("Templates", "— A regular since the first season"), "Caption")}, VAlign::Middle);
     // Page 2.
     b.onPage(1);
     auto cont = std::make_shared<TextItem>();
@@ -663,8 +679,8 @@ std::unique_ptr<Document> newsletter(const TemplateOptions &o, int variant)
     lead->nextId = cont->id;
     b.pg->items.push_back(cont);
     b.picture(QRectF(c.left(), 290, colW * 2 + 14, 200), "leaves", 6);
-    b.text(QRectF(c.left() + 2 * colW + 28, 290, colW, 200), {H(QStringLiteral("Volunteer spotlight"), 16, 0, Accent1), P(kLorem3, "Body Text")});
-    b.text(QRectF(c.left(), 506, c.width(), 36), {C(QStringLiteral("Coming up"), 18, Accent1, 0, true, 700)}, VAlign::Bottom);
+    b.text(QRectF(c.left() + 2 * colW + 28, 290, colW, 200), {H(QCoreApplication::translate("Templates", "Volunteer spotlight"), 16, 0, Accent1), P(lorem3(), "Body Text")});
+    b.text(QRectF(c.left(), 506, c.width(), 36), {C(QCoreApplication::translate("Templates", "Coming up"), 18, Accent1, 0, true, 700)}, VAlign::Bottom);
     // A small calendar-style table.
     auto tbl = std::make_shared<TableItem>();
     tbl->rows = 5;
@@ -673,12 +689,14 @@ std::unique_ptr<Document> newsletter(const TemplateOptions &o, int variant)
     tbl->colW = {c.width() * 0.22, c.width() * 0.5, c.width() * 0.28};
     tbl->rowH = QVector<double>(5, 30);
     tbl->cells.resize(15);
-    const QStringList rowsText{"Date|Event|Where", "June 6|Opening night: Riverbend Youth Orchestra|Riverfront Lawn", "June 13|Open house at the new studio|1450 Mill Street",
-                               "June 20|Jazz on the lawn|Riverfront Lawn", "June 27|Family printmaking workshop|Studio B"};
+    const QString rowsText[5][3] = {
+        {QCoreApplication::translate("Templates", "Date"), QCoreApplication::translate("Templates", "Event"), QCoreApplication::translate("Templates", "Where")},
+        {QCoreApplication::translate("Templates", "June 6"), QCoreApplication::translate("Templates", "Opening night: Riverbend Youth Orchestra"), QCoreApplication::translate("Templates", "Riverfront Lawn")},
+        {QCoreApplication::translate("Templates", "June 13"), QCoreApplication::translate("Templates", "Open house at the new studio"), QCoreApplication::translate("Templates", "1450 Mill Street")},
+        {QCoreApplication::translate("Templates", "June 20"), QCoreApplication::translate("Templates", "Jazz on the lawn"), QCoreApplication::translate("Templates", "Riverfront Lawn")},
+        {QCoreApplication::translate("Templates", "June 27"), QCoreApplication::translate("Templates", "Family printmaking workshop"), QCoreApplication::translate("Templates", "Studio B")}};
     for (int r = 0; r < 5; ++r)
-        for (int col = 0; col < 3; ++col) {
-            tbl->cell(r, col).storyId = d->createStory(rowsText[r].split('|')[col]);
-        }
+        for (int col = 0; col < 3; ++col) tbl->cell(r, col).storyId = d->createStory(rowsText[r][col]);
     tbl->syncRect();
     applyTableFormatCells(tbl.get(), QStringLiteral("Table Style 1"), [&](TableCell &cell, bool head, bool) {
         if (!head) return;
@@ -702,15 +720,15 @@ std::unique_ptr<Document> greetingCard(const TemplateOptions &o, int variant)
     B b(*d);
     const QSizeF ps = d->pageSize();
     b.picture(QRectF(0, 0, ps.width(), ps.height()), variant == 0 ? "confetti" : "leaves", 7);
-    b.textart(QRectF(30, ps.height() / 2 - 70, ps.width() - 60, 120), variant == 0 ? QStringLiteral("Happy Birthday!") : QStringLiteral("Thank You"),
+    b.textart(QRectF(30, ps.height() / 2 - 70, ps.width() - 60, 120), variant == 0 ? QCoreApplication::translate("Templates", "Happy Birthday!") : QCoreApplication::translate("Templates", "Thank You"),
               variant == 0 ? "arch-a1" : "script", d->fonts.heading);
     b.onPage(1);
     b.onPage(2);
     b.text(QRectF(36, ps.height() / 2 - 60, ps.width() - 72, 120),
-           {C(variant == 0 ? QStringLiteral("Wishing you a year full of good surprises.") : QStringLiteral("Your kindness meant more than you know."), 16, Accent1, 1, true),
+           {C(variant == 0 ? QCoreApplication::translate("Templates", "Wishing you a year full of good surprises.") : QCoreApplication::translate("Templates", "Your kindness meant more than you know."), 16, Accent1, 1, true),
             C(QStringLiteral("— {biz:person}"), 11, Main, 1)}, VAlign::Middle);
     b.onPage(3);
-    b.text(QRectF(36, ps.height() - 70, ps.width() - 72, 36), {C(QStringLiteral("Made with JeffPub"), 8, Accent4, 1)}, VAlign::Bottom);
+    b.text(QRectF(36, ps.height() - 70, ps.width() - 72, 36), {C(QCoreApplication::translate("Templates", "Made with JeffPub"), 8, Accent4, 1)}, VAlign::Bottom);
     return d;
 }
 
@@ -723,11 +741,11 @@ std::unique_ptr<Document> certificate(const TemplateOptions &o)
     auto inner = b.shape("rect", QRectF(40, 40, ps.width() - 80, ps.height() - 80), Fill::none(), Stroke::line(ColorRef::scheme(Accent3), 1.5));
     inner->stroke.compound = Stroke::Double;
     inner->stroke.width = 4;
-    b.text(QRectF(80, 84, ps.width() - 160, 132), {C(QStringLiteral("Certificate"), 46, Accent1, 1, true), C(QStringLiteral("of Achievement"), 22, Accent3, 1, true)});
-    b.text(QRectF(80, 220, ps.width() - 160, 30), {C(QStringLiteral("This certificate is presented to"), 14, Main, 1, false)});
-    b.text(QRectF(120, 256, ps.width() - 240, 64), {C(QStringLiteral("Recipient Name"), 36, Main, 1, false, -1)})->autofit = TextItem::ShrinkOnOverflow;
+    b.text(QRectF(80, 84, ps.width() - 160, 132), {C(QCoreApplication::translate("Templates", "Certificate"), 46, Accent1, 1, true), C(QCoreApplication::translate("Templates", "of Achievement"), 22, Accent3, 1, true)});
+    b.text(QRectF(80, 220, ps.width() - 160, 30), {C(QCoreApplication::translate("Templates", "This certificate is presented to"), 14, Main, 1, false)});
+    b.text(QRectF(120, 256, ps.width() - 240, 64), {C(QCoreApplication::translate("Templates", "Recipient Name"), 36, Main, 1, false, -1)})->autofit = TextItem::ShrinkOnOverflow;
     b.line(QPointF(170, 326), QPointF(ps.width() - 170, 326), ColorRef::scheme(Accent4), 1);
-    b.text(QRectF(120, 336, ps.width() - 240, 60), {C(QStringLiteral("in recognition of outstanding dedication to the summer concert series and the students it supports."), 13, Main, 1)});
+    b.text(QRectF(120, 336, ps.width() - 240, 60), {C(QCoreApplication::translate("Templates", "in recognition of outstanding dedication to the summer concert series and the students it supports."), 13, Main, 1)});
     for (int i = 0; i < 2; ++i) {
         const double x = i == 0 ? 120 : ps.width() - 330;
         b.line(QPointF(x, ps.height() - 140), QPointF(x + 210, ps.height() - 140), ColorRef::scheme(Main), 0.75);
@@ -744,14 +762,14 @@ std::unique_ptr<Document> postcard(const TemplateOptions &o)
     B b(*d);
     const QSizeF ps = d->pageSize();
     b.picture(QRectF(0, 0, ps.width(), ps.height()), "sunburst", 11);
-    b.textart(QRectF(30, ps.height() / 2 - 50, ps.width() - 60, 80), QStringLiteral("Greetings from Riverbend"), "retro", d->fonts.heading);
+    b.textart(QRectF(30, ps.height() / 2 - 50, ps.width() - 60, 80), QCoreApplication::translate("Templates", "Greetings from Riverbend"), "retro", d->fonts.heading);
     b.onPage(1);
     b.line(QPointF(ps.width() / 2, 24), QPointF(ps.width() / 2, ps.height() - 24), ColorRef::scheme(Accent4), 0.75);
-    b.text(QRectF(18, 18, ps.width() / 2 - 32, ps.height() - 36), {C(QStringLiteral("Wish you were here!"), 14, Accent1, 0, true), P(kLorem1.left(160) + QStringLiteral("…"), "Body Text"),
+    b.text(QRectF(18, 18, ps.width() / 2 - 32, ps.height() - 36), {C(QCoreApplication::translate("Templates", "Wish you were here!"), 14, Accent1, 0, true), P(lorem1().left(160) + QStringLiteral("…"), "Body Text"),
                                                                    C(QStringLiteral("{biz:name} · {biz:web}"), 7.5, Accent4, 0)});
     if (wantsMailing(o)) {
         b.shape("rect", QRectF(ps.width() - 78, 18, 60, 70), Fill::none(), Stroke::line(ColorRef::scheme(Accent4), 0.75))->stroke.dash = Stroke::DashLine;
-        b.text(QRectF(ps.width() - 78, 34, 60, 40), {C(QStringLiteral("Place\nstamp\nhere"), 7, Accent4, 1)}, VAlign::Middle);
+        b.text(QRectF(ps.width() - 78, 34, 60, 40), {C(QCoreApplication::translate("Templates", "Place\nstamp\nhere"), 7, Accent4, 1)}, VAlign::Middle);
         b.text(QRectF(ps.width() / 2 + 18, ps.height() / 2, ps.width() / 2 - 36, 90), {C(QStringLiteral("{mergeblock:address}"), 10, Main, 0)});
     }
     return d;
@@ -764,10 +782,10 @@ std::unique_ptr<Document> sign(const TemplateOptions &o, int variant)
     const QSizeF ps = d->pageSize();
     b.shape("rect", QRectF(0, 0, ps.width(), ps.height()), Fill::solid(ColorRef::scheme(variant == 0 ? Accent3 : Accent1)));
     b.shape("roundRect", QRectF(36, 36, ps.width() - 72, ps.height() - 72), Fill::solid(ColorRef::rgb(Qt::white)));
-    b.textart(QRectF(80, 90, ps.width() - 160, 220), variant == 0 ? QStringLiteral("CLOSED") : QStringLiteral("WELCOME"), "fill-main", d->fonts.heading);
+    b.textart(QRectF(80, 90, ps.width() - 160, 220), variant == 0 ? QCoreApplication::translate("Templates", "CLOSED") : QCoreApplication::translate("Templates", "WELCOME"), "fill-main", d->fonts.heading);
     b.text(QRectF(80, 330, ps.width() - 160, 120),
-           {C(variant == 0 ? QStringLiteral("for the holiday") : QStringLiteral("Come on in — we're open!"), 34, variant == 0 ? Accent3 : Accent1, 1, true),
-            C(variant == 0 ? QStringLiteral("We reopen Monday at 9 AM.") : QStringLiteral("Monday – Saturday · 9 AM – 6 PM"), 20, Main, 1)});
+           {C(variant == 0 ? QCoreApplication::translate("Templates", "for the holiday") : QCoreApplication::translate("Templates", "Come on in — we're open!"), 34, variant == 0 ? Accent3 : Accent1, 1, true),
+            C(variant == 0 ? QCoreApplication::translate("Templates", "We reopen Monday at 9 AM.") : QCoreApplication::translate("Templates", "Monday – Saturday · 9 AM – 6 PM"), 20, Main, 1)});
     b.text(QRectF(80, ps.height() - 110, ps.width() - 160, 40), {C(QStringLiteral("{biz:name}  ·  {biz:phone}"), 14, Accent4, 1)}, VAlign::Bottom);
     return d;
 }
@@ -779,7 +797,7 @@ std::unique_ptr<Document> banner(const TemplateOptions &o)
     B b(*d);
     const QSizeF ps = d->pageSize();
     b.picture(QRectF(0, 0, ps.width(), ps.height()), "waves", 13);
-    b.textart(QRectF(200, 300, ps.width() - 400, 900), QStringLiteral("WELCOME HOME"), "fill-main", d->fonts.heading)->fill = Fill::solid(ColorRef::scheme(Accent1));
+    b.textart(QRectF(200, 300, ps.width() - 400, 900), QCoreApplication::translate("Templates", "WELCOME HOME"), "fill-main", d->fonts.heading)->fill = Fill::solid(ColorRef::scheme(Accent1));
     b.text(QRectF(200, 1250, ps.width() - 400, 300), {C(QStringLiteral("{biz:name}"), 120, Main, 1, true, 700)});
     return d;
 }
@@ -793,15 +811,15 @@ std::unique_ptr<Document> menu(const TemplateOptions &o)
     b.shape("rect", QRectF(18, 18, ps.width() - 36, ps.height() - 36), Fill::none(), Stroke::line(ColorRef::scheme(Accent2), 1.5));
     b.text(QRectF(c.left(), c.top() + 20, c.width(), 110), {C(QStringLiteral("{biz:name}"), 40, Accent1, 1, true), C(QStringLiteral("{biz:tagline}"), 13, Accent2, 1)});
     struct Sec { const char *title; QVector<QPair<const char *, const char *>> items; };
-    const QVector<Sec> secs = {{"Starters", {{"Tomato basil soup", "6"}, {"Garden salad with lemon vinaigrette", "8"}, {"Roasted squash and burrata", "11"}}},
-                               {"Mains", {{"Herb roast chicken, root vegetables", "19"}, {"Mushroom risotto, aged parmesan", "17"}, {"Seared trout, brown butter, capers", "22"}, {"Braised short rib, polenta", "24"}}},
-                               {"Desserts", {{"Apple crisp with cream", "8"}, {"Dark chocolate tart", "9"}, {"Seasonal sorbet", "6"}}}};
+    const QVector<Sec> secs = {{QT_TRANSLATE_NOOP("Templates", "Starters"), {{QT_TRANSLATE_NOOP("Templates", "Tomato basil soup"), "6"}, {QT_TRANSLATE_NOOP("Templates", "Garden salad with lemon vinaigrette"), "8"}, {QT_TRANSLATE_NOOP("Templates", "Roasted squash and burrata"), "11"}}},
+                               {QT_TRANSLATE_NOOP("Templates", "Mains"), {{QT_TRANSLATE_NOOP("Templates", "Herb roast chicken, root vegetables"), "19"}, {QT_TRANSLATE_NOOP("Templates", "Mushroom risotto, aged parmesan"), "17"}, {QT_TRANSLATE_NOOP("Templates", "Seared trout, brown butter, capers"), "22"}, {QT_TRANSLATE_NOOP("Templates", "Braised short rib, polenta"), "24"}}},
+                               {QT_TRANSLATE_NOOP("Templates", "Desserts"), {{QT_TRANSLATE_NOOP("Templates", "Apple crisp with cream"), "8"}, {QT_TRANSLATE_NOOP("Templates", "Dark chocolate tart"), "9"}, {QT_TRANSLATE_NOOP("Templates", "Seasonal sorbet"), "6"}}}};
     double y = c.top() + 150;
     for (const Sec &s : secs) {
-        QVector<Para> paras{C(QString::fromLatin1(s.title), 20, Accent1, 1, true)};
+        QVector<Para> paras{C(QCoreApplication::translate("Templates", s.title), 20, Accent1, 1, true)};
         for (const auto &it : s.items) {
             Para p;
-            p.text = QString::fromUtf8(it.first) + "\t" + QString::fromLatin1(it.second);
+            p.text = QCoreApplication::translate("Templates", it.first) + "\t" + QString::fromLatin1(it.second);
             p.style = "Body Text";
             paras << p;
         }
@@ -827,9 +845,9 @@ std::unique_ptr<Document> giftCertificate(const TemplateOptions &o)
     const QSizeF ps = d->pageSize();
     b.shape("rect", QRectF(0, 0, ps.width(), ps.height()), Fill::gradient(ColorRef::scheme(Accent1), ColorRef::scheme(Accent2), 0));
     b.shape("rect", QRectF(12, 12, ps.width() - 24, ps.height() - 24), Fill::solid(ColorRef::rgb(Qt::white)));
-    b.text(QRectF(30, 22, ps.width() * 0.6, 60), {C(QStringLiteral("Gift Certificate"), 28, Accent1, 0, true)});
-    b.text(QRectF(30, 84, ps.width() * 0.6, 100), {C(QStringLiteral("To: ______________________"), 11, Main, 0), C(QStringLiteral("From: ____________________"), 11, Main, 0),
-                                                    C(QStringLiteral("Expires: _________________"), 11, Main, 0)});
+    b.text(QRectF(30, 22, ps.width() * 0.6, 60), {C(QCoreApplication::translate("Templates", "Gift Certificate"), 28, Accent1, 0, true)});
+    b.text(QRectF(30, 84, ps.width() * 0.6, 100), {C(QCoreApplication::translate("Templates", "To: ______________________"), 11, Main, 0), C(QCoreApplication::translate("Templates", "From: ____________________"), 11, Main, 0),
+                                                    C(QCoreApplication::translate("Templates", "Expires: _________________"), 11, Main, 0)});
     b.shapeText("ellipse", QRectF(ps.width() - 170, 40, 130, 130), Fill::solid(ColorRef::scheme(Accent2)), {W(QStringLiteral("$50"), 34, 1, true, 700)});
     b.text(QRectF(30, ps.height() - 40, ps.width() - 60, 22), {C(QStringLiteral("{biz:name} · {biz:phone} · {biz:web}"), 8, Accent4, 0)});
     return d;
@@ -842,10 +860,10 @@ std::unique_ptr<Document> invitation(const TemplateOptions &o)
     const QSizeF ps = d->pageSize();
     b.picture(QRectF(0, 0, ps.width(), ps.height() * 0.42), "bokeh", 21);
     b.shape("wave", QRectF(-6, ps.height() * 0.36, ps.width() + 12, 40), Fill::solid(ColorRef::rgb(Qt::white)));
-    b.text(QRectF(28, ps.height() * 0.44, ps.width() - 56, 70), {C(QStringLiteral("You're Invited"), 34, Accent1, 1, true)});
+    b.text(QRectF(28, ps.height() * 0.44, ps.width() - 56, 70), {C(QCoreApplication::translate("Templates", "You're Invited"), 34, Accent1, 1, true)});
     b.text(QRectF(36, ps.height() * 0.56, ps.width() - 72, 160),
-           {C(QStringLiteral("to an evening of music and dessert"), 12, Main, 1), C(QStringLiteral("Saturday, the twentieth of June"), 13, Accent1, 1, false, 700),
-            C(QStringLiteral("seven o'clock in the evening"), 12, Main, 1), C(QStringLiteral("{biz:address:oneline}"), 11, Main, 1), C(QStringLiteral("Kindly reply to {biz:email}"), 9, Accent4, 1)});
+           {C(QCoreApplication::translate("Templates", "to an evening of music and dessert"), 12, Main, 1), C(QCoreApplication::translate("Templates", "Saturday, the twentieth of June"), 13, Accent1, 1, false, 700),
+            C(QCoreApplication::translate("Templates", "seven o'clock in the evening"), 12, Main, 1), C(QStringLiteral("{biz:address:oneline}"), 11, Main, 1), C(QCoreApplication::translate("Templates", "Kindly reply to {biz:email}"), 9, Accent4, 1)});
     return d;
 }
 
@@ -861,8 +879,8 @@ std::unique_ptr<Document> letterhead(const TemplateOptions &o)
         TextItem::ShrinkOnOverflow;
     b.text(QRectF(c.left() + c.width() * 0.6, 36, c.width() * 0.4, 70), {C(QStringLiteral("{biz:address}"), 8.5, Main, 2), C(QStringLiteral("{biz:phone}"), 8.5, Main, 2), C(QStringLiteral("{biz:email}"), 8.5, Main, 2)});
     b.line(QPointF(c.left(), 112), QPointF(c.right(), 112), ColorRef::scheme(Accent1), 1.5);
-    b.text(QRectF(c.left(), 140, c.width(), c.bottom() - 200), {P(QStringLiteral("{date:MMMM d, yyyy}"), "Normal"), P(QString()), P(QStringLiteral("Dear neighbor,"), "Normal"), P(kLorem2, "Body Text"), P(kLorem3, "Body Text"),
-                                                                 P(QStringLiteral("Sincerely,"), "Normal"), P(QString()), P(QStringLiteral("{biz:person}\n{biz:title}"), "Normal")});
+    b.text(QRectF(c.left(), 140, c.width(), c.bottom() - 200), {P(QStringLiteral("{date:MMMM d, yyyy}"), "Normal"), P(QString()), P(QCoreApplication::translate("Templates", "Dear neighbor,"), "Normal"), P(lorem2(), "Body Text"), P(lorem3(), "Body Text"),
+                                                                 P(QCoreApplication::translate("Templates", "Sincerely,"), "Normal"), P(QString()), P(QCoreApplication::translate("Templates", "{biz:person}\n{biz:title}"), "Normal")});
     b.text(QRectF(c.left(), ps.height() - 50, c.width(), 18), {C(QStringLiteral("{biz:web}"), 8.5, Accent1, 1)});
     return d;
 }
@@ -876,13 +894,13 @@ std::unique_ptr<Document> resume(const TemplateOptions &o)
     b.line(QPointF(c.left(), c.top() + 76), QPointF(c.right(), c.top() + 76), ColorRef::scheme(Accent1), 2);
     double y = c.top() + 92;
     const QVector<QPair<QString, QVector<Para>>> secs = {
-        {"Objective", {P(QStringLiteral("Program director with ten years of experience building community arts programs and the volunteer teams that run them."), "Body Text")}},
-        {"Experience", {C(QStringLiteral("Program Director, {biz:name}\t2019 – present"), 11, Main, 0, false, 700),
-                        P(QStringLiteral("Grew the summer concert series from 8 to 13 weeks; recruited and trained 40 volunteers; secured three foundation grants."), "Body Text"),
-                        C(QStringLiteral("Outreach Coordinator, Kalamazoo Arts Council\t2014 – 2019"), 11, Main, 0, false, 700),
-                        P(QStringLiteral("Ran school partnerships reaching 2,000 students a year."), "Body Text")}},
-        {"Education", {C(QStringLiteral("B.A., Music Education, Western Michigan University\t2013"), 11, Main, 0, false, 700)}},
-        {"Skills", {P(QStringLiteral("Grant writing · Event production · Volunteer management · Budgeting · Desktop publishing"), "Body Text")}},
+        {QCoreApplication::translate("Templates", "Objective"), {P(QCoreApplication::translate("Templates", "Program director with ten years of experience building community arts programs and the volunteer teams that run them."), "Body Text")}},
+        {QCoreApplication::translate("Templates", "Experience"), {C(QCoreApplication::translate("Templates", "Program Director, {biz:name}\t2019 – present"), 11, Main, 0, false, 700),
+                        P(QCoreApplication::translate("Templates", "Grew the summer concert series from 8 to 13 weeks; recruited and trained 40 volunteers; secured three foundation grants."), "Body Text"),
+                        C(QCoreApplication::translate("Templates", "Outreach Coordinator, Kalamazoo Arts Council\t2014 – 2019"), 11, Main, 0, false, 700),
+                        P(QCoreApplication::translate("Templates", "Ran school partnerships reaching 2,000 students a year."), "Body Text")}},
+        {QCoreApplication::translate("Templates", "Education"), {C(QCoreApplication::translate("Templates", "B.A., Music Education, Western Michigan University\t2013"), 11, Main, 0, false, 700)}},
+        {QCoreApplication::translate("Templates", "Skills"), {P(QCoreApplication::translate("Templates", "Grant writing · Event production · Volunteer management · Budgeting · Desktop publishing"), "Body Text")}},
     };
     for (const auto &s : secs) {
         b.text(QRectF(c.left(), y, 120, 24), {C(s.first, 12, Accent1, 0, true, 700)});
@@ -930,14 +948,14 @@ std::unique_ptr<Document> program(const TemplateOptions &o)
     const QSizeF ps = d->pageSize();
     const QRectF c = content(*d);
     b.shape("rect", QRectF(0, 0, ps.width(), ps.height()), Fill::solid(ColorRef::scheme(Accent1)));
-    b.text(QRectF(c.left(), 120, c.width(), 220), {W(QStringLiteral("Spring Recital"), 32, 1, true), W(QStringLiteral("Students of {biz:name}"), 13, 1), W(QStringLiteral("Sunday, May 17 · 3:00 PM"), 12, 1)});
+    b.text(QRectF(c.left(), 120, c.width(), 220), {W(QCoreApplication::translate("Templates", "Spring Recital"), 32, 1, true), W(QCoreApplication::translate("Templates", "Students of {biz:name}"), 13, 1), W(QCoreApplication::translate("Templates", "Sunday, May 17 · 3:00 PM"), 12, 1)});
     b.onPage(1);
-    b.text(c, {H(QStringLiteral("Welcome"), 20, 0, Accent1), P(kLorem2, "Body Text"), P(kLorem3, "Body Text")});
+    b.text(c, {H(QCoreApplication::translate("Templates", "Welcome"), 20, 0, Accent1), P(lorem2(), "Body Text"), P(lorem3(), "Body Text")});
     b.onPage(2);
-    auto t = b.text(c, {H(QStringLiteral("Program"), 20, 0, Accent1),
-                        P(QStringLiteral("Minuet in G\tJ. S. Bach\nFür Elise\tL. van Beethoven\nThe Entertainer\tS. Joplin\nClair de Lune\tC. Debussy\nPrelude in C\tJ. S. Bach"), "Body Text"),
-                        P(QStringLiteral("Intermission"), "Caption"),
-                        P(QStringLiteral("Gymnopédie No. 1\tE. Satie\nRondo alla Turca\tW. A. Mozart\nMaple Leaf Rag\tS. Joplin"), "Body Text")});
+    auto t = b.text(c, {H(QCoreApplication::translate("Templates", "Program"), 20, 0, Accent1),
+                        P(QCoreApplication::translate("Templates", "Minuet in G\tJ. S. Bach\nFür Elise\tL. van Beethoven\nThe Entertainer\tS. Joplin\nClair de Lune\tC. Debussy\nPrelude in C\tJ. S. Bach"), "Body Text"),
+                        P(QCoreApplication::translate("Templates", "Intermission"), "Caption"),
+                        P(QCoreApplication::translate("Templates", "Gymnopédie No. 1\tE. Satie\nRondo alla Turca\tW. A. Mozart\nMaple Leaf Rag\tS. Joplin"), "Body Text")});
     QTextCursor cur(d->storyDoc(t->storyId));
     cur.select(QTextCursor::Document);
     QTextBlockFormat bf;
@@ -945,7 +963,7 @@ std::unique_ptr<Document> program(const TemplateOptions &o)
     bf.setProperty(tp::TabLeaders, QStringLiteral("."));
     cur.mergeBlockFormat(bf);
     b.onPage(3);
-    b.text(QRectF(c.left(), c.bottom() - 140, c.width(), 140), {C(QStringLiteral("Thank you for coming"), 16, Accent1, 1, true), C(QStringLiteral("{biz:name}\n{biz:address}\n{biz:web}"), 10, Main, 1)}, VAlign::Bottom);
+    b.text(QRectF(c.left(), c.bottom() - 140, c.width(), 140), {C(QCoreApplication::translate("Templates", "Thank you for coming"), 16, Accent1, 1, true), C(QCoreApplication::translate("Templates", "{biz:name}\n{biz:address}\n{biz:web}"), 10, Main, 1)}, VAlign::Bottom);
     return d;
 }
 
@@ -985,8 +1003,8 @@ std::unique_ptr<Document> businessForm(const TemplateOptions &o, int variant)
     const double lx = b.logo(QRectF(c.left(), c.top(), 64, 64), o) ? 74 : 0;
     b.text(QRectF(c.left() + lx, c.top(), c.width() * 0.5 - lx, 84), {C(QStringLiteral("{biz:name}"), 18, Accent1, 0, true, 700), C(QStringLiteral("{biz:address}"), 9, Main, 0)});
     b.text(QRectF(c.left() + c.width() * 0.5, c.top(), c.width() * 0.5, 84),
-           {C(variant == 0 ? QStringLiteral("INVOICE") : QStringLiteral("PURCHASE ORDER"), 22, Accent1, 2, true, 700), C(QStringLiteral("No. 1001  ·  {date:M/d/yyyy}"), 9, Main, 2)});
-    b.text(QRectF(c.left(), c.top() + 90, c.width() / 2, 80), {C(variant == 0 ? QStringLiteral("Bill to:") : QStringLiteral("Vendor:"), 10, Accent4, 0, false, 700), C(QStringLiteral("Customer name\nStreet address\nCity, ST 00000"), 10, Main, 0)});
+           {C(variant == 0 ? QCoreApplication::translate("Templates", "INVOICE") : QCoreApplication::translate("Templates", "PURCHASE ORDER"), 22, Accent1, 2, true, 700), C(QCoreApplication::translate("Templates", "No. 1001  ·  {date:M/d/yyyy}"), 9, Main, 2)});
+    b.text(QRectF(c.left(), c.top() + 90, c.width() / 2, 80), {C(variant == 0 ? QCoreApplication::translate("Templates", "Bill to:") : QCoreApplication::translate("Templates", "Vendor:"), 10, Accent4, 0, false, 700), C(QCoreApplication::translate("Templates", "Customer name\nStreet address\nCity, ST 00000"), 10, Main, 0)});
     auto tbl = std::make_shared<TableItem>();
     tbl->rows = 10;
     tbl->cols = 4;
@@ -994,7 +1012,8 @@ std::unique_ptr<Document> businessForm(const TemplateOptions &o, int variant)
     tbl->colW = {c.width() * 0.12, c.width() * 0.52, c.width() * 0.18, c.width() * 0.18};
     tbl->rowH = QVector<double>(10, 26);
     tbl->cells.resize(40);
-    const QStringList head{"Qty", "Description", "Unit price", "Amount"};
+    const QStringList head{QCoreApplication::translate("Templates", "Qty"), QCoreApplication::translate("Templates", "Description"),
+                           QCoreApplication::translate("Templates", "Unit price"), QCoreApplication::translate("Templates", "Amount")};
     for (int r = 0; r < 10; ++r)
         for (int col = 0; col < 4; ++col) tbl->cell(r, col).storyId = d->createStory(r == 0 ? head[col] : QString());
     tbl->syncRect();
@@ -1008,8 +1027,8 @@ std::unique_ptr<Document> businessForm(const TemplateOptions &o, int variant)
         cur.mergeCharFormat(f);
     });
     b.pg->items.push_back(tbl);
-    b.text(QRectF(c.left() + c.width() * 0.6, c.top() + 510, c.width() * 0.4, 80), {C(QStringLiteral("Subtotal\nTax\nTotal"), 11, Main, 2, false, 700)});
-    b.text(QRectF(c.left(), c.bottom() - 60, c.width(), 50), {C(QStringLiteral("Thank you for your business!  {biz:phone} · {biz:email}"), 10, Accent4, 1)}, VAlign::Bottom);
+    b.text(QRectF(c.left() + c.width() * 0.6, c.top() + 510, c.width() * 0.4, 80), {C(QCoreApplication::translate("Templates", "Subtotal\nTax\nTotal"), 11, Main, 2, false, 700)});
+    b.text(QRectF(c.left(), c.bottom() - 60, c.width(), 50), {C(QCoreApplication::translate("Templates", "Thank you for your business!  {biz:phone} · {biz:email}"), 10, Accent4, 1)}, VAlign::Bottom);
     return d;
 }
 
@@ -1020,7 +1039,7 @@ std::unique_ptr<Document> catalog(const TemplateOptions &o)
     const QSizeF ps = d->pageSize();
     const QRectF c = content(*d);
     b.picture(QRectF(0, 0, ps.width(), ps.height() * 0.65), "leaves", 31);
-    b.text(QRectF(c.left(), ps.height() * 0.7, c.width() - (wantsLogo(o) ? 120 : 0), 140), {C(QStringLiteral("{biz:name}"), 36, Accent1, 0, true), C(QStringLiteral("Fall Catalog"), 18, Accent2, 0, true)});
+    b.text(QRectF(c.left(), ps.height() * 0.7, c.width() - (wantsLogo(o) ? 120 : 0), 140), {C(QStringLiteral("{biz:name}"), 36, Accent1, 0, true), C(QCoreApplication::translate("Templates", "Fall Catalog"), 18, Accent2, 0, true)});
     b.logo(QRectF(c.right() - 100, ps.height() * 0.7, 100, 100), o);
     for (int pgi = 1; pgi < 4; ++pgi) {
         b.onPage(pgi);
@@ -1028,8 +1047,8 @@ std::unique_ptr<Document> catalog(const TemplateOptions &o)
             const double x = c.left() + (k % 2) * (c.width() / 2 + 8), y = c.top() + (k / 2) * (c.height() / 2 + 8);
             const double w = c.width() / 2 - 8, h = c.height() / 2 - 8;
             b.picture(QRectF(x, y, w, h * 0.62), k % 2 ? "geo" : "bokeh", pgi * 10 + k);
-            b.text(QRectF(x, y + h * 0.65, w, h * 0.35), {C(QStringLiteral("Product name"), 13, Accent1, 0, true, 700), P(QStringLiteral("Short description of the product, its materials and sizes."), "Body Text"),
-                                                          C(QStringLiteral("$00.00  ·  Item #%1%2").arg(pgi).arg(k + 1), 11, Main, 0, false, 700)});
+            b.text(QRectF(x, y + h * 0.65, w, h * 0.35), {C(QCoreApplication::translate("Templates", "Product name"), 13, Accent1, 0, true, 700), P(QCoreApplication::translate("Templates", "Short description of the product, its materials and sizes."), "Body Text"),
+                                                          C(QCoreApplication::translate("Templates", "$00.00  ·  Item #%1%2").arg(pgi).arg(k + 1), 11, Main, 0, false, 700)});
         }
     }
     return d;
@@ -1043,12 +1062,12 @@ std::unique_ptr<Document> emailNewsletter(const TemplateOptions &o)
     const QSizeF ps = d->pageSize();
     const QRectF c = content(*d);
     b.shape("rect", QRectF(0, 0, ps.width(), 120), Fill::solid(ColorRef::scheme(Accent1)));
-    b.text(QRectF(c.left(), 30, c.width() - (wantsLogo(o) ? 90 : 0), 70), {W(QStringLiteral("{biz:name}"), 28, 0, true, 700), W(QStringLiteral("News for friends and neighbors"), 12, 0)});
+    b.text(QRectF(c.left(), 30, c.width() - (wantsLogo(o) ? 90 : 0), 70), {W(QStringLiteral("{biz:name}"), 28, 0, true, 700), W(QCoreApplication::translate("Templates", "News for friends and neighbors"), 12, 0)});
     b.logo(QRectF(c.right() - 76, 22, 76, 76), o);
     b.picture(QRectF(c.left(), 140, c.width(), 240), "hills", 41);
-    b.text(QRectF(c.left(), 396, c.width(), 260), {H(QStringLiteral("This month on the riverfront"), 22, 0, Accent1), P(kLorem1, "Body Text"), P(kLorem2, "Body Text")});
-    b.shapeText("roundRect", QRectF(ps.width() / 2 - 110, 670, 220, 44), Fill::solid(ColorRef::scheme(Accent3)), {W(QStringLiteral("Get tickets"), 14, 1, true, 700)});
-    b.text(QRectF(c.left(), 740, c.width(), 300), {H(QStringLiteral("Volunteer with us"), 18, 0, Accent1), P(kLorem3, "Body Text")});
+    b.text(QRectF(c.left(), 396, c.width(), 260), {H(QCoreApplication::translate("Templates", "This month on the riverfront"), 22, 0, Accent1), P(lorem1(), "Body Text"), P(lorem2(), "Body Text")});
+    b.shapeText("roundRect", QRectF(ps.width() / 2 - 110, 670, 220, 44), Fill::solid(ColorRef::scheme(Accent3)), {W(QCoreApplication::translate("Templates", "Get tickets"), 14, 1, true, 700)});
+    b.text(QRectF(c.left(), 740, c.width(), 300), {H(QCoreApplication::translate("Templates", "Volunteer with us"), 18, 0, Accent1), P(lorem3(), "Body Text")});
     b.text(QRectF(c.left(), ps.height() - 90, c.width(), 50), {C(QStringLiteral("{biz:address:oneline} · {biz:web}"), 9, Accent4, 1)}, VAlign::Bottom);
     return d;
 }
@@ -1059,7 +1078,7 @@ std::unique_ptr<Document> complimentsCard(const TemplateOptions &o)
     B b(*d);
     const QSizeF ps = d->pageSize();
     b.shape("rect", QRectF(0, 0, ps.width(), 24), Fill::solid(ColorRef::scheme(Accent1)));
-    b.text(QRectF(36, 60, ps.width() - 72, 80), {C(QStringLiteral("With Compliments"), 30, Accent1, 1, true)});
+    b.text(QRectF(36, 60, ps.width() - 72, 80), {C(QCoreApplication::translate("Templates", "With Compliments"), 30, Accent1, 1, true)});
     b.text(QRectF(36, ps.height() - 90, ps.width() - 72, 60), {C(QStringLiteral("{biz:name}"), 12, Main, 1, false, 700), C(QStringLiteral("{biz:address:oneline}  ·  {biz:phone}"), 9, Main, 1)}, VAlign::Bottom);
     return d;
 }
@@ -1079,7 +1098,7 @@ std::unique_ptr<Document> paperAirplane(const TemplateOptions &o)
     mk(QPointF(ps.width() / 2, 0), QPointF(ps.width() * 0.12, ps.height()));
     mk(QPointF(ps.width() / 2, 0), QPointF(ps.width() * 0.88, ps.height()));
     b.shapeText("roundRect", QRectF(ps.width() / 2 - 150, ps.height() - 120, 300, 70), Fill::solid(ColorRef::rgb(Qt::white)),
-                {C(QStringLiteral("Fold along the dashed lines, center line first."), 11, Main, 1)});
+                {C(QCoreApplication::translate("Templates", "Fold along the dashed lines, center line first."), 11, Main, 1)});
     return d;
 }
 
@@ -1105,12 +1124,12 @@ std::unique_ptr<Document> certificateAppreciation(const TemplateOptions &o)
     inner->stroke.compound = Stroke::ThinThick;
     for (int i = 0; i < 4; ++i)
         b.shape("diamond", QRectF(i % 2 ? ps.width() - 52 : 28, i / 2 ? ps.height() - 52 : 28, 24, 24), Fill::solid(ColorRef::scheme(Accent3)));
-    b.text(QRectF(72, 110, ps.width() - 144, 150), {C(QStringLiteral("Certificate"), 54, Accent1, 1, true), C(QStringLiteral("OF APPRECIATION"), 16, Accent3, 1, false, 700)});
-    b.text(QRectF(72, 300, ps.width() - 144, 30), {C(QStringLiteral("With gratitude, this certificate is presented to"), 13, Main, 1)});
-    b.text(QRectF(90, 340, ps.width() - 180, 70), {C(QStringLiteral("Recipient Name"), 40, Accent1, 1, true)})->autofit = TextItem::ShrinkOnOverflow;
+    b.text(QRectF(72, 110, ps.width() - 144, 150), {C(QCoreApplication::translate("Templates", "Certificate"), 54, Accent1, 1, true), C(QCoreApplication::translate("Templates", "OF APPRECIATION"), 16, Accent3, 1, false, 700)});
+    b.text(QRectF(72, 300, ps.width() - 144, 30), {C(QCoreApplication::translate("Templates", "With gratitude, this certificate is presented to"), 13, Main, 1)});
+    b.text(QRectF(90, 340, ps.width() - 180, 70), {C(QCoreApplication::translate("Templates", "Recipient Name"), 40, Accent1, 1, true)})->autofit = TextItem::ShrinkOnOverflow;
     b.line(QPointF(120, 418), QPointF(ps.width() - 120, 418), ColorRef::scheme(Accent3), 1);
-    b.text(QRectF(100, 432, ps.width() - 200, 90), {C(QStringLiteral("for generously giving time, talent and heart to our community this year."), 13, Main, 1)});
-    b.shapeText("ribbon2", QRectF(ps.width() / 2 - 120, 540, 240, 70), Fill::solid(ColorRef::scheme(Accent1)), {W(QStringLiteral("THANK YOU"), 15, 1, false, 700)});
+    b.text(QRectF(100, 432, ps.width() - 200, 90), {C(QCoreApplication::translate("Templates", "for generously giving time, talent and heart to our community this year."), 13, Main, 1)});
+    b.shapeText("ribbon2", QRectF(ps.width() / 2 - 120, 540, 240, 70), Fill::solid(ColorRef::scheme(Accent1)), {W(QCoreApplication::translate("Templates", "THANK YOU"), 15, 1, false, 700)});
     for (int i = 0; i < 2; ++i) {
         const double x = i == 0 ? 90 : ps.width() - 290;
         b.line(QPointF(x, ps.height() - 170), QPointF(x + 200, ps.height() - 170), ColorRef::scheme(Main), 0.75);
@@ -1127,18 +1146,18 @@ std::unique_ptr<Document> postcardEvent(const TemplateOptions &o)
     B b(*d);
     const QSizeF ps = d->pageSize();
     b.picture(QRectF(0, 0, ps.width(), ps.height()), "bokeh", 17);
-    b.text(QRectF(24, 30, ps.width() * 0.62, 180), {W(QStringLiteral("SAVE"), 54, 0, true), W(QStringLiteral("THE DATE"), 54, 0, true)});
-    b.shapeText("ellipse", QRectF(ps.width() - 150, 40, 120, 120), Fill::solid(ColorRef::scheme(Accent3)), {C(QStringLiteral("JUNE"), 14, Main, 1, true), C(QStringLiteral("20"), 40, Main, 1, true)});
-    b.text(QRectF(24, ps.height() - 70, ps.width() - 48, 50), {W(QStringLiteral("{biz:name} · Annual Gala · {biz:address:oneline}"), 10, 0)}, VAlign::Bottom);
+    b.text(QRectF(24, 30, ps.width() * 0.62, 180), {W(QCoreApplication::translate("Templates", "SAVE"), 54, 0, true), W(QCoreApplication::translate("Templates", "THE DATE"), 54, 0, true)});
+    b.shapeText("ellipse", QRectF(ps.width() - 150, 40, 120, 120), Fill::solid(ColorRef::scheme(Accent3)), {C(QCoreApplication::translate("Templates", "JUNE"), 14, Main, 1, true), C(QStringLiteral("20"), 40, Main, 1, true)});
+    b.text(QRectF(24, ps.height() - 70, ps.width() - 48, 50), {W(QCoreApplication::translate("Templates", "{biz:name} · Annual Gala · {biz:address:oneline}"), 10, 0)}, VAlign::Bottom);
     b.onPage(1);
     b.shape("rect", QRectF(0, 0, 10, ps.height()), Fill::solid(ColorRef::scheme(Accent1)));
     b.text(QRectF(26, 20, ps.width() / 2 - 40, ps.height() - 40),
-           {C(QStringLiteral("Annual Gala"), 18, Accent1, 0, true), P(QStringLiteral("Dinner, music and a silent auction to support our programs. Formal invitation to follow."), "Body Text"),
+           {C(QCoreApplication::translate("Templates", "Annual Gala"), 18, Accent1, 0, true), P(QCoreApplication::translate("Templates", "Dinner, music and a silent auction to support our programs. Formal invitation to follow."), "Body Text"),
             C(QStringLiteral("{biz:web}"), 9, Accent4, 0)});
     b.line(QPointF(ps.width() / 2, 24), QPointF(ps.width() / 2, ps.height() - 24), ColorRef::scheme(Accent4), 0.75);
     if (wantsMailing(o)) {
         b.shape("rect", QRectF(ps.width() - 78, 18, 60, 70), Fill::none(), Stroke::line(ColorRef::scheme(Accent4), 0.75))->stroke.dash = Stroke::DashLine;
-        b.text(QRectF(ps.width() - 78, 34, 60, 40), {C(QStringLiteral("Place\nstamp\nhere"), 7, Accent4, 1)}, VAlign::Middle);
+        b.text(QRectF(ps.width() - 78, 34, 60, 40), {C(QCoreApplication::translate("Templates", "Place\nstamp\nhere"), 7, Accent4, 1)}, VAlign::Middle);
         b.text(QRectF(ps.width() / 2 + 18, ps.height() / 2, ps.width() / 2 - 36, 90), {C(QStringLiteral("{mergeblock:address}"), 10, Main, 0)});
     }
     return d;
@@ -1153,8 +1172,8 @@ std::unique_ptr<Document> bannerGrandOpening(const TemplateOptions &o)
     b.shape("rect", QRectF(0, 0, ps.width(), ps.height()), Fill::solid(ColorRef::scheme(Accent5)));
     b.picture(QRectF(0, 0, ps.width(), 260), "stripes", 7);
     b.picture(QRectF(0, ps.height() - 260, ps.width(), 260), "stripes", 8);
-    b.textart(QRectF(260, 360, ps.width() - 520, 760), QStringLiteral("GRAND OPENING"), "fill-main", d->fonts.heading)->fill = Fill::solid(ColorRef::scheme(Accent1));
-    b.text(QRectF(260, 1140, ps.width() - 520, 240), {C(QStringLiteral("{biz:name}  ·  Saturday 10 AM"), 110, Main, 1, true, 700)});
+    b.textart(QRectF(260, 360, ps.width() - 520, 760), QCoreApplication::translate("Templates", "GRAND OPENING"), "fill-main", d->fonts.heading)->fill = Fill::solid(ColorRef::scheme(Accent1));
+    b.text(QRectF(260, 1140, ps.width() - 520, 240), {C(QCoreApplication::translate("Templates", "{biz:name}  ·  Saturday 10 AM"), 110, Main, 1, true, 700)});
     return d;
 }
 
@@ -1167,17 +1186,17 @@ std::unique_ptr<Document> menuCafe(const TemplateOptions &o)
     b.shape("rect", QRectF(0, 0, ps.width(), ps.height()), Fill::solid(ColorRef::scheme(Main)));
     auto frame = b.shape("roundRect", QRectF(20, 20, ps.width() - 40, ps.height() - 40), Fill::none(), Stroke::line(ColorRef::rgb(Qt::white), 2));
     frame->stroke.dash = Stroke::RoundDot;
-    b.text(QRectF(c.left(), c.top() + 10, c.width(), 90), {W(QStringLiteral("{biz:name}"), 40, 1, true), W(QStringLiteral("COFFEE · TEA · PASTRY"), 12, 1)});
+    b.text(QRectF(c.left(), c.top() + 10, c.width(), 90), {W(QStringLiteral("{biz:name}"), 40, 1, true), W(QCoreApplication::translate("Templates", "COFFEE · TEA · PASTRY"), 12, 1)});
     struct Col { const char *title; QVector<QPair<const char *, const char *>> items; };
-    const QVector<Col> cols = {{"Coffee", {{"Drip coffee", "2.50"}, {"Espresso", "3.00"}, {"Cappuccino", "4.25"}, {"Latte", "4.50"}, {"Mocha", "4.75"}, {"Cold brew", "4.00"}}},
-                               {"Tea", {{"Black or green", "2.75"}, {"Chai latte", "4.50"}, {"Herbal", "2.75"}, {"Iced tea", "3.00"}}},
-                               {"Bakery", {{"Butter croissant", "3.25"}, {"Blueberry muffin", "3.00"}, {"Cinnamon roll", "3.75"}, {"Banana bread", "3.25"}}},
-                               {"Lunch", {{"Soup of the day", "6.00"}, {"Grilled cheese", "7.50"}, {"Turkey and swiss", "9.00"}, {"Garden salad", "8.00"}}}};
+    const QVector<Col> cols = {{QT_TRANSLATE_NOOP("Templates", "Coffee"), {{QT_TRANSLATE_NOOP("Templates", "Drip coffee"), "2.50"}, {QT_TRANSLATE_NOOP("Templates", "Espresso"), "3.00"}, {QT_TRANSLATE_NOOP("Templates", "Cappuccino"), "4.25"}, {QT_TRANSLATE_NOOP("Templates", "Latte"), "4.50"}, {QT_TRANSLATE_NOOP("Templates", "Mocha"), "4.75"}, {QT_TRANSLATE_NOOP("Templates", "Cold brew"), "4.00"}}},
+                               {QT_TRANSLATE_NOOP("Templates", "Tea"), {{QT_TRANSLATE_NOOP("Templates", "Black or green"), "2.75"}, {QT_TRANSLATE_NOOP("Templates", "Chai latte"), "4.50"}, {QT_TRANSLATE_NOOP("Templates", "Herbal"), "2.75"}, {QT_TRANSLATE_NOOP("Templates", "Iced tea"), "3.00"}}},
+                               {QT_TRANSLATE_NOOP("Templates", "Bakery"), {{QT_TRANSLATE_NOOP("Templates", "Butter croissant"), "3.25"}, {QT_TRANSLATE_NOOP("Templates", "Blueberry muffin"), "3.00"}, {QT_TRANSLATE_NOOP("Templates", "Cinnamon roll"), "3.75"}, {QT_TRANSLATE_NOOP("Templates", "Banana bread"), "3.25"}}},
+                               {QT_TRANSLATE_NOOP("Templates", "Lunch"), {{QT_TRANSLATE_NOOP("Templates", "Soup of the day"), "6.00"}, {QT_TRANSLATE_NOOP("Templates", "Grilled cheese"), "7.50"}, {QT_TRANSLATE_NOOP("Templates", "Turkey and swiss"), "9.00"}, {QT_TRANSLATE_NOOP("Templates", "Garden salad"), "8.00"}}}};
     const double colW = (c.width() - 30) / 2;
     for (int k = 0; k < cols.size(); ++k) {
         const double x = c.left() + (k % 2) * (colW + 30), y = c.top() + 130 + (k / 2) * 290;
-        QVector<Para> paras{W(QString::fromLatin1(cols[k].title), 22, 0, true)};
-        for (const auto &it : cols[k].items) paras << W(QString::fromUtf8(it.first) + "\t" + QString::fromLatin1(it.second), 12, 0);
+        QVector<Para> paras{W(QCoreApplication::translate("Templates", cols[k].title), 22, 0, true)};
+        for (const auto &it : cols[k].items) paras << W(QCoreApplication::translate("Templates", it.first) + "\t" + QString::fromLatin1(it.second), 12, 0);
         auto t = b.text(QRectF(x, y, colW, 270), paras);
         dotLeaders(*d, *t, colW - 8);
     }
@@ -1195,11 +1214,11 @@ std::unique_ptr<Document> giftCertificateClassic(const TemplateOptions &o)
     auto border = b.shape("rect", QRectF(10, 10, ps.width() - 20, ps.height() - 20), Fill::none(), Stroke::line(ColorRef::scheme(Accent1), 5));
     border->stroke.compound = Stroke::Triple;
     b.shape("rect", QRectF(ps.width() * 0.68, 10, ps.width() * 0.32 - 10, ps.height() - 20), Fill::solid(ColorRef::scheme(Accent1)));
-    b.text(QRectF(30, 26, ps.width() * 0.6, 50), {C(QStringLiteral("GIFT CERTIFICATE"), 24, Accent1, 0, true)});
-    auto f = b.text(QRectF(30, 84, ps.width() * 0.6, 90), {C(QStringLiteral("Presented to\t"), 11, Main, 0), C(QStringLiteral("From\t"), 11, Main, 0), C(QStringLiteral("Valid until\t"), 11, Main, 0)});
+    b.text(QRectF(30, 26, ps.width() * 0.6, 50), {C(QCoreApplication::translate("Templates", "GIFT CERTIFICATE"), 24, Accent1, 0, true)});
+    auto f = b.text(QRectF(30, 84, ps.width() * 0.6, 90), {C(QCoreApplication::translate("Templates", "Presented to\t"), 11, Main, 0), C(QCoreApplication::translate("Templates", "From\t"), 11, Main, 0), C(QCoreApplication::translate("Templates", "Valid until\t"), 11, Main, 0)});
     dotLeaders(*d, *f, ps.width() * 0.6 - 10, QStringLiteral("_"));
     b.text(QRectF(ps.width() * 0.68 + 10, 40, ps.width() * 0.32 - 30, 140), {W(QStringLiteral("$100"), 38, 1, true), W(QStringLiteral("{biz:name}"), 10, 1, false, 700), W(QStringLiteral("{biz:phone}"), 8, 1)}, VAlign::Middle);
-    b.text(QRectF(30, ps.height() - 42, ps.width() * 0.6, 20), {C(QStringLiteral("No. 0001 · Not redeemable for cash"), 7.5, Accent4, 0)});
+    b.text(QRectF(30, ps.height() - 42, ps.width() * 0.6, 20), {C(QCoreApplication::translate("Templates", "No. 0001 · Not redeemable for cash"), 7.5, Accent4, 0)});
     return d;
 }
 
@@ -1210,10 +1229,10 @@ std::unique_ptr<Document> invitationParty(const TemplateOptions &o)
     const QSizeF ps = d->pageSize();
     b.picture(QRectF(0, 0, ps.width(), ps.height()), "confetti", 27);
     b.shape("roundRect", QRectF(26, 70, ps.width() - 52, ps.height() - 140), Fill::solid(ColorRef::rgb(Qt::white)));
-    b.text(QRectF(40, 96, ps.width() - 80, 110), {C(QStringLiteral("Let's"), 26, Accent2, 1, true), C(QStringLiteral("Celebrate!"), 40, Accent1, 1, true)});
+    b.text(QRectF(40, 96, ps.width() - 80, 110), {C(QCoreApplication::translate("Templates", "Let's"), 26, Accent2, 1, true), C(QCoreApplication::translate("Templates", "Celebrate!"), 40, Accent1, 1, true)});
     b.text(QRectF(46, 220, ps.width() - 92, 190),
-           {C(QStringLiteral("Join us for a birthday party"), 13, Main, 1), C(QStringLiteral("Saturday, August 8"), 15, Accent1, 1, false, 700), C(QStringLiteral("2:00 – 5:00 PM"), 13, Main, 1),
-            C(QStringLiteral("{biz:address:oneline}"), 11, Main, 1), C(QStringLiteral("RSVP {biz:phone}"), 10, Accent4, 1)});
+           {C(QCoreApplication::translate("Templates", "Join us for a birthday party"), 13, Main, 1), C(QCoreApplication::translate("Templates", "Saturday, August 8"), 15, Accent1, 1, false, 700), C(QCoreApplication::translate("Templates", "2:00 – 5:00 PM"), 13, Main, 1),
+            C(QStringLiteral("{biz:address:oneline}"), 11, Main, 1), C(QCoreApplication::translate("Templates", "RSVP {biz:phone}"), 10, Accent4, 1)});
     return d;
 }
 
@@ -1226,8 +1245,8 @@ std::unique_ptr<Document> letterheadModern(const TemplateOptions &o)
     b.shape("rect", QRectF(0, 0, ps.width(), 96), Fill::gradient(ColorRef::scheme(Accent1), ColorRef::scheme(Accent2), 0));
     b.text(QRectF(c.left(), 18, c.width() - (wantsLogo(o) ? 84 : 0), 64), {W(QStringLiteral("{biz:name}"), 24, 0, true, 700), W(QStringLiteral("{biz:tagline}"), 10, 0)}, VAlign::Middle);
     b.logo(QRectF(c.right() - 70, 13, 70, 70), o);
-    b.text(QRectF(c.left(), 130, c.width(), c.bottom() - 220), {P(QStringLiteral("{date:MMMM d, yyyy}"), "Normal"), P(QString()), P(QStringLiteral("Dear neighbor,"), "Normal"), P(kLorem1, "Body Text"),
-                                                                P(kLorem2, "Body Text"), P(QStringLiteral("Best regards,"), "Normal"), P(QString()), P(QStringLiteral("{biz:person}\n{biz:title}"), "Normal")});
+    b.text(QRectF(c.left(), 130, c.width(), c.bottom() - 220), {P(QStringLiteral("{date:MMMM d, yyyy}"), "Normal"), P(QString()), P(QCoreApplication::translate("Templates", "Dear neighbor,"), "Normal"), P(lorem1(), "Body Text"),
+                                                                P(lorem2(), "Body Text"), P(QCoreApplication::translate("Templates", "Best regards,"), "Normal"), P(QString()), P(QCoreApplication::translate("Templates", "{biz:person}\n{biz:title}"), "Normal")});
     b.line(QPointF(c.left(), ps.height() - 74), QPointF(c.right(), ps.height() - 74), ColorRef::scheme(Accent1), 0.75);
     b.text(QRectF(c.left(), ps.height() - 66, c.width(), 30), {C(QStringLiteral("{biz:address:oneline}  ·  {biz:phone}  ·  {biz:email}  ·  {biz:web}"), 8.5, Accent4, 1)});
     return d;
@@ -1242,20 +1261,20 @@ std::unique_ptr<Document> resumeSidebar(const TemplateOptions &o)
     b.shape("rect", QRectF(0, 0, side, ps.height()), Fill::solid(ColorRef::scheme(Accent1)));
     b.picture(QRectF(40, 40, side - 80, side - 80), "hills", 61, QStringLiteral("ellipse"));
     b.text(QRectF(24, side - 20, side - 48, 400),
-           {W(QStringLiteral("CONTACT"), 11, 0, true, 700), W(QStringLiteral("{biz:phone}\n{biz:email}\n{biz:address}"), 9.5, 0), W(QString(), 6, 0),
-            W(QStringLiteral("SKILLS"), 11, 0, true, 700), W(QStringLiteral("Grant writing\nEvent production\nVolunteer management\nBudgeting\nDesktop publishing"), 9.5, 0)});
+           {W(QCoreApplication::translate("Templates", "CONTACT"), 11, 0, true, 700), W(QCoreApplication::translate("Templates", "{biz:phone}\n{biz:email}\n{biz:address}"), 9.5, 0), W(QString(), 6, 0),
+            W(QCoreApplication::translate("Templates", "SKILLS"), 11, 0, true, 700), W(QCoreApplication::translate("Templates", "Grant writing\nEvent production\nVolunteer management\nBudgeting\nDesktop publishing"), 9.5, 0)});
     const double x = side + 30, w = ps.width() - side - 66;
-    b.text(QRectF(x, 40, w, 80), {C(QStringLiteral("{biz:person}"), 30, Accent1, 0, true, 700), C(QStringLiteral("Program Director"), 13, Accent4, 0)});
+    b.text(QRectF(x, 40, w, 80), {C(QStringLiteral("{biz:person}"), 30, Accent1, 0, true, 700), C(QCoreApplication::translate("Templates", "Program Director"), 13, Accent4, 0)});
     auto body = b.text(QRectF(x, 140, w, ps.height() - 190),
-                       {C(QStringLiteral("PROFILE"), 12, Accent1, 0, true, 700),
-                        P(QStringLiteral("Program director with ten years of experience building community arts programs and the volunteer teams that run them."), "Body Text"),
-                        C(QStringLiteral("EXPERIENCE"), 12, Accent1, 0, true, 700),
-                        C(QStringLiteral("Program Director, {biz:name}\t2019 – present"), 10.5, Main, 0, false, 700),
-                        P(QStringLiteral("Grew the summer concert series from 8 to 13 weeks; recruited and trained 40 volunteers; secured three foundation grants."), "Body Text"),
-                        C(QStringLiteral("Outreach Coordinator, Kalamazoo Arts Council\t2014 – 2019"), 10.5, Main, 0, false, 700),
-                        P(QStringLiteral("Ran school partnerships reaching 2,000 students a year."), "Body Text"),
-                        C(QStringLiteral("EDUCATION"), 12, Accent1, 0, true, 700),
-                        C(QStringLiteral("B.A., Music Education, Western Michigan University\t2013"), 10.5, Main, 0, false, 700)});
+                       {C(QCoreApplication::translate("Templates", "PROFILE"), 12, Accent1, 0, true, 700),
+                        P(QCoreApplication::translate("Templates", "Program director with ten years of experience building community arts programs and the volunteer teams that run them."), "Body Text"),
+                        C(QCoreApplication::translate("Templates", "EXPERIENCE"), 12, Accent1, 0, true, 700),
+                        C(QCoreApplication::translate("Templates", "Program Director, {biz:name}\t2019 – present"), 10.5, Main, 0, false, 700),
+                        P(QCoreApplication::translate("Templates", "Grew the summer concert series from 8 to 13 weeks; recruited and trained 40 volunteers; secured three foundation grants."), "Body Text"),
+                        C(QCoreApplication::translate("Templates", "Outreach Coordinator, Kalamazoo Arts Council\t2014 – 2019"), 10.5, Main, 0, false, 700),
+                        P(QCoreApplication::translate("Templates", "Ran school partnerships reaching 2,000 students a year."), "Body Text"),
+                        C(QCoreApplication::translate("Templates", "EDUCATION"), 12, Accent1, 0, true, 700),
+                        C(QCoreApplication::translate("Templates", "B.A., Music Education, Western Michigan University\t2013"), 10.5, Main, 0, false, 700)});
     dotLeaders(*d, *body, w - 6, QString());
     return d;
 }
@@ -1279,16 +1298,16 @@ std::unique_ptr<Document> programEvent(const TemplateOptions &o)
     const QSizeF ps = d->pageSize();
     const QRectF c = content(*d);
     b.shape("rect", QRectF(0, 0, ps.width(), 150), Fill::solid(ColorRef::scheme(Accent1)));
-    b.text(QRectF(c.left(), 30, c.width(), 100), {W(QStringLiteral("Annual Meeting"), 34, 1, true), W(QStringLiteral("{biz:name} · {date:MMMM d, yyyy}"), 12, 1)}, VAlign::Middle);
+    b.text(QRectF(c.left(), 30, c.width(), 100), {W(QCoreApplication::translate("Templates", "Annual Meeting"), 34, 1, true), W(QStringLiteral("{biz:name} · {date:MMMM d, yyyy}"), 12, 1)}, VAlign::Middle);
     auto t = b.text(QRectF(c.left() + 20, 190, c.width() - 40, 420),
-                    {C(QStringLiteral("Order of Events"), 20, Accent1, 1, true),
-                     C(QStringLiteral("Welcome and introductions\t6:00 PM"), 13, Main, 0), C(QStringLiteral("Year in review\t6:15 PM"), 13, Main, 0),
-                     C(QStringLiteral("Treasurer's report\t6:35 PM"), 13, Main, 0), C(QStringLiteral("Volunteer awards\t6:50 PM"), 13, Main, 0),
-                     C(QStringLiteral("Election of officers\t7:15 PM"), 13, Main, 0), C(QStringLiteral("Closing remarks\t7:40 PM"), 13, Main, 0),
-                     C(QStringLiteral("Refreshments\t7:45 PM"), 13, Main, 0)});
+                    {C(QCoreApplication::translate("Templates", "Order of Events"), 20, Accent1, 1, true),
+                     C(QCoreApplication::translate("Templates", "Welcome and introductions\t6:00 PM"), 13, Main, 0), C(QCoreApplication::translate("Templates", "Year in review\t6:15 PM"), 13, Main, 0),
+                     C(QCoreApplication::translate("Templates", "Treasurer's report\t6:35 PM"), 13, Main, 0), C(QCoreApplication::translate("Templates", "Volunteer awards\t6:50 PM"), 13, Main, 0),
+                     C(QCoreApplication::translate("Templates", "Election of officers\t7:15 PM"), 13, Main, 0), C(QCoreApplication::translate("Templates", "Closing remarks\t7:40 PM"), 13, Main, 0),
+                     C(QCoreApplication::translate("Templates", "Refreshments\t7:45 PM"), 13, Main, 0)});
     dotLeaders(*d, *t, c.width() - 46);
     b.shape("rect", QRectF(c.left(), 640, c.width(), 1.5), Fill::solid(ColorRef::scheme(Accent3)));
-    b.text(QRectF(c.left(), 660, c.width(), 80), {C(QStringLiteral("Thank you to our sponsors and volunteers."), 12, Accent4, 1), C(QStringLiteral("{biz:web}"), 10, Accent1, 1)});
+    b.text(QRectF(c.left(), 660, c.width(), 80), {C(QCoreApplication::translate("Templates", "Thank you to our sponsors and volunteers."), 12, Accent4, 1), C(QStringLiteral("{biz:web}"), 10, Accent1, 1)});
     return d;
 }
 
@@ -1305,8 +1324,8 @@ std::unique_ptr<Document> labelsShipping(const TemplateOptions &o)
     B b(*d);
     const QSizeF ps = d->pageSize();
     b.shape("rect", QRectF(0, 0, 8, ps.height()), Fill::solid(ColorRef::scheme(Accent1)));
-    b.text(QRectF(16, 8, ps.width() * 0.45, 60), {C(QStringLiteral("FROM"), 6.5, Accent4, 0, false, 700), C(QStringLiteral("{biz:name}\n{biz:address}"), 7.5, Main, 0)});
-    b.text(QRectF(ps.width() * 0.38, ps.height() * 0.42, ps.width() * 0.58, ps.height() * 0.54), {C(QStringLiteral("SHIP TO"), 7, Accent4, 0, false, 700), C(QStringLiteral("{mergeblock:address}"), 10, Main, 0)});
+    b.text(QRectF(16, 8, ps.width() * 0.45, 60), {C(QCoreApplication::translate("Templates", "FROM"), 6.5, Accent4, 0, false, 700), C(QCoreApplication::translate("Templates", "{biz:name}\n{biz:address}"), 7.5, Main, 0)});
+    b.text(QRectF(ps.width() * 0.38, ps.height() * 0.42, ps.width() * 0.58, ps.height() * 0.54), {C(QCoreApplication::translate("Templates", "SHIP TO"), 7, Accent4, 0, false, 700), C(QStringLiteral("{mergeblock:address}"), 10, Main, 0)});
     return d;
 }
 
@@ -1333,18 +1352,24 @@ std::unique_ptr<Document> catalogMerged(const TemplateOptions &o)
     const QRectF c = content(*d);
     b.shape("rect", QRectF(0, 0, ps.width(), ps.height()), Fill::solid(ColorRef::scheme(Accent5)));
     b.picture(QRectF(c.left(), c.top(), c.width(), c.height() * 0.6), "geo", 81);
-    b.text(QRectF(c.left(), c.top() + c.height() * 0.64, c.width() - (wantsLogo(o) ? 120 : 0), 140), {C(QStringLiteral("{biz:name}"), 40, Accent1, 0, true, 700), C(QStringLiteral("Product Catalog"), 20, Accent2, 0, true)});
+    b.text(QRectF(c.left(), c.top() + c.height() * 0.64, c.width() - (wantsLogo(o) ? 120 : 0), 140), {C(QStringLiteral("{biz:name}"), 40, Accent1, 0, true, 700), C(QCoreApplication::translate("Templates", "Product Catalog"), 20, Accent2, 0, true)});
     b.logo(QRectF(c.right() - 100, c.top() + c.height() * 0.64, 100, 100), o);
     d->merge.fields = {QStringLiteral("Product"), QStringLiteral("Price"), QStringLiteral("Description"), QStringLiteral("Item")};
-    const QVector<QStringList> rows = {{"Canvas tote", "$24", "Heavy cotton canvas with leather handles.", "101"},
-                                       {"Wool throw", "$68", "Soft merino wool, 50 by 60 inches.", "102"},
-                                       {"Ceramic mug", "$16", "Glazed stoneware, holds 12 ounces.", "103"},
-                                       {"Notebook set", "$18", "Three lined notebooks with recycled covers.", "104"},
-                                       {"Desk lamp", "$45", "Adjustable arm and a warm LED bulb.", "105"},
-                                       {"Plant pot", "$22", "Terracotta with a drainage saucer.", "106"}};
+    const QVector<QStringList> rows = {{QCoreApplication::translate("Templates", "Canvas tote"), "$24",
+                                        QCoreApplication::translate("Templates", "Heavy cotton canvas with leather handles."), "101"},
+                                       {QCoreApplication::translate("Templates", "Wool throw"), "$68",
+                                        QCoreApplication::translate("Templates", "Soft merino wool, 50 by 60 inches."), "102"},
+                                       {QCoreApplication::translate("Templates", "Ceramic mug"), "$16",
+                                        QCoreApplication::translate("Templates", "Glazed stoneware, holds 12 ounces."), "103"},
+                                       {QCoreApplication::translate("Templates", "Notebook set"), "$18",
+                                        QCoreApplication::translate("Templates", "Three lined notebooks with recycled covers."), "104"},
+                                       {QCoreApplication::translate("Templates", "Desk lamp"), "$45",
+                                        QCoreApplication::translate("Templates", "Adjustable arm and a warm LED bulb."), "105"},
+                                       {QCoreApplication::translate("Templates", "Plant pot"), "$22",
+                                        QCoreApplication::translate("Templates", "Terracotta with a drainage saucer."), "106"}};
     d->merge.rows = rows;
     b.onPage(1);
-    b.text(QRectF(c.left(), c.top(), c.width(), 40), {C(QStringLiteral("New this season"), 20, Accent1, 0, true)});
+    b.text(QRectF(c.left(), c.top(), c.width(), 40), {C(QCoreApplication::translate("Templates", "New this season"), 20, Accent1, 0, true)});
     d->catalog.pageId = d->pages[1]->id;
     d->catalog.rect = QRectF(c.left(), c.top() + 50, c.width(), c.height() - 50);
     d->catalog.rows = 2;
@@ -1357,7 +1382,7 @@ std::unique_ptr<Document> catalogMerged(const TemplateOptions &o)
     b.pg->items.push_back(pic);
     b.text(QRectF(cell.left(), cell.top() + cell.height() * 0.63, cell.width(), cell.height() * 0.37),
            {C(QStringLiteral("{merge:Product}"), 14, Accent1, 0, true, 700), P(QStringLiteral("{merge:Description}"), "Body Text"),
-            C(QStringLiteral("{merge:Price}  ·  Item {merge:Item}"), 11, Main, 0, false, 700)});
+            C(QCoreApplication::translate("Templates", "{merge:Price}  ·  Item {merge:Item}"), 11, Main, 0, false, 700)});
     return d;
 }
 
@@ -1370,13 +1395,13 @@ std::unique_ptr<Document> emailPromo(const TemplateOptions &o)
     const QRectF c = content(*d);
     b.text(QRectF(c.left(), 30, c.width(), 40), {C(QStringLiteral("{biz:name}"), 16, Accent1, 1, true, 700)});
     b.picture(QRectF(0, 80, ps.width(), 300), "sunburst", 91);
-    b.text(QRectF(c.left(), 400, c.width(), 120), {C(QStringLiteral("20% OFF"), 54, Accent1, 1, true), C(QStringLiteral("everything this weekend"), 18, Main, 1)});
+    b.text(QRectF(c.left(), 400, c.width(), 120), {C(QCoreApplication::translate("Templates", "20% OFF"), 54, Accent1, 1, true), C(QCoreApplication::translate("Templates", "everything this weekend"), 18, Main, 1)});
     auto coupon = b.shapeText("roundRect", QRectF(ps.width() / 2 - 150, 540, 300, 80), Fill::solid(ColorRef::scheme(Accent5)),
-                              {C(QStringLiteral("Use code"), 11, Main, 1), C(QStringLiteral("WEEKEND20"), 24, Accent1, 1, true, 700)});
+                              {C(QCoreApplication::translate("Templates", "Use code"), 11, Main, 1), C(QCoreApplication::translate("Templates", "WEEKEND20"), 24, Accent1, 1, true, 700)});
     coupon->stroke = Stroke::line(ColorRef::scheme(Accent1), 2);
     coupon->stroke.dash = Stroke::DashLine;
-    b.text(QRectF(c.left(), 650, c.width(), 120), {P(kLorem3, "Body Text")});
-    b.shapeText("roundRect", QRectF(ps.width() / 2 - 100, 780, 200, 44), Fill::solid(ColorRef::scheme(Accent1)), {W(QStringLiteral("Shop now"), 14, 1, true, 700)});
+    b.text(QRectF(c.left(), 650, c.width(), 120), {P(lorem3(), "Body Text")});
+    b.shapeText("roundRect", QRectF(ps.width() / 2 - 100, 780, 200, 44), Fill::solid(ColorRef::scheme(Accent1)), {W(QCoreApplication::translate("Templates", "Shop now"), 14, 1, true, 700)});
     b.text(QRectF(c.left(), ps.height() - 70, c.width(), 40), {C(QStringLiteral("{biz:address:oneline} · {biz:web}"), 8.5, Accent4, 1)}, VAlign::Bottom);
     return d;
 }
@@ -1390,7 +1415,7 @@ std::unique_ptr<Document> complimentsModern(const TemplateOptions &o)
     b.logo(QRectF(18, 18, 64, 64), o);
     const double top = wantsLogo(o) ? 90 : 30;
     b.text(QRectF(18, top, ps.width() * 0.32 - 36, ps.height() - 30 - top), {W(QStringLiteral("{biz:name}"), 16, 0, true, 700), W(QStringLiteral("{biz:address}"), 8.5, 0), W(QStringLiteral("{biz:phone}"), 8.5, 0)}, VAlign::Bottom);
-    b.text(QRectF(ps.width() * 0.32 + 30, 40, ps.width() * 0.68 - 60, 70), {C(QStringLiteral("With Compliments"), 28, Accent1, 0, true)});
+    b.text(QRectF(ps.width() * 0.32 + 30, 40, ps.width() * 0.68 - 60, 70), {C(QCoreApplication::translate("Templates", "With Compliments"), 28, Accent1, 0, true)});
     b.line(QPointF(ps.width() * 0.32 + 30, 116), QPointF(ps.width() - 30, 116), ColorRef::scheme(Accent3), 1);
     return d;
 }
@@ -1407,7 +1432,8 @@ std::unique_ptr<Document> fortuneTeller(const TemplateOptions &o)
     const QPointF ctr = sq.center();
     // Outer corner triangles: the four colors.
     const QPointF corners[4] = {sq.topLeft(), sq.topRight(), sq.bottomRight(), sq.bottomLeft()};
-    const char *colorNames[4] = {"RED", "BLUE", "GREEN", "YELLOW"};
+    const char *colorNames[4] = {QT_TRANSLATE_NOOP("Templates", "RED"), QT_TRANSLATE_NOOP("Templates", "BLUE"), QT_TRANSLATE_NOOP("Templates", "GREEN"),
+                                 QT_TRANSLATE_NOOP("Templates", "YELLOW")};
     const int slots[4] = {Accent1, Accent2, Accent3, Accent4};
     for (int k = 0; k < 4; ++k) {
         const QPointF a = corners[k], m1 = (corners[k] + corners[(k + 1) % 4]) / 2, m0 = (corners[k] + corners[(k + 3) % 4]) / 2;
@@ -1422,7 +1448,7 @@ std::unique_ptr<Document> fortuneTeller(const TemplateOptions &o)
         tri->stroke = Stroke::none();
         b.pg->items.push_back(tri);
         const QPointF tc = (a + m1 + m0) / 3;
-        b.text(QRectF(tc.x() - 50, tc.y() - 12, 100, 24), {C(QString::fromLatin1(colorNames[k]), 12, Main, 1, true, 700)}, VAlign::Middle);
+        b.text(QRectF(tc.x() - 50, tc.y() - 12, 100, 24), {C(QCoreApplication::translate("Templates", colorNames[k]), 12, Main, 1, true, 700)}, VAlign::Middle);
     }
     // Numbers in the middle ring, and fold lines.
     for (int k = 0; k < 8; ++k) {
@@ -1437,7 +1463,7 @@ std::unique_ptr<Document> fortuneTeller(const TemplateOptions &o)
     fold(QPointF(sq.left(), ctr.y()), QPointF(sq.right(), ctr.y()));
     for (int k = 0; k < 4; ++k) fold((corners[k] + corners[(k + 1) % 4]) / 2, (corners[(k + 1) % 4] + corners[(k + 2) % 4]) / 2);
     b.text(QRectF(sq.left(), sq.bottom() + 14, sq.width(), 60),
-           {C(QStringLiteral("Cut out the square. Fold the corners to the center, turn it over, fold the corners in again, then fold in half both ways."), 10, Accent4, 1)});
+           {C(QCoreApplication::translate("Templates", "Cut out the square. Fold the corners to the center, turn it over, fold the corners in again, then fold in half both ways."), 10, Accent4, 1)});
     return d;
 }
 
@@ -1446,54 +1472,102 @@ std::unique_ptr<Document> fortuneTeller(const TemplateOptions &o)
 const QVector<TemplateInfo> &templates()
 {
     static const QVector<TemplateInfo> list = {
-        {"flyer-event", "Flyers", "Event Flyer", "Bold top artwork, event details and a starburst callout.", flyerEvent, {}},
-        {"flyer-sale", "Flyers", "Sale Flyer", "Full-color sale sign with a percentage burst.", flyerSale, {}},
-        {"flyer-announce", "Flyers", "Announcement Flyer", "Picture, headline, story and a sidebar.", flyerAnnouncement, {}},
-        {"bizcard-band", "Business Cards", "Accent Band Business Card", "Color band with your logo spot.", [](const TemplateOptions &o) { return businessCard(o, 0); }, {"logo"}},
-        {"bizcard-dark", "Business Cards", "Bold Business Card", "Dark card with an accent stripe.", [](const TemplateOptions &o) { return businessCard(o, 1); }, {"logo"}},
-        {"bizcard-classic", "Business Cards", "Classic Business Card", "Centered, framed and elegant.", [](const TemplateOptions &o) { return businessCard(o, 2); }, {"logo"}},
-        {"brochure-trifold", "Brochures", "Tri-fold Brochure", "Letter landscape, three panels, linked story inside.", [](const TemplateOptions &o) { return brochure(o, 0); }, {"logo"}},
-        {"brochure-gallery", "Brochures", "Gallery Brochure", "Tri-fold with a full-height cover picture.", [](const TemplateOptions &o) { return brochure(o, 1); }, {"logo"}},
-        {"newsletter-classic", "Newsletters", "Classic Newsletter", "Masthead, three columns, continued story, calendar table.", [](const TemplateOptions &o) { return newsletter(o, 0); }, {"logo"}},
-        {"newsletter-friendly", "Newsletters", "Friendly Newsletter", "Warm colors and rounded type.", [](const TemplateOptions &o) { return newsletter(o, 1); }, {"logo"}},
-        {"greeting-birthday", "Greeting Cards", "Birthday Card", "Quarter-fold card with confetti.", [](const TemplateOptions &o) { return greetingCard(o, 0); }, {}},
-        {"greeting-thanks", "Greeting Cards", "Thank You Card", "Quarter-fold card with leaves.", [](const TemplateOptions &o) { return greetingCard(o, 1); }, {}},
-        {"certificate-achievement", "Award Certificates", "Certificate of Achievement", "Landscape certificate with a seal.", certificate, {}},
-        {"postcard-greetings", "Postcards", "Greetings Postcard", "Front artwork, back with message and address.", postcard, {"address"}},
-        {"sign-closed", "Signs", "Closed Sign", "Big, readable door sign.", [](const TemplateOptions &o) { return sign(o, 0); }, {}},
-        {"sign-welcome", "Signs", "Welcome Sign", "Friendly open-hours sign.", [](const TemplateOptions &o) { return sign(o, 1); }, {}},
-        {"banner-welcome", "Banners", "Welcome Banner", "5 × 2 ft banner, prints tiled.", banner, {}},
-        {"menu-bistro", "Menus", "Bistro Menu", "Legal-size menu with dot leaders.", menu, {}},
-        {"gift-certificate", "Gift Certificates", "Gift Certificate", "Gradient border and amount badge.", giftCertificate, {}},
-        {"invitation-evening", "Invitation Cards", "Evening Invitation", "5 × 7 invitation.", invitation, {}},
-        {"letterhead", "Letterhead", "Letterhead", "Header, contact block and letter body.", letterhead, {"logo"}},
-        {"resume", "Resumes", "Résumé", "Clean one-page résumé.", resume, {}},
-        {"calendar-year", "Calendars", "Wall Calendar", "Twelve months, picture on each page.", calendarTemplate, {}},
-        {"program-recital", "Programs", "Recital Program", "Four-page booklet that prints folded.", program, {}},
-        {"labels-address", "Labels", "Address Labels", "30 per sheet, ready for mail merge.", labels, {}},
-        {"envelope-10", "Envelopes", "#10 Envelope", "Return address and merge address block.", envelope, {}},
-        {"form-invoice", "Business Forms", "Invoice", "Itemized invoice table.", [](const TemplateOptions &o) { return businessForm(o, 0); }, {"logo"}},
-        {"form-po", "Business Forms", "Purchase Order", "Purchase order table.", [](const TemplateOptions &o) { return businessForm(o, 1); }, {"logo"}},
-        {"catalog-fall", "Catalogs", "Product Catalog", "Cover plus four products per page.", catalog, {"logo"}},
-        {"email-newsletter", "Email", "Email Newsletter", "Tall single page for email.", emailNewsletter, {"logo"}},
-        {"compliments", "With Compliments Cards", "With Compliments", "DL compliments slip.", complimentsCard, {}},
-        {"paper-airplane", "Paper Folding Projects", "Paper Airplane", "Printable fold lines.", paperAirplane, {}},
-        {"certificate-appreciation", "Award Certificates", "Certificate of Appreciation", "Portrait certificate with a ribbon.", certificateAppreciation, {}},
-        {"postcard-save-date", "Postcards", "Save the Date Postcard", "Night-sky front with a date badge.", postcardEvent, {"address"}},
-        {"banner-grand-opening", "Banners", "Grand Opening Banner", "6 × 2 ft banner with striped edges, prints tiled.", bannerGrandOpening, {}},
-        {"menu-cafe", "Menus", "Café Menu", "Chalkboard menu in four columns with dot leaders.", menuCafe, {}},
-        {"gift-certificate-classic", "Gift Certificates", "Classic Gift Certificate", "Triple border and an amount panel.", giftCertificateClassic, {}},
-        {"invitation-party", "Invitation Cards", "Party Invitation", "Confetti birthday invitation.", invitationParty, {}},
-        {"letterhead-modern", "Letterhead", "Modern Letterhead", "Gradient header, contact line at the foot.", letterheadModern, {"logo"}},
-        {"resume-sidebar", "Resumes", "Sidebar Résumé", "Colored sidebar with photo, contact and skills.", resumeSidebar, {}},
-        {"calendar-month", "Calendars", "Monthly Calendar", "One month with a picture, portrait.", calendarMonth, {}},
-        {"program-event", "Programs", "Event Program", "One-page order of events with dot leaders.", programEvent, {}},
-        {"labels-shipping", "Labels", "Shipping Labels", "4 × 2 in, 10 per sheet, ready for mail merge.", labelsShipping, {}},
-        {"envelope-a7", "Envelopes", "A7 Invitation Envelope", "Centered address and a heart.", envelopeA7, {}},
-        {"catalog-merge", "Catalogs", "Merged Product Catalog", "Cover, then a catalog page filled from a product list.", catalogMerged, {"logo"}},
-        {"email-promo", "Email", "Promotion Email", "Sale headline, coupon code and a button.", emailPromo, {}},
-        {"compliments-modern", "With Compliments Cards", "Modern Compliments Slip", "Gradient side panel.", complimentsModern, {"logo"}},
-        {"fortune-teller", "Paper Folding Projects", "Fortune Teller", "Origami fortune teller with colors and numbers.", fortuneTeller, {}},
+        {"flyer-event", QCoreApplication::translate("Templates", "Flyers"), QCoreApplication::translate("Templates", "Event Flyer"),
+         QCoreApplication::translate("Templates", "Bold top artwork, event details and a starburst callout."), flyerEvent, {}},
+        {"flyer-sale", QCoreApplication::translate("Templates", "Flyers"), QCoreApplication::translate("Templates", "Sale Flyer"),
+         QCoreApplication::translate("Templates", "Full-color sale sign with a percentage burst."), flyerSale, {}},
+        {"flyer-announce", QCoreApplication::translate("Templates", "Flyers"), QCoreApplication::translate("Templates", "Announcement Flyer"),
+         QCoreApplication::translate("Templates", "Picture, headline, story and a sidebar."), flyerAnnouncement, {}},
+        {"bizcard-band", QCoreApplication::translate("Templates", "Business Cards"), QCoreApplication::translate("Templates", "Accent Band Business Card"),
+         QCoreApplication::translate("Templates", "Color band with your logo spot."), [](const TemplateOptions &o) { return businessCard(o, 0); }, {"logo"}},
+        {"bizcard-dark", QCoreApplication::translate("Templates", "Business Cards"), QCoreApplication::translate("Templates", "Bold Business Card"),
+         QCoreApplication::translate("Templates", "Dark card with an accent stripe."), [](const TemplateOptions &o) { return businessCard(o, 1); }, {"logo"}},
+        {"bizcard-classic", QCoreApplication::translate("Templates", "Business Cards"), QCoreApplication::translate("Templates", "Classic Business Card"),
+         QCoreApplication::translate("Templates", "Centered, framed and elegant."), [](const TemplateOptions &o) { return businessCard(o, 2); }, {"logo"}},
+        {"brochure-trifold", QCoreApplication::translate("Templates", "Brochures"), QCoreApplication::translate("Templates", "Tri-fold Brochure"),
+         QCoreApplication::translate("Templates", "Letter landscape, three panels, linked story inside."), [](const TemplateOptions &o) { return brochure(o, 0); }, {"logo"}},
+        {"brochure-gallery", QCoreApplication::translate("Templates", "Brochures"), QCoreApplication::translate("Templates", "Gallery Brochure"),
+         QCoreApplication::translate("Templates", "Tri-fold with a full-height cover picture."), [](const TemplateOptions &o) { return brochure(o, 1); }, {"logo"}},
+        {"newsletter-classic", QCoreApplication::translate("Templates", "Newsletters"), QCoreApplication::translate("Templates", "Classic Newsletter"),
+         QCoreApplication::translate("Templates", "Masthead, three columns, continued story, calendar table."), [](const TemplateOptions &o) { return newsletter(o, 0); }, {"logo"}},
+        {"newsletter-friendly", QCoreApplication::translate("Templates", "Newsletters"), QCoreApplication::translate("Templates", "Friendly Newsletter"),
+         QCoreApplication::translate("Templates", "Warm colors and rounded type."), [](const TemplateOptions &o) { return newsletter(o, 1); }, {"logo"}},
+        {"greeting-birthday", QCoreApplication::translate("Templates", "Greeting Cards"), QCoreApplication::translate("Templates", "Birthday Card"),
+         QCoreApplication::translate("Templates", "Quarter-fold card with confetti."), [](const TemplateOptions &o) { return greetingCard(o, 0); }, {}},
+        {"greeting-thanks", QCoreApplication::translate("Templates", "Greeting Cards"), QCoreApplication::translate("Templates", "Thank You Card"),
+         QCoreApplication::translate("Templates", "Quarter-fold card with leaves."), [](const TemplateOptions &o) { return greetingCard(o, 1); }, {}},
+        {"certificate-achievement", QCoreApplication::translate("Templates", "Award Certificates"), QCoreApplication::translate("Templates", "Certificate of Achievement"),
+         QCoreApplication::translate("Templates", "Landscape certificate with a seal."), certificate, {}},
+        {"postcard-greetings", QCoreApplication::translate("Templates", "Postcards"), QCoreApplication::translate("Templates", "Greetings Postcard"),
+         QCoreApplication::translate("Templates", "Front artwork, back with message and address."), postcard, {"address"}},
+        {"sign-closed", QCoreApplication::translate("Templates", "Signs"), QCoreApplication::translate("Templates", "Closed Sign"),
+         QCoreApplication::translate("Templates", "Big, readable door sign."), [](const TemplateOptions &o) { return sign(o, 0); }, {}},
+        {"sign-welcome", QCoreApplication::translate("Templates", "Signs"), QCoreApplication::translate("Templates", "Welcome Sign"),
+         QCoreApplication::translate("Templates", "Friendly open-hours sign."), [](const TemplateOptions &o) { return sign(o, 1); }, {}},
+        {"banner-welcome", QCoreApplication::translate("Templates", "Banners"), QCoreApplication::translate("Templates", "Welcome Banner"),
+         QCoreApplication::translate("Templates", "5 × 2 ft banner, prints tiled."), banner, {}},
+        {"menu-bistro", QCoreApplication::translate("Templates", "Menus"), QCoreApplication::translate("Templates", "Bistro Menu"),
+         QCoreApplication::translate("Templates", "Legal-size menu with dot leaders."), menu, {}},
+        {"gift-certificate", QCoreApplication::translate("Templates", "Gift Certificates"), QCoreApplication::translate("Templates", "Gift Certificate"),
+         QCoreApplication::translate("Templates", "Gradient border and amount badge."), giftCertificate, {}},
+        {"invitation-evening", QCoreApplication::translate("Templates", "Invitation Cards"), QCoreApplication::translate("Templates", "Evening Invitation"),
+         QCoreApplication::translate("Templates", "5 × 7 invitation."), invitation, {}},
+        {"letterhead", QCoreApplication::translate("Templates", "Letterhead"), QCoreApplication::translate("Templates", "Letterhead"),
+         QCoreApplication::translate("Templates", "Header, contact block and letter body."), letterhead, {"logo"}},
+        {"resume", QCoreApplication::translate("Templates", "Resumes"), QCoreApplication::translate("Templates", "Résumé"),
+         QCoreApplication::translate("Templates", "Clean one-page résumé."), resume, {}},
+        {"calendar-year", QCoreApplication::translate("Templates", "Calendars"), QCoreApplication::translate("Templates", "Wall Calendar"),
+         QCoreApplication::translate("Templates", "Twelve months, picture on each page."), calendarTemplate, {}},
+        {"program-recital", QCoreApplication::translate("Templates", "Programs"), QCoreApplication::translate("Templates", "Recital Program"),
+         QCoreApplication::translate("Templates", "Four-page booklet that prints folded."), program, {}},
+        {"labels-address", QCoreApplication::translate("Templates", "Labels"), QCoreApplication::translate("Templates", "Address Labels"),
+         QCoreApplication::translate("Templates", "30 per sheet, ready for mail merge."), labels, {}},
+        {"envelope-10", QCoreApplication::translate("Templates", "Envelopes"), QCoreApplication::translate("Templates", "#10 Envelope"),
+         QCoreApplication::translate("Templates", "Return address and merge address block."), envelope, {}},
+        {"form-invoice", QCoreApplication::translate("Templates", "Business Forms"), QCoreApplication::translate("Templates", "Invoice"),
+         QCoreApplication::translate("Templates", "Itemized invoice table."), [](const TemplateOptions &o) { return businessForm(o, 0); }, {"logo"}},
+        {"form-po", QCoreApplication::translate("Templates", "Business Forms"), QCoreApplication::translate("Templates", "Purchase Order"),
+         QCoreApplication::translate("Templates", "Purchase order table."), [](const TemplateOptions &o) { return businessForm(o, 1); }, {"logo"}},
+        {"catalog-fall", QCoreApplication::translate("Templates", "Catalogs"), QCoreApplication::translate("Templates", "Product Catalog"),
+         QCoreApplication::translate("Templates", "Cover plus four products per page."), catalog, {"logo"}},
+        {"email-newsletter", QCoreApplication::translate("Templates", "Email"), QCoreApplication::translate("Templates", "Email Newsletter"),
+         QCoreApplication::translate("Templates", "Tall single page for email."), emailNewsletter, {"logo"}},
+        {"compliments", QCoreApplication::translate("Templates", "With Compliments Cards"), QCoreApplication::translate("Templates", "With Compliments"),
+         QCoreApplication::translate("Templates", "DL compliments slip."), complimentsCard, {}},
+        {"paper-airplane", QCoreApplication::translate("Templates", "Paper Folding Projects"), QCoreApplication::translate("Templates", "Paper Airplane"),
+         QCoreApplication::translate("Templates", "Printable fold lines."), paperAirplane, {}},
+        {"certificate-appreciation", QCoreApplication::translate("Templates", "Award Certificates"), QCoreApplication::translate("Templates", "Certificate of Appreciation"),
+         QCoreApplication::translate("Templates", "Portrait certificate with a ribbon."), certificateAppreciation, {}},
+        {"postcard-save-date", QCoreApplication::translate("Templates", "Postcards"), QCoreApplication::translate("Templates", "Save the Date Postcard"),
+         QCoreApplication::translate("Templates", "Night-sky front with a date badge."), postcardEvent, {"address"}},
+        {"banner-grand-opening", QCoreApplication::translate("Templates", "Banners"), QCoreApplication::translate("Templates", "Grand Opening Banner"),
+         QCoreApplication::translate("Templates", "6 × 2 ft banner with striped edges, prints tiled."), bannerGrandOpening, {}},
+        {"menu-cafe", QCoreApplication::translate("Templates", "Menus"), QCoreApplication::translate("Templates", "Café Menu"),
+         QCoreApplication::translate("Templates", "Chalkboard menu in four columns with dot leaders."), menuCafe, {}},
+        {"gift-certificate-classic", QCoreApplication::translate("Templates", "Gift Certificates"), QCoreApplication::translate("Templates", "Classic Gift Certificate"),
+         QCoreApplication::translate("Templates", "Triple border and an amount panel."), giftCertificateClassic, {}},
+        {"invitation-party", QCoreApplication::translate("Templates", "Invitation Cards"), QCoreApplication::translate("Templates", "Party Invitation"),
+         QCoreApplication::translate("Templates", "Confetti birthday invitation."), invitationParty, {}},
+        {"letterhead-modern", QCoreApplication::translate("Templates", "Letterhead"), QCoreApplication::translate("Templates", "Modern Letterhead"),
+         QCoreApplication::translate("Templates", "Gradient header, contact line at the foot."), letterheadModern, {"logo"}},
+        {"resume-sidebar", QCoreApplication::translate("Templates", "Resumes"), QCoreApplication::translate("Templates", "Sidebar Résumé"),
+         QCoreApplication::translate("Templates", "Colored sidebar with photo, contact and skills."), resumeSidebar, {}},
+        {"calendar-month", QCoreApplication::translate("Templates", "Calendars"), QCoreApplication::translate("Templates", "Monthly Calendar"),
+         QCoreApplication::translate("Templates", "One month with a picture, portrait."), calendarMonth, {}},
+        {"program-event", QCoreApplication::translate("Templates", "Programs"), QCoreApplication::translate("Templates", "Event Program"),
+         QCoreApplication::translate("Templates", "One-page order of events with dot leaders."), programEvent, {}},
+        {"labels-shipping", QCoreApplication::translate("Templates", "Labels"), QCoreApplication::translate("Templates", "Shipping Labels"),
+         QCoreApplication::translate("Templates", "4 × 2 in, 10 per sheet, ready for mail merge."), labelsShipping, {}},
+        {"envelope-a7", QCoreApplication::translate("Templates", "Envelopes"), QCoreApplication::translate("Templates", "A7 Invitation Envelope"),
+         QCoreApplication::translate("Templates", "Centered address and a heart."), envelopeA7, {}},
+        {"catalog-merge", QCoreApplication::translate("Templates", "Catalogs"), QCoreApplication::translate("Templates", "Merged Product Catalog"),
+         QCoreApplication::translate("Templates", "Cover, then a catalog page filled from a product list."), catalogMerged, {"logo"}},
+        {"email-promo", QCoreApplication::translate("Templates", "Email"), QCoreApplication::translate("Templates", "Promotion Email"),
+         QCoreApplication::translate("Templates", "Sale headline, coupon code and a button."), emailPromo, {}},
+        {"compliments-modern", QCoreApplication::translate("Templates", "With Compliments Cards"), QCoreApplication::translate("Templates", "Modern Compliments Slip"),
+         QCoreApplication::translate("Templates", "Gradient side panel."), complimentsModern, {"logo"}},
+        {"fortune-teller", QCoreApplication::translate("Templates", "Paper Folding Projects"), QCoreApplication::translate("Templates", "Fortune Teller"),
+         QCoreApplication::translate("Templates", "Origami fortune teller with colors and numbers."), fortuneTeller, {}},
     };
     return list;
 }
@@ -1557,7 +1631,9 @@ ItemList makeCalendar(Document &doc, const QRectF &area, int year, int month, in
     t->rowH[0] = 24;
     t->cells.resize(t->rows * 7);
     t->growToFit = false;
-    const QStringList names{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+    const QStringList names{QCoreApplication::translate("Templates", "Sun"), QCoreApplication::translate("Templates", "Mon"), QCoreApplication::translate("Templates", "Tue"),
+                            QCoreApplication::translate("Templates", "Wed"), QCoreApplication::translate("Templates", "Thu"), QCoreApplication::translate("Templates", "Fri"),
+                            QCoreApplication::translate("Templates", "Sat")};
     for (int r = 0; r < t->rows; ++r)
         for (int c = 0; c < 7; ++c) {
             QString text;
@@ -1620,9 +1696,9 @@ const QVector<BuildingBlock> &buildingBlocks()
             return x;
         };
         // Headings.
-        const QStringList headingNames{"Accent Bar Heading", "Underlined Heading", "Boxed Heading", "Tab Heading", "Centered Rule Heading", "Banner Heading"};
-        for (int i = 0; i < headingNames.size(); ++i) {
-            v << BuildingBlock{QStringLiteral("heading.%1").arg(i), "Page Parts", headingNames[i], [i, mkText, shapeOf](Document &d, const QRectF &c) {
+        static const char *const headingNames[] = {QT_TRANSLATE_NOOP("BuildingBlocks", "Accent Bar Heading"), QT_TRANSLATE_NOOP("BuildingBlocks", "Underlined Heading"), QT_TRANSLATE_NOOP("BuildingBlocks", "Boxed Heading"), QT_TRANSLATE_NOOP("BuildingBlocks", "Tab Heading"), QT_TRANSLATE_NOOP("BuildingBlocks", "Centered Rule Heading"), QT_TRANSLATE_NOOP("BuildingBlocks", "Banner Heading")};
+        for (int i = 0; i < int(std::size(headingNames)); ++i) {
+            v << BuildingBlock{QStringLiteral("heading.%1").arg(i), "Page Parts", QCoreApplication::translate("BuildingBlocks", headingNames[i]), [i, mkText, shapeOf](Document &d, const QRectF &c) {
                 ItemList out;
                 const QRectF r(c.left(), c.top() + 36, c.width(), 54);
                 switch (i) {
@@ -1633,7 +1709,7 @@ const QVector<BuildingBlock> &buildingBlocks()
                 default: break;
                 }
                 const bool white = i == 2 || i == 3 || i == 5;
-                Para hp = H(QStringLiteral("Heading Text"), 24, i == 4 || i == 5 ? 1 : 0, white ? -1 : Accent1);
+                Para hp = H(QCoreApplication::translate("BuildingBlocks", "Heading Text"), 24, i == 4 || i == 5 ? 1 : 0, white ? -1 : Accent1);
                 if (white) hp.color = ColorRef::rgb(Qt::white);
                 auto t = mkText(d, QRectF(r.left() + (i == 0 ? 16 : 10), r.top(), r.width() - 26, r.height()), {hp}, VAlign::Middle);
                 out.push_back(t);
@@ -1655,9 +1731,9 @@ const QVector<BuildingBlock> &buildingBlocks()
             }};
         }
         // Pull quotes.
-        const QStringList quoteNames{"Quote Box", "Quote Rule", "Quote Marks", "Quote Circle"};
-        for (int i = 0; i < quoteNames.size(); ++i) {
-            v << BuildingBlock{QStringLiteral("quote.%1").arg(i), "Page Parts", quoteNames[i], [i, mkText, shapeOf](Document &d, const QRectF &c) {
+        static const char *const quoteNames[] = {QT_TRANSLATE_NOOP("BuildingBlocks", "Quote Box"), QT_TRANSLATE_NOOP("BuildingBlocks", "Quote Rule"), QT_TRANSLATE_NOOP("BuildingBlocks", "Quote Marks"), QT_TRANSLATE_NOOP("BuildingBlocks", "Quote Circle")};
+        for (int i = 0; i < int(std::size(quoteNames)); ++i) {
+            v << BuildingBlock{QStringLiteral("quote.%1").arg(i), "Page Parts", QCoreApplication::translate("BuildingBlocks", quoteNames[i]), [i, mkText, shapeOf](Document &d, const QRectF &c) {
                 ItemList out;
                 const QRectF r(c.center().x() - 120, c.center().y() - 80, 240, i == 3 ? 240 : 150);
                 if (i == 0) out.push_back(shapeOf("rect", r, Fill::solid(ColorRef::scheme(Accent5)), Stroke::line(ColorRef::scheme(Accent1), 1)));
@@ -1670,7 +1746,7 @@ const QVector<BuildingBlock> &buildingBlocks()
                 }
                 QVector<Para> paras;
                 if (i == 2) paras << C(QStringLiteral("“"), 60, Accent1, 0, true);
-                paras << Para{QStringLiteral("“A pull quote highlights a key sentence from the story.”"), QStringLiteral("Quote"), 0, 1};
+                paras << Para{QCoreApplication::translate("BuildingBlocks", "“A pull quote highlights a key sentence from the story.”"), QStringLiteral("Quote"), 0, 1};
                 auto t = mkText(d, r.adjusted(16, 16, -16, -16), paras, VAlign::Middle);
                 t->wrap.mode = Wrap::Square;
                 out.push_back(t);
@@ -1678,9 +1754,9 @@ const QVector<BuildingBlock> &buildingBlocks()
             }};
         }
         // Sidebars.
-        const QStringList sideNames{"Shaded Sidebar", "Bordered Sidebar", "Tab Sidebar", "Checklist Sidebar"};
-        for (int i = 0; i < sideNames.size(); ++i) {
-            v << BuildingBlock{QStringLiteral("sidebar.%1").arg(i), "Page Parts", sideNames[i], [i, mkText, shapeOf](Document &d, const QRectF &c) {
+        static const char *const sideNames[] = {QT_TRANSLATE_NOOP("BuildingBlocks", "Shaded Sidebar"), QT_TRANSLATE_NOOP("BuildingBlocks", "Bordered Sidebar"), QT_TRANSLATE_NOOP("BuildingBlocks", "Tab Sidebar"), QT_TRANSLATE_NOOP("BuildingBlocks", "Checklist Sidebar")};
+        for (int i = 0; i < int(std::size(sideNames)); ++i) {
+            v << BuildingBlock{QStringLiteral("sidebar.%1").arg(i), "Page Parts", QCoreApplication::translate("BuildingBlocks", sideNames[i]), [i, mkText, shapeOf](Document &d, const QRectF &c) {
                 ItemList out;
                 const QRectF r(c.right() - 170, c.top() + 60, 170, 300);
                 if (i == 0) out.push_back(shapeOf("rect", r, Fill::solid(ColorRef::scheme(Accent5))));
@@ -1688,39 +1764,39 @@ const QVector<BuildingBlock> &buildingBlocks()
                 if (i == 2) { out.push_back(shapeOf("rect", r, Fill::solid(ColorRef::scheme(Accent5)))); out.push_back(shapeOf("rect", QRectF(r.left(), r.top(), r.width(), 34), Fill::solid(ColorRef::scheme(Accent1)))); }
                 if (i == 3) out.push_back(shapeOf("roundRect", r, Fill::solid(ColorRef::scheme(Accent3, 80))));
                 QVector<Para> paras;
-                Para h = C(QStringLiteral("Sidebar Heading"), 14, i == 2 ? -1 : Accent1, 0, true, 700);
+                Para h = C(QCoreApplication::translate("BuildingBlocks", "Sidebar Heading"), 14, i == 2 ? -1 : Accent1, 0, true, 700);
                 if (i == 2) h.color = ColorRef::rgb(Qt::white);
                 paras << h;
-                if (i == 3) paras << P(QStringLiteral("✔ First item\n✔ Second item\n✔ Third item"), "Body Text");
-                else paras << P(QStringLiteral("Use a sidebar for short, related information such as dates, contacts or a list of what's inside."), "Body Text");
+                if (i == 3) paras << P(QCoreApplication::translate("BuildingBlocks", "✔ First item\n✔ Second item\n✔ Third item"), "Body Text");
+                else paras << P(QCoreApplication::translate("BuildingBlocks", "Use a sidebar for short, related information such as dates, contacts or a list of what's inside."), "Body Text");
                 auto t = mkText(d, r.adjusted(10, i == 2 ? 6 : 10, -10, -10), paras);
                 out.push_back(t);
                 return out;
             }};
         }
         // Stories and table of contents.
-        v << BuildingBlock{"story.2col", "Page Parts", "Two-Column Story", [mkText](Document &d, const QRectF &c) {
+        v << BuildingBlock{"story.2col", "Page Parts", QCoreApplication::translate("BuildingBlocks", "Two-Column Story"), [mkText](Document &d, const QRectF &c) {
             ItemList out;
-            out.push_back(mkText(d, QRectF(c.left(), c.top(), c.width(), 50), {H(QStringLiteral("Story Headline"), 26, 0, Accent1)}));
-            auto t = mkText(d, QRectF(c.left(), c.top() + 56, c.width(), 280), {P(kLorem1, "Body Text"), P(kLorem2, "Body Text"), P(kLorem3, "Body Text")});
+            out.push_back(mkText(d, QRectF(c.left(), c.top(), c.width(), 50), {H(QCoreApplication::translate("BuildingBlocks", "Story Headline"), 26, 0, Accent1)}));
+            auto t = mkText(d, QRectF(c.left(), c.top() + 56, c.width(), 280), {P(lorem1(), "Body Text"), P(lorem2(), "Body Text"), P(lorem3(), "Body Text")});
             t->columns = 2;
             t->columnGap = 18;
             out.push_back(t);
             return out;
         }};
-        v << BuildingBlock{"story.3col", "Page Parts", "Three-Column Story", [mkText](Document &d, const QRectF &c) {
+        v << BuildingBlock{"story.3col", "Page Parts", QCoreApplication::translate("BuildingBlocks", "Three-Column Story"), [mkText](Document &d, const QRectF &c) {
             ItemList out;
-            out.push_back(mkText(d, QRectF(c.left(), c.top(), c.width(), 50), {H(QStringLiteral("Story Headline"), 26, 0, Accent1)}));
-            auto t = mkText(d, QRectF(c.left(), c.top() + 56, c.width(), 260), {P(kLorem1, "Body Text"), P(kLorem2, "Body Text"), P(kLorem3, "Body Text"), P(kLorem1, "Body Text")});
+            out.push_back(mkText(d, QRectF(c.left(), c.top(), c.width(), 50), {H(QCoreApplication::translate("BuildingBlocks", "Story Headline"), 26, 0, Accent1)}));
+            auto t = mkText(d, QRectF(c.left(), c.top() + 56, c.width(), 260), {P(lorem1(), "Body Text"), P(lorem2(), "Body Text"), P(lorem3(), "Body Text"), P(lorem1(), "Body Text")});
             t->columns = 3;
             t->columnGap = 14;
             out.push_back(t);
             return out;
         }};
-        v << BuildingBlock{"toc", "Page Parts", "Table of Contents", [mkText](Document &d, const QRectF &c) {
+        v << BuildingBlock{"toc", "Page Parts", QCoreApplication::translate("BuildingBlocks", "Table of Contents"), [mkText](Document &d, const QRectF &c) {
             ItemList out;
-            auto t = mkText(d, QRectF(c.left(), c.top() + 40, 220, 160), {C(QStringLiteral("Inside This Issue"), 14, Accent1, 0, true, 700),
-                                                                          P(QStringLiteral("Lead story\t1\nInside story\t2\nInside story\t2\nCalendar\t3\nBack page story\t4"), "Body Text")});
+            auto t = mkText(d, QRectF(c.left(), c.top() + 40, 220, 160), {C(QCoreApplication::translate("BuildingBlocks", "Inside This Issue"), 14, Accent1, 0, true, 700),
+                                                                          P(QCoreApplication::translate("BuildingBlocks", "Lead story\t1\nInside story\t2\nInside story\t2\nCalendar\t3\nBack page story\t4"), "Body Text")});
             QTextCursor cur(d.storyDoc(t->storyId));
             cur.select(QTextCursor::Document);
             QTextBlockFormat bf;
@@ -1731,9 +1807,9 @@ const QVector<BuildingBlock> &buildingBlocks()
             return out;
         }};
         // Borders & accents.
-        const QStringList borderNames{"Thick Bar", "Double Rule", "Corner Accent", "Frame", "Rounded Frame", "Dotted Frame", "Wave Accent", "Chevron Bar"};
-        for (int i = 0; i < borderNames.size(); ++i) {
-            v << BuildingBlock{QStringLiteral("border.%1").arg(i), "Borders & Accents", borderNames[i], [i, shapeOf](Document &d, const QRectF &c) {
+        static const char *const borderNames[] = {QT_TRANSLATE_NOOP("BuildingBlocks", "Thick Bar"), QT_TRANSLATE_NOOP("BuildingBlocks", "Double Rule"), QT_TRANSLATE_NOOP("BuildingBlocks", "Corner Accent"), QT_TRANSLATE_NOOP("BuildingBlocks", "Frame"), QT_TRANSLATE_NOOP("BuildingBlocks", "Rounded Frame"), QT_TRANSLATE_NOOP("BuildingBlocks", "Dotted Frame"), QT_TRANSLATE_NOOP("BuildingBlocks", "Wave Accent"), QT_TRANSLATE_NOOP("BuildingBlocks", "Chevron Bar")};
+        for (int i = 0; i < int(std::size(borderNames)); ++i) {
+            v << BuildingBlock{QStringLiteral("border.%1").arg(i), "Borders & Accents", QCoreApplication::translate("BuildingBlocks", borderNames[i]), [i, shapeOf](Document &d, const QRectF &c) {
                 Q_UNUSED(d);
                 ItemList out;
                 switch (i) {
@@ -1755,21 +1831,21 @@ const QVector<BuildingBlock> &buildingBlocks()
             }};
         }
         // Advertisements and attention getters.
-        const QStringList adNames{"Coupon", "Sale Ad", "Event Ad", "Starburst", "Price Tag", "Ribbon Banner", "New!"};
-        for (int i = 0; i < adNames.size(); ++i) {
-            v << BuildingBlock{QStringLiteral("ad.%1").arg(i), "Advertisements", adNames[i], [i, mkText, shapeOf](Document &d, const QRectF &c) {
+        static const char *const adNames[] = {QT_TRANSLATE_NOOP("BuildingBlocks", "Coupon"), QT_TRANSLATE_NOOP("BuildingBlocks", "Sale Ad"), QT_TRANSLATE_NOOP("BuildingBlocks", "Event Ad"), QT_TRANSLATE_NOOP("BuildingBlocks", "Starburst"), QT_TRANSLATE_NOOP("BuildingBlocks", "Price Tag"), QT_TRANSLATE_NOOP("BuildingBlocks", "Ribbon Banner"), QT_TRANSLATE_NOOP("BuildingBlocks", "New!")};
+        for (int i = 0; i < int(std::size(adNames)); ++i) {
+            v << BuildingBlock{QStringLiteral("ad.%1").arg(i), "Advertisements", QCoreApplication::translate("BuildingBlocks", adNames[i]), [i, mkText, shapeOf](Document &d, const QRectF &c) {
                 ItemList out;
                 const QRectF r(c.center().x() - 140, c.center().y() - 80, 280, 160);
                 if (i == 0) {
                     auto s = shapeOf("rect", r, Fill::solid(ColorRef::scheme(Accent5)), Stroke::line(ColorRef::scheme(Main), 1.5));
                     s->stroke.dash = Stroke::DashLine;
                     out.push_back(s);
-                    out.push_back(mkText(d, r.adjusted(12, 12, -12, -12), {C(QStringLiteral("$5 OFF"), 34, Accent1, 1, true, 700), C(QStringLiteral("any purchase of $25 or more"), 11, Main, 1),
-                                                                           C(QStringLiteral("{biz:name} · Expires June 30"), 8, Accent4, 1)}, VAlign::Middle));
+                    out.push_back(mkText(d, r.adjusted(12, 12, -12, -12), {C(QCoreApplication::translate("BuildingBlocks", "$5 OFF"), 34, Accent1, 1, true, 700), C(QCoreApplication::translate("BuildingBlocks", "any purchase of $25 or more"), 11, Main, 1),
+                                                                           C(QCoreApplication::translate("BuildingBlocks", "{biz:name} · Expires June 30"), 8, Accent4, 1)}, VAlign::Middle));
                 } else if (i == 1 || i == 2) {
                     out.push_back(shapeOf("rect", r, Fill::solid(ColorRef::scheme(i == 1 ? Accent1 : Accent2))));
-                    out.push_back(mkText(d, r.adjusted(12, 12, -12, -12), {W(i == 1 ? QStringLiteral("SPRING SALE") : QStringLiteral("OPEN HOUSE"), 26, 1, true, 700),
-                                                                           W(i == 1 ? QStringLiteral("This weekend only") : QStringLiteral("Saturday 10–4"), 13, 1)}, VAlign::Middle));
+                    out.push_back(mkText(d, r.adjusted(12, 12, -12, -12), {W(i == 1 ? QCoreApplication::translate("BuildingBlocks", "SPRING SALE") : QCoreApplication::translate("BuildingBlocks", "OPEN HOUSE"), 26, 1, true, 700),
+                                                                           W(i == 1 ? QCoreApplication::translate("BuildingBlocks", "This weekend only") : QCoreApplication::translate("BuildingBlocks", "Saturday 10–4"), 13, 1)}, VAlign::Middle));
                 } else {
                     const QString shapeId = i == 3 ? "irregularSeal1" : i == 4 ? "pentagon" : i == 5 ? "ribbon2" : "star8";
                     auto s = shapeOf(shapeId, QRectF(c.center().x() - 80, c.center().y() - 80, 160, i == 5 ? 80 : 160), Fill::solid(ColorRef::scheme(Accent3)));
@@ -1777,7 +1853,7 @@ const QVector<BuildingBlock> &buildingBlocks()
                     Page tmp;
                     B b(d);
                     b.pg = &tmp;
-                    b.fillStory(d.storyDoc(s->storyId), {W(i == 3 ? QStringLiteral("FREE!") : i == 4 ? QStringLiteral("$19.99") : i == 5 ? QStringLiteral("Best Seller") : QStringLiteral("NEW!"), 20, 1, true, 700)});
+                    b.fillStory(d.storyDoc(s->storyId), {W(i == 3 ? QCoreApplication::translate("BuildingBlocks", "FREE!") : i == 4 ? QStringLiteral("$19.99") : i == 5 ? QCoreApplication::translate("BuildingBlocks", "Best Seller") : QCoreApplication::translate("BuildingBlocks", "NEW!"), 20, 1, true, 700)});
                     out.push_back(s);
                 }
                 return out;
@@ -1785,7 +1861,7 @@ const QVector<BuildingBlock> &buildingBlocks()
         }
         // Calendars.
         for (int k = 0; k < 4; ++k) {
-            v << BuildingBlock{QStringLiteral("calendar.%1").arg(k), "Calendars", k < 2 ? QStringLiteral("This Month") : QStringLiteral("Next Month"), [k](Document &d, const QRectF &c) {
+            v << BuildingBlock{QStringLiteral("calendar.%1").arg(k), "Calendars", k < 2 ? QCoreApplication::translate("BuildingBlocks", "This Month") : QCoreApplication::translate("BuildingBlocks", "Next Month"), [k](Document &d, const QRectF &c) {
                 const QDate dt = QDate::currentDate().addMonths(k < 2 ? 0 : 1);
                 return makeCalendar(d, QRectF(c.left(), c.top() + c.height() * 0.4, c.width(), c.height() * 0.55), dt.year(), dt.month(), k % 2 ? 2 : 0);
             }};

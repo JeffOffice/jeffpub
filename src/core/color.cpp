@@ -1,5 +1,6 @@
 #include "core/color.h"
 
+#include <QCoreApplication>
 #include <QHash>
 #include <algorithm>
 #include <cmath>
@@ -117,20 +118,22 @@ ColorRef ColorRef::fromString(const QString &s)
 
 QString slotName(int slot)
 {
-    static const char *n[] = {"Main", "Accent 1", "Accent 2", "Accent 3", "Accent 4", "Accent 5", "Hyperlink", "Followed Hyperlink"};
-    return (slot >= 0 && slot < SlotCount) ? QString::fromLatin1(n[slot]) : QString();
+    static const char *n[] = {QT_TRANSLATE_NOOP("Core", "Main"), QT_TRANSLATE_NOOP("Core", "Accent 1"), QT_TRANSLATE_NOOP("Core", "Accent 2"),
+                              QT_TRANSLATE_NOOP("Core", "Accent 3"), QT_TRANSLATE_NOOP("Core", "Accent 4"), QT_TRANSLATE_NOOP("Core", "Accent 5"),
+                              QT_TRANSLATE_NOOP("Core", "Hyperlink"), QT_TRANSLATE_NOOP("Core", "Followed Hyperlink")};
+    return (slot >= 0 && slot < SlotCount) ? QCoreApplication::translate("Core", n[slot]) : QString();
 }
 
 QString ColorRef::displayName() const
 {
-    if (m_kind == None) return QStringLiteral("No Color");
+    if (m_kind == None) return QCoreApplication::translate("Core", "No Color");
     if (m_kind == Rgb && m_rgb.spec() == QColor::Cmyk)
-        return QStringLiteral("C %1 M %2 Y %3 K %4").arg(std::round(m_rgb.cyanF() * 1000) / 10).arg(std::round(m_rgb.magentaF() * 1000) / 10)
+        return QCoreApplication::translate("Core", "C %1 M %2 Y %3 K %4").arg(std::round(m_rgb.cyanF() * 1000) / 10).arg(std::round(m_rgb.magentaF() * 1000) / 10)
             .arg(std::round(m_rgb.yellowF() * 1000) / 10).arg(std::round(m_rgb.blackF() * 1000) / 10);
     if (m_kind == Rgb) return m_rgb.name().toUpper();
     QString n = slotName(m_slot);
-    if (m_lighten) n += QStringLiteral(" (Tint %1%)").arg(100 - m_lighten);
-    if (m_darken) n += QStringLiteral(" (Shade %1%)").arg(100 - m_darken);
+    if (m_lighten) n = QCoreApplication::translate("Core", "%1 (Tint %2%)").arg(n).arg(100 - m_lighten);
+    if (m_darken) n = QCoreApplication::translate("Core", "%1 (Shade %2%)").arg(n).arg(100 - m_darken);
     return n;
 }
 

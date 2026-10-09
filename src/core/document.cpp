@@ -7,6 +7,7 @@
 #include "text/storyio.h"
 #include "text/textprops.h"
 
+#include <QCoreApplication>
 #include <QBuffer>
 #include <atomic>
 #include <QFont>
@@ -207,10 +208,21 @@ QStringList BusinessInfo::keys()
 }
 QString BusinessInfo::label(const QString &k)
 {
-    static const QMap<QString, QString> m{{"name", "Organization Name"}, {"tagline", "Tagline or Motto"}, {"person", "Individual Name"},
-                                          {"title", "Job Position or Title"}, {"address", "Address"}, {"phone", "Phone"},
-                                          {"fax", "Fax"}, {"email", "Email"}, {"web", "Website"}};
-    return m.value(k, k);
+    struct Label {
+        const char *key, *text;
+    };
+    static const Label labels[] = {{"name", QT_TRANSLATE_NOOP("Core", "Organization Name")},
+                                   {"tagline", QT_TRANSLATE_NOOP("Core", "Tagline or Motto")},
+                                   {"person", QT_TRANSLATE_NOOP("Core", "Individual Name")},
+                                   {"title", QT_TRANSLATE_NOOP("Core", "Job Position or Title")},
+                                   {"address", QT_TRANSLATE_NOOP("Core", "Address")},
+                                   {"phone", QT_TRANSLATE_NOOP("Core", "Phone")},
+                                   {"fax", QT_TRANSLATE_NOOP("Core", "Fax")},
+                                   {"email", QT_TRANSLATE_NOOP("Core", "Email")},
+                                   {"web", QT_TRANSLATE_NOOP("Core", "Website")}};
+    for (const Label &l : labels)
+        if (k == QLatin1String(l.key)) return QCoreApplication::translate("Core", l.text);
+    return k;
 }
 QString BusinessInfo::field(const QString &k) const
 {

@@ -6,6 +6,7 @@
 #include "render/shapes.h"
 #include "text/textprops.h"
 
+#include <QCoreApplication>
 #include <QJsonDocument>
 #include <QRegularExpression>
 #include <QFile>
@@ -149,7 +150,7 @@ public:
         m_doc.props.keywords = str(p["meta:keyword"]);
         m_doc.props.comments = str(p["dc:description"]);
     }
-    void defineEmbeddedFont(const RVNGPropertyList &p) override { m_rep.warnings << QStringLiteral("Embedded font \"%1\" was not imported.").arg(str(p["librevenge:name"])); }
+    void defineEmbeddedFont(const RVNGPropertyList &p) override { m_rep.warnings << QCoreApplication::translate("Import", "Embedded font \"%1\" was not imported.").arg(str(p["librevenge:name"])); }
 
     void startPage(const RVNGPropertyList &p) override
     {
@@ -1154,7 +1155,7 @@ private:
             const QString fmt = formatForMime(mime);
             pic->imageId = m_doc.addImage(bytes, fmt);
             if (m_doc.image(pic->imageId).isNull())
-                m_rep.warnings << QStringLiteral("A %1 picture could not be displayed.").arg(fmt.toUpper());
+                m_rep.warnings << QCoreApplication::translate("Import", "A %1 picture could not be displayed.").arg(fmt.toUpper());
         }
         ++m_rep.pictures;
         return pic;
@@ -1501,12 +1502,12 @@ std::unique_ptr<Document> importPublisher(const QByteArray &data, QString *error
     PubImportReport localReport;
     PubImportReport &rep = report ? *report : localReport;
     if (!isPublisherFile(data)) {
-        if (error) *error = QStringLiteral("This is not a .pub publication file.");
+        if (error) *error = QCoreApplication::translate("Import", "This is not a .pub publication file.");
         return nullptr;
     }
     librevenge::RVNGStringStream input(reinterpret_cast<const unsigned char *>(data.constData()), (unsigned)data.size());
     if (!libmspub::MSPUBDocument::isSupported(&input)) {
-        if (error) *error = QStringLiteral("JeffPub can't read this version of .pub file.");
+        if (error) *error = QCoreApplication::translate("Import", "JeffPub can't read this version of .pub file.");
         return nullptr;
     }
     auto doc = std::make_unique<Document>();
@@ -1517,17 +1518,17 @@ std::unique_ptr<Document> importPublisher(const QByteArray &data, QString *error
         input.seek(0, librevenge::RVNG_SEEK_SET);
         ok = libmspub::MSPUBDocument::parse(&input, &c);
     } catch (const std::exception &e) {
-        if (error) *error = QStringLiteral("The .pub file is damaged: %1").arg(QString::fromUtf8(e.what()));
+        if (error) *error = QCoreApplication::translate("Import", "The .pub file is damaged: %1").arg(QString::fromUtf8(e.what()));
         return nullptr;
     } catch (...) {
-        if (error) *error = QStringLiteral("The .pub file is damaged.");
+        if (error) *error = QCoreApplication::translate("Import", "The .pub file is damaged.");
         return nullptr;
     }
     c.finish();
     // Saving back to .pub keeps these names as they are.
     doc->pubFonts = rep.fontsUsed;
     if (!ok) {
-        if (error) *error = QStringLiteral("JeffPub could not read this .pub file. It may be damaged or use features that aren't supported yet.");
+        if (error) *error = QCoreApplication::translate("Import", "JeffPub could not read this .pub file. It may be damaged or use features that aren't supported yet.");
         return nullptr;
     }
     doc->props.created = QDateTime::currentDateTime();

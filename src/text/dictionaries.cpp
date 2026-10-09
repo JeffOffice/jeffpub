@@ -25,18 +25,18 @@ struct Entry {
 };
 
 const Entry kEntries[] = {
-    {"en-US", "English (United States)", "en/en_US", "en/hyph_en_US.dic"},
-    {"en-GB", "English (United Kingdom)", "en/en_GB", "en/hyph_en_GB.dic"},
-    {"en-CA", "English (Canada)", "en/en_CA", "en/hyph_en_US.dic"},
-    {"en-AU", "English (Australia)", "en/en_AU", "en/hyph_en_GB.dic"},
-    {"es-MX", "Spanish (Mexico)", "es/es_MX", "es/hyph_es.dic"},
-    {"es-ES", "Spanish (Spain)", "es/es_ES", "es/hyph_es.dic"},
-    {"fr-FR", "French", "fr_FR/fr", "fr_FR/hyph_fr.dic"},
-    {"de-DE", "German", "de/de_DE_frami", "de/hyph_de_DE.dic"},
-    {"it-IT", "Italian", "it_IT/it_IT", "it_IT/hyph_it_IT.dic"},
-    {"nl-NL", "Dutch", "nl_NL/nl_NL", "nl_NL/hyph_nl_NL.dic"},
-    {"pt-BR", "Portuguese (Brazil)", "pt_BR/pt_BR", "pt_BR/hyph_pt_BR.dic"},
-    {"pt-PT", "Portuguese (Portugal)", "pt_PT/pt_PT", "pt_PT/hyph_pt_PT.dic"},
+    {"en-US", QT_TRANSLATE_NOOP("Text", "English (United States)"), "en/en_US", "en/hyph_en_US.dic"},
+    {"en-GB", QT_TRANSLATE_NOOP("Text", "English (United Kingdom)"), "en/en_GB", "en/hyph_en_GB.dic"},
+    {"en-CA", QT_TRANSLATE_NOOP("Text", "English (Canada)"), "en/en_CA", "en/hyph_en_US.dic"},
+    {"en-AU", QT_TRANSLATE_NOOP("Text", "English (Australia)"), "en/en_AU", "en/hyph_en_GB.dic"},
+    {"es-MX", QT_TRANSLATE_NOOP("Text", "Spanish (Mexico)"), "es/es_MX", "es/hyph_es.dic"},
+    {"es-ES", QT_TRANSLATE_NOOP("Text", "Spanish (Spain)"), "es/es_ES", "es/hyph_es.dic"},
+    {"fr-FR", QT_TRANSLATE_NOOP("Text", "French"), "fr_FR/fr", "fr_FR/hyph_fr.dic"},
+    {"de-DE", QT_TRANSLATE_NOOP("Text", "German"), "de/de_DE_frami", "de/hyph_de_DE.dic"},
+    {"it-IT", QT_TRANSLATE_NOOP("Text", "Italian"), "it_IT/it_IT", "it_IT/hyph_it_IT.dic"},
+    {"nl-NL", QT_TRANSLATE_NOOP("Text", "Dutch"), "nl_NL/nl_NL", "nl_NL/hyph_nl_NL.dic"},
+    {"pt-BR", QT_TRANSLATE_NOOP("Text", "Portuguese (Brazil)"), "pt_BR/pt_BR", "pt_BR/hyph_pt_BR.dic"},
+    {"pt-PT", QT_TRANSLATE_NOOP("Text", "Portuguese (Portugal)"), "pt_PT/pt_PT", "pt_PT/hyph_pt_PT.dic"},
 };
 
 const Entry *entry(const QString &code)
@@ -93,7 +93,7 @@ const QVector<Language> &languages()
 {
     static const QVector<Language> list = [] {
         QVector<Language> l;
-        for (const Entry &e : kEntries) l << Language{QLatin1String(e.code), QLatin1String(e.name)};
+        for (const Entry &e : kEntries) l << Language{QLatin1String(e.code), QCoreApplication::translate("Text", e.name)};
         return l;
     }();
     return list;
@@ -101,7 +101,7 @@ const QVector<Language> &languages()
 
 QString languageName(const QString &tag)
 {
-    if (const Entry *e = entry(tag)) return QLatin1String(e->name);
+    if (const Entry *e = entry(tag)) return QCoreApplication::translate("Text", e->name);
     return tag;
 }
 

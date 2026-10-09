@@ -407,7 +407,7 @@ void Canvas::paintCatalogArea(QPainter &p, const Slot &s)
     QFont f = font();
     f.setPointSizeF(8.0 / std::max(0.05, ppp()));
     p.setFont(f);
-    const QString tag = QStringLiteral("Catalog area: %1 per page").arg(cat.perPage());
+    const QString tag = QCoreApplication::translate("Canvas", "Catalog area: %1 per page").arg(cat.perPage());
     const QFontMetricsF fm(f);
     const QRectF box(cat.rect.left(), cat.rect.top() - fm.height() * 1.3, fm.horizontalAdvance(tag) + fm.height(), fm.height() * 1.3);
     p.fillRect(box, QColor(230, 120, 20));
@@ -1086,7 +1086,7 @@ void Canvas::paintOverlay(QPainter &p)
     // Master page banner.
     if (!m_ed->masterView().isEmpty()) {
         const MasterPage *m = d->master(m_ed->masterView());
-        const QString label = QStringLiteral("Editing %1").arg(m ? m->name : QString());
+        const QString label = QCoreApplication::translate("Canvas", "Editing %1").arg(m ? m->name : QString());
         QFont f = font();
         f.setBold(true);
         p.setFont(f);
@@ -1453,7 +1453,7 @@ void Canvas::applyFormatPainter(const QString &id)
 {
     Item *it = m_ed->doc()->item(id);
     if (!it) return;
-    m_ed->change(QStringLiteral("Format Painter"), [&] {
+    m_ed->change(QCoreApplication::translate("Canvas", "Format Painter"), [&] {
         const QJsonObject &f = m_ed->painterItem;
         if (f.contains("fill")) it->fill = Fill::fromJson(f["fill"].toObject());
         if (f.contains("stroke")) it->stroke = Stroke::fromJson(f["stroke"].toObject());
@@ -1556,7 +1556,7 @@ void Canvas::mousePressEvent(QMouseEvent *e)
             if (auto *t = dynamic_cast<TextItem *>(m_ed->doc()->item(h.id))) m_ed->linkFrames(src, t->id);
         } else if (Item *s = m_ed->doc()->item(src)) {
             // Clicking empty space creates a new box for the overflow.
-            m_ed->beginChange(QStringLiteral("Create Text Box Link"));
+            m_ed->beginChange(QCoreApplication::translate("Canvas", "Create Text Box Link"));
             auto t = std::static_pointer_cast<TextItem>(m_ed->newTextBox(QRectF(m_pressPage, s->rect.size())));
             t->insets = static_cast<TextItem *>(s)->insets;
             t->columns = static_cast<TextItem *>(s)->columns;
@@ -1582,10 +1582,10 @@ void Canvas::mousePressEvent(QMouseEvent *e)
         if (h.kind == HitKind::WrapPoint && (e->modifiers() & Qt::ControlModifier)) {
             // Ctrl+click a point deletes it (a wrap outline keeps at least three).
             if (it->wrap.points.size() > 3)
-                m_ed->change(QStringLiteral("Delete Wrap Point"), [&] { it->wrap.points.remove(h.index); });
+                m_ed->change(QCoreApplication::translate("Canvas", "Delete Wrap Point"), [&] { it->wrap.points.remove(h.index); });
             return;
         }
-        m_ed->beginChange(h.kind == HitKind::WrapPoint ? QStringLiteral("Move Wrap Point") : QStringLiteral("Add Wrap Point"));
+        m_ed->beginChange(h.kind == HitKind::WrapPoint ? QCoreApplication::translate("Canvas", "Move Wrap Point") : QCoreApplication::translate("Canvas", "Add Wrap Point"));
         m_hit = h;
         if (h.kind == HitKind::WrapEdge) {
             it->wrap.points.insert(h.index + 1, local);
@@ -1603,10 +1603,10 @@ void Canvas::mousePressEvent(QMouseEvent *e)
         const QPointF local = sh->transform().inverted().map(m_pressPage);
         if (h.kind == HitKind::Point && (e->modifiers() & Qt::ControlModifier)) {
             // Ctrl+click a point deletes it.
-            m_ed->change(QStringLiteral("Delete Point"), [&] { sh->customPath = pts::removed(sh->customPath, h.index); });
+            m_ed->change(QCoreApplication::translate("Canvas", "Delete Point"), [&] { sh->customPath = pts::removed(sh->customPath, h.index); });
             return;
         }
-        m_ed->beginChange(h.kind == HitKind::Point ? QStringLiteral("Move Point") : QStringLiteral("Add Point"));
+        m_ed->beginChange(h.kind == HitKind::Point ? QCoreApplication::translate("Canvas", "Move Point") : QCoreApplication::translate("Canvas", "Add Point"));
         m_hit = h;
         if (h.kind == HitKind::PointEdge) {
             int at = -1;
@@ -1638,7 +1638,7 @@ void Canvas::mousePressEvent(QMouseEvent *e)
         m_ed->linkSource = h.id;
         m_ed->setTool(Tool::Link);
         m_ed->linkSource = h.id;
-        Q_EMIT m_ed->status(QStringLiteral("Click an empty text box to continue the story there, or click the page to create one."));
+        Q_EMIT m_ed->status(QCoreApplication::translate("Canvas", "Click an empty text box to continue the story there, or click the page to create one."));
         return;
     case HitKind::Handle:
     case HitKind::Rotate:
@@ -1655,7 +1655,7 @@ void Canvas::mousePressEvent(QMouseEvent *e)
         m_guideOrient = h.row == 0 ? Qt::Horizontal : Qt::Vertical;
         m_guideIndex = h.index;
         m_guideOnMaster = !h.id.isEmpty();
-        m_ed->beginChange(QStringLiteral("Move Guide"));
+        m_ed->beginChange(QCoreApplication::translate("Canvas", "Move Guide"));
         RulerGuides &g = m_ed->surface()->guides;
         m_guidePos = m_guideOrient == Qt::Horizontal ? g.h[h.index] : g.v[h.index];
         return;
@@ -1710,7 +1710,7 @@ void Canvas::mousePressEvent(QMouseEvent *e)
             m_drag = Drag::CropMove;
             m_orig.clear();
             m_orig[h.id] = it->toJson();
-            m_ed->beginChange(QStringLiteral("Crop"));
+            m_ed->beginChange(QCoreApplication::translate("Canvas", "Crop"));
             return;
         }
         m_copyDrag = (e->modifiers() & Qt::ControlModifier);
@@ -1736,20 +1736,20 @@ void Canvas::beginResize(const Hit &h, const QPointF &page)
     for (Item *it : m_ed->selectedItems()) m_orig[it->id] = it->toJson();
     m_origBox = m_ed->selectionBounds();
     switch (h.kind) {
-    case HitKind::Handle: m_drag = Drag::Resize; m_ed->beginChange(QStringLiteral("Resize")); break;
+    case HitKind::Handle: m_drag = Drag::Resize; m_ed->beginChange(QCoreApplication::translate("Canvas", "Resize")); break;
     case HitKind::Rotate: {
         m_drag = Drag::Rotate;
         const QPointF c = m_origBox.center();
         m_rotStart = qRadiansToDegrees(std::atan2(page.y() - c.y(), page.x() - c.x()));
-        m_ed->beginChange(QStringLiteral("Rotate"));
+        m_ed->beginChange(QCoreApplication::translate("Canvas", "Rotate"));
         break;
     }
-    case HitKind::LineEnd: m_drag = Drag::LineEnd; m_ed->beginChange(QStringLiteral("Move Line Point")); break;
-    case HitKind::LineBend: m_drag = Drag::LineBend; m_ed->beginChange(QStringLiteral("Adjust Line")); break;
-    case HitKind::Adjust: m_drag = Drag::Adjust; m_ed->beginChange(QStringLiteral("Adjust Shape")); break;
-    case HitKind::Crop: m_drag = Drag::Crop; m_ed->beginChange(QStringLiteral("Crop")); break;
-    case HitKind::ColBorder: m_drag = Drag::ColResize; m_ed->beginChange(QStringLiteral("Resize Column")); break;
-    case HitKind::RowBorder: m_drag = Drag::RowResize; m_ed->beginChange(QStringLiteral("Resize Row")); break;
+    case HitKind::LineEnd: m_drag = Drag::LineEnd; m_ed->beginChange(QCoreApplication::translate("Canvas", "Move Line Point")); break;
+    case HitKind::LineBend: m_drag = Drag::LineBend; m_ed->beginChange(QCoreApplication::translate("Canvas", "Adjust Line")); break;
+    case HitKind::Adjust: m_drag = Drag::Adjust; m_ed->beginChange(QCoreApplication::translate("Canvas", "Adjust Shape")); break;
+    case HitKind::Crop: m_drag = Drag::Crop; m_ed->beginChange(QCoreApplication::translate("Canvas", "Crop")); break;
+    case HitKind::ColBorder: m_drag = Drag::ColResize; m_ed->beginChange(QCoreApplication::translate("Canvas", "Resize Column")); break;
+    case HitKind::RowBorder: m_drag = Drag::RowResize; m_ed->beginChange(QCoreApplication::translate("Canvas", "Resize Row")); break;
     default: break;
     }
 }
@@ -1806,7 +1806,7 @@ void Canvas::mouseMoveEvent(QMouseEvent *e)
         bool locked = false;
         for (Item *it : m_ed->selectedItems()) locked |= it->locked;
         if (locked) { m_drag = Drag::None; return; }
-        m_ed->beginChange(m_copyDrag ? QStringLiteral("Copy") : QStringLiteral("Move"));
+        m_ed->beginChange(m_copyDrag ? QCoreApplication::translate("Canvas", "Copy") : QCoreApplication::translate("Canvas", "Move"));
         if (m_copyDrag) {
             QStringList copies;
             ItemList originals;
@@ -2254,7 +2254,7 @@ void Canvas::mouseReleaseEvent(QMouseEvent *e)
             m_ed->setCursor(c);
         } else {
             const int from = m_moveFrom, to = m_moveTo, at = m_movePos;
-            m_ed->editTextAs(copy ? QStringLiteral("Copy Text") : QStringLiteral("Move Text"), [&](QTextCursor &cur) {
+            m_ed->editTextAs(copy ? QCoreApplication::translate("Canvas", "Copy Text") : QCoreApplication::translate("Canvas", "Move Text"), [&](QTextCursor &cur) {
                 QTextDocument *doc = cur.document();
                 QTextCursor src(doc);
                 src.setPosition(from);
@@ -2277,7 +2277,7 @@ void Canvas::mouseReleaseEvent(QMouseEvent *e)
     }
     case Drag::TextSelect:
         if (m_ed->tool() == Tool::FormatPainter && m_ed->painterHasText && m_ed->cursor().hasSelection()) {
-            m_ed->mergeCharFormat(m_ed->painterText, QStringLiteral("Format Painter"));
+            m_ed->mergeCharFormat(m_ed->painterText, QCoreApplication::translate("Canvas", "Format Painter"));
             if (!m_ed->painterLocked) m_ed->setTool(Tool::Select);
         }
         break;
@@ -2671,7 +2671,7 @@ void Canvas::handleTextKey(QKeyEvent *e)
             if (r < 0) return;
             if (r >= t->rows) {
                 // Tab in the last cell adds a row.
-                m_ed->change(QStringLiteral("Insert Row"), [&] {
+                m_ed->change(QCoreApplication::translate("Canvas", "Insert Row"), [&] {
                     t->rows += 1;
                     t->rowH << t->rowH.last();
                     for (int k = 0; k < t->cols; ++k) {
@@ -2745,10 +2745,10 @@ void Canvas::keyPressEvent(QKeyEvent *e)
     case Qt::Key_Backspace:
         m_ed->deleteSelection();
         return;
-    case Qt::Key_Left: m_ed->moveSelectionBy(-step, 0, QStringLiteral("Nudge")); return;
-    case Qt::Key_Right: m_ed->moveSelectionBy(step, 0, QStringLiteral("Nudge")); return;
-    case Qt::Key_Up: m_ed->moveSelectionBy(0, -step, QStringLiteral("Nudge")); return;
-    case Qt::Key_Down: m_ed->moveSelectionBy(0, step, QStringLiteral("Nudge")); return;
+    case Qt::Key_Left: m_ed->moveSelectionBy(-step, 0, QCoreApplication::translate("Canvas", "Nudge")); return;
+    case Qt::Key_Right: m_ed->moveSelectionBy(step, 0, QCoreApplication::translate("Canvas", "Nudge")); return;
+    case Qt::Key_Up: m_ed->moveSelectionBy(0, -step, QCoreApplication::translate("Canvas", "Nudge")); return;
+    case Qt::Key_Down: m_ed->moveSelectionBy(0, step, QCoreApplication::translate("Canvas", "Nudge")); return;
     case Qt::Key_Tab:
     case Qt::Key_Backtab: {
         const ItemList &l = m_ed->surfaceItems();
@@ -2861,7 +2861,7 @@ void Canvas::dropEvent(QDropEvent *e)
 
 void Canvas::startGuideDrag(Qt::Orientation o, const QPoint &globalPos)
 {
-    m_ed->beginChange(QStringLiteral("Add Ruler Guide"));
+    m_ed->beginChange(QCoreApplication::translate("Canvas", "Add Ruler Guide"));
     RulerGuides &g = m_ed->surface()->guides;
     const QPointF page = toPage(viewport()->mapFromGlobal(globalPos));
     m_guideOrient = o;
@@ -3060,11 +3060,11 @@ void Ruler::mousePressEvent(QMouseEvent *e)
             tabs << QTextOption::Tab(pos, QTextOption::LeftTab);
             std::sort(tabs.begin(), tabs.end(), [](const QTextOption::Tab &a, const QTextOption::Tab &b) { return a.position < b.position; });
             bf.setTabPositions(tabs);
-            m_c->editor()->mergeBlockFormat(bf, QStringLiteral("Set Tab"));
+            m_c->editor()->mergeBlockFormat(bf, QCoreApplication::translate("Canvas", "Set Tab"));
             return;
         }
         if (m_dragMarker >= 0) {
-            m_c->editor()->beginChange(QStringLiteral("Indent"));
+            m_c->editor()->beginChange(QCoreApplication::translate("Canvas", "Indent"));
             return;
         }
     }
