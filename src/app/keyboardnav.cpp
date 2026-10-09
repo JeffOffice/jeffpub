@@ -28,7 +28,7 @@ bool usesArrows(const QWidget *w)
         || qobject_cast<const QAbstractItemView *>(w) || qobject_cast<const QSlider *>(w))
         return true;
     if (auto *c = qobject_cast<const QComboBox *>(w)) return c->isEditable();
-    return false;
+    return w->property("jpOwnArrows").toBool();   // the ribbon's tabs move along themselves
 }
 
 class ArrowNav : public QObject {

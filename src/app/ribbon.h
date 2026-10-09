@@ -80,6 +80,7 @@ private:
 };
 
 class RibbonHeader;
+class HeaderButton;
 
 class Ribbon : public QWidget {
     Q_OBJECT
@@ -102,6 +103,8 @@ public:
     QString tabName(int i) const { return m_tabs.value(i).name; }
     QString tabTitle(int i) const { return m_tabs.value(i).title; }
     QString tabKeytip(int i) const { return m_tabs.value(i).keytip; }
+    QWidget *tabButton(int i) const;   // the tab's control in the top row
+    QWidget *fileButton() const;
     void setTabKeytip(RibbonTab *t, const QString &k);
     // The File button isn't a tab; it only records its KeyTip.
     QString fileKeytip() const { return m_fileKeytip; }
@@ -112,12 +115,19 @@ public:
     // `keytips`, each line that has a KeyTip ends with it.
     QString describe(bool keytips = false) const;
 
+    void focusCurrentTab();   // the keyboard enters the ribbon (F6)
+
 Q_SIGNALS:
     void fileClicked();
     void tabChanged();
+    void leaveRequested();    // Escape: back to the page
+
+protected:
+    void keyPressEvent(QKeyEvent *e) override;
 
 private:
     friend class RibbonHeader;
+    friend class HeaderButton;
     struct Tab {
         QString name, group;
         QColor color;

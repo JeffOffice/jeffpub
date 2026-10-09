@@ -829,6 +829,7 @@ public:
 
 FontCombo::FontCombo(QWidget *parent) : QComboBox(parent)
 {
+    setAccessibleName(QStringLiteral("Font"));
     setEditable(true);
     setInsertPolicy(QComboBox::NoInsert);
     setMinimumWidth(150);
@@ -895,6 +896,7 @@ void FontCombo::setCurrentFamily(const QString &family)
 // ---------------- SizeCombo ----------------
 SizeCombo::SizeCombo(QWidget *parent) : QComboBox(parent)
 {
+    setAccessibleName(QStringLiteral("Font Size"));
     setEditable(true);
     setInsertPolicy(QComboBox::NoInsert);
     setFixedWidth(70);

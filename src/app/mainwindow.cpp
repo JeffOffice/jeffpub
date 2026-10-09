@@ -55,6 +55,7 @@
 #include <QListWidget>
 #include <QMenu>
 #include <QMessageBox>
+#include <QShortcut>
 #include <QDialog>
 #include <QPainter>
 #include <QPdfWriter>
@@ -123,6 +124,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     m_backstage->hide();
     connect(m_backstage, &Backstage::closeRequested, this, &MainWindow::hideBackstage);
     connect(m_ribbon, &Ribbon::fileClicked, this, [this] { showBackstage(); });
+    connect(m_ribbon, &Ribbon::leaveRequested, this, [this] { m_canvas->setFocus(Qt::OtherFocusReason); });
+    // F6 and Shift+F6 move the keyboard between the window's parts: the
+    // ribbon, the page thumbnails, and the page.
+    auto cycle = [this](int dir) {
+        QWidget *f = QApplication::focusWidget();
+        int at = m_ribbon->isAncestorOf(f) ? 0 : (f == m_pages || m_pages->isAncestorOf(f)) ? 1 : 2;
+        int next = (at + dir + 3) % 3;
+        if (next == 1 && !m_pages->isVisible()) next = (next + dir + 3) % 3;
+        if (next == 0) m_ribbon->focusCurrentTab();
+        else if (next == 1) m_pages->setFocus(Qt::TabFocusReason);
+        else m_canvas->setFocus(Qt::TabFocusReason);
+    };
+    auto *f6 = new QShortcut(QKeySequence(Qt::Key_F6), this);
+    connect(f6, &QShortcut::activated, this, [cycle] { cycle(1); });
+    auto *sf6 = new QShortcut(QKeySequence(Qt::SHIFT | Qt::Key_F6), this);
+    connect(sf6, &QShortcut::activated, this, [cycle] { cycle(-1); });
     connect(m_task, &TaskPane::closed, this, &MainWindow::hideTaskPane);
 
     m_refreshTimer.setSingleShot(true);

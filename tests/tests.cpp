@@ -88,6 +88,8 @@
 #include <QtEndian>
 #include <QLockFile>
 #include <QStyleHints>
+#include <QSlider>
+#include <QAccessible>
 #include <QGridLayout>
 #include <QListWidget>
 #include <clocale>
@@ -1519,6 +1521,66 @@ private Q_SLOTS:
         QVERIFY2(d.contains(QStringLiteral("tab Two (Ctx, #0000ff) keytip=JT")), qPrintable(d));
         QVERIFY2(d.contains(QStringLiteral("group SHARED launcher=\"SHARED SETTINGS\" keytip=ZS launcher-keytip=SS")), qPrintable(d));
         QVERIFY(!r.describe().contains(QStringLiteral("keytip")));
+    }
+
+    // Every ribbon control has a name screen readers read, and the keyboard
+    // reaches it (the ribbon's buttons, galleries and color buttons refused
+    // the focus; its tabs and File button were only drawn).
+    void ribbonControlsAreNamedAndReachable()
+    {
+        jp::MainWindow w;
+        auto *r = w.findChild<jp::Ribbon *>();
+        QVERIFY(r);
+        QStringList unnamed, unreachable;
+        int checked = 0;
+        for (QWidget *c : r->findChildren<QWidget *>()) {
+            const bool control = qobject_cast<QAbstractButton *>(c) || qobject_cast<QComboBox *>(c) || qobject_cast<QAbstractSpinBox *>(c)
+                                 || qobject_cast<QAbstractItemView *>(c) || qobject_cast<QSlider *>(c);
+            if (!control || qobject_cast<QAbstractItemView *>(c->parentWidget()) || c->parentWidget()->inherits("QComboBoxPrivateContainer")) continue;   // a combo's own list
+            if (c->inherits("QLineEdit") && c->parentWidget() && (c->parentWidget()->inherits("QComboBox") || c->parentWidget()->inherits("QAbstractSpinBox"))) continue;
+            ++checked;
+            QAccessibleInterface *iface = QAccessible::queryAccessibleInterface(c);
+            QVERIFY(iface);
+            const QString name = iface->text(QAccessible::Name).trimmed();
+            const auto *group = qobject_cast<jp::RibbonGroup *>(c->parentWidget());
+            const QString where = QStringLiteral("%1 \"%2\" in %3").arg(QString::fromLatin1(c->metaObject()->className()), c->toolTip(),
+                                                                          group ? group->title() : c->parentWidget() ? QString::fromLatin1(c->parentWidget()->metaObject()->className()) : QString());
+            if (name.isEmpty()) unnamed << where;
+            if (!(c->focusPolicy() & Qt::TabFocus) && c->objectName() != QLatin1String("jpRibbonTab")) unreachable << where + QStringLiteral(" [") + name + QLatin1Char(']');
+        }
+        QVERIFY2(checked > 300, qPrintable(QString::number(checked)));
+        QVERIFY2(unnamed.isEmpty(), qPrintable(QStringLiteral("no name: ") + unnamed.join(QStringLiteral("; "))));
+        QVERIFY2(unreachable.isEmpty(), qPrintable(QStringLiteral("no keyboard focus: ") + unreachable.join(QStringLiteral("; "))));
+    }
+
+    // Using the ribbon with the keyboard alone: F6 enters it on the current
+    // tab, Right switches to the next tab, Down goes into its controls, the
+    // arrow keys move among them, and Escape goes back to the page.
+    void ribbonByKeyboard()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        QVERIFY(QTest::qWaitForWindowActive(&w));
+        auto *r = w.findChild<jp::Ribbon *>();
+        auto *canvas = w.findChild<jp::Canvas *>();
+        canvas->setFocus();
+        QTest::keyClick(&w, Qt::Key_F6);
+        QWidget *f = QApplication::focusWidget();
+        QVERIFY(f && f->objectName() == QLatin1String("jpRibbonTab"));
+        QCOMPARE(f->accessibleName(), QStringLiteral("Home"));
+        QTest::keyClick(f, Qt::Key_Right);
+        QCOMPARE(r->current(), r->tab(QStringLiteral("Insert")));
+        f = QApplication::focusWidget();
+        QCOMPARE(f->accessibleName(), QStringLiteral("Insert"));
+        QTest::keyClick(f, Qt::Key_Down);
+        f = QApplication::focusWidget();
+        QVERIFY(f && r->current()->isAncestorOf(f));
+        QTest::keyClick(f, Qt::Key_Right);
+        QWidget *g = QApplication::focusWidget();
+        QVERIFY(g && g != f && r->current()->isAncestorOf(g));
+        QTest::keyClick(g, Qt::Key_Escape);
+        QCOMPARE(QApplication::focusWidget(), static_cast<QWidget *>(canvas));
     }
 
     // The keyboard reaches the shared controls: arrow keys move among

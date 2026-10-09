@@ -13,6 +13,9 @@
 #include <QMenu>
 #include <QRegularExpression>
 #include <QToolButton>
+#include <QAbstractButton>
+#include <QComboBox>
+#include <QAbstractSpinBox>
 
 namespace jp {
 
@@ -358,7 +361,9 @@ private:
             b->setPopupMode(QToolButton::InstantPopup);
             if (QMenu *m = menu(o.value(QLatin1String("menu")), b)) b->setMenu(m);
             else problem(QStringLiteral("a dropdown needs a menu"));
-            if (!tip.isEmpty()) b->setToolTip(tr(tip));
+            if (tip.isEmpty()) problem(QStringLiteral("a dropdown needs a tip (its name for screen readers)"));
+            b->setToolTip(tr(tip));
+            b->setAccessibleName(tr(tip));
             w = b;
         } else if (o.contains(QLatin1String("label"))) {
             allow(o, {"label"}, QStringLiteral("a label"));
@@ -383,6 +388,20 @@ private:
 
 } // namespace
 
+// A control with no name of its own for screen readers (a spin box, an
+// icon-only dropdown) takes its tooltip's, without the shortcut.
+static void nameUnnamedControls(Ribbon *r)
+{
+    static const QRegularExpression shortcut(QStringLiteral("\\s*\\([^()]*\\)$"));
+    for (QWidget *w : r->findChildren<QWidget *>()) {
+        if (!w->accessibleName().isEmpty() || w->toolTip().isEmpty()) continue;
+        auto *b = qobject_cast<QAbstractButton *>(w);
+        if (b && !b->text().isEmpty()) continue;
+        if (!b && !qobject_cast<QAbstractSpinBox *>(w) && !qobject_cast<QComboBox *>(w)) continue;
+        w->setAccessibleName(w->toolTip().remove(shortcut).remove(QLatin1Char('&')));
+    }
+}
+
 bool buildRibbon(Ribbon *r, const QByteArray &json, const RibbonParts &parts, QObject *actionOwner, QString *error)
 {
     QJsonParseError pe;
@@ -393,6 +412,7 @@ bool buildRibbon(Ribbon *r, const QByteArray &json, const RibbonParts &parts, QO
     }
     Builder b(r, parts, actionOwner);
     b.build(doc.object());
+    nameUnnamedControls(r);
     if (b.problems().isEmpty()) return true;
     if (error) *error = b.problems().join(QLatin1Char('\n'));
     return false;

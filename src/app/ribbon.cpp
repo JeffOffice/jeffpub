@@ -1,4 +1,5 @@
 #include "app/ribbon.h"
+#include "app/keyboardnav.h"
 
 #include "app/icons.h"
 
@@ -6,6 +7,7 @@
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QKeyEvent>
 #include <QWidgetAction>
 #include <QMenu>
 #include <QMouseEvent>
@@ -135,7 +137,9 @@ QToolButton *ribbonButton(QAction *a, bool large, QWidget *parent)
     if (large) b->setAttribute(Qt::WA_Hover);
     b->setDefaultAction(a);
     b->setAutoRaise(true);
-    b->setFocusPolicy(Qt::NoFocus);
+    // The keyboard reaches it (Tab, the arrow keys, KeyTips); a click
+    // leaves the focus where it was, in the text being edited.
+    b->setFocusPolicy(Qt::TabFocus);
     if (large) {
         b->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
         b->setIconSize(QSize(30, 30));
@@ -240,12 +244,14 @@ void RibbonGroup::setLauncher(const std::function<void()> &fn, const QString &ti
         m_launcher = new QToolButton(this);
         m_launcher->setObjectName(QStringLiteral("launcher"));
         m_launcher->setAutoRaise(true);
-        m_launcher->setFocusPolicy(Qt::NoFocus);
+        m_launcher->setFocusPolicy(Qt::TabFocus);
         m_launcher->setIcon(icon("ellipsis"));
         m_launcher->setIconSize(QSize(13, 13));
         m_launcher->setFixedSize(18, 15);
     }
     m_launcher->setToolTip(tip.isEmpty() ? QStringLiteral("%1 Settings").arg(m_title) : tip);
+    m_launcher->setAccessibleName(m_launcher->toolTip() + QStringLiteral("…"));
+    m_launcher->setAccessibleDescription(QStringLiteral("Opens the %1 dialog").arg(m_launcher->toolTip()));
     QObject::disconnect(m_launcher, nullptr, nullptr, nullptr);
     connect(m_launcher, &QToolButton::clicked, this, [fn] { fn(); });
 }
@@ -402,15 +408,182 @@ void RibbonTab::popUp(int i)
 }
 
 // ---------------- header ----------------
+// One control in the ribbon's top row: the File button, a tab, or the
+// chevron that collapses the ribbon. Drawn as pills, but real controls:
+// the keyboard reaches them and screen readers see them. Only the current
+// tab takes the focus with Tab; the arrow keys move along the tabs and
+// switch to each (as tab lists do).
+class HeaderButton : public QAbstractButton {
+public:
+    enum Kind { File, Tab, Collapse };
+    HeaderButton(Kind k, Ribbon *r, int tab, QWidget *parent) : QAbstractButton(parent), m_kind(k), m_r(r), m_tab(tab)
+    {
+        setAttribute(Qt::WA_Hover);
+        setFocusPolicy(k == Tab ? Qt::NoFocus : Qt::TabFocus);
+        setObjectName(k == File ? QStringLiteral("jpRibbonFile") : k == Tab ? QStringLiteral("jpRibbonTab") : QStringLiteral("jpRibbonCollapse"));
+        if (k == Tab) setProperty("jpOwnArrows", true);   // they move along the tabs
+        if (k == File) {
+            setText(QStringLiteral("File"));
+            setAccessibleDescription(QStringLiteral("Opens the File page: new, open, save, print, share, export, and options."));
+        }
+        connect(this, &QAbstractButton::clicked, this, [this] {
+            if (m_kind == File) Q_EMIT m_r->fileClicked();
+            else if (m_kind == Collapse) m_r->setMinimized(!m_r->m_minimized);
+            else {
+                if (m_r->m_minimized) m_r->setMinimized(false);
+                m_r->showTab(m_r->m_tabs[m_tab].page);
+            }
+        });
+    }
+    Kind kind() const { return m_kind; }
+    int tab() const { return m_tab; }
+    bool isCurrent() const { return m_kind == Tab && m_tab == m_r->m_current && !m_r->m_minimized; }
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        const QRectF r = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
+        const bool hot = underMouse();
+        if (m_kind == File) {
+            // One pill holding the "JP" badge, the label and a chevron, so it
+            // reads as a single control that opens the File screen.
+            QColor bg = uiAccent();
+            bg.setAlphaF(dark() ? (hot ? 0.34f : 0.22f) : (hot ? 0.18f : 0.10f));
+            QColor edge = uiAccent();
+            edge.setAlphaF(dark() ? 0.55f : 0.35f);
+            p.setPen(QPen(edge, 1));
+            p.setBrush(bg);
+            p.drawRoundedRect(r, r.height() / 2, r.height() / 2);
+            const QRectF badge(r.left() + 4, r.center().y() - 9, 18, 18);
+            p.setPen(Qt::NoPen);
+            p.setBrush(uiAccent());
+            p.drawEllipse(badge);
+            QFont bf = font();
+            bf.setBold(true);
+            bf.setPixelSize(9);
+            p.setFont(bf);
+            p.setPen(uiHighContrast() ? palette().color(QPalette::HighlightedText) : QColor(Qt::white));
+            p.drawText(badge, Qt::AlignCenter, QStringLiteral("JP"));
+            QFont lf = font();
+            lf.setWeight(QFont::DemiBold);
+            p.setFont(lf);
+            const QColor fg = uiHighContrast() ? uiText() : dark() ? uiAccent().lighter(140) : uiAccent();
+            p.setPen(fg);
+            p.drawText(QRectF(badge.right() + 7, r.top(), r.right() - badge.right() - 25, r.height()), Qt::AlignVCenter | Qt::AlignLeft, text());
+            const QPointF c(r.right() - 12, r.center().y() + 0.5);
+            p.setPen(QPen(fg, 1.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            p.drawPolyline(QPolygonF({c + QPointF(-3, -1.5), c + QPointF(0, 1.5), c + QPointF(3, -1.5)}));
+            return;
+        }
+        if (m_kind == Collapse) {
+            if (hot) {
+                p.setPen(Qt::NoPen);
+                p.setBrush(dark() ? QColor(255, 255, 255, 18) : QColor(0, 0, 0, 12));
+                p.drawRoundedRect(r, 6, 6);
+            }
+            p.setPen(QPen(mutedText(), 1.5));
+            const QRect cr(width() / 2 - 8, height() / 2 - 8, 16, 16);
+            if (m_r->m_minimized) { p.drawLine(cr.left() + 3, cr.top() + 6, cr.center().x(), cr.top() + 11); p.drawLine(cr.center().x(), cr.top() + 11, cr.right() - 3, cr.top() + 6); }
+            else { p.drawLine(cr.left() + 3, cr.top() + 11, cr.center().x(), cr.top() + 6); p.drawLine(cr.center().x(), cr.top() + 6, cr.right() - 3, cr.top() + 11); }
+            return;
+        }
+        // Tabs are pills: the current one filled, others lit on hover.
+        // Contextual tabs (Text Box, Picture...) carry a colored dot.
+        const auto &t = m_r->m_tabs[m_tab];
+        const bool cur = isCurrent();
+        const QColor base = t.group.isEmpty() || uiHighContrast() ? uiAccent() : t.color;
+        if (cur) {
+            QColor bg = base;
+            bg.setAlphaF(uiHighContrast() ? 1.0f : dark() ? 0.30f : 0.13f);
+            p.setPen(Qt::NoPen);
+            p.setBrush(bg);
+            p.drawRoundedRect(r, r.height() / 2, r.height() / 2);
+        } else if (hot) {
+            p.setPen(uiHighContrast() ? QPen(uiText(), 1) : Qt::NoPen);
+            p.setBrush(uiHighContrast() ? Qt::NoBrush : dark() ? QBrush(QColor(255, 255, 255, 18)) : QBrush(QColor(0, 0, 0, 12)));
+            p.drawRoundedRect(r, r.height() / 2, r.height() / 2);
+        }
+        QRectF tr = r;
+        if (!t.group.isEmpty()) {
+            p.setPen(Qt::NoPen);
+            p.setBrush(uiHighContrast() ? (cur ? palette().color(QPalette::HighlightedText) : uiText()) : t.color);
+            p.drawEllipse(QPointF(r.left() + 13, r.center().y()), 3.5, 3.5);
+            tr.setLeft(r.left() + 12);
+        }
+        QFont tf = font();
+        if (cur) tf.setWeight(QFont::DemiBold);
+        p.setFont(tf);
+        if (uiHighContrast()) p.setPen(cur ? palette().color(QPalette::HighlightedText) : uiText());
+        else p.setPen(cur ? (dark() ? base.lighter(140) : base.darker(t.group.isEmpty() ? 100 : 130)) : uiText());
+        p.drawText(tr, Qt::AlignCenter, t.title);
+    }
+
+    void mouseDoubleClickEvent(QMouseEvent *e) override
+    {
+        if (m_kind == Tab) m_r->setMinimized(!m_r->m_minimized);
+        else QAbstractButton::mouseDoubleClickEvent(e);
+    }
+
+    void keyPressEvent(QKeyEvent *e) override
+    {
+        if (m_kind != Tab || (e->modifiers() & ~Qt::KeypadModifier)) return QAbstractButton::keyPressEvent(e);
+        switch (e->key()) {
+        case Qt::Key_Left:
+        case Qt::Key_Right: {
+            const int dir = e->key() == Qt::Key_Right ? 1 : -1;
+            for (int i = m_tab + dir; i >= 0 && i < m_r->m_tabs.size(); i += dir)
+                if (m_r->m_tabs[i].visible) {
+                    m_r->showTab(m_r->m_tabs[i].page);
+                    if (QWidget *b = m_r->tabButton(i)) b->setFocus(Qt::TabFocusReason);
+                    return;
+                }
+            // Past the ends: the File button, or the collapse chevron.
+            if (QWidget *w = m_r->findChild<QWidget *>(dir < 0 ? QStringLiteral("jpRibbonFile") : QStringLiteral("jpRibbonCollapse"))) w->setFocus(Qt::TabFocusReason);
+            return;
+        }
+        case Qt::Key_Down: {
+            // Into the tab's controls, the nearest below.
+            QList<QWidget *> controls;
+            if (RibbonTab *page = m_r->current())
+                for (QWidget *w : page->findChildren<QWidget *>())
+                    if (w->isVisible() && w->isEnabled() && (w->focusPolicy() & Qt::TabFocus)) controls << w;
+            if (QWidget *w = nearestInDirection(this, Qt::Key_Down, controls)) w->setFocus(Qt::TabFocusReason);
+            return;
+        }
+        case Qt::Key_Return:
+        case Qt::Key_Enter:
+        case Qt::Key_Space:
+            click();
+            return;
+        default:
+            QAbstractButton::keyPressEvent(e);
+        }
+    }
+
+private:
+    Kind m_kind;
+    Ribbon *m_r;
+    int m_tab;
+};
+
+// The top row: the Quick Access Toolbar, the File button, the tabs and the
+// collapse chevron as controls, with the brand mark drawn behind them.
 class RibbonHeader : public QWidget {
 public:
     explicit RibbonHeader(Ribbon *r) : QWidget(r), m_r(r)
     {
-        setMouseTracking(true);
+        setObjectName(QStringLiteral("jpRibbonTabs"));
+        setAccessibleName(QStringLiteral("Ribbon tabs"));
         setFixedHeight(50);   // room for a small gap under the tab pills
-        m_qat = new QHBoxLayout();
+        m_file = new HeaderButton(HeaderButton::File, r, -1, this);
+        m_collapse = new HeaderButton(HeaderButton::Collapse, r, -1, this);
     }
     QVector<QToolButton *> qatButtons;
+    QVector<HeaderButton *> tabButtons;
+    HeaderButton *m_file, *m_collapse;
+
     int qatWidth() const
     {
         int w = 6;
@@ -424,105 +597,53 @@ public:
             b->setGeometry(x, 18, 26, 26);
             x += 28;
         }
+        layoutButtons();
+    }
+    void addTabButton(int i)
+    {
+        auto *b = new HeaderButton(HeaderButton::Tab, m_r, i, this);
+        const auto &t = m_r->m_tabs[i];
+        b->setText(t.title);
+        b->setAccessibleName(t.title);
+        tabButtons << b;
+        b->show();
+        layoutButtons();
+    }
+    // Places the File button, the visible tabs and the chevron; the current
+    // tab is the one Tab reaches, and every tab button says which it is.
+    void layoutButtons()
+    {
+        QFontMetrics fm(font());
+        int x = qatWidth();
+        m_file->setGeometry(x + 2, 19, fm.horizontalAdvance(m_file->text()) + 58, 26);
+        x += 6 + m_file->width() + 4;
+        for (HeaderButton *b : tabButtons) {
+            const auto &t = m_r->m_tabs[b->tab()];
+            b->setVisible(t.visible);
+            if (!t.visible) continue;
+            const int w = fm.horizontalAdvance(t.title) + 26 + (t.group.isEmpty() ? 0 : 12);
+            b->setGeometry(x, 19, w, 26);
+            x += w + 4;
+            b->setText(t.title);
+            b->setAccessibleName(t.title);
+            b->setAccessibleDescription(t.group.isEmpty() ? QStringLiteral("Ribbon tab") : QStringLiteral("Ribbon tab, %1").arg(t.group));
+            b->setFocusPolicy(b->tab() == m_r->m_current ? Qt::TabFocus : Qt::NoFocus);
+            b->update();
+        }
+        m_collapse->setGeometry(width() - 30, 18, 28, 26);
+        m_collapse->setAccessibleName(m_r->m_minimized ? QStringLiteral("Expand the Ribbon") : QStringLiteral("Collapse the Ribbon"));
+        m_collapse->update();
+        m_file->update();
     }
 
 protected:
-    QVector<QRect> tabRects() const
-    {
-        QVector<QRect> out;
-        QFontMetrics fm(font());
-        int x = qatWidth();
-        out << QRect(x + 2, 19, fm.horizontalAdvance("File") + 58, 26);   // File: one pill with badge, label and chevron
-        x += 6;
-        x += out.last().width() + 4;
-        for (const auto &t : m_r->m_tabs) {
-            if (!t.visible) { out << QRect(); continue; }
-            const int w = fm.horizontalAdvance(t.title) + 26 + (t.group.isEmpty() ? 0 : 12);
-            out << QRect(x, 19, w, 26);
-            x += w + 4;
-        }
-        return out;
-    }
+    void resizeEvent(QResizeEvent *) override { layoutButtons(); }
 
     void paintEvent(QPaintEvent *) override
     {
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing);
         p.fillRect(rect(), headerBg());
-        const auto rects = tabRects();
-        // File button: one pill holding the "JP" badge, the label and a chevron,
-        // so it reads as a single control that opens the File screen.
-        {
-            const QRectF pill = QRectF(rects[0]).adjusted(0.5, 0.5, -0.5, -0.5);
-            const bool hot = rects[0].contains(m_hover);
-            QColor bg = uiAccent();
-            bg.setAlphaF(dark() ? (hot ? 0.34f : 0.22f) : (hot ? 0.18f : 0.10f));
-            QColor edge = uiAccent();
-            edge.setAlphaF(dark() ? 0.55f : 0.35f);
-            p.setPen(QPen(edge, 1));
-            p.setBrush(bg);
-            p.drawRoundedRect(pill, pill.height() / 2, pill.height() / 2);
-            const QRectF badge(pill.left() + 4, pill.center().y() - 9, 18, 18);
-            p.setPen(Qt::NoPen);
-            p.setBrush(uiAccent());
-            p.drawEllipse(badge);
-            QFont bf = font();
-            bf.setBold(true);
-            bf.setPixelSize(9);
-            p.setFont(bf);
-            p.setPen(Qt::white);
-            p.drawText(badge, Qt::AlignCenter, QStringLiteral("JP"));
-            QFont lf = font();
-            lf.setWeight(QFont::DemiBold);
-            p.setFont(lf);
-            const QColor fg = dark() ? uiAccent().lighter(140) : uiAccent();
-            p.setPen(fg);
-            const QRectF label(badge.right() + 7, pill.top(), pill.right() - badge.right() - 25, pill.height());
-            p.drawText(label, Qt::AlignVCenter | Qt::AlignLeft, QStringLiteral("File"));
-            const QPointF c(pill.right() - 12, pill.center().y() + 0.5);
-            p.setPen(QPen(fg, 1.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-            p.drawPolyline(QPolygonF({c + QPointF(-3, -1.5), c + QPointF(0, 1.5), c + QPointF(3, -1.5)}));
-            p.setFont(font());
-        }
-        // Tabs are pills: the current one filled, others lit on hover.
-        // Contextual tabs (Text Box, Picture...) carry a colored dot.
-        p.setFont(font());
-        for (int i = 0; i < m_r->m_tabs.size(); ++i) {
-            const auto &t = m_r->m_tabs[i];
-            if (!t.visible) continue;
-            const QRectF r = QRectF(rects[i + 1]).adjusted(0.5, 0.5, -0.5, -0.5);
-            const bool cur = i == m_r->m_current && !m_r->m_minimized;
-            const QColor base = t.group.isEmpty() ? uiAccent() : t.color;
-            if (cur) {
-                QColor bg = base;
-                bg.setAlphaF(dark() ? 0.30f : 0.13f);
-                p.setPen(Qt::NoPen);
-                p.setBrush(bg);
-                p.drawRoundedRect(r, r.height() / 2, r.height() / 2);
-            } else if (rects[i + 1].contains(m_hover)) {
-                p.setPen(Qt::NoPen);
-                p.setBrush(dark() ? QColor(255, 255, 255, 18) : QColor(0, 0, 0, 12));
-                p.drawRoundedRect(r, r.height() / 2, r.height() / 2);
-            }
-            QRectF tr = r;
-            if (!t.group.isEmpty()) {
-                p.setPen(Qt::NoPen);
-                p.setBrush(t.color);
-                p.drawEllipse(QPointF(r.left() + 13, r.center().y()), 3.5, 3.5);
-                tr.setLeft(r.left() + 12);
-            }
-            QFont tf = font();
-            if (cur) tf.setWeight(QFont::DemiBold);
-            p.setFont(tf);
-            p.setPen(cur ? (dark() ? base.lighter(140) : base.darker(t.group.isEmpty() ? 100 : 130)) : uiText());
-            p.drawText(tr, Qt::AlignCenter, t.title);
-        }
-        p.setFont(font());
-        // Collapse chevron.
-        p.setPen(QPen(mutedText(), 1.5));
-        const QRect cr(width() - 26, 22, 16, 16);
-        if (m_r->m_minimized) { p.drawLine(cr.left() + 3, cr.top() + 6, cr.center().x(), cr.top() + 11); p.drawLine(cr.center().x(), cr.top() + 11, cr.right() - 3, cr.top() + 6); }
-        else { p.drawLine(cr.left() + 3, cr.top() + 11, cr.center().x(), cr.top() + 6); p.drawLine(cr.center().x(), cr.top() + 6, cr.right() - 3, cr.top() + 11); }
         // Brand mark: four CMYK dots.
         const QColor dots[4] = {QColor(0, 163, 224), QColor(229, 0, 126), QColor(255, 212, 0), dark() ? QColor(220, 220, 220) : QColor(28, 35, 48)};
         for (int i = 0; i < 4; ++i) {
@@ -540,35 +661,6 @@ protected:
         p.drawLine(0, height() - 1, width(), height() - 1);
     }
 
-    void mouseMoveEvent(QMouseEvent *e) override
-    {
-        m_hover = e->position().toPoint();
-        update();
-    }
-    void leaveEvent(QEvent *) override
-    {
-        m_hover = QPoint(-1, -1);
-        update();
-    }
-    void mousePressEvent(QMouseEvent *e) override
-    {
-        const auto rects = tabRects();
-        const QPoint pt = e->position().toPoint();
-        if (rects[0].contains(pt)) { Q_EMIT m_r->fileClicked(); return; }
-        if (QRect(width() - 30, 18, 28, 26).contains(pt)) { m_r->setMinimized(!m_r->m_minimized); return; }
-        for (int i = 0; i < m_r->m_tabs.size(); ++i)
-            if (rects[i + 1].contains(pt)) {
-                if (m_r->m_minimized) m_r->setMinimized(false);
-                m_r->showTab(m_r->m_tabs[i].page);
-                return;
-            }
-    }
-    void mouseDoubleClickEvent(QMouseEvent *e) override
-    {
-        const auto rects = tabRects();
-        for (int i = 0; i < m_r->m_tabs.size(); ++i)
-            if (rects[i + 1].contains(e->position().toPoint())) { m_r->setMinimized(!m_r->m_minimized); return; }
-    }
     void wheelEvent(QWheelEvent *e) override
     {
         // The mouse wheel scrolls through tabs.
@@ -583,8 +675,6 @@ protected:
 
 private:
     Ribbon *m_r;
-    QPoint m_hover{-1, -1};
-    QHBoxLayout *m_qat;
 };
 
 // ---------------- ribbon ----------------
@@ -604,6 +694,24 @@ Ribbon::Ribbon(QWidget *parent) : QWidget(parent)
     setPalette(pal);
     m_stack->setAutoFillBackground(true);
     m_stack->setPalette(pal);
+    setAccessibleName(QStringLiteral("Ribbon"));
+    installArrowNavigation(this);
+}
+
+void Ribbon::keyPressEvent(QKeyEvent *e)
+{
+    // Escape from a control (that didn't use it) goes back to the page.
+    if (e->key() == Qt::Key_Escape) {
+        Q_EMIT leaveRequested();
+        return;
+    }
+    QWidget::keyPressEvent(e);
+}
+
+void Ribbon::focusCurrentTab()
+{
+    if (m_minimized) setMinimized(false);
+    if (QWidget *b = tabButton(m_current)) b->setFocus(Qt::TabFocusReason);
 }
 
 RibbonTab *Ribbon::addTab(const QString &name, const QString &contextGroup, const QColor &color, const QString &title)
@@ -623,7 +731,7 @@ RibbonTab *Ribbon::addTab(const QString &name, const QString &contextGroup, cons
     page->setPalette(pal);
     m_stack->addWidget(scroll);
     m_tabs.push_back(Tab{name, contextGroup, color, page, scroll, contextGroup.isEmpty(), title.isEmpty() ? name : title, QString()});
-    m_header->update();
+    m_header->addTabButton(int(m_tabs.size()) - 1);
     return page;
 }
 
@@ -647,7 +755,7 @@ void Ribbon::setContextVisible(const QString &group, bool visible)
         for (int i = 0; i < m_tabs.size(); ++i)
             if (m_tabs[i].name == QLatin1String("Home")) { showTab(m_tabs[i].page); break; }
     }
-    if (changed) m_header->update();
+    if (changed) m_header->layoutButtons();
 }
 
 void Ribbon::showTab(RibbonTab *t)
@@ -657,7 +765,7 @@ void Ribbon::showTab(RibbonTab *t)
             m_current = i;
             m_stack->setCurrentWidget(m_tabs[i].scroll);
         }
-    m_header->update();
+    m_header->layoutButtons();
     Q_EMIT tabChanged();
 }
 
@@ -677,12 +785,21 @@ QToolButton *Ribbon::addQuickAccess(QAction *a)
     b->setAutoRaise(true);
     b->setIconSize(QSize(16, 16));
     b->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    b->setFocusPolicy(Qt::NoFocus);
+    b->setFocusPolicy(Qt::TabFocus);   // the keyboard reaches it; a click leaves the focus in the text
     m_header->qatButtons << b;
     m_header->layoutQat();
     m_header->update();
     return b;
 }
+
+QWidget *Ribbon::tabButton(int i) const
+{
+    for (HeaderButton *b : m_header->tabButtons)
+        if (b->tab() == i) return b;
+    return nullptr;
+}
+
+QWidget *Ribbon::fileButton() const { return m_header->m_file; }
 
 QList<QToolButton *> Ribbon::quickAccessButtons() const { return QList<QToolButton *>(m_header->qatButtons.begin(), m_header->qatButtons.end()); }
 
@@ -690,7 +807,7 @@ void Ribbon::setMinimized(bool m)
 {
     m_minimized = m;
     m_stack->setVisible(!m);
-    m_header->update();
+    m_header->layoutButtons();
 }
 
 // ---------- description (tests) ----------

@@ -413,7 +413,7 @@
         {"widget": "pictureStyles", "keytip": "PS"},
         {"row": [
           {"widget": "pictureBorder", "keytip": "PB"},
-          {"dropdown": {"icon": "chevron-down"}, "keytip": "PD", "menu": [
+          {"dropdown": {"icon": "chevron-down", "tip": "Border Weight and Dashes"}, "keytip": "PD", "menu": [
             "weight.0.25", "weight.0.5", "weight.0.75", "weight.1", "weight.1.5", "weight.2.25", "weight.3", "weight.4.5",
             "weight.6", "-", "dash.0", "dash.1", "dash.2", "dash.3", "dash.4", "dash.5", "dash.6", "dash.7"]}]},
         {"small": {"id": "ribbon.pictureEffects", "text": "Picture Effects", "icon": "sparkles"}, "keytip": "PE", "menu": [
