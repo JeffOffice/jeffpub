@@ -1,5 +1,6 @@
 #include "app/ribbon.h"
 #include "app/keyboardnav.h"
+#include "app/theme.h"
 
 #include "app/icons.h"
 
@@ -8,6 +9,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QKeyEvent>
+#include <QApplication>
 #include <QWidgetAction>
 #include <QMenu>
 #include <QMouseEvent>
@@ -25,10 +27,11 @@
 namespace jp {
 
 static bool dark() { return uiDark(); }
-static QColor ribbonBg() { return dark() ? QColor(0x26, 0x2B, 0x33) : QColor(0xFB, 0xFB, 0xFC); }
-static QColor headerBg() { return dark() ? QColor(0x1E, 0x22, 0x29) : QColor(0xF0, 0xF1, 0xF4); }
-static QColor lineColor() { return dark() ? QColor(0x3A, 0x41, 0x4C) : QColor(0xD9, 0xDC, 0xE2); }
-static QColor mutedText() { return dark() ? QColor(0xA9, 0xB0, 0xBC) : QColor(0x5E, 0x66, 0x73); }
+// In high contrast, the system's colors (from the palette) instead.
+static QColor ribbonBg() { return uiHighContrast() ? QApplication::palette().color(QPalette::Window) : dark() ? QColor(0x26, 0x2B, 0x33) : QColor(0xFB, 0xFB, 0xFC); }
+static QColor headerBg() { return uiHighContrast() ? QApplication::palette().color(QPalette::Window) : dark() ? QColor(0x1E, 0x22, 0x29) : QColor(0xF0, 0xF1, 0xF4); }
+static QColor lineColor() { return uiHighContrast() ? QApplication::palette().color(QPalette::WindowText) : dark() ? QColor(0x3A, 0x41, 0x4C) : QColor(0xD9, 0xDC, 0xE2); }
+static QColor mutedText() { return uiHighContrast() ? QApplication::palette().color(QPalette::WindowText) : dark() ? QColor(0xA9, 0xB0, 0xBC) : QColor(0x5E, 0x66, 0x73); }
 
 static QStringList largeLabelLines(const QToolButton *b)
 {
@@ -83,7 +86,7 @@ void paintLargeRibbonButton(QToolButton *b)
     const QSize is = b->iconSize();
     const QRect ir(int(r.center().x() - is.width() / 2.0), int(r.top() + 4), is.width(), is.height());
     b->icon().paint(&p, ir, Qt::AlignCenter, b->isEnabled() ? QIcon::Normal : QIcon::Disabled);
-    const QColor tc = b->isEnabled() ? uiText() : QColor(0x9C, 0xA3, 0xAF);
+    const QColor tc = b->isEnabled() ? uiText() : uiHighContrast() ? QApplication::palette().color(QPalette::Disabled, QPalette::WindowText) : QColor(0x9C, 0xA3, 0xAF);
     p.setPen(tc);
     p.setFont(b->font());
     const QFontMetrics fm(b->font());
@@ -231,6 +234,7 @@ void RibbonGroup::addSeparator()
 {
     m_col = nullptr;
     auto *f = new QFrame(this);
+    f->setObjectName(QStringLiteral("jpRibbonSeparator"));
     f->setFixedWidth(1);
     f->setStyleSheet(QStringLiteral("background:%1;").arg(lineColor().name()));
     m_cols->addSpacing(2);
@@ -279,8 +283,8 @@ void RibbonGroup::paintEvent(QPaintEvent *e)
     p.setRenderHint(QPainter::Antialiasing);
     // A soft rounded card per group, titled at the top left in small capitals.
     const QRectF card = QRectF(rect()).adjusted(3, 3, -3, -2);
-    p.setPen(Qt::NoPen);
-    p.setBrush(dark() ? QColor(255, 255, 255, 10) : QColor(0x1E, 0x29, 0x3B, 9));
+    p.setPen(uiHighContrast() ? QPen(lineColor(), 1) : Qt::NoPen);
+    p.setBrush(uiHighContrast() ? QBrush(Qt::NoBrush) : dark() ? QBrush(QColor(255, 255, 255, 10)) : QBrush(QColor(0x1E, 0x29, 0x3B, 9)));
     p.drawRoundedRect(card, 9, 9);
     QFont f = font();
     f.setPointSizeF(f.pointSizeF() * 0.74);
@@ -696,6 +700,25 @@ Ribbon::Ribbon(QWidget *parent) : QWidget(parent)
     m_stack->setPalette(pal);
     setAccessibleName(QStringLiteral("Ribbon"));
     installArrowNavigation(this);
+    connect(UiTheme::instance(), &UiTheme::changed, this, &Ribbon::restyle);   // the look switched in Options
+}
+
+// The colors set when the ribbon was built, again for the current look.
+void Ribbon::restyle()
+{
+    auto paint = [](QWidget *w) {
+        QPalette pal = w->palette();
+        pal.setColor(QPalette::Window, ribbonBg());
+        w->setPalette(pal);
+    };
+    paint(this);
+    paint(m_stack);
+    for (const Tab &t : m_tabs) {
+        paint(t.scroll);
+        paint(t.page);
+    }
+    for (QFrame *f : findChildren<QFrame *>(QStringLiteral("jpRibbonSeparator"))) f->setStyleSheet(QStringLiteral("background:%1;").arg(lineColor().name()));
+    for (QWidget *w : findChildren<QWidget *>()) w->update();
 }
 
 void Ribbon::keyPressEvent(QKeyEvent *e)

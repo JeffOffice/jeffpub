@@ -342,7 +342,7 @@ void Canvas::paintEvent(QPaintEvent *)
 {
     QPainter p(viewport());
     const bool dark = darkUi();
-    p.fillRect(viewport()->rect(), dark ? QColor(0x2B, 0x30, 0x38) : QColor(0xC9, 0xCE, 0xD6));
+    p.fillRect(viewport()->rect(), uiHighContrast() ? palette().color(QPalette::Window) : dark ? QColor(0x2B, 0x30, 0x38) : QColor(0xC9, 0xCE, 0xD6));
     const QString master = m_ed->masterView();
     for (const Slot &s : slots()) paintPageSlot(p, s, s.page == m_ed->currentPage() || s.page < 0);
     // Scratch area items, shared by every page.
@@ -2935,8 +2935,10 @@ void Ruler::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
     const bool dark = darkUi();
-    const QColor bg = dark ? QColor(0x24, 0x28, 0x2F) : QColor(0xF3, 0xF4, 0xF6);
-    const QColor fg = dark ? QColor(0xC8, 0xCC, 0xD3) : QColor(0x4A, 0x50, 0x5A);
+    // In high contrast, the system's window and text colors.
+    const bool contrast = uiHighContrast();
+    const QColor bg = contrast ? palette().color(QPalette::Window) : dark ? QColor(0x24, 0x28, 0x2F) : QColor(0xF3, 0xF4, 0xF6);
+    const QColor fg = contrast ? palette().color(QPalette::WindowText) : dark ? QColor(0xC8, 0xCC, 0xD3) : QColor(0x4A, 0x50, 0x5A);
     p.fillRect(rect(), bg);
     const bool horiz = m_o == Qt::Horizontal;
     Settings &st = Settings::get();
@@ -2944,7 +2946,7 @@ void Ruler::paintEvent(QPaintEvent *)
     // Page extent highlighted in white.
     const QSizeF ps = m_c->editor()->surfaceSize();
     const QPointF a = m_c->toView(origin), b = m_c->toView(origin + QPointF(ps.width(), ps.height()));
-    const QColor paper = dark ? QColor(0x3A, 0x40, 0x4A) : Qt::white;
+    const QColor paper = contrast ? bg : dark ? QColor(0x3A, 0x40, 0x4A) : Qt::white;
     if (horiz) p.fillRect(QRectF(a.x(), 3, b.x() - a.x(), height() - 6), paper);
     else p.fillRect(QRectF(3, a.y(), width() - 6, b.y() - a.y()), paper);
     // Selection extent.
@@ -2958,8 +2960,8 @@ void Ruler::paintEvent(QPaintEvent *)
     const TextRuler tr = textRuler();
     if (tr.on) {
         const double x1 = m_c->pageToView(QPointF(tr.left, 0)).x(), x2 = m_c->pageToView(QPointF(tr.right, 0)).x();
-        p.fillRect(QRectF(x1, 3, x2 - x1, height() - 6), dark ? QColor(0x55, 0x5D, 0x6A) : QColor(255, 255, 255));
-        p.setPen(QColor(150, 150, 150));
+        p.fillRect(QRectF(x1, 3, x2 - x1, height() - 6), contrast ? bg : dark ? QColor(0x55, 0x5D, 0x6A) : QColor(255, 255, 255));
+        p.setPen(contrast ? fg : QColor(150, 150, 150));
         p.drawRect(QRectF(x1, 3, x2 - x1, height() - 6));
     }
     // Ticks.
@@ -3029,7 +3031,7 @@ void Ruler::paintEvent(QPaintEvent *)
         if (horiz) p.drawLine(QPointF(v, 0), QPointF(v, height()));
         else p.drawLine(QPointF(0, v), QPointF(width(), v));
     }
-    p.setPen(dark ? QColor(0x39, 0x41, 0x4D) : QColor(0xD5, 0xDA, 0xE1));
+    p.setPen(uiHighContrast() ? palette().color(QPalette::WindowText) : dark ? QColor(0x39, 0x41, 0x4D) : QColor(0xD5, 0xDA, 0xE1));
     if (horiz) p.drawLine(0, height() - 1, width(), height() - 1);
     else p.drawLine(width() - 1, 0, width() - 1, height());
 }

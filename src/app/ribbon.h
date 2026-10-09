@@ -121,6 +121,7 @@ public:
     QString describe(bool keytips = false) const;
 
     void focusCurrentTab();   // the keyboard enters the ribbon (F6)
+    void restyle();           // the colors, again for the current look
 
 Q_SIGNALS:
     void fileClicked();

@@ -1757,6 +1757,8 @@ private Q_SLOTS:
             QVERIFY(qApp->styleSheet().contains(dark ? QStringLiteral("#22262d") : QStringLiteral("#ffffff")));
             QVERIFY2(side->styleSheet().contains(dark ? QStringLiteral("#171a1f") : QStringLiteral("#f1f2f5")), qPrintable(side->styleSheet()));
             QVERIFY(pages->styleSheet().contains(dark ? QStringLiteral("#171a1f") : QStringLiteral("#f1f2f5")));
+            auto *ribbon = w.findChild<jp::Ribbon *>();
+            QVERIFY2((ribbon->palette().color(QPalette::Window).lightness() < 128) == dark, qPrintable(ribbon->palette().color(QPalette::Window).name()));
             if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
                 w.resize(1200, 800);
                 w.show();
@@ -1764,6 +1766,40 @@ private Q_SLOTS:
                 w.grab().save(qEnvironmentVariable("JP_SHOT_DIR") + QStringLiteral("/theme-%1.png").arg(dark ? "dark" : "light"));
             }
         }
+        QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Unknown);
+        jp::setUiDark(wasDark);
+        qApp->setPalette(pal);
+        qApp->setStyleSheet(sheet);
+    }
+
+    // Windows' high contrast: the system's colors everywhere (here the
+    // stand-in black theme JP_HIGH_CONTRAST=1 selects), none of JeffPub's.
+    void highContrastUsesSystemColors()
+    {
+        const QPalette pal = qApp->palette();
+        const QString sheet = qApp->styleSheet();
+        const bool wasDark = jp::uiDark();
+        jp::MainWindow w;
+        qputenv("JP_HIGH_CONTRAST", "1");
+        jp::applyUiTheme(1);
+        QVERIFY(jp::uiHighContrast());
+        QVERIFY(qApp->styleSheet().isEmpty());
+        QCOMPARE(qApp->palette().color(QPalette::Window), QColor(Qt::black));
+        QCOMPARE(w.findChild<jp::Ribbon *>()->palette().color(QPalette::Window), QColor(Qt::black));
+        QCOMPARE(jp::focusRingColor(), qApp->palette().color(QPalette::Highlight));
+        QCOMPARE(jp::uiLine(), QColor(Qt::white));   // borders as strong as the text
+        QVERIFY(w.findChild<QFrame *>(QStringLiteral("jpSide"))->styleSheet().contains(QStringLiteral("#000000")));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            w.resize(1200, 800);
+            w.show();
+            QTest::qWait(200);
+            w.grab().save(qEnvironmentVariable("JP_SHOT_DIR") + QStringLiteral("/theme-contrast.png"));
+        }
+        qputenv("JP_HIGH_CONTRAST", "0");
+        jp::applyUiTheme(1);
+        QVERIFY(!jp::uiHighContrast());
+        QVERIFY(!qApp->styleSheet().isEmpty());
+        qunsetenv("JP_HIGH_CONTRAST");
         QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Unknown);
         jp::setUiDark(wasDark);
         qApp->setPalette(pal);
