@@ -1,5 +1,6 @@
 #include "core/style.h"
 
+#include <QCoreApplication>
 #include <QImage>
 #include <QJsonArray>
 #include <QLinearGradient>
@@ -23,8 +24,11 @@ QVector<Qt::BrushStyle> patternBrushes()
 
 QString dashName(Stroke::Dash d)
 {
-    static const char *n[] = {"Solid", "Round Dot", "Square Dot", "Dash", "Dash Dot", "Long Dash", "Long Dash Dot", "Long Dash Dot Dot"};
-    return QString::fromLatin1(n[int(d)]);
+    static const char *n[] = {QT_TRANSLATE_NOOP("Core", "Solid"),         QT_TRANSLATE_NOOP("Core", "Round Dot"),
+                              QT_TRANSLATE_NOOP("Core", "Square Dot"),    QT_TRANSLATE_NOOP("Core", "Dash"),
+                              QT_TRANSLATE_NOOP("Core", "Dash Dot"),      QT_TRANSLATE_NOOP("Core", "Long Dash"),
+                              QT_TRANSLATE_NOOP("Core", "Long Dash Dot"), QT_TRANSLATE_NOOP("Core", "Long Dash Dot Dot")};
+    return QCoreApplication::translate("Core", n[int(d)]);
 }
 
 QImage Fill::patternTile(const ColorScheme &s) const

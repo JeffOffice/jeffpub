@@ -5,6 +5,7 @@
 #include "text/hyphenation.h"
 #include "text/textprops.h"
 
+#include <QCoreApplication>
 #include <QFontDatabase>
 #include <QFontMetricsF>
 #include <QJsonDocument>
@@ -88,7 +89,7 @@ QString FieldContext::resolve(const QString &code) const
         return doc->merge.value(mergeRecord, arg);
     }
     if (kind == "mergeblock") {
-        if (!doc || mergeRecord < 0) return arg == "greeting" ? QStringLiteral("«Greeting Line»") : QStringLiteral("«Address Block»");
+        if (!doc || mergeRecord < 0) return arg == "greeting" ? QCoreApplication::translate("Text", "«Greeting Line»") : QCoreApplication::translate("Text", "«Address Block»");
         auto v = [&](const QStringList &names) {
             for (const auto &n : names)
                 for (const auto &f : doc->merge.fields)
@@ -101,7 +102,7 @@ QString FieldContext::resolve(const QString &code) const
         const QString first = v({"First Name", "FirstName", "First"}), last = v({"Last Name", "LastName", "Last", "Surname"});
         if (arg == "greeting") {
             const QString who = (first + ' ' + last).trimmed();
-            return who.isEmpty() ? QStringLiteral("Dear Friend,") : QStringLiteral("Dear %1,").arg(who);
+            return who.isEmpty() ? QCoreApplication::translate("Text", "Dear Friend,") : QCoreApplication::translate("Text", "Dear %1,").arg(who);
         }
         QStringList lines;
         const QString name = (first + ' ' + last).trimmed().isEmpty() ? v({"Name", "Full Name"}) : (first + ' ' + last).trimmed();
@@ -120,8 +121,8 @@ QString FieldContext::resolve(const QString &code) const
         if (!country.isEmpty()) lines << country;
         return lines.join(QChar(QChar::LineSeparator));
     }
-    if (kind == "conton") return continuedOnPage > 0 ? QStringLiteral("(Continued on page %1)").arg(continuedOnPage) : QString();
-    if (kind == "contfrom") return continuedFromPage > 0 ? QStringLiteral("(Continued from page %1)").arg(continuedFromPage) : QString();
+    if (kind == "conton") return continuedOnPage > 0 ? QCoreApplication::translate("Text", "(Continued on page %1)").arg(continuedOnPage) : QString();
+    if (kind == "contfrom") return continuedFromPage > 0 ? QCoreApplication::translate("Text", "(Continued from page %1)").arg(continuedFromPage) : QString();
     return QStringLiteral("[%1]").arg(code);
 }
 
@@ -2030,7 +2031,7 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
         }
     if (m_notesHeading.frame == frame) {
         p->setPen(m_notesHeading.color);
-        drawPlainText(p, m_notesHeading.baseline, m_notesHeading.font, QStringLiteral("Notes"));
+        drawPlainText(p, m_notesHeading.baseline, m_notesHeading.font, QCoreApplication::translate("Text", "Notes"));
     }
     for (const Note &n : m_notes) {
         if (n.frame != frame || !n.layout) continue;

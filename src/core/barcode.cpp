@@ -1,5 +1,6 @@
 #include "core/barcode.h"
 
+#include <QCoreApplication>
 #include <QHash>
 #include <QRegularExpression>
 #include <QXmlStreamReader>
@@ -103,19 +104,19 @@ Layout eanUpc(const Options &o, QString digits, const QString &caption)
     const bool ean8 = o.type == Type::Ean8, upc = o.type == Type::UpcA;
     const int n = ean8 ? 8 : upc ? 12 : 13;
     if (!allDigits(digits) || (digits.size() != n && digits.size() != n - 1)) {
-        l.error = QStringLiteral("%1 takes %2 digits (or %3 without the check digit).")
+        l.error = QCoreApplication::translate("Core", "%1 takes %2 digits (or %3 without the check digit).")
                       .arg(ean8 ? QStringLiteral("EAN-8") : upc ? QStringLiteral("UPC-A") : QStringLiteral("EAN-13")).arg(n).arg(n - 1);
         return l;
     }
     const int check = eanCheckDigit(digits.left(n - 1));
     if (digits.size() == n && digits[n - 1].digitValue() != check) {
-        l.error = QStringLiteral("The check digit should be %1, not %2.").arg(check).arg(digits[n - 1]);
+        l.error = QCoreApplication::translate("Core", "The check digit should be %1, not %2.").arg(check).arg(digits[n - 1]);
         return l;
     }
     digits = digits.left(n - 1) + QString::number(check);
     const QString addOn = digitsOnly(o.addOn);
     if (!o.addOn.trimmed().isEmpty() && addOn.size() != 2 && addOn.size() != 5) {
-        l.error = QStringLiteral("An add-on has 2 or 5 digits.");
+        l.error = QCoreApplication::translate("Core", "An add-on has 2 or 5 digits.");
         return l;
     }
     // The bars, as modules: UPC-A is an EAN-13 starting with 0.
@@ -195,10 +196,10 @@ Layout code128(const Options &o)
 {
     Layout l;
     const QString s = o.data;
-    if (s.isEmpty()) { l.error = QStringLiteral("Type the text the barcode holds."); return l; }
+    if (s.isEmpty()) { l.error = QCoreApplication::translate("Core", "Type the text the barcode holds."); return l; }
     for (QChar c : s)
         if (c.unicode() < 32 || c.unicode() > 126) {
-            l.error = QStringLiteral("Code 128 holds plain letters, digits and symbols (\"%1\" isn't one).").arg(c);
+            l.error = QCoreApplication::translate("Core", "Code 128 holds plain letters, digits and symbols (\"%1\" isn't one).").arg(c);
             return l;
         }
     // Code set B for text, C (two digits to a symbol) for runs of four or
@@ -249,12 +250,12 @@ Layout code39(const Options &o)
 {
     Layout l;
     QString s = o.data.toUpper();
-    if (s.isEmpty()) { l.error = QStringLiteral("Type the text the barcode holds."); return l; }
+    if (s.isEmpty()) { l.error = QCoreApplication::translate("Core", "Type the text the barcode holds."); return l; }
     QVector<int> idx;
     for (QChar c : s) {
         const char *p = c.unicode() < 128 ? strchr(kChars39, char(c.unicode())) : nullptr;
         if (!p || c == '*' || !c.unicode()) {
-            l.error = QStringLiteral("Code 39 holds capital letters, digits, spaces and - . $ / + % (\"%1\" isn't one).").arg(c);
+            l.error = QCoreApplication::translate("Core", "Code 39 holds capital letters, digits, spaces and - . $ / + % (\"%1\" isn't one).").arg(c);
             return l;
         }
         idx << int(p - kChars39);
@@ -305,14 +306,14 @@ QString isbn13(const QString &input, QString *error)
     for (QChar c : input)
         if (c.isDigit() || c == 'X' || c == 'x') s += c.toUpper();
         else if (c != '-' && c != ' ' && c.unicode() != 0x2010 && c.unicode() != 0x2011) {
-            if (error) *error = QStringLiteral("An ISBN has only digits (and hyphens).");
+            if (error) *error = QCoreApplication::translate("Core", "An ISBN has only digits (and hyphens).");
             return {};
         }
     if (s.size() == 10) {
         int sum = 0;
         for (int i = 0; i < 9; ++i) {
             if (!s[i].isDigit()) {
-                if (error) *error = QStringLiteral("Only an ISBN-10's last character can be X.");
+                if (error) *error = QCoreApplication::translate("Core", "Only an ISBN-10's last character can be X.");
                 return {};
             }
             sum += s[i].digitValue() * (10 - i);
@@ -320,7 +321,7 @@ QString isbn13(const QString &input, QString *error)
         const int check = (11 - sum % 11) % 11;
         const QChar want = check == 10 ? QChar('X') : QChar('0' + check);
         if (s[9] != want) {
-            if (error) *error = QStringLiteral("This ISBN-10's check digit should be %1, not %2.").arg(want).arg(s[9]);
+            if (error) *error = QCoreApplication::translate("Core", "This ISBN-10's check digit should be %1, not %2.").arg(want).arg(s[9]);
             return {};
         }
         const QString body = QStringLiteral("978") + s.left(9);
@@ -328,17 +329,17 @@ QString isbn13(const QString &input, QString *error)
     }
     if (s.size() == 13 && allDigits(s)) {
         if (!s.startsWith(QLatin1String("978")) && !s.startsWith(QLatin1String("979"))) {
-            if (error) *error = QStringLiteral("An ISBN-13 starts with 978 or 979.");
+            if (error) *error = QCoreApplication::translate("Core", "An ISBN-13 starts with 978 or 979.");
             return {};
         }
         const int check = eanCheckDigit(s.left(12));
         if (s[12].digitValue() != check) {
-            if (error) *error = QStringLiteral("This ISBN's check digit should be %1, not %2.").arg(check).arg(s[12]);
+            if (error) *error = QCoreApplication::translate("Core", "This ISBN's check digit should be %1, not %2.").arg(check).arg(s[12]);
             return {};
         }
         return s;
     }
-    if (error) *error = QStringLiteral("An ISBN has 10 or 13 digits.");
+    if (error) *error = QCoreApplication::translate("Core", "An ISBN has 10 or 13 digits.");
     return {};
 }
 
@@ -455,7 +456,7 @@ QString priceAddOn(Currency c, double price, QString *error)
     if (c == Currency::None) return QStringLiteral("90000");
     const int cents = int(std::lround(price * 100));
     if (cents <= 0) {
-        if (error) *error = QStringLiteral("Type the price.");
+        if (error) *error = QCoreApplication::translate("Core", "Type the price.");
         return {};
     }
     // Prices past 99.99 are printed as 99.99 (the add-on has four digits for them).

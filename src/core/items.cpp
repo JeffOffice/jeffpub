@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include <QCoreApplication>
 #include <QJsonArray>
 #include <QRandomGenerator>
 #include <QTransform>
@@ -23,13 +24,13 @@ QString newId(const char *prefix)
 QString itemTypeName(ItemType t)
 {
     switch (t) {
-    case ItemType::Text: return QStringLiteral("Text Box");
-    case ItemType::Picture: return QStringLiteral("Picture");
-    case ItemType::Shape: return QStringLiteral("Shape");
-    case ItemType::Line: return QStringLiteral("Line");
-    case ItemType::Table: return QStringLiteral("Table");
-    case ItemType::TextArt: return QStringLiteral("Text Art");
-    case ItemType::Group: return QStringLiteral("Group");
+    case ItemType::Text: return QCoreApplication::translate("Core", "Text Box");
+    case ItemType::Picture: return QCoreApplication::translate("Core", "Picture");
+    case ItemType::Shape: return QCoreApplication::translate("Core", "Shape");
+    case ItemType::Line: return QCoreApplication::translate("Core", "Line");
+    case ItemType::Table: return QCoreApplication::translate("Core", "Table");
+    case ItemType::TextArt: return QCoreApplication::translate("Core", "Text Art");
+    case ItemType::Group: return QCoreApplication::translate("Core", "Group");
     }
     return {};
 }
@@ -619,6 +620,7 @@ void TableItem::fromJson(const QJsonObject &o)
 // ---------- TextArtItem ----------
 TextArtItem::TextArtItem()
 {
+    text = QCoreApplication::translate("Core", "Your Text Here");
     fill = Fill::solid(ColorRef::scheme(Accent1));
     stroke = Stroke::none();
     wrap.mode = Wrap::Square;

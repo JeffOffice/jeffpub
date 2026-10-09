@@ -5,6 +5,7 @@
 #include "render/metafile.h"
 
 #include <QBuffer>
+#include <QCoreApplication>
 #include <QFile>
 #include <QDateTime>
 #include <QHash>
@@ -66,13 +67,13 @@ std::unique_ptr<Document> publicationFromBytes(const QByteArray &bytes, QString 
     QMap<QString, QByteArray> entries;
     if (!readZip(bytes, entries, error)) return nullptr;
     if (!entries.contains("document.json")) {
-        if (error) *error = QStringLiteral("The file has no publication content.");
+        if (error) *error = QCoreApplication::translate("Import", "The file has no publication content.");
         return nullptr;
     }
     QJsonParseError pe;
     const QJsonDocument jd = QJsonDocument::fromJson(entries["document.json"], &pe);
     if (jd.isNull()) {
-        if (error) *error = QStringLiteral("The publication content is damaged: %1").arg(pe.errorString());
+        if (error) *error = QCoreApplication::translate("Import", "The publication content is damaged: %1").arg(pe.errorString());
         return nullptr;
     }
     auto doc = std::make_unique<Document>();

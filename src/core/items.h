@@ -227,7 +227,7 @@ public:
     ItemType type() const override { return ItemType::TextArt; }
     ItemPtr clone() const override;
 
-    QString text = QStringLiteral("Your Text Here");
+    QString text;               // starts as "Your Text Here" in the program's language (set in the constructor)
     QString font = QStringLiteral("Archivo Black");
     bool bold = false, italic = false;
     double size = 36;           // nominal size (TextArt stretches to the frame)

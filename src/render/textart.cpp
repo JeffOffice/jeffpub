@@ -2,6 +2,7 @@
 
 #include "core/fonts.h"
 
+#include <QCoreApplication>
 #include <QFont>
 #include <QFontMetricsF>
 #include <QtMath>
@@ -14,13 +15,21 @@ namespace jp {
 const QVector<TextArtTransform> &textArtTransforms()
 {
     static const QVector<TextArtTransform> t = {
-        {"plain", "Plain Text"}, {"archUp", "Arch Up"}, {"archDown", "Arch Down"}, {"circle", "Circle"}, {"button", "Button"},
-        {"waveUp", "Wave 1"}, {"waveDown", "Wave 2"}, {"doubleWave", "Double Wave"}, {"inflate", "Inflate"}, {"deflate", "Deflate"},
-        {"inflateTop", "Inflate Top"}, {"inflateBottom", "Inflate Bottom"}, {"deflateTop", "Deflate Top"}, {"deflateBottom", "Deflate Bottom"},
-        {"slantUp", "Slant Up"}, {"slantDown", "Slant Down"}, {"triangleUp", "Triangle Up"}, {"triangleDown", "Triangle Down"},
-        {"chevronUp", "Chevron Up"}, {"chevronDown", "Chevron Down"}, {"fadeRight", "Fade Right"}, {"fadeLeft", "Fade Left"},
-        {"fadeUp", "Fade Up"}, {"fadeDown", "Fade Down"}, {"cascadeUp", "Cascade Up"}, {"cascadeDown", "Cascade Down"},
-        {"canUp", "Can Up"}, {"canDown", "Can Down"}, {"ringInside", "Ring Inside"}, {"ringOutside", "Ring Outside"},
+        {"plain", QCoreApplication::translate("Render", "Plain Text")}, {"archUp", QCoreApplication::translate("Render", "Arch Up")},
+        {"archDown", QCoreApplication::translate("Render", "Arch Down")}, {"circle", QCoreApplication::translate("Render", "Circle")},
+        {"button", QCoreApplication::translate("Render", "Button")}, {"waveUp", QCoreApplication::translate("Render", "Wave 1")},
+        {"waveDown", QCoreApplication::translate("Render", "Wave 2")}, {"doubleWave", QCoreApplication::translate("Render", "Double Wave")},
+        {"inflate", QCoreApplication::translate("Render", "Inflate")}, {"deflate", QCoreApplication::translate("Render", "Deflate")},
+        {"inflateTop", QCoreApplication::translate("Render", "Inflate Top")}, {"inflateBottom", QCoreApplication::translate("Render", "Inflate Bottom")},
+        {"deflateTop", QCoreApplication::translate("Render", "Deflate Top")}, {"deflateBottom", QCoreApplication::translate("Render", "Deflate Bottom")},
+        {"slantUp", QCoreApplication::translate("Render", "Slant Up")}, {"slantDown", QCoreApplication::translate("Render", "Slant Down")},
+        {"triangleUp", QCoreApplication::translate("Render", "Triangle Up")}, {"triangleDown", QCoreApplication::translate("Render", "Triangle Down")},
+        {"chevronUp", QCoreApplication::translate("Render", "Chevron Up")}, {"chevronDown", QCoreApplication::translate("Render", "Chevron Down")},
+        {"fadeRight", QCoreApplication::translate("Render", "Fade Right")}, {"fadeLeft", QCoreApplication::translate("Render", "Fade Left")},
+        {"fadeUp", QCoreApplication::translate("Render", "Fade Up")}, {"fadeDown", QCoreApplication::translate("Render", "Fade Down")},
+        {"cascadeUp", QCoreApplication::translate("Render", "Cascade Up")}, {"cascadeDown", QCoreApplication::translate("Render", "Cascade Down")},
+        {"canUp", QCoreApplication::translate("Render", "Can Up")}, {"canDown", QCoreApplication::translate("Render", "Can Down")},
+        {"ringInside", QCoreApplication::translate("Render", "Ring Inside")}, {"ringOutside", QCoreApplication::translate("Render", "Ring Outside")},
     };
     return t;
 }
@@ -268,7 +277,7 @@ static TextArtStyle mk(const char *id, const char *name, const char *font, Fill 
 {
     TextArtStyle s;
     s.id = QString::fromLatin1(id);
-    s.name = QString::fromLatin1(name);
+    s.name = QCoreApplication::translate("Render", name);
     s.font = QString::fromLatin1(font);
     s.fill = fill;
     s.stroke = stroke;
@@ -288,42 +297,42 @@ const QVector<TextArtStyle> &textArtStyles()
         const ColorRef a1 = ColorRef::scheme(Accent1), a2 = ColorRef::scheme(Accent2), a3 = ColorRef::scheme(Accent3), main = ColorRef::scheme(Main);
         const ColorRef white = ColorRef::rgb(Qt::white), black = ColorRef::rgb(QColor(30, 30, 30));
         QVector<TextArtStyle> s;
-        s << mk("fill-main", "Fill: Main", "Archivo Black", Fill::solid(main), Stroke::none());
-        s << mk("fill-a1", "Fill: Accent 1", "Archivo Black", Fill::solid(a1), Stroke::none());
-        s << mk("fill-a1-shadow", "Fill: Accent 1, Shadow", "Archivo Black", Fill::solid(a1), Stroke::none(), true);
-        s << mk("outline-a1", "Outline: Accent 1", "Archivo Black", Fill::solid(white), Stroke::line(a1, 2));
-        s << mk("fill-a2-outline", "Fill: Accent 2, Outline: Main", "Bebas Neue", Fill::solid(a2), Stroke::line(main, 1.5));
-        s << mk("grad-a1-a2", "Gradient: Accent 1 to Accent 2", "Archivo Black", Fill::gradient(a1, a2, 90), Stroke::none());
-        s << mk("grad-gold", "Gradient: Gold", "Abril Fatface", Fill::gradient(ColorRef::rgb(QColor("#F7D774")), ColorRef::rgb(QColor("#A8741A")), 90),
+        s << mk("fill-main", QT_TRANSLATE_NOOP("Render", "Fill: Main"), "Archivo Black", Fill::solid(main), Stroke::none());
+        s << mk("fill-a1", QT_TRANSLATE_NOOP("Render", "Fill: Accent 1"), "Archivo Black", Fill::solid(a1), Stroke::none());
+        s << mk("fill-a1-shadow", QT_TRANSLATE_NOOP("Render", "Fill: Accent 1, Shadow"), "Archivo Black", Fill::solid(a1), Stroke::none(), true);
+        s << mk("outline-a1", QT_TRANSLATE_NOOP("Render", "Outline: Accent 1"), "Archivo Black", Fill::solid(white), Stroke::line(a1, 2));
+        s << mk("fill-a2-outline", QT_TRANSLATE_NOOP("Render", "Fill: Accent 2, Outline: Main"), "Bebas Neue", Fill::solid(a2), Stroke::line(main, 1.5));
+        s << mk("grad-a1-a2", QT_TRANSLATE_NOOP("Render", "Gradient: Accent 1 to Accent 2"), "Archivo Black", Fill::gradient(a1, a2, 90), Stroke::none());
+        s << mk("grad-gold", QT_TRANSLATE_NOOP("Render", "Gradient: Gold"), "Abril Fatface", Fill::gradient(ColorRef::rgb(QColor("#F7D774")), ColorRef::rgb(QColor("#A8741A")), 90),
                 Stroke::line(ColorRef::rgb(QColor("#7A5210")), 1), true);
-        s << mk("grad-silver", "Gradient: Silver", "Archivo Black", Fill::gradient(ColorRef::rgb(QColor("#F4F4F4")), ColorRef::rgb(QColor("#8A8A8A")), 90),
+        s << mk("grad-silver", QT_TRANSLATE_NOOP("Render", "Gradient: Silver"), "Archivo Black", Fill::gradient(ColorRef::rgb(QColor("#F4F4F4")), ColorRef::rgb(QColor("#8A8A8A")), 90),
                 Stroke::line(ColorRef::rgb(QColor("#5A5A5A")), 1), true);
-        s << mk("grad-sunset", "Gradient: Sunset", "Lobster", Fill::gradient(ColorRef::rgb(QColor("#FFB347")), ColorRef::rgb(QColor("#E0405E")), 0), Stroke::none(), true);
-        s << mk("grad-ocean", "Gradient: Ocean", "Archivo Black", Fill::gradient(ColorRef::rgb(QColor("#56CCF2")), ColorRef::rgb(QColor("#1B3F8B")), 90), Stroke::none());
-        s << mk("rainbow", "Rainbow", "Archivo Black", [] {
+        s << mk("grad-sunset", QT_TRANSLATE_NOOP("Render", "Gradient: Sunset"), "Lobster", Fill::gradient(ColorRef::rgb(QColor("#FFB347")), ColorRef::rgb(QColor("#E0405E")), 0), Stroke::none(), true);
+        s << mk("grad-ocean", QT_TRANSLATE_NOOP("Render", "Gradient: Ocean"), "Archivo Black", Fill::gradient(ColorRef::rgb(QColor("#56CCF2")), ColorRef::rgb(QColor("#1B3F8B")), 90), Stroke::none());
+        s << mk("rainbow", QT_TRANSLATE_NOOP("Render", "Rainbow"), "Archivo Black", [] {
             Fill f; f.type = Fill::Gradient; f.angle = 0;
             const char *c[] = {"#E53935", "#FB8C00", "#FDD835", "#43A047", "#1E88E5", "#8E24AA"};
             for (int i = 0; i < 6; ++i) f.stops << GradientStop{i / 5.0, ColorRef::rgb(QColor(c[i])), 0};
             return f; }(), Stroke::none());
-        s << mk("arch-a1", "Arch: Accent 1", "Archivo Black", Fill::solid(a1), Stroke::none(), false, "archUp");
-        s << mk("arch-down-a2", "Arch Down: Accent 2", "Archivo Black", Fill::solid(a2), Stroke::none(), false, "archDown");
-        s << mk("wave-a3", "Wave: Accent 3", "Bungee", Fill::solid(a3), Stroke::line(main, 1), false, "waveUp");
-        s << mk("inflate-a1", "Inflate: Accent 1", "Anton", Fill::solid(a1), Stroke::none(), true, "inflate");
-        s << mk("slant-main", "Slant Up: Main", "Oswald", Fill::solid(main), Stroke::none(), false, "slantUp", true);
-        s << mk("fade-right", "Fade Right: Accent 1", "Archivo Black", Fill::solid(a1), Stroke::none(), false, "fadeRight");
-        s << mk("chevron", "Chevron Up: Accent 2", "Bebas Neue", Fill::solid(a2), Stroke::line(main, 1), false, "chevronUp");
-        s << mk("circle", "Circle: Accent 1", "Archivo Black", Fill::solid(a1), Stroke::none(), false, "circle");
-        s << mk("triangle", "Triangle Up: Accent 1", "Anton", Fill::solid(a1), Stroke::none(), false, "triangleUp");
-        s << mk("can", "Can Up: Main", "Archivo Black", Fill::solid(main), Stroke::none(), false, "canUp");
-        s << mk("cascade", "Cascade Up: Accent 1", "Archivo Black", Fill::gradient(a1, a2, 0), Stroke::none(), false, "cascadeUp");
-        s << mk("script", "Script: Accent 1", "Great Vibes", Fill::solid(a1), Stroke::none(), true);
-        s << mk("retro", "Retro: Accent 2", "Bungee", Fill::solid(a2), Stroke::line(black, 2), true);
-        s << mk("chalk", "Chalk: White", "Permanent Marker", Fill::solid(white), Stroke::line(black, 0.5));
-        s << mk("classic-serif", "Classic Serif", "Playfair Display", Fill::solid(main), Stroke::none(), true, "plain", true);
-        s << mk("pop", "Pop: Accent 3", "Alfa Slab One", Fill::solid(a3), Stroke::line(main, 2.5), true);
-        s << mk("deflate", "Deflate: Accent 2", "Anton", Fill::solid(a2), Stroke::none(), false, "deflate");
-        s << mk("button", "Button: Main", "Archivo Black", Fill::solid(main), Stroke::none(), false, "button");
-        s << mk("double-wave", "Double Wave: Accent 1", "Lobster", Fill::gradient(a1, a3, 90), Stroke::none(), true, "doubleWave");
+        s << mk("arch-a1", QT_TRANSLATE_NOOP("Render", "Arch: Accent 1"), "Archivo Black", Fill::solid(a1), Stroke::none(), false, "archUp");
+        s << mk("arch-down-a2", QT_TRANSLATE_NOOP("Render", "Arch Down: Accent 2"), "Archivo Black", Fill::solid(a2), Stroke::none(), false, "archDown");
+        s << mk("wave-a3", QT_TRANSLATE_NOOP("Render", "Wave: Accent 3"), "Bungee", Fill::solid(a3), Stroke::line(main, 1), false, "waveUp");
+        s << mk("inflate-a1", QT_TRANSLATE_NOOP("Render", "Inflate: Accent 1"), "Anton", Fill::solid(a1), Stroke::none(), true, "inflate");
+        s << mk("slant-main", QT_TRANSLATE_NOOP("Render", "Slant Up: Main"), "Oswald", Fill::solid(main), Stroke::none(), false, "slantUp", true);
+        s << mk("fade-right", QT_TRANSLATE_NOOP("Render", "Fade Right: Accent 1"), "Archivo Black", Fill::solid(a1), Stroke::none(), false, "fadeRight");
+        s << mk("chevron", QT_TRANSLATE_NOOP("Render", "Chevron Up: Accent 2"), "Bebas Neue", Fill::solid(a2), Stroke::line(main, 1), false, "chevronUp");
+        s << mk("circle", QT_TRANSLATE_NOOP("Render", "Circle: Accent 1"), "Archivo Black", Fill::solid(a1), Stroke::none(), false, "circle");
+        s << mk("triangle", QT_TRANSLATE_NOOP("Render", "Triangle Up: Accent 1"), "Anton", Fill::solid(a1), Stroke::none(), false, "triangleUp");
+        s << mk("can", QT_TRANSLATE_NOOP("Render", "Can Up: Main"), "Archivo Black", Fill::solid(main), Stroke::none(), false, "canUp");
+        s << mk("cascade", QT_TRANSLATE_NOOP("Render", "Cascade Up: Accent 1"), "Archivo Black", Fill::gradient(a1, a2, 0), Stroke::none(), false, "cascadeUp");
+        s << mk("script", QT_TRANSLATE_NOOP("Render", "Script: Accent 1"), "Great Vibes", Fill::solid(a1), Stroke::none(), true);
+        s << mk("retro", QT_TRANSLATE_NOOP("Render", "Retro: Accent 2"), "Bungee", Fill::solid(a2), Stroke::line(black, 2), true);
+        s << mk("chalk", QT_TRANSLATE_NOOP("Render", "Chalk: White"), "Permanent Marker", Fill::solid(white), Stroke::line(black, 0.5));
+        s << mk("classic-serif", QT_TRANSLATE_NOOP("Render", "Classic Serif"), "Playfair Display", Fill::solid(main), Stroke::none(), true, "plain", true);
+        s << mk("pop", QT_TRANSLATE_NOOP("Render", "Pop: Accent 3"), "Alfa Slab One", Fill::solid(a3), Stroke::line(main, 2.5), true);
+        s << mk("deflate", QT_TRANSLATE_NOOP("Render", "Deflate: Accent 2"), "Anton", Fill::solid(a2), Stroke::none(), false, "deflate");
+        s << mk("button", QT_TRANSLATE_NOOP("Render", "Button: Main"), "Archivo Black", Fill::solid(main), Stroke::none(), false, "button");
+        s << mk("double-wave", QT_TRANSLATE_NOOP("Render", "Double Wave: Accent 1"), "Lobster", Fill::gradient(a1, a3, 90), Stroke::none(), true, "doubleWave");
         return s;
     }();
     return v;

@@ -1,5 +1,6 @@
 #include "io/qtpdf.h"
 
+#include <QCoreApplication>
 #include <QFile>
 #include <QHash>
 #include <QRegularExpression>
@@ -48,7 +49,7 @@ bool QtPdf::load(const QString &path, QString *error)
     objects.clear();
     qsizetype at = pdf.indexOf("\n1 0 obj\n");
     if (!pdf.startsWith("%PDF-") || at < 0) {
-        if (error) *error = QStringLiteral("not a PDF this program wrote");
+        if (error) *error = QCoreApplication::translate("Export", "not a PDF this program wrote");
         return false;
     }
     header = pdf.left(at + 1);
@@ -74,7 +75,7 @@ bool QtPdf::load(const QString &path, QString *error)
     const qsizetype t = pdf.indexOf("trailer", pdf.lastIndexOf("\nxref\n"));
     const qsizetype startxref = pdf.lastIndexOf("startxref");
     if (objects.isEmpty() || t < 0 || startxref < t) {
-        if (error) *error = QStringLiteral("unexpected PDF layout");
+        if (error) *error = QCoreApplication::translate("Export", "unexpected PDF layout");
         return false;
     }
     trailer = pdf.mid(t, startxref - t);

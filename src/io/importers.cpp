@@ -10,6 +10,7 @@
 #include <QBuffer>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -432,7 +433,7 @@ bool loadMergeSource(const QString &path, MergeSource *out, QString *error)
     }
     if (m.fields.isEmpty()) {
         if (rows.isEmpty()) {
-            if (error) *error = QStringLiteral("The file has no rows.");
+            if (error) *error = QCoreApplication::translate("Import", "The file has no rows.");
             return false;
         }
         m.fields = rows.takeFirst();
@@ -571,7 +572,7 @@ std::unique_ptr<Document> mergeToNewPublication(const Document &src)
     }
     out->merge = MergeSource();
     if (out->pages.isEmpty()) out->addPage();
-    out->props.title = src.props.title + QStringLiteral(" (merged)");
+    out->props.title = QCoreApplication::translate("Import", "%1 (merged)").arg(src.props.title);
     return out;
 }
 
@@ -579,27 +580,27 @@ void mergeToEmailFiles(QWidget *parent, Editor *ed)
 {
     const Document &d = *ed->doc();
     if (d.merge.isEmpty()) {
-        QMessageBox::information(parent, QStringLiteral("Merge to Email"), QStringLiteral("Select a recipient list first."));
+        QMessageBox::information(parent, QCoreApplication::translate("Import", "Merge to Email"), QCoreApplication::translate("Import", "Select a recipient list first."));
         return;
     }
     QDialog dlg(parent);
-    dlg.setWindowTitle(QStringLiteral("Merge to Email"));
+    dlg.setWindowTitle(QCoreApplication::translate("Import", "Merge to Email"));
     auto *form = new QFormLayout(&dlg);
     auto *to = new QComboBox(&dlg);
     to->addItems(d.merge.fields);
     for (int i = 0; i < d.merge.fields.size(); ++i)
         if (d.merge.fields[i].contains("mail", Qt::CaseInsensitive)) to->setCurrentIndex(i);
     auto *subject = new QLineEdit(d.props.title.isEmpty() ? ed->displayName() : d.props.title, &dlg);
-    form->addRow(QStringLiteral("To:"), to);
-    form->addRow(QStringLiteral("Subject:"), subject);
-    form->addRow(new QLabel(QStringLiteral("JeffPub creates one ready-to-send email file (.eml) per recipient, with the publication as an inline picture.\n"
-                                           "Open them with your email program to send."), &dlg));
+    form->addRow(QCoreApplication::translate("Import", "To:"), to);
+    form->addRow(QCoreApplication::translate("Import", "Subject:"), subject);
+    form->addRow(new QLabel(QCoreApplication::translate("Import", "JeffPub creates one ready-to-send email file (.eml) per recipient, with the publication as an inline picture.\n"
+                                                                    "Open them with your email program to send."), &dlg));
     auto *bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
     form->addRow(bb);
     QObject::connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
     QObject::connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
     if (dlg.exec() != QDialog::Accepted) return;
-    const QString dir = QFileDialog::getExistingDirectory(parent, QStringLiteral("Save Email Files To"));
+    const QString dir = QFileDialog::getExistingDirectory(parent, QCoreApplication::translate("Import", "Save Email Files To"));
     if (dir.isEmpty()) return;
     PaintContext ctx;
     ctx.doc = &d;
@@ -629,7 +630,7 @@ void mergeToEmailFiles(QWidget *parent, Editor *ed)
         QFile f(QDir(dir).filePath(safe + ".eml"));
         if (f.open(QIODevice::WriteOnly)) { f.write(eml.toUtf8()); ++n; }
     }
-    QMessageBox::information(parent, QStringLiteral("Merge to Email"), QStringLiteral("Created %1 email file(s) in %2.").arg(n).arg(dir));
+    QMessageBox::information(parent, QCoreApplication::translate("Import", "Merge to Email"), QCoreApplication::translate("Import", "Created %1 email file(s) in %2.").arg(n).arg(dir));
 }
 
 std::unique_ptr<Document> loadAnyPublication(const QString &path, QString *error)
@@ -671,9 +672,10 @@ PrinterMarks PrinterMarks::fromJson(const QJsonObject &o)
 
 QString plateName(int plate, const Document *doc)
 {
-    static const char *names[] = {"Cyan", "Magenta", "Yellow", "Black"};
+    static const char *names[] = {QT_TRANSLATE_NOOP("Import", "Cyan"), QT_TRANSLATE_NOOP("Import", "Magenta"), QT_TRANSLATE_NOOP("Import", "Yellow"),
+                                  QT_TRANSLATE_NOOP("Import", "Black")};
     if (plate >= 4 && doc) return doc->print.spotName(plate - 4);
-    return QString::fromLatin1(names[std::clamp(plate, 0, 3)]);
+    return QCoreApplication::translate("Import", names[std::clamp(plate, 0, 3)]);
 }
 
 double spotAmount(const QColor &c, const QColor &spot)
@@ -925,7 +927,7 @@ void printDocument(Editor *ed, QPrinter *printer, const QJsonObject &opts)
             PrinterMarks m = marks;
             m.bleedSize *= s;
             m.plate = plate;
-            QString info = QStringLiteral("%1  ·  Page %2 of %3  ·  %4").arg(title).arg(page + 1).arg(d->pages.size()).arg(stamp);
+            QString info = QCoreApplication::translate("Import", "%1  ·  Page %2 of %3  ·  %4").arg(title).arg(page + 1).arg(d->pages.size()).arg(stamp);
             if (plate >= 0) info += QStringLiteral("  ·  ") + plateName(plate, d);
             drawPrinterMarks(&p, QRectF(target.topLeft(), ps * s), m, info);
             p.restore();
@@ -1015,15 +1017,16 @@ void printDocument(Editor *ed, QPrinter *printer, const QJsonObject &opts)
 void compressPicturesDialog(QWidget *parent, Editor *ed)
 {
     QDialog dlg(parent);
-    dlg.setWindowTitle(QStringLiteral("Compress Pictures"));
+    dlg.setWindowTitle(QCoreApplication::translate("Import", "Compress Pictures"));
     auto *form = new QFormLayout(&dlg);
     auto *target = new QComboBox(&dlg);
-    target->addItems({"Commercial printing (300 ppi)", "Desktop printing (220 ppi)", "Web (96 ppi)"});
-    auto *all = new QCheckBox(QStringLiteral("Apply to all pictures in the publication"), &dlg);
+    target->addItems({QCoreApplication::translate("Import", "Commercial printing (300 ppi)"), QCoreApplication::translate("Import", "Desktop printing (220 ppi)"),
+                      QCoreApplication::translate("Import", "Web (96 ppi)")});
+    auto *all = new QCheckBox(QCoreApplication::translate("Import", "Apply to all pictures in the publication"), &dlg);
     all->setChecked(true);
-    auto *crop = new QCheckBox(QStringLiteral("Delete cropped areas of pictures"), &dlg);
+    auto *crop = new QCheckBox(QCoreApplication::translate("Import", "Delete cropped areas of pictures"), &dlg);
     crop->setChecked(true);
-    form->addRow(QStringLiteral("Target output:"), target);
+    form->addRow(QCoreApplication::translate("Import", "Target output:"), target);
     form->addRow(all);
     form->addRow(crop);
     auto *bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
@@ -1036,7 +1039,7 @@ void compressPicturesDialog(QWidget *parent, Editor *ed)
     if (all->isChecked()) ed->doc()->forEachItem([&](Item *it, int, const QString &) { if (auto *p = dynamic_cast<PictureItem *>(it)) pics << p; });
     else for (Item *it : ed->selectedItems()) if (auto *p = dynamic_cast<PictureItem *>(it)) pics << p;
     qint64 saved = 0;
-    ed->change(QStringLiteral("Compress Pictures"), [&] {
+    ed->change(QCoreApplication::translate("Import", "Compress Pictures"), [&] {
         for (PictureItem *p : pics) {
             ImageData &data = ed->doc()->images[p->imageId];
             if (data.format == "svg" || data.format == "wmf" || data.format == "emf" || data.format == "pdf") continue;
@@ -1067,7 +1070,7 @@ void compressPicturesDialog(QWidget *parent, Editor *ed)
             }
         }
     });
-    QMessageBox::information(parent, QStringLiteral("Compress Pictures"), QStringLiteral("Saved %1 KB.").arg(saved / 1024));
+    QMessageBox::information(parent, QCoreApplication::translate("Import", "Compress Pictures"), QCoreApplication::translate("Import", "Saved %1 KB.").arg(saved / 1024));
 }
 
 } // namespace jp
