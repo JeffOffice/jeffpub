@@ -1526,6 +1526,24 @@ private Q_SLOTS:
         QVERIFY(!r.describe().contains(QStringLiteral("keytip")));
     }
 
+    // Setting a group's launcher again cut every connection from its button,
+    // including the one that tells Qt's screen reader support the button is
+    // gone: its stale entry was later handed to a new control at the same
+    // address, and asking its name crashed (only where a screen reader or
+    // other accessibility client is active, as on the Mac and Windows
+    // runners).
+    void launcherKeepsAccessibilityInTouch()
+    {
+        auto *g = new jp::RibbonGroup(QStringLiteral("Font"));
+        g->setLauncher([] {}, QStringLiteral("Font"));
+        QAccessibleInterface *iface = QAccessible::queryAccessibleInterface(g->launcher());
+        QVERIFY(iface);
+        const QAccessible::Id id = QAccessible::uniqueId(iface);
+        g->setLauncher([] {}, QStringLiteral("Font Settings"));
+        delete g;
+        QVERIFY(!QAccessible::accessibleInterface(id));   // gone with its button
+    }
+
     // Every ribbon control has a name screen readers read, and the keyboard
     // reaches it (the ribbon's buttons, galleries and color buttons refused
     // the focus; its tabs and File button were only drawn).
@@ -1543,9 +1561,6 @@ private Q_SLOTS:
             if (!control || !pw || qobject_cast<QAbstractItemView *>(pw) || pw->inherits("QComboBoxPrivateContainer")) continue;   // a combo's own list
             if (c->inherits("QLineEdit") && c->parentWidget() && (c->parentWidget()->inherits("QComboBox") || c->parentWidget()->inherits("QAbstractSpinBox"))) continue;
             ++checked;
-            // Which control is asked (the test crashed on some runners only).
-            fprintf(stderr, "a11y %d %s %s\n", checked, c->metaObject()->className(), qPrintable(c->objectName()));
-            fflush(stderr);
             QAccessibleInterface *iface = QAccessible::queryAccessibleInterface(c);
             QVERIFY(iface);
             const QString name = iface->text(QAccessible::Name).trimmed();

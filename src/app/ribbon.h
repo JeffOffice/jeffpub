@@ -49,6 +49,7 @@ private:
     int m_rows = 0;
     QString m_title;
     QToolButton *m_launcher = nullptr;
+    QMetaObject::Connection m_launcherClicked;
 };
 
 // A ribbon page. When the window is too narrow for every group, groups

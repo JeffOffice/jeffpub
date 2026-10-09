@@ -47,7 +47,7 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 - [x] Objects in text (Publisher's "inline" pictures, shapes, and text boxes): Wrap Text > In Line with Text moves an object over a text box into its text, and choosing another wrap with the object selected in the text moves it back out; opened from and saved to `.pub`, and kept in `.jpub`; each sits on its line's baseline inside its wrap distances and a tall one makes its line taller, as in Publisher *(measured against Publisher to the pixel; Publisher showed a JeffPub-saved copy of its sample exactly as its own file)*
 - [x] Fields and hyperlinks in `.pub` text: page numbers (this page's, and the next or previous linked box's), dates and times in Publisher's 17 formats (they update, as in Publisher), and hyperlinks are read and saved as Publisher's own *(Publisher counted the same fields and links in JeffPub's copies of its samples as in its own files, and pictured them the same)*
 - [x] Anonymous usage statistics, with a choice in Windows setup and when JeffPub first starts, and a switch in File > Options: once a day (and on the day of an update), the version, operating system, language, and how often each command is used; never files or their contents (see README, Privacy)
-- [x] Save, Save As, AutoRecover (copies of unsaved work offered again after a crash), and backup on save
+- [x] Save, Save As, AutoRecover (copies of unsaved work offered again after a crash, and cleaned up once saved), and backup on save
 - [x] Close and prompt to save changes
 
 ### Print
@@ -212,6 +212,11 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 - [x] Linux packages: `.deb` (Debian, Ubuntu) and AppImage
 - [ ] macOS app (Apple silicon and Intel) in a `.dmg`, signed and notarized so it opens without warnings
 - [x] File associations for `.jpub`
-- [x] Light and dark interface themes
+- [x] Light and dark interface themes, switched in File > Options at once (no restart), and following the system's setting while set to
+- [x] Windows high contrast mode: the system's colors throughout, applied as it's turned on or off
 - [x] Standard desktop publishing keyboard shortcuts (Ctrl+B, Ctrl+Shift+>, F9, Ctrl+Shift+L, Ctrl+M, Ctrl+Shift+N, and others)
+- [x] KeyTips: press Alt and letters appear on the ribbon; type a tab's letter, then a command's, to use it without the mouse
+- [x] The ribbon by keyboard: Tab and the arrow keys move among its tabs and controls, with a visible focus ring; Escape returns to the page; F6 moves between the ribbon, the page thumbnails, and the page
+- [x] Screen readers (Narrator and others): every ribbon control, tab, gallery, and color button has a name and description (checked by a test for every control)
+- [x] Translatable: the program's text (2,566 strings) is ready for translation with Qt Linguist, with a display language choice in File > Options; no translations yet (see translations/README.md)
 - [x] Bundled open fonts, including metric-compatible replacements for Calibri, Cambria, Arial, Times New Roman, and Courier New

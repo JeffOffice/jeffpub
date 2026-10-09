@@ -257,8 +257,11 @@ void RibbonGroup::setLauncher(const std::function<void()> &fn, const QString &ti
     m_launcher->setToolTip(tip.isEmpty() ? tr("%1 Settings").arg(m_title) : tip);
     m_launcher->setAccessibleName(m_launcher->toolTip() + QStringLiteral("…"));
     m_launcher->setAccessibleDescription(tr("Opens the %1 dialog").arg(m_launcher->toolTip()));
-    QObject::disconnect(m_launcher, nullptr, nullptr, nullptr);
-    connect(m_launcher, &QToolButton::clicked, this, [fn] { fn(); });
+    // Only our own click handler goes: cutting every connection from the
+    // button also cut the one that tells Qt's screen reader support it's
+    // gone, leaving a stale entry that crashed a later control's name.
+    QObject::disconnect(m_launcherClicked);
+    m_launcherClicked = connect(m_launcher, &QToolButton::clicked, this, [fn] { fn(); });
 }
 
 static void collectControls(const QLayout *l, QList<QWidget *> &out)
