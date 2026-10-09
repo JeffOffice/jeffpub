@@ -13,6 +13,11 @@ language.
 - To start a language, copy `jeffpub.ts` to `jeffpub_<language>.ts`, set its
   language in Qt Linguist (Edit > Translation File Settings), translate,
   and rebuild.
+- To see a translation in JeffPub before it's built in, release it with
+  `lrelease jeffpub_<language>.ts` and start JeffPub with
+  `JEFFPUB_TRANSLATION=/path/to/jeffpub_<language>.qm`.
+- English has `jeffpub_en.ts` for plurals only ("%n page(s)"): lupdate adds
+  each new plural there empty; give it its singular and plural forms.
 - The ribbon's labels come from `resources/ribbon.json`; they are listed for
   translators in `src/app/ribbon_strings.cpp`, which a test keeps in step
   with the file.

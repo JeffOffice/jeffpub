@@ -20,6 +20,15 @@ QStringList availableUiLanguages()
 
 QString installTranslations()
 {
+    // A translator's own file, to see it in place before it's built in:
+    // JEFFPUB_TRANSLATION=/path/to/jeffpub_xx.qm.
+    if (const QString own = qEnvironmentVariable("JEFFPUB_TRANSLATION"); !own.isEmpty()) {
+        auto *t = new QTranslator(QCoreApplication::instance());
+        if (t->load(own)) {
+            QCoreApplication::installTranslator(t);
+            return t->language();
+        }
+    }
     const QStringList have = availableUiLanguages();
     QStringList wanted;
     const QString chosen = Settings::get().value(QStringLiteral("ui/language")).toString();
