@@ -210,6 +210,7 @@ QAction *MainWindow::mk(const QString &id, const QString &text, const QString &i
                         const std::function<void()> &fn, bool checkable)
 {
     auto *a = new QAction(text, this);
+    a->setObjectName(id);   // the command's id (KeyTips, automation, tests)
     if (!iconName.isEmpty()) a->setIcon(icon(iconName));
     if (!key.isEmpty()) {
         a->setShortcut(key);

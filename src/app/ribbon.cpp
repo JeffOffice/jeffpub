@@ -6,6 +6,7 @@
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QWidgetAction>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
@@ -234,6 +235,7 @@ void RibbonGroup::setLauncher(const std::function<void()> &fn, const QString &ti
 {
     if (!m_launcher) {
         m_launcher = new QToolButton(this);
+        m_launcher->setObjectName(QStringLiteral("launcher"));
         m_launcher->setAutoRaise(true);
         m_launcher->setFocusPolicy(Qt::NoFocus);
         m_launcher->setIcon(icon("ellipsis"));
@@ -661,6 +663,80 @@ void Ribbon::setMinimized(bool m)
     m_minimized = m;
     m_stack->setVisible(!m);
     m_header->update();
+}
+
+// ---------- description (tests) ----------
+namespace {
+QString describeAction(const QAction *a)
+{
+    if (!a) return QStringLiteral("(none)");
+    if (a->isSeparator()) return QStringLiteral("-");
+    if (auto *wa = qobject_cast<const QWidgetAction *>(a)) return QStringLiteral("widget:") + QString::fromLatin1(wa->defaultWidget() ? wa->defaultWidget()->metaObject()->className() : "?");
+    QString s = a->objectName().isEmpty() ? QStringLiteral("\"%1\"").arg(a->text()) : a->objectName();
+    if (a->menu()) s += QStringLiteral(" >");
+    return s;
+}
+
+QString describeMenu(const QMenu *m, int depth = 0)
+{
+    if (!m) return QString();
+    QStringList parts;
+    for (const QAction *a : m->actions()) {
+        QString s = describeAction(a);
+        if (a->menu() && depth < 3) s += QStringLiteral(" {") + describeMenu(a->menu(), depth + 1) + QLatin1Char('}');
+        parts << s;
+    }
+    return parts.join(QStringLiteral(", "));
+}
+
+QString describeWidget(const QWidget *w)
+{
+    QString s = QString::fromLatin1(w->metaObject()->className());
+    if (auto *b = qobject_cast<const QToolButton *>(w)) {
+        s += QLatin1Char(' ') + (b->defaultAction() ? describeAction(b->defaultAction()) : QStringLiteral("\"%1\"").arg(b->text()));
+        static const char *styles[] = {"icon", "text", "beside", "under", "follow"};
+        s += QStringLiteral(" style=%1 icon=%2").arg(QLatin1String(styles[b->toolButtonStyle()])).arg(b->iconSize().width());
+        if (b->menu()) {
+            static const char *modes[] = {"delayed", "split", "instant"};
+            s += QStringLiteral(" popup=%1 menu=[%2]").arg(QLatin1String(modes[b->popupMode()]), describeMenu(b->menu()));
+        }
+    } else if (auto *l = qobject_cast<const QLabel *>(w)) {
+        s += QStringLiteral(" \"%1\"").arg(l->text());
+    }
+    if (!w->toolTip().isEmpty()) s += QStringLiteral(" tip=\"%1\"").arg(w->toolTip());
+    return s;
+}
+
+void describeLayout(const QLayout *l, int depth, QStringList &out)
+{
+    for (int i = 0; i < l->count(); ++i) {
+        QLayoutItem *it = l->itemAt(i);
+        const QString pad(depth * 2, QLatin1Char(' '));
+        if (QWidget *w = it->widget()) out << pad + describeWidget(w);
+        else if (QLayout *sub = it->layout()) {
+            out << pad + QString::fromLatin1(qobject_cast<QHBoxLayout *>(sub) ? "row" : "column");
+            describeLayout(sub, depth + 1, out);
+        }
+    }
+}
+} // namespace
+
+QString Ribbon::describe() const
+{
+    QStringList out;
+    QStringList qat;
+    for (const QToolButton *b : m_header->qatButtons) qat << describeAction(b->defaultAction());
+    out << QStringLiteral("quick access: ") + qat.join(QStringLiteral(", "));
+    for (const Tab &t : m_tabs) {
+        out << QStringLiteral("tab %1%2").arg(t.name, t.group.isEmpty() ? QString() : QStringLiteral(" (%1, %2)").arg(t.group, t.color.name()));
+        for (const RibbonGroup *g : t.page->findChildren<RibbonGroup *>(Qt::FindDirectChildrenOnly)) {
+            QString head = QStringLiteral("  group %1").arg(g->title());
+            if (auto *l = g->findChild<QToolButton *>(QStringLiteral("launcher"), Qt::FindDirectChildrenOnly)) head += QStringLiteral(" launcher=\"%1\"").arg(l->toolTip());
+            out << head;
+            describeLayout(g->layout(), 2, out);
+        }
+    }
+    return out.join(QLatin1Char('\n')) + QLatin1Char('\n');
 }
 
 } // namespace jp

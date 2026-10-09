@@ -82,6 +82,9 @@ public:
     void addQuickAccess(QAction *a);
     void setMinimized(bool m);
     bool isMinimized() const { return m_minimized; }
+    // Everything the ribbon holds, one control per line: tabs, groups, each
+    // control's kind, command and menu, in order (tests compare it).
+    QString describe() const;
 
 Q_SIGNALS:
     void fileClicked();

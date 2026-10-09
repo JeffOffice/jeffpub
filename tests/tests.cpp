@@ -1286,6 +1286,24 @@ private Q_SLOTS:
         QVERIFY2(extraStrike > 100, qPrintable(QString::number(extraStrike)));   // a line through them
     }
 
+    // The ribbon as built, one control per line (JP_RIBBON_DUMP=file writes
+    // it, to compare a rebuilt ribbon with the one before).
+    void ribbonDescription()
+    {
+        jp::MainWindow w;
+        auto *r = w.findChild<jp::Ribbon *>();
+        QVERIFY(r);
+        const QString d = r->describe();
+        for (const char *tab : {"Home", "Insert", "Page Design", "Mailings", "Review", "View", "Text Box", "Table Layout"})
+            QVERIFY2(d.contains(QStringLiteral("\ntab %1").arg(QLatin1String(tab))), tab);
+        QVERIFY(d.contains(QStringLiteral("QToolButton edit.paste")));
+        if (const QByteArray out = qgetenv("JP_RIBBON_DUMP"); !out.isEmpty()) {
+            QFile f(QString::fromLocal8Bit(out));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(d.toUtf8());
+        }
+    }
+
     // AutoRecover keeps one copy per document and run: two "Cover.pub"
     // files in different folders overwrote each other's copy, copies were
     // never offered after a crash, and never removed.
