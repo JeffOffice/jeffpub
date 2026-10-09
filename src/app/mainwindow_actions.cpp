@@ -135,43 +135,43 @@ void MainWindow::createActions()
     Q_UNUSED(needsSel);
 
     // ---------------- File / quick access ----------------
-    mk("file.new", QStringLiteral("New"), "file-plus", QKeySequence::New, [this] { showBackstage("new"); });
-    mk("file.blank", QStringLiteral("New Blank Publication"), "file", QKeySequence(), [this] {
+    mk("file.new", tr("New"), "file-plus", QKeySequence::New, [this] { showBackstage("new"); });
+    mk("file.blank", tr("New Blank Publication"), "file", QKeySequence(), [this] {
         if (maybeSave()) newPublication(Document::blank(QSizeF(612, 792)));
     });
-    mk("file.open", QStringLiteral("Open"), "folder-open", QKeySequence::Open, [this] {
+    mk("file.open", tr("Open"), "folder-open", QKeySequence::Open, [this] {
         if (!maybeSave()) return;
-        const QString p = QFileDialog::getOpenFileName(this, QStringLiteral("Open Publication"), Settings::get().value("dirs/open", QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)).toString(),
-                                                       QStringLiteral("Publications (*.jpub *.pub);;JeffPub Publications (*.jpub);;.pub Publication Files (*.pub);;All Files (*)"));
+        const QString p = QFileDialog::getOpenFileName(this, tr("Open Publication"), Settings::get().value("dirs/open", QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)).toString(),
+                                                       tr("Publications (*.jpub *.pub)") + QStringLiteral(";;") + tr("JeffPub Publications (*.jpub)") + QStringLiteral(";;") + tr(".pub Publication Files (*.pub)") + QStringLiteral(";;") + tr("All Files (*)"));
         if (p.isEmpty()) return;
         Settings::get().setValue("dirs/open", QFileInfo(p).absolutePath());
         openFile(p);
     });
-    mk("file.save", QStringLiteral("Save"), "save", QKeySequence::Save, [this] { save(); });
-    mk("file.saveAs", QStringLiteral("Save As"), "save-all", QKeySequence(Qt::Key_F12), [this] { saveAs(); });
-    mk("file.saveAsPub", QStringLiteral("Save as .pub File"), "file-output", QKeySequence(), [this] { saveAs("pub"); });
-    mk("file.print", QStringLiteral("Print"), "printer", QKeySequence::Print, [this] { showBackstage("print"); });
-    mk("file.printNow", QStringLiteral("Print"), "printer", QKeySequence(), [this] { printPublication(); });
-    mk("file.exportPdf", QStringLiteral("Create PDF"), "file-text", QKeySequence(), [this] { exportPdfWithOptions(); });
-    mk("file.exportImages", QStringLiteral("Save as Picture"), "image-down", QKeySequence(), [this] { exportImages(); });
-    mk("file.exportHtml", QStringLiteral("Save as Web Page"), "globe", QKeySequence(), [this] { exportHtml(); });
-    mk("file.close", QStringLiteral("Close"), "x", QKeySequence(Qt::CTRL | Qt::Key_F4), [this] {
+    mk("file.save", tr("Save"), "save", QKeySequence::Save, [this] { save(); });
+    mk("file.saveAs", tr("Save As"), "save-all", QKeySequence(Qt::Key_F12), [this] { saveAs(); });
+    mk("file.saveAsPub", tr("Save as .pub File"), "file-output", QKeySequence(), [this] { saveAs("pub"); });
+    mk("file.print", tr("Print"), "printer", QKeySequence::Print, [this] { showBackstage("print"); });
+    mk("file.printNow", tr("Print"), "printer", QKeySequence(), [this] { printPublication(); });
+    mk("file.exportPdf", tr("Create PDF"), "file-text", QKeySequence(), [this] { exportPdfWithOptions(); });
+    mk("file.exportImages", tr("Save as Picture"), "image-down", QKeySequence(), [this] { exportImages(); });
+    mk("file.exportHtml", tr("Save as Web Page"), "globe", QKeySequence(), [this] { exportHtml(); });
+    mk("file.close", tr("Close"), "x", QKeySequence(Qt::CTRL | Qt::Key_F4), [this] {
         if (maybeSave()) newPublication(Document::blank(QSizeF(612, 792)));
     });
-    mk("file.properties", QStringLiteral("Properties"), "info", QKeySequence(), [this] { documentPropertiesDialog(this, m_ed); });
-    mk("file.options", QStringLiteral("Options"), "settings", QKeySequence(), [this] { optionsDialog(this, m_ed); });
-    mk("edit.undo", QStringLiteral("Undo"), "undo-2", QKeySequence::Undo, [ed] { ed->undo(); });
-    mk("edit.redo", QStringLiteral("Redo"), "redo-2", QKeySequence(Qt::CTRL | Qt::Key_Y), [ed] { ed->redo(); });
+    mk("file.properties", tr("Properties"), "info", QKeySequence(), [this] { documentPropertiesDialog(this, m_ed); });
+    mk("file.options", tr("Options"), "settings", QKeySequence(), [this] { optionsDialog(this, m_ed); });
+    mk("edit.undo", tr("Undo"), "undo-2", QKeySequence::Undo, [ed] { ed->undo(); });
+    mk("edit.redo", tr("Redo"), "redo-2", QKeySequence(Qt::CTRL | Qt::Key_Y), [ed] { ed->redo(); });
 
     // ---------------- Clipboard ----------------
-    mk("edit.cut", QStringLiteral("Cut"), "scissors", QKeySequence::Cut, [ed] { ed->cut(); });
-    mk("edit.copy", QStringLiteral("Copy"), "copy", QKeySequence::Copy, [ed] { ed->copy(); });
-    mk("edit.paste", QStringLiteral("Paste"), "clipboard-paste", QKeySequence::Paste, [ed] { ed->paste(); });
-    mk("edit.pasteText", QStringLiteral("Keep Text Only"), "clipboard-type", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V), [ed] { ed->paste(true); });
-    mk("edit.pasteSpecial", QStringLiteral("Paste Special…"), "clipboard-list", QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_V), [this] { pasteSpecialDialog(this, m_ed); });
-    mk("edit.duplicate", QStringLiteral("Duplicate"), "copy-plus", QKeySequence(Qt::CTRL | Qt::Key_D), [ed] { ed->duplicateSelection(); });
-    mk("edit.delete", QStringLiteral("Delete Object"), "trash-2", QKeySequence(), [ed] { ed->deleteSelection(); });
-    mk("edit.formatPainter", QStringLiteral("Format Painter"), "paintbrush", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C), [ed] {
+    mk("edit.cut", tr("Cut"), "scissors", QKeySequence::Cut, [ed] { ed->cut(); });
+    mk("edit.copy", tr("Copy"), "copy", QKeySequence::Copy, [ed] { ed->copy(); });
+    mk("edit.paste", tr("Paste"), "clipboard-paste", QKeySequence::Paste, [ed] { ed->paste(); });
+    mk("edit.pasteText", tr("Keep Text Only"), "clipboard-type", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V), [ed] { ed->paste(true); });
+    mk("edit.pasteSpecial", tr("Paste Special…"), "clipboard-list", QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_V), [this] { pasteSpecialDialog(this, m_ed); });
+    mk("edit.duplicate", tr("Duplicate"), "copy-plus", QKeySequence(Qt::CTRL | Qt::Key_D), [ed] { ed->duplicateSelection(); });
+    mk("edit.delete", tr("Delete Object"), "trash-2", QKeySequence(), [ed] { ed->deleteSelection(); });
+    mk("edit.formatPainter", tr("Format Painter"), "paintbrush", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C), [ed] {
         if (ed->tool() == Tool::FormatPainter) { ed->setTool(Tool::Select); return; }
         ed->painterItem = QJsonObject();
         ed->painterHasText = false;
@@ -189,7 +189,7 @@ void MainWindow::createActions()
         ed->painterLocked = QApplication::keyboardModifiers() & Qt::ShiftModifier;
         ed->setTool(Tool::FormatPainter);
     });
-    mk("edit.selectAll", QStringLiteral("Select All"), "text-select", QKeySequence::SelectAll, [ed] {
+    mk("edit.selectAll", tr("Select All"), "text-select", QKeySequence::SelectAll, [ed] {
         if (ed->isEditingText()) {
             QTextCursor c = ed->cursor();
             c.select(QTextCursor::Document);
@@ -200,7 +200,7 @@ void MainWindow::createActions()
         for (const auto &it : ed->surfaceItems()) ids << it->id;
         ed->select(ids);
     });
-    mk("edit.selectText", QStringLiteral("Select All Text in Text Box"), "text-select", QKeySequence(), [ed] {
+    mk("edit.selectText", tr("Select All Text in Text Box"), "text-select", QKeySequence(), [ed] {
         if (Item *it = ed->single(); it && it->hasText()) {
             if (!ed->isEditingText()) ed->beginTextEdit(it->id);
             QTextCursor c = ed->cursor();
@@ -208,75 +208,76 @@ void MainWindow::createActions()
             ed->setCursor(c);
         }
     });
-    mk("edit.selectObjects", QStringLiteral("Select Objects"), "mouse-pointer-2", QKeySequence(), [ed] { ed->setTool(Tool::Select); ed->endTextEdit(); });
-    for (const auto &[id, name, type] : {std::tuple{"sel.text", "Text Boxes", ItemType::Text}, {"sel.pictures", "Pictures", ItemType::Picture},
-                                          {"sel.shapes", "Shapes", ItemType::Shape}, {"sel.tables", "Tables", ItemType::Table}, {"sel.textart", "Text Art", ItemType::TextArt}}) {
+    mk("edit.selectObjects", tr("Select Objects"), "mouse-pointer-2", QKeySequence(), [ed] { ed->setTool(Tool::Select); ed->endTextEdit(); });
+    for (const auto &[id, name, type] : {std::tuple{"sel.text", tr("Text Boxes"), ItemType::Text}, {"sel.pictures", tr("Pictures"), ItemType::Picture},
+                                          {"sel.shapes", tr("Shapes"), ItemType::Shape}, {"sel.tables", tr("Tables"), ItemType::Table}, {"sel.textart", tr("Text Art"), ItemType::TextArt}}) {
         const ItemType t = type;
-        mk(id, QStringLiteral("Select All %1").arg(name), "", QKeySequence(), [ed, t] {
+        mk(id, tr("Select All %1").arg(name), "", QKeySequence(), [ed, t] {
             QStringList ids;
             for (const auto &it : ed->surfaceItems())
                 if (it->type() == t) ids << it->id;
             ed->select(ids);
         });
     }
-    mk("edit.find", QStringLiteral("Find"), "search", QKeySequence::Find, [this] { showTaskPane("find"); });
-    mk("edit.replace", QStringLiteral("Replace"), "replace", QKeySequence(Qt::CTRL | Qt::Key_H), [this] { showTaskPane("replace"); });
+    mk("edit.find", tr("Find"), "search", QKeySequence::Find, [this] { showTaskPane("find"); });
+    mk("edit.replace", tr("Replace"), "replace", QKeySequence(Qt::CTRL | Qt::Key_H), [this] { showTaskPane("replace"); });
 
     // ---------------- Font ----------------
-    mk("fmt.bold", QStringLiteral("Bold"), "bold", QKeySequence::Bold, [ed] { ed->toggleBold(); }, true);
-    mk("fmt.italic", QStringLiteral("Italic"), "italic", QKeySequence::Italic, [ed] { ed->toggleItalic(); }, true);
-    mk("fmt.underline", QStringLiteral("Underline"), "underline", QKeySequence::Underline, [ed] { ed->toggleUnderline(); }, true);
-    mk("fmt.underlineDouble", QStringLiteral("Double Underline"), "", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_D), [ed] {
+    mk("fmt.bold", tr("Bold"), "bold", QKeySequence::Bold, [ed] { ed->toggleBold(); }, true);
+    mk("fmt.italic", tr("Italic"), "italic", QKeySequence::Italic, [ed] { ed->toggleItalic(); }, true);
+    mk("fmt.underline", tr("Underline"), "underline", QKeySequence::Underline, [ed] { ed->toggleUnderline(); }, true);
+    mk("fmt.underlineDouble", tr("Double Underline"), "", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_D), [ed] {
         QTextCharFormat f;
         f.setUnderlineStyle(QTextCharFormat::SingleUnderline);
         f.setProperty(QTextFormat::UserProperty + 60, true);
         ed->toggleUnderline();
     });
-    mk("fmt.underlineDotted", QStringLiteral("Dotted Underline"), "", QKeySequence(), [ed] { ed->toggleUnderline(QTextCharFormat::DotLine); });
-    mk("fmt.underlineDash", QStringLiteral("Dashed Underline"), "", QKeySequence(), [ed] { ed->toggleUnderline(QTextCharFormat::DashUnderline); });
-    mk("fmt.underlineWave", QStringLiteral("Wavy Underline"), "", QKeySequence(), [ed] { ed->toggleUnderline(QTextCharFormat::WaveUnderline); });
-    mk("fmt.strike", QStringLiteral("Strikethrough"), "strikethrough", QKeySequence(), [ed] { ed->toggleStrike(); }, true);
-    mk("fmt.sub", QStringLiteral("Subscript"), "subscript", QKeySequence(Qt::CTRL | Qt::Key_Equal), [ed] { ed->toggleScript(false); }, true);
-    mk("fmt.sup", QStringLiteral("Superscript"), "superscript", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Plus), [ed] { ed->toggleScript(true); }, true);
-    mk("fmt.grow", QStringLiteral("Grow Font"), "a-arrow-up", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Greater), [ed] { ed->growFont(1); });
-    mk("fmt.shrink", QStringLiteral("Shrink Font"), "a-arrow-down", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Less), [ed] { ed->growFont(-1); });
-    mk("fmt.clear", QStringLiteral("Clear All Formatting"), "remove-formatting", QKeySequence(Qt::CTRL | Qt::Key_Space), [ed] { ed->clearFormatting(); });
-    mk("fmt.smallCaps", QStringLiteral("Small Caps"), "case-upper", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_K), [ed] {
+    mk("fmt.underlineDotted", tr("Dotted Underline"), "", QKeySequence(), [ed] { ed->toggleUnderline(QTextCharFormat::DotLine); });
+    mk("fmt.underlineDash", tr("Dashed Underline"), "", QKeySequence(), [ed] { ed->toggleUnderline(QTextCharFormat::DashUnderline); });
+    mk("fmt.underlineWave", tr("Wavy Underline"), "", QKeySequence(), [ed] { ed->toggleUnderline(QTextCharFormat::WaveUnderline); });
+    mk("fmt.strike", tr("Strikethrough"), "strikethrough", QKeySequence(), [ed] { ed->toggleStrike(); }, true);
+    mk("fmt.sub", tr("Subscript"), "subscript", QKeySequence(Qt::CTRL | Qt::Key_Equal), [ed] { ed->toggleScript(false); }, true);
+    mk("fmt.sup", tr("Superscript"), "superscript", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Plus), [ed] { ed->toggleScript(true); }, true);
+    mk("fmt.grow", tr("Grow Font"), "a-arrow-up", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Greater), [ed] { ed->growFont(1); });
+    mk("fmt.shrink", tr("Shrink Font"), "a-arrow-down", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Less), [ed] { ed->growFont(-1); });
+    mk("fmt.clear", tr("Clear All Formatting"), "remove-formatting", QKeySequence(Qt::CTRL | Qt::Key_Space), [ed] { ed->clearFormatting(); });
+    mk("fmt.smallCaps", tr("Small Caps"), "case-upper", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_K), [ed] {
         QTextCharFormat f;
         f.setFontCapitalization(ed->currentCharFormat().fontCapitalization() == QFont::SmallCaps ? QFont::MixedCase : QFont::SmallCaps);
-        ed->mergeCharFormat(f, QStringLiteral("Small Caps"));
+        ed->mergeCharFormat(f, tr("Small Caps"));
     }, true);
-    mk("fmt.allCaps", QStringLiteral("All Caps"), "case-upper", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_A), [ed] {
+    mk("fmt.allCaps", tr("All Caps"), "case-upper", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_A), [ed] {
         QTextCharFormat f;
         f.setFontCapitalization(ed->currentCharFormat().fontCapitalization() == QFont::AllUppercase ? QFont::MixedCase : QFont::AllUppercase);
-        ed->mergeCharFormat(f, QStringLiteral("All Caps"));
+        ed->mergeCharFormat(f, tr("All Caps"));
     }, true);
-    const char *caseNames[] = {"Sentence case.", "lowercase", "UPPERCASE", "Capitalize Each Word", "tOGGLE cASE"};
-    for (int i = 0; i < 5; ++i) mk(QStringLiteral("case.%1").arg(i), QString::fromLatin1(caseNames[i]), "", QKeySequence(), [ed, i] { ed->changeCase(i); });
-    mk("case.cycle", QStringLiteral("Change Case"), "case-sensitive", QKeySequence(Qt::SHIFT | Qt::Key_F3), [ed] {
+    const QString caseNames[] = {tr("Sentence case."), tr("lowercase"), tr("UPPERCASE"), tr("Capitalize Each Word"), tr("tOGGLE cASE")};
+    for (int i = 0; i < 5; ++i) mk(QStringLiteral("case.%1").arg(i), caseNames[i], "", QKeySequence(), [ed, i] { ed->changeCase(i); });
+    mk("case.cycle", tr("Change Case"), "case-sensitive", QKeySequence(Qt::SHIFT | Qt::Key_F3), [ed] {
         static int next = 0;
         ed->changeCase(next);
         next = (next + 1) % 3;
     });
     // Tracking presets, as percentages of normal letter spacing.
-    const QPair<const char *, double> spacing[] = {{"Very Tight", 75}, {"Tight", 87.5}, {"Normal", 100}, {"Loose", 112.5}, {"Very Loose", 125}};
+    struct Spacing { const char *id; QString name; double pct; };
+    const Spacing spacing[] = {{"Very Tight", tr("Very Tight"), 75}, {"Tight", tr("Tight"), 87.5}, {"Normal", tr("Normal"), 100}, {"Loose", tr("Loose"), 112.5}, {"Very Loose", tr("Very Loose"), 125}};
     for (const auto &s : spacing) {
-        const double v = s.second;
-        mk(QStringLiteral("spacing.%1").arg(QString::fromLatin1(s.first)), QString::fromLatin1(s.first), "", QKeySequence(), [ed, v] {
+        const double v = s.pct;
+        mk(QStringLiteral("spacing.%1").arg(QString::fromLatin1(s.id)), s.name, "", QKeySequence(), [ed, v] {
             QTextCharFormat f;
             f.setProperty(tp::Tracking, v);
-            ed->mergeCharFormat(f, QStringLiteral("Character Spacing"));
+            ed->mergeCharFormat(f, tr("Character Spacing"));
         });
     }
-    mk("fmt.spacingDialog", QStringLiteral("More Spacing…"), "", QKeySequence(), [this] { characterSpacingDialog(this, m_ed); });
-    mk("fmt.fontDialog", QStringLiteral("Font…"), "type", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F), [this] { fontDialog(this, m_ed); });
+    mk("fmt.spacingDialog", tr("More Spacing…"), "", QKeySequence(), [this] { characterSpacingDialog(this, m_ed); });
+    mk("fmt.fontDialog", tr("Font…"), "type", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F), [this] { fontDialog(this, m_ed); });
 
     // ---------------- Paragraph ----------------
-    mk("para.bullets", QStringLiteral("Bullets"), "list", QKeySequence(), [ed] {
+    mk("para.bullets", tr("Bullets"), "list", QKeySequence(), [ed] {
         ed->setList(ed->currentBlockFormat().isValid() && ed->isEditingText() && ed->cursor().block().textList() &&
                             isBulletList(ed->cursor().block().textList()->format().style()) ? 0 : 1);
     }, true);
-    mk("para.numbers", QStringLiteral("Numbering"), "list-ordered", QKeySequence(), [ed] {
+    mk("para.numbers", tr("Numbering"), "list-ordered", QKeySequence(), [ed] {
         ed->setList(ed->isEditingText() && ed->cursor().block().textList() && !isBulletList(ed->cursor().block().textList()->format().style()) ? 0 : 2, 1);
     }, true);
     for (const auto &[id, ch] : {std::pair{"bullet.disc", "•"}, {"bullet.circle", "◦"}, {"bullet.square", "▪"}, {"bullet.diamond", "❖"},
@@ -290,47 +291,47 @@ void MainWindow::createActions()
         const int f = numFmt[i];
         mk(QStringLiteral("number.%1").arg(i), QString::fromLatin1(numNames[i]), "", QKeySequence(), [ed, f] { ed->setList(2, f); });
     }
-    mk("para.listNone", QStringLiteral("None"), "", QKeySequence(), [ed] { ed->setList(0); });
-    mk("para.bulletsDialog", QStringLiteral("Bullets and Numbering…"), "list-plus", QKeySequence(), [this] { bulletsDialog(this, m_ed, false); });
-    mk("para.indentDec", QStringLiteral("Decrease Indent"), "indent-decrease", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M), [ed] { ed->changeIndent(-1); });
-    mk("para.indentInc", QStringLiteral("Increase Indent"), "indent-increase", QKeySequence(Qt::CTRL | Qt::Key_M), [ed] { ed->changeIndent(1); });
-    mk("para.ltr", QStringLiteral("Left-to-Right Text Direction"), "pilcrow-right", QKeySequence(), [ed] { ed->setDirection(Qt::LeftToRight); }, true);
-    mk("para.rtl", QStringLiteral("Right-to-Left Text Direction"), "pilcrow-left", QKeySequence(), [ed] { ed->setDirection(Qt::RightToLeft); }, true);
-    mk("para.special", QStringLiteral("Special Characters"), "pilcrow", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Y), [ed] {
+    mk("para.listNone", tr("None"), "", QKeySequence(), [ed] { ed->setList(0); });
+    mk("para.bulletsDialog", tr("Bullets and Numbering…"), "list-plus", QKeySequence(), [this] { bulletsDialog(this, m_ed, false); });
+    mk("para.indentDec", tr("Decrease Indent"), "indent-decrease", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M), [ed] { ed->changeIndent(-1); });
+    mk("para.indentInc", tr("Increase Indent"), "indent-increase", QKeySequence(Qt::CTRL | Qt::Key_M), [ed] { ed->changeIndent(1); });
+    mk("para.ltr", tr("Left-to-Right Text Direction"), "pilcrow-right", QKeySequence(), [ed] { ed->setDirection(Qt::LeftToRight); }, true);
+    mk("para.rtl", tr("Right-to-Left Text Direction"), "pilcrow-left", QKeySequence(), [ed] { ed->setDirection(Qt::RightToLeft); }, true);
+    mk("para.special", tr("Special Characters"), "pilcrow", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Y), [ed] {
         ed->setView([](ViewOptions &v) { v.special = !v.special; });
     }, true);
-    mk("para.left", QStringLiteral("Align Left"), "align-left", QKeySequence(Qt::CTRL | Qt::Key_L), [ed] { ed->setAlignment(Qt::AlignLeft); }, true);
-    mk("para.center", QStringLiteral("Center"), "align-center", QKeySequence(Qt::CTRL | Qt::Key_E), [ed] { ed->setAlignment(Qt::AlignHCenter); }, true);
-    mk("para.right", QStringLiteral("Align Right"), "align-right", QKeySequence(Qt::CTRL | Qt::Key_R), [ed] { ed->setAlignment(Qt::AlignRight); }, true);
-    mk("para.justify", QStringLiteral("Justify"), "align-justify", QKeySequence(Qt::CTRL | Qt::Key_J), [ed] { ed->setAlignment(Qt::AlignJustify); }, true);
-    mk("para.distribute", QStringLiteral("Distribute"), "align-horizontal-space-between", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_J), [ed] {
+    mk("para.left", tr("Align Left"), "align-left", QKeySequence(Qt::CTRL | Qt::Key_L), [ed] { ed->setAlignment(Qt::AlignLeft); }, true);
+    mk("para.center", tr("Center"), "align-center", QKeySequence(Qt::CTRL | Qt::Key_E), [ed] { ed->setAlignment(Qt::AlignHCenter); }, true);
+    mk("para.right", tr("Align Right"), "align-right", QKeySequence(Qt::CTRL | Qt::Key_R), [ed] { ed->setAlignment(Qt::AlignRight); }, true);
+    mk("para.justify", tr("Justify"), "align-justify", QKeySequence(Qt::CTRL | Qt::Key_J), [ed] { ed->setAlignment(Qt::AlignJustify); }, true);
+    mk("para.distribute", tr("Distribute"), "align-horizontal-space-between", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_J), [ed] {
         QTextBlockFormat f;
         f.setAlignment(Qt::AlignJustify);
         f.setProperty(tp::Distribute, true);
-        ed->mergeBlockFormat(f, QStringLiteral("Distribute"));
+        ed->mergeBlockFormat(f, tr("Distribute"));
     }, true);
     const double spacings[] = {1.0, 1.15, 1.5, 2.0, 2.5, 3.0};
     for (double s : spacings)
         mk(QStringLiteral("ls.%1").arg(s), QString::number(s), "", QKeySequence(), [ed, s] { ed->setLineSpacing(QTextBlockFormat::ProportionalHeight, s * 100); });
-    mk("para.spaceBefore0", QStringLiteral("0 pt Before"), "", QKeySequence(), [ed] { ed->setParagraphSpacing(0, -1); });
-    mk("para.spaceBefore6", QStringLiteral("6 pt Before"), "", QKeySequence(), [ed] { ed->setParagraphSpacing(6, -1); });
-    mk("para.spaceBefore12", QStringLiteral("12 pt Before"), "", QKeySequence(), [ed] { ed->setParagraphSpacing(12, -1); });
-    mk("para.spaceAfter0", QStringLiteral("0 pt After"), "", QKeySequence(), [ed] { ed->setParagraphSpacing(-1, 0); });
-    mk("para.spaceAfter6", QStringLiteral("6 pt After"), "", QKeySequence(), [ed] { ed->setParagraphSpacing(-1, 6); });
-    mk("para.spaceAfter12", QStringLiteral("12 pt After"), "", QKeySequence(), [ed] { ed->setParagraphSpacing(-1, 12); });
-    mk("para.dialog", QStringLiteral("Paragraph…"), "pilcrow", QKeySequence(), [this] { paragraphDialog(this, m_ed, 0); });
-    mk("para.tabs", QStringLiteral("Tabs…"), "", QKeySequence(), [this] { paragraphDialog(this, m_ed, 2); });
+    mk("para.spaceBefore0", tr("0 pt Before"), "", QKeySequence(), [ed] { ed->setParagraphSpacing(0, -1); });
+    mk("para.spaceBefore6", tr("6 pt Before"), "", QKeySequence(), [ed] { ed->setParagraphSpacing(6, -1); });
+    mk("para.spaceBefore12", tr("12 pt Before"), "", QKeySequence(), [ed] { ed->setParagraphSpacing(12, -1); });
+    mk("para.spaceAfter0", tr("0 pt After"), "", QKeySequence(), [ed] { ed->setParagraphSpacing(-1, 0); });
+    mk("para.spaceAfter6", tr("6 pt After"), "", QKeySequence(), [ed] { ed->setParagraphSpacing(-1, 6); });
+    mk("para.spaceAfter12", tr("12 pt After"), "", QKeySequence(), [ed] { ed->setParagraphSpacing(-1, 12); });
+    mk("para.dialog", tr("Paragraph…"), "pilcrow", QKeySequence(), [this] { paragraphDialog(this, m_ed, 0); });
+    mk("para.tabs", tr("Tabs…"), "", QKeySequence(), [this] { paragraphDialog(this, m_ed, 2); });
 
     // ---------------- Styles ----------------
-    mk("style.new", QStringLiteral("New Style…"), "plus", QKeySequence(), [this] { styleDialog(this, m_ed); });
-    mk("style.modify", QStringLiteral("Modify Style…"), "pencil", QKeySequence(), [this] { styleDialog(this, m_ed, m_ed->currentStyleName().isEmpty() ? QStringLiteral("Normal") : m_ed->currentStyleName()); });
-    mk("style.import", QStringLiteral("Import Styles…"), "import", QKeySequence(), [this] {
-        const QString p = QFileDialog::getOpenFileName(this, QStringLiteral("Import Styles"), QString(), QStringLiteral("Publications (*.jpub *.pub)"));
+    mk("style.new", tr("New Style…"), "plus", QKeySequence(), [this] { styleDialog(this, m_ed); });
+    mk("style.modify", tr("Modify Style…"), "pencil", QKeySequence(), [this] { styleDialog(this, m_ed, m_ed->currentStyleName().isEmpty() ? QStringLiteral("Normal") : m_ed->currentStyleName()); });
+    mk("style.import", tr("Import Styles…"), "import", QKeySequence(), [this] {
+        const QString p = QFileDialog::getOpenFileName(this, tr("Import Styles"), QString(), tr("Publications (*.jpub *.pub)"));
         if (p.isEmpty()) return;
         QString err;
         auto src = loadAnyPublication(p, &err);
-        if (!src) { QMessageBox::warning(this, QStringLiteral("Import Styles"), err); return; }
-        m_ed->change(QStringLiteral("Import Styles"), [&] {
+        if (!src) { QMessageBox::warning(this, tr("Import Styles"), err); return; }
+        m_ed->change(tr("Import Styles"), [&] {
             for (const auto &s : src->styles) {
                 bool replaced = false;
                 for (auto &mine : m_ed->doc()->styles)
@@ -339,11 +340,11 @@ void MainWindow::createActions()
             }
         });
     });
-    mk("style.byExample", QStringLiteral("New Style by Example"), "", QKeySequence(), [this] {
+    mk("style.byExample", tr("New Style by Example"), "", QKeySequence(), [this] {
         bool ok = false;
-        const QString name = QInputDialog::getText(this, QStringLiteral("New Style"), QStringLiteral("Name the style based on the selected text:"), QLineEdit::Normal, QString(), &ok);
+        const QString name = QInputDialog::getText(this, tr("New Style"), tr("Name the style based on the selected text:"), QLineEdit::Normal, QString(), &ok);
         if (!ok || name.trimmed().isEmpty()) return;
-        m_ed->change(QStringLiteral("New Style"), [&] {
+        m_ed->change(tr("New Style"), [&] {
             TextStyle s;
             s.name = name.trimmed();
             s.chr = m_ed->currentCharFormat();
@@ -357,45 +358,45 @@ void MainWindow::createActions()
     });
 
     // ---------------- Objects / Insert ----------------
-    mk("ins.textbox", QStringLiteral("Draw Text Box"), "text-cursor-input", QKeySequence(), [ed] { ed->setTool(Tool::Text); });
-    mk("ins.tableDialog", QStringLiteral("Insert Table…"), "table", QKeySequence(), [this] { insertTableDialog(this, m_ed); });
-    mk("ins.drawTable", QStringLiteral("Draw Table"), "pencil-ruler", QKeySequence(), [ed] { ed->setTool(Tool::Table); });
-    mk("ins.picture", QStringLiteral("Pictures"), "image", QKeySequence(), [this] { insertPictureFromFile(); });
-    mk("ins.onlinePicture", QStringLiteral("Online Pictures"), "globe", QKeySequence(), [this] { showTaskPane("online"); });
-    mk("ins.placeholder", QStringLiteral("Picture Placeholder"), "image-plus", QKeySequence(), [ed] {
+    mk("ins.textbox", tr("Draw Text Box"), "text-cursor-input", QKeySequence(), [ed] { ed->setTool(Tool::Text); });
+    mk("ins.tableDialog", tr("Insert Table…"), "table", QKeySequence(), [this] { insertTableDialog(this, m_ed); });
+    mk("ins.drawTable", tr("Draw Table"), "pencil-ruler", QKeySequence(), [ed] { ed->setTool(Tool::Table); });
+    mk("ins.picture", tr("Pictures"), "image", QKeySequence(), [this] { insertPictureFromFile(); });
+    mk("ins.onlinePicture", tr("Online Pictures"), "globe", QKeySequence(), [this] { showTaskPane("online"); });
+    mk("ins.placeholder", tr("Picture Placeholder"), "image-plus", QKeySequence(), [ed] {
         auto pic = std::make_shared<PictureItem>();
         const QSizeF ps = ed->doc()->pageSize();
         pic->rect = QRectF(ps.width() / 2 - 108, ps.height() / 2 - 72, 216, 144);
         pic->imgRect = QRectF(0, 0, 216, 144);
         ed->addItem(pic);
     });
-    mk("ins.textart", QStringLiteral("Text Art"), "type", QKeySequence(), [ed] { ed->setTool(Tool::TextArt); });
-    mk("ins.bizInfo", QStringLiteral("Edit Business Information…"), "contact", QKeySequence(), [this] { businessInfoDialog(this, m_ed); });
-    mk("ins.file", QStringLiteral("Insert File"), "file-input", QKeySequence(), [this] { insertFileDialog(this, m_ed); });
-    mk("ins.symbol", QStringLiteral("Symbol"), "omega", QKeySequence(), [this] { symbolDialog(this, m_ed); });
-    mk("ins.barcode", QStringLiteral("Barcode"), "barcode", QKeySequence(), [this] { barcodeDialog(this, m_ed); });
-    mk("ins.icons", QStringLiteral("Icons"), "smile-plus", QKeySequence(), [this] { insertIcons(m_ed, pickIcons(this)); });
-    mk("ins.toc", QStringLiteral("Table of Contents"), "table-of-contents", QKeySequence(), [this] { insertTableOfContents(m_ed); });
-    mk("ins.footnote", QStringLiteral("Footnote"), "superscript", QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_F), [this] {
+    mk("ins.textart", tr("Text Art"), "type", QKeySequence(), [ed] { ed->setTool(Tool::TextArt); });
+    mk("ins.bizInfo", tr("Edit Business Information…"), "contact", QKeySequence(), [this] { businessInfoDialog(this, m_ed); });
+    mk("ins.file", tr("Insert File"), "file-input", QKeySequence(), [this] { insertFileDialog(this, m_ed); });
+    mk("ins.symbol", tr("Symbol"), "omega", QKeySequence(), [this] { symbolDialog(this, m_ed); });
+    mk("ins.barcode", tr("Barcode"), "barcode", QKeySequence(), [this] { barcodeDialog(this, m_ed); });
+    mk("ins.icons", tr("Icons"), "smile-plus", QKeySequence(), [this] { insertIcons(m_ed, pickIcons(this)); });
+    mk("ins.toc", tr("Table of Contents"), "table-of-contents", QKeySequence(), [this] { insertTableOfContents(m_ed); });
+    mk("ins.footnote", tr("Footnote"), "superscript", QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_F), [this] {
         if (m_ed->isEditingText()) noteDialog(this, m_ed, false);
-        else statusBar()->showMessage(QStringLiteral("Click in text where the footnote's number goes, then choose Footnote."), 6000);
+        else statusBar()->showMessage(tr("Click in text where the footnote's number goes, then choose Footnote."), 6000);
     });
-    mk("ins.endnote", QStringLiteral("Endnote"), "notebook-text", QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_D), [this] {
+    mk("ins.endnote", tr("Endnote"), "notebook-text", QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_D), [this] {
         if (m_ed->isEditingText()) noteDialog(this, m_ed, true);
-        else statusBar()->showMessage(QStringLiteral("Click in text where the endnote's number goes, then choose Endnote."), 6000);
+        else statusBar()->showMessage(tr("Click in text where the endnote's number goes, then choose Endnote."), 6000);
     });
-    mk("ins.updateToc", QStringLiteral("Update Table"), "refresh-cw", QKeySequence(), [this] {
+    mk("ins.updateToc", tr("Update Table"), "refresh-cw", QKeySequence(), [this] {
         if (!updateTablesOfContents(m_ed))
-            statusBar()->showMessage(QStringLiteral("This publication has no table of contents yet: Insert > Table of Contents adds one."), 6000);
+            statusBar()->showMessage(tr("This publication has no table of contents yet: Insert > Table of Contents adds one."), 6000);
     });
-    mk("ins.datetime", QStringLiteral("Date & Time"), "calendar-clock", QKeySequence(), [this] { dateTimeDialog(this, m_ed); });
-    mk("ins.object", QStringLiteral("Object"), "paperclip", QKeySequence(), [this] {
+    mk("ins.datetime", tr("Date & Time"), "calendar-clock", QKeySequence(), [this] { dateTimeDialog(this, m_ed); });
+    mk("ins.object", tr("Object"), "paperclip", QKeySequence(), [this] {
         // Embedded objects become pictures of their content where JeffPub can render it.
         insertPictureFromFile();
     });
-    mk("ins.link", QStringLiteral("Link"), "link", QKeySequence(Qt::CTRL | Qt::Key_K), [this] { hyperlinkDialog(this, m_ed); });
-    mk("ins.bookmark", QStringLiteral("Bookmark"), "bookmark", QKeySequence(), [this] { bookmarkDialog(this, m_ed); });
-    mk("ins.header", QStringLiteral("Header"), "panel-top", QKeySequence(), [this] {
+    mk("ins.link", tr("Link"), "link", QKeySequence(Qt::CTRL | Qt::Key_K), [this] { hyperlinkDialog(this, m_ed); });
+    mk("ins.bookmark", tr("Bookmark"), "bookmark", QKeySequence(), [this] { bookmarkDialog(this, m_ed); });
+    mk("ins.header", tr("Header"), "panel-top", QKeySequence(), [this] {
         const Page *pg = m_ed->doc()->pages[m_ed->currentPage()].get();
         m_ed->setMasterView(pg->masterId.isEmpty() ? m_ed->doc()->masters.first()->id : pg->masterId);
         // Put the caret in (or create) a header box at the top margin.
@@ -407,7 +408,7 @@ void MainWindow::createActions()
         m_ed->addItem(t);
         m_ed->beginTextEdit(t->id);
     });
-    mk("ins.footer", QStringLiteral("Footer"), "panel-bottom", QKeySequence(), [this] {
+    mk("ins.footer", tr("Footer"), "panel-bottom", QKeySequence(), [this] {
         const Page *pg = m_ed->doc()->pages[m_ed->currentPage()].get();
         m_ed->setMasterView(pg->masterId.isEmpty() ? m_ed->doc()->masters.first()->id : pg->masterId);
         const QSizeF ps = m_ed->doc()->pageSize();
@@ -419,12 +420,12 @@ void MainWindow::createActions()
         m_ed->addItem(t);
         m_ed->beginTextEdit(t->id);
     });
-    mk("ins.pageNumber", QStringLiteral("Insert Page Number"), "hash", QKeySequence(Qt::ALT | Qt::SHIFT | Qt::Key_P), [this] {
+    mk("ins.pageNumber", tr("Insert Page Number"), "hash", QKeySequence(Qt::ALT | Qt::SHIFT | Qt::Key_P), [this] {
         if (m_ed->isEditingText()) m_ed->insertField(QStringLiteral("page"));
         else pageNumberDialog(this, m_ed);
     });
-    mk("ins.pageCount", QStringLiteral("Insert Page Count"), "", QKeySequence(), [ed] { ed->insertField(QStringLiteral("pages")); });
-    mk("ins.pageNumberFormat", QStringLiteral("Format Page Numbers…"), "", QKeySequence(), [this] { pageNumberDialog(this, m_ed); });
+    mk("ins.pageCount", tr("Insert Page Count"), "", QKeySequence(), [ed] { ed->insertField(QStringLiteral("pages")); });
+    mk("ins.pageNumberFormat", tr("Format Page Numbers…"), "", QKeySequence(), [this] { pageNumberDialog(this, m_ed); });
     for (const QString &k : BusinessInfo::keys()) {
         mk("biz." + k, BusinessInfo::label(k), "", QKeySequence(), [this, k] {
             if (m_ed->isEditingText()) { m_ed->insertField("biz:" + k); return; }
@@ -438,7 +439,7 @@ void MainWindow::createActions()
             m_ed->addItem(t);
         });
     }
-    mk("biz.logo", QStringLiteral("Logo"), "", QKeySequence(), [this] {
+    mk("biz.logo", tr("Logo"), "", QKeySequence(), [this] {
         const QString id = m_ed->doc()->business().logoImageId;
         if (id.isEmpty()) { businessInfoDialog(this, m_ed); return; }
         auto pic = std::make_shared<PictureItem>();
@@ -449,98 +450,98 @@ void MainWindow::createActions()
     });
 
     // ---------------- Pages ----------------
-    mk("page.insert", QStringLiteral("Insert Blank Page"), "file-plus-2", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N), [ed] { ed->insertPages(ed->currentPage(), 1, false, false); });
-    mk("page.insertDup", QStringLiteral("Insert Duplicate Page"), "copy", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_U), [ed] { ed->insertPages(ed->currentPage(), 1, true, false); });
-    mk("page.insertDialog", QStringLiteral("Insert Page…"), "files", QKeySequence(), [this] { insertPageDialog(this, m_ed); });
-    mk("page.delete", QStringLiteral("Delete Page"), "file-minus", QKeySequence(), [this] {
-        if (QMessageBox::question(this, QStringLiteral("Delete Page"), QStringLiteral("Delete page %1?").arg(m_ed->currentPage() + 1)) == QMessageBox::Yes)
+    mk("page.insert", tr("Insert Blank Page"), "file-plus-2", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N), [ed] { ed->insertPages(ed->currentPage(), 1, false, false); });
+    mk("page.insertDup", tr("Insert Duplicate Page"), "copy", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_U), [ed] { ed->insertPages(ed->currentPage(), 1, true, false); });
+    mk("page.insertDialog", tr("Insert Page…"), "files", QKeySequence(), [this] { insertPageDialog(this, m_ed); });
+    mk("page.delete", tr("Delete Page"), "file-minus", QKeySequence(), [this] {
+        if (QMessageBox::question(this, tr("Delete Page"), tr("Delete page %1?").arg(m_ed->currentPage() + 1)) == QMessageBox::Yes)
             m_ed->deletePage(m_ed->currentPage());
     });
-    mk("page.moveUp", QStringLiteral("Move Page Up"), "arrow-up", QKeySequence(), [ed] { ed->movePage(ed->currentPage(), ed->currentPage() - 1); });
-    mk("page.moveDown", QStringLiteral("Move Page Down"), "arrow-down", QKeySequence(), [ed] { ed->movePage(ed->currentPage(), ed->currentPage() + 1); });
-    mk("page.move", QStringLiteral("Move Page…"), "arrow-up-down", QKeySequence(), [this] {
+    mk("page.moveUp", tr("Move Page Up"), "arrow-up", QKeySequence(), [ed] { ed->movePage(ed->currentPage(), ed->currentPage() - 1); });
+    mk("page.moveDown", tr("Move Page Down"), "arrow-down", QKeySequence(), [ed] { ed->movePage(ed->currentPage(), ed->currentPage() + 1); });
+    mk("page.move", tr("Move Page…"), "arrow-up-down", QKeySequence(), [this] {
         bool ok = false;
-        const int to = QInputDialog::getInt(this, QStringLiteral("Move Page"), QStringLiteral("Move this page to position:"), m_ed->currentPage() + 1, 1,
+        const int to = QInputDialog::getInt(this, tr("Move Page"), tr("Move this page to position:"), m_ed->currentPage() + 1, 1,
                                             m_ed->doc()->pages.size(), 1, &ok);
         if (ok) m_ed->movePage(m_ed->currentPage(), to - 1);
     });
-    mk("page.rename", QStringLiteral("Rename Page…"), "pencil-line", QKeySequence(), [this] {
+    mk("page.rename", tr("Rename Page…"), "pencil-line", QKeySequence(), [this] {
         bool ok = false;
-        const QString t = QInputDialog::getText(this, QStringLiteral("Rename Page"), QStringLiteral("Page title:"), QLineEdit::Normal,
+        const QString t = QInputDialog::getText(this, tr("Rename Page"), tr("Page title:"), QLineEdit::Normal,
                                                 m_ed->doc()->pages[m_ed->currentPage()]->title, &ok);
         if (ok) m_ed->renamePage(m_ed->currentPage(), t);
     });
-    mk("page.next", QStringLiteral("Next Page"), "chevron-right", QKeySequence(Qt::CTRL | Qt::Key_PageDown), [ed] { ed->setCurrentPage(ed->currentPage() + 1); });
-    mk("page.prev", QStringLiteral("Previous Page"), "chevron-left", QKeySequence(Qt::CTRL | Qt::Key_PageUp), [ed] { ed->setCurrentPage(ed->currentPage() - 1); });
-    mk("page.goto", QStringLiteral("Go to Page…"), "", QKeySequence(Qt::Key_F5), [this] {
+    mk("page.next", tr("Next Page"), "chevron-right", QKeySequence(Qt::CTRL | Qt::Key_PageDown), [ed] { ed->setCurrentPage(ed->currentPage() + 1); });
+    mk("page.prev", tr("Previous Page"), "chevron-left", QKeySequence(Qt::CTRL | Qt::Key_PageUp), [ed] { ed->setCurrentPage(ed->currentPage() - 1); });
+    mk("page.goto", tr("Go to Page…"), "", QKeySequence(Qt::Key_F5), [this] {
         bool ok = false;
-        const int p = QInputDialog::getInt(this, QStringLiteral("Go to Page"), QStringLiteral("Page:"), m_ed->currentPage() + 1, 1, m_ed->doc()->pages.size(), 1, &ok);
+        const int p = QInputDialog::getInt(this, tr("Go to Page"), tr("Page:"), m_ed->currentPage() + 1, 1, m_ed->doc()->pages.size(), 1, &ok);
         if (ok) m_ed->setCurrentPage(p - 1);
     });
 
     // ---------------- Arrange ----------------
-    mk("arr.front", QStringLiteral("Bring to Front"), "bring-to-front", QKeySequence(Qt::ALT | Qt::Key_F6), [ed] { ed->arrange(Editor::Order::Front); });
-    mk("arr.forward", QStringLiteral("Bring Forward"), "arrow-up-from-line", QKeySequence(), [ed] { ed->arrange(Editor::Order::Forward); });
-    mk("arr.backward", QStringLiteral("Send Backward"), "arrow-down-to-line", QKeySequence(), [ed] { ed->arrange(Editor::Order::Backward); });
-    mk("arr.back", QStringLiteral("Send to Back"), "send-to-back", QKeySequence(Qt::ALT | Qt::SHIFT | Qt::Key_F6), [ed] { ed->arrange(Editor::Order::Back); });
-    mk("arr.group", QStringLiteral("Group"), "group", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G), [ed] {
+    mk("arr.front", tr("Bring to Front"), "bring-to-front", QKeySequence(Qt::ALT | Qt::Key_F6), [ed] { ed->arrange(Editor::Order::Front); });
+    mk("arr.forward", tr("Bring Forward"), "arrow-up-from-line", QKeySequence(), [ed] { ed->arrange(Editor::Order::Forward); });
+    mk("arr.backward", tr("Send Backward"), "arrow-down-to-line", QKeySequence(), [ed] { ed->arrange(Editor::Order::Backward); });
+    mk("arr.back", tr("Send to Back"), "send-to-back", QKeySequence(Qt::ALT | Qt::SHIFT | Qt::Key_F6), [ed] { ed->arrange(Editor::Order::Back); });
+    mk("arr.group", tr("Group"), "group", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G), [ed] {
         if (ed->selectionKind() == "group") ed->ungroupSelection(); else ed->groupSelection();
     });
-    mk("arr.ungroup", QStringLiteral("Ungroup"), "ungroup", QKeySequence(), [ed] { ed->ungroupSelection(); });
-    mk("arr.regroup", QStringLiteral("Regroup"), "group", QKeySequence(), [ed] { ed->regroup(); });
-    mk("arr.relMargins", QStringLiteral("Relative to Margin Guides"), "", QKeySequence(), [] {}, true);
+    mk("arr.ungroup", tr("Ungroup"), "ungroup", QKeySequence(), [ed] { ed->ungroupSelection(); });
+    mk("arr.regroup", tr("Regroup"), "group", QKeySequence(), [ed] { ed->regroup(); });
+    mk("arr.relMargins", tr("Relative to Margin Guides"), "", QKeySequence(), [] {}, true);
     auto toMargins = [this] { return act("arr.relMargins")->isChecked(); };
-    mk("arr.alignLeft", QStringLiteral("Align Left"), "align-start-vertical", QKeySequence(), [ed, toMargins] { ed->align(Editor::Align::Left, toMargins()); });
-    mk("arr.alignCenter", QStringLiteral("Align Center"), "align-center-vertical", QKeySequence(), [ed, toMargins] { ed->align(Editor::Align::Center, toMargins()); });
-    mk("arr.alignRight", QStringLiteral("Align Right"), "align-end-vertical", QKeySequence(), [ed, toMargins] { ed->align(Editor::Align::Right, toMargins()); });
-    mk("arr.alignTop", QStringLiteral("Align Top"), "align-start-horizontal", QKeySequence(), [ed, toMargins] { ed->align(Editor::Align::Top, toMargins()); });
-    mk("arr.alignMiddle", QStringLiteral("Align Middle"), "align-center-horizontal", QKeySequence(), [ed, toMargins] { ed->align(Editor::Align::Middle, toMargins()); });
-    mk("arr.alignBottom", QStringLiteral("Align Bottom"), "align-end-horizontal", QKeySequence(), [ed, toMargins] { ed->align(Editor::Align::Bottom, toMargins()); });
-    mk("arr.distH", QStringLiteral("Distribute Horizontally"), "align-horizontal-distribute-center", QKeySequence(), [ed, toMargins] { ed->distribute(true, toMargins()); });
-    mk("arr.distV", QStringLiteral("Distribute Vertically"), "align-vertical-distribute-center", QKeySequence(), [ed, toMargins] { ed->distribute(false, toMargins()); });
-    mk("arr.rotR", QStringLiteral("Rotate Right 90°"), "rotate-cw", QKeySequence(), [ed] { ed->rotateSelection(90); });
-    mk("arr.rotL", QStringLiteral("Rotate Left 90°"), "rotate-ccw", QKeySequence(), [ed] { ed->rotateSelection(-90); });
-    mk("arr.flipH", QStringLiteral("Flip Horizontal"), "flip-horizontal-2", QKeySequence(), [ed] { ed->flipSelection(true); });
-    mk("arr.flipV", QStringLiteral("Flip Vertical"), "flip-vertical-2", QKeySequence(), [ed] { ed->flipSelection(false); });
-    mk("arr.freeRotate", QStringLiteral("More Rotation Options…"), "", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 1); });
+    mk("arr.alignLeft", tr("Align Left"), "align-start-vertical", QKeySequence(), [ed, toMargins] { ed->align(Editor::Align::Left, toMargins()); });
+    mk("arr.alignCenter", tr("Align Center"), "align-center-vertical", QKeySequence(), [ed, toMargins] { ed->align(Editor::Align::Center, toMargins()); });
+    mk("arr.alignRight", tr("Align Right"), "align-end-vertical", QKeySequence(), [ed, toMargins] { ed->align(Editor::Align::Right, toMargins()); });
+    mk("arr.alignTop", tr("Align Top"), "align-start-horizontal", QKeySequence(), [ed, toMargins] { ed->align(Editor::Align::Top, toMargins()); });
+    mk("arr.alignMiddle", tr("Align Middle"), "align-center-horizontal", QKeySequence(), [ed, toMargins] { ed->align(Editor::Align::Middle, toMargins()); });
+    mk("arr.alignBottom", tr("Align Bottom"), "align-end-horizontal", QKeySequence(), [ed, toMargins] { ed->align(Editor::Align::Bottom, toMargins()); });
+    mk("arr.distH", tr("Distribute Horizontally"), "align-horizontal-distribute-center", QKeySequence(), [ed, toMargins] { ed->distribute(true, toMargins()); });
+    mk("arr.distV", tr("Distribute Vertically"), "align-vertical-distribute-center", QKeySequence(), [ed, toMargins] { ed->distribute(false, toMargins()); });
+    mk("arr.rotR", tr("Rotate Right 90°"), "rotate-cw", QKeySequence(), [ed] { ed->rotateSelection(90); });
+    mk("arr.rotL", tr("Rotate Left 90°"), "rotate-ccw", QKeySequence(), [ed] { ed->rotateSelection(-90); });
+    mk("arr.flipH", tr("Flip Horizontal"), "flip-horizontal-2", QKeySequence(), [ed] { ed->flipSelection(true); });
+    mk("arr.flipV", tr("Flip Vertical"), "flip-vertical-2", QKeySequence(), [ed] { ed->flipSelection(false); });
+    mk("arr.freeRotate", tr("More Rotation Options…"), "", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 1); });
     // An object set in text that the text selection holds comes back onto the page.
     auto setWrap = [ed](Wrap::Mode m) {
         if (ed->moveOutOfText(m)) return;
-        ed->forEachSelected(QStringLiteral("Wrap Text"), [m](Item *it) { it->wrap.mode = m; });
+        ed->forEachSelected(tr("Wrap Text"), [m](Item *it) { it->wrap.mode = m; });
     };
-    mk("wrap.none", QStringLiteral("None"), "", QKeySequence(), [setWrap] { setWrap(Wrap::None); }, true);
-    mk("wrap.square", QStringLiteral("Square"), "", QKeySequence(), [setWrap] { setWrap(Wrap::Square); }, true);
-    mk("wrap.tight", QStringLiteral("Tight"), "", QKeySequence(), [setWrap] { setWrap(Wrap::Tight); }, true);
-    mk("wrap.through", QStringLiteral("Through"), "", QKeySequence(), [setWrap] { setWrap(Wrap::Through); }, true);
-    mk("wrap.topBottom", QStringLiteral("Top and Bottom"), "", QKeySequence(), [setWrap] { setWrap(Wrap::TopBottom); }, true);
-    mk("wrap.inline", QStringLiteral("In Line with Text"), "", QKeySequence(), [this, ed] {
+    mk("wrap.none", tr("None"), "", QKeySequence(), [setWrap] { setWrap(Wrap::None); }, true);
+    mk("wrap.square", tr("Square"), "", QKeySequence(), [setWrap] { setWrap(Wrap::Square); }, true);
+    mk("wrap.tight", tr("Tight"), "", QKeySequence(), [setWrap] { setWrap(Wrap::Tight); }, true);
+    mk("wrap.through", tr("Through"), "", QKeySequence(), [setWrap] { setWrap(Wrap::Through); }, true);
+    mk("wrap.topBottom", tr("Top and Bottom"), "", QKeySequence(), [setWrap] { setWrap(Wrap::TopBottom); }, true);
+    mk("wrap.inline", tr("In Line with Text"), "", QKeySequence(), [this, ed] {
         if (ed->selectionIsInlineObject()) return;
         if (!ed->moveIntoText())
-            statusBar()->showMessage(QStringLiteral("Move the object over a text box first; it goes into the text where its top left corner is."), 6000);
+            statusBar()->showMessage(tr("Move the object over a text box first; it goes into the text where its top left corner is."), 6000);
     }, true);
-    mk("wrap.edit", QStringLiteral("Edit Wrap Points"), "wrap-points", QKeySequence(), [this] {
+    mk("wrap.edit", tr("Edit Wrap Points"), "wrap-points", QKeySequence(), [this] {
         Item *it = m_ed->single();
         if (!it) return;
         if (m_ed->wrapItem == it->id) { m_ed->setWrapItem(QString()); return; }
         // Text wraps tightly around the points; start from the object's outline.
-        m_ed->change(QStringLiteral("Edit Wrap Points"), [&] {
+        m_ed->change(tr("Edit Wrap Points"), [&] {
             if (it->wrap.mode != Wrap::Tight && it->wrap.mode != Wrap::Through) it->wrap.mode = Wrap::Tight;
             if (it->wrap.points.size() < 3) it->wrap.points = Renderer::defaultWrapPolygon(*m_ed->doc(), *it);
         });
         m_ed->setWrapItem(it->id);
-        statusBar()->showMessage(QStringLiteral("Drag a point to change how text wraps. Drag an edge to add a point; Ctrl+click a point to delete it. Press Esc when done."), 8000);
+        statusBar()->showMessage(tr("Drag a point to change how text wraps. Drag an edge to add a point; Ctrl+click a point to delete it. Press Esc when done."), 8000);
     });
-    mk("wrap.more", QStringLiteral("More Layout Options…"), "", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 2); });
-    mk("obj.lock", QStringLiteral("Lock Position and Size"), "lock", QKeySequence(), [ed] {
+    mk("wrap.more", tr("More Layout Options…"), "", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 2); });
+    mk("obj.lock", tr("Lock Position and Size"), "lock", QKeySequence(), [ed] {
         const bool lock = ed->single() ? !ed->single()->locked : true;
-        ed->forEachSelected(QStringLiteral("Lock"), [lock](Item *it) { it->locked = lock; });
+        ed->forEachSelected(tr("Lock"), [lock](Item *it) { it->locked = lock; });
     }, true);
-    mk("obj.format", QStringLiteral("Format Object…"), "settings-2", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 0); });
-    mk("obj.sizePos", QStringLiteral("Size and Position…"), "", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 1); });
-    mk("obj.altText", QStringLiteral("Alt Text…"), "", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 5); });
-    mk("obj.saveBlock", QStringLiteral("Save as Building Block…"), "package-plus", QKeySequence(), [this] {
+    mk("obj.format", tr("Format Object…"), "settings-2", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 0); });
+    mk("obj.sizePos", tr("Size and Position…"), "", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 1); });
+    mk("obj.altText", tr("Alt Text…"), "", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 5); });
+    mk("obj.saveBlock", tr("Save as Building Block…"), "package-plus", QKeySequence(), [this] {
         bool ok = false;
-        const QString name = QInputDialog::getText(this, QStringLiteral("Save as Building Block"), QStringLiteral("Name:"), QLineEdit::Normal, QString(), &ok);
+        const QString name = QInputDialog::getText(this, tr("Save as Building Block"), tr("Name:"), QLineEdit::Normal, QString(), &ok);
         if (!ok || name.trimmed().isEmpty()) return;
         m_ed->copy();
         const QByteArray data = QApplication::clipboard()->mimeData()->data("application/x-jeffpub-items");
@@ -552,86 +553,87 @@ void MainWindow::createActions()
         file.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]|^\\.+")), QStringLiteral("-"));
         QSaveFile f(QDir(dir).filePath(file + ".json"));
         if (!f.open(QIODevice::WriteOnly) || f.write(data) != data.size() || !f.commit()) {
-            QMessageBox::warning(this, QStringLiteral("Save as Building Block"), QStringLiteral("JeffPub couldn't save the building block: %1").arg(f.errorString()));
+            QMessageBox::warning(this, tr("Save as Building Block"), tr("JeffPub couldn't save the building block: %1").arg(f.errorString()));
             return;
         }
-        statusBar()->showMessage(QStringLiteral("Saved \"%1\" to My Building Blocks.").arg(name.trimmed()), 4000);
+        statusBar()->showMessage(tr("Saved \"%1\" to My Building Blocks.").arg(name.trimmed()), 4000);
     });
 
     // ---------------- Page Design ----------------
-    mk("pd.changeTemplate", QStringLiteral("Change Template"), "layout-template", QKeySequence(), [this] { showBackstage("new"); });
-    mk("pd.pageSetup", QStringLiteral("Page Setup…"), "file-cog", QKeySequence(), [this] { pageSetupDialog(this, m_ed); });
-    mk("pd.guidesDialog", QStringLiteral("Grid and Baseline Guides…"), "grid-3x3", QKeySequence(), [this] { gridGuidesDialog(this, m_ed); });
+    mk("pd.changeTemplate", tr("Change Template"), "layout-template", QKeySequence(), [this] { showBackstage("new"); });
+    mk("pd.pageSetup", tr("Page Setup…"), "file-cog", QKeySequence(), [this] { pageSetupDialog(this, m_ed); });
+    mk("pd.guidesDialog", tr("Grid and Baseline Guides…"), "grid-3x3", QKeySequence(), [this] { gridGuidesDialog(this, m_ed); });
     // A new guide goes to the middle of the page, or half an inch on from
     // the last free place, so adding several doesn't stack them.
-    mk("pd.addH", QStringLiteral("Add Horizontal Ruler Guide"), "", QKeySequence(), [ed] {
-        ed->change(QStringLiteral("Add Guide"), [ed] {
+    mk("pd.addH", tr("Add Horizontal Ruler Guide"), "", QKeySequence(), [ed] {
+        ed->change(tr("Add Guide"), [ed] {
             const double h = ed->doc()->pageSize().height();
             auto &g = ed->surface()->guides.h;
             g << RulerGuides::freeSpot(g, h / 2, 36, h);
         });
     });
-    mk("pd.addV", QStringLiteral("Add Vertical Ruler Guide"), "", QKeySequence(), [ed] {
-        ed->change(QStringLiteral("Add Guide"), [ed] {
+    mk("pd.addV", tr("Add Vertical Ruler Guide"), "", QKeySequence(), [ed] {
+        ed->change(tr("Add Guide"), [ed] {
             const double w = ed->doc()->pageSize().width();
             auto &g = ed->surface()->guides.v;
             g << RulerGuides::freeSpot(g, w / 2, 36, w);
         });
     });
-    mk("pd.rulerGuides", QStringLiteral("Ruler Guides…"), "", QKeySequence(), [this] { rulerGuidesDialog(this, m_ed); });
-    mk("pd.clearGuides", QStringLiteral("Clear All Ruler Guides"), "", QKeySequence(), [ed] {
-        ed->change(QStringLiteral("Clear Guides"), [ed] { ed->surface()->guides = RulerGuides(); });
+    mk("pd.rulerGuides", tr("Ruler Guides…"), "", QKeySequence(), [this] { rulerGuidesDialog(this, m_ed); });
+    mk("pd.clearGuides", tr("Clear All Ruler Guides"), "", QKeySequence(), [ed] {
+        ed->change(tr("Clear Guides"), [ed] { ed->surface()->guides = RulerGuides(); });
     });
-    mk("pd.alignGuides", QStringLiteral("Align to Guides"), "magnet", QKeySequence(), [ed] { ed->setView([](ViewOptions &v) { v.snapGuides = !v.snapGuides; }); }, true);
-    mk("pd.alignObjects", QStringLiteral("Align to Objects"), "magnet", QKeySequence(), [ed] { ed->setView([](ViewOptions &v) { v.snapObjects = !v.snapObjects; }); }, true);
-    mk("pd.portrait", QStringLiteral("Portrait"), "rectangle-vertical", QKeySequence(), [ed] {
+    mk("pd.alignGuides", tr("Align to Guides"), "magnet", QKeySequence(), [ed] { ed->setView([](ViewOptions &v) { v.snapGuides = !v.snapGuides; }); }, true);
+    mk("pd.alignObjects", tr("Align to Objects"), "magnet", QKeySequence(), [ed] { ed->setView([](ViewOptions &v) { v.snapObjects = !v.snapObjects; }); }, true);
+    mk("pd.portrait", tr("Portrait"), "rectangle-vertical", QKeySequence(), [ed] {
         QSizeF s = ed->doc()->setup.size;
         if (s.width() <= s.height()) return;
-        ed->change(QStringLiteral("Orientation"), [ed, s] { ed->doc()->setup.size = s.transposed(); ed->doc()->setup.sheet = ed->doc()->setup.sheet.transposed(); });
+        ed->change(tr("Orientation"), [ed, s] { ed->doc()->setup.size = s.transposed(); ed->doc()->setup.sheet = ed->doc()->setup.sheet.transposed(); });
     });
-    mk("pd.landscape", QStringLiteral("Landscape"), "rectangle-horizontal", QKeySequence(), [ed] {
+    mk("pd.landscape", tr("Landscape"), "rectangle-horizontal", QKeySequence(), [ed] {
         QSizeF s = ed->doc()->setup.size;
         if (s.width() >= s.height()) return;
-        ed->change(QStringLiteral("Orientation"), [ed, s] { ed->doc()->setup.size = s.transposed(); ed->doc()->setup.sheet = ed->doc()->setup.sheet.transposed(); });
+        ed->change(tr("Orientation"), [ed, s] { ed->doc()->setup.size = s.transposed(); ed->doc()->setup.sheet = ed->doc()->setup.sheet.transposed(); });
     });
-    const QPair<const char *, double> margins[] = {{"None", 0}, {"Narrow", 18}, {"Moderate", 36}, {"Wide", 54}, {"Extra Wide", 72}};
+    struct MarginPreset { const char *id; QString name; double pts; };
+    const MarginPreset margins[] = {{"None", tr("None"), 0}, {"Narrow", tr("Narrow"), 18}, {"Moderate", tr("Moderate"), 36}, {"Wide", tr("Wide"), 54}, {"Extra Wide", tr("Extra Wide"), 72}};
     for (const auto &m : margins) {
-        const double v = m.second;
-        mk(QStringLiteral("margins.%1").arg(QString::fromLatin1(m.first)), QStringLiteral("%1 (%2)").arg(QString::fromLatin1(m.first), Settings::get().format(v)), "",
-           QKeySequence(), [ed, v] { ed->change(QStringLiteral("Margins"), [ed, v] { ed->doc()->setup.margins = QMarginsF(v, v, v, v); }); });
+        const double v = m.pts;
+        mk(QStringLiteral("margins.%1").arg(QString::fromLatin1(m.id)), tr("%1 (%2)").arg(m.name, Settings::get().format(v)), "",
+           QKeySequence(), [ed, v] { ed->change(tr("Margins"), [ed, v] { ed->doc()->setup.margins = QMarginsF(v, v, v, v); }); });
     }
     // Margins on the Page Design tab are the margin guides (Publisher's word for them).
-    mk("pd.customMargins", QStringLiteral("Custom Margins…"), "", QKeySequence(), [this] { gridGuidesDialog(this, m_ed, 0); });
-    mk("pd.newPageSize", QStringLiteral("Create New Page Size…"), "file-plus", QKeySequence(), [this] { createPageSizeDialog(this, m_ed); });
-    mk("pd.customSizes", QStringLiteral("Edit Custom Page Sizes…"), "", QKeySequence(), [this] { customPageSizesDialog(this, m_ed); });
-    mk("pd.newColorScheme", QStringLiteral("Create New Color Scheme…"), "palette", QKeySequence(), [this] { colorSchemeDialog(this, m_ed); });
-    mk("pd.newFontScheme", QStringLiteral("Create New Font Scheme…"), "type", QKeySequence(), [this] { fontSchemeDialog(this, m_ed); });
-    mk("pd.updateFonts", QStringLiteral("Update Font Scheme"), "refresh-cw", QKeySequence(), [ed] {
+    mk("pd.customMargins", tr("Custom Margins…"), "", QKeySequence(), [this] { gridGuidesDialog(this, m_ed, 0); });
+    mk("pd.newPageSize", tr("Create New Page Size…"), "file-plus", QKeySequence(), [this] { createPageSizeDialog(this, m_ed); });
+    mk("pd.customSizes", tr("Edit Custom Page Sizes…"), "", QKeySequence(), [this] { customPageSizesDialog(this, m_ed); });
+    mk("pd.newColorScheme", tr("Create New Color Scheme…"), "palette", QKeySequence(), [this] { colorSchemeDialog(this, m_ed); });
+    mk("pd.newFontScheme", tr("Create New Font Scheme…"), "type", QKeySequence(), [this] { fontSchemeDialog(this, m_ed); });
+    mk("pd.updateFonts", tr("Update Font Scheme"), "refresh-cw", QKeySequence(), [ed] {
         // Re-applies scheme fonts to text whose fonts were set by styles.
-        ed->change(QStringLiteral("Update Font Scheme"), [ed] {
+        ed->change(tr("Update Font Scheme"), [ed] {
             for (auto &st : ed->doc()->styles) st.chr.clearProperty(QTextFormat::FontFamilies);
         });
     });
-    mk("pd.bgNone", QStringLiteral("No Background"), "ban", QKeySequence(), [ed] {
-        ed->change(QStringLiteral("Background"), [ed] { ed->surface()->background = Fill(); });
+    mk("pd.bgNone", tr("No Background"), "ban", QKeySequence(), [ed] {
+        ed->change(tr("Background"), [ed] { ed->surface()->background = Fill(); });
     });
-    mk("pd.bgMore", QStringLiteral("More Backgrounds…"), "image", QKeySequence(), [this] {
+    mk("pd.bgMore", tr("More Backgrounds…"), "image", QKeySequence(), [this] {
         Fill f = m_ed->surface()->background;
-        if (fillEffectsDialog(this, m_ed, f, QStringLiteral("Format Background")))
-            m_ed->change(QStringLiteral("Background"), [&] { m_ed->surface()->background = f; });
+        if (fillEffectsDialog(this, m_ed, f, tr("Format Background")))
+            m_ed->change(tr("Background"), [&] { m_ed->surface()->background = f; });
     });
-    mk("pd.bgAllPages", QStringLiteral("Apply Background to All Pages"), "", QKeySequence(), [ed] {
+    mk("pd.bgAllPages", tr("Apply Background to All Pages"), "", QKeySequence(), [ed] {
         const Fill f = ed->surface()->background;
-        ed->change(QStringLiteral("Background"), [ed, f] { for (auto &p : ed->doc()->pages) p->background = f; });
+        ed->change(tr("Background"), [ed, f] { for (auto &p : ed->doc()->pages) p->background = f; });
     });
-    mk("pd.bgImage", QStringLiteral("Apply Image as Background"), "image", QKeySequence(), [this] {
+    mk("pd.bgImage", tr("Apply Image as Background"), "image", QKeySequence(), [this] {
         Item *it = m_ed->single();
         auto *pic = dynamic_cast<PictureItem *>(it);
         if (!pic || pic->imageId.isEmpty()) {
-            QMessageBox::information(this, QStringLiteral("Apply Image as Background"), QStringLiteral("Select a picture first."));
+            QMessageBox::information(this, tr("Apply Image as Background"), tr("Select a picture first."));
             return;
         }
-        m_ed->change(QStringLiteral("Background"), [&] {
+        m_ed->change(tr("Background"), [&] {
             Fill f;
             f.type = Fill::Picture;
             f.imageId = pic->imageId;
@@ -641,68 +643,68 @@ void MainWindow::createActions()
     });
 
     // ---------------- Master pages ----------------
-    mk("view.master", QStringLiteral("Master Page"), "layout-panel-top", QKeySequence(Qt::CTRL | Qt::Key_M), [ed] {
+    mk("view.master", tr("Master Page"), "layout-panel-top", QKeySequence(Qt::CTRL | Qt::Key_M), [ed] {
         if (!ed->masterView().isEmpty()) { ed->setMasterView(QString()); return; }
         const Page *pg = ed->doc()->pages[ed->currentPage()].get();
         ed->setMasterView(pg->masterId.isEmpty() ? ed->doc()->masters.first()->id : pg->masterId);
     }, true);
-    mk("view.normal", QStringLiteral("Normal"), "file", QKeySequence(), [ed] { ed->setMasterView(QString()); }, true);
-    mk("mp.add", QStringLiteral("Add Master Page"), "file-plus", QKeySequence(), [ed] { ed->addMaster(false); });
-    mk("mp.dup", QStringLiteral("Duplicate"), "copy", QKeySequence(), [ed] { ed->addMaster(true); });
-    mk("mp.rename", QStringLiteral("Rename"), "pencil-line", QKeySequence(), [this] {
+    mk("view.normal", tr("Normal"), "file", QKeySequence(), [ed] { ed->setMasterView(QString()); }, true);
+    mk("mp.add", tr("Add Master Page"), "file-plus", QKeySequence(), [ed] { ed->addMaster(false); });
+    mk("mp.dup", tr("Duplicate"), "copy", QKeySequence(), [ed] { ed->addMaster(true); });
+    mk("mp.rename", tr("Rename"), "pencil-line", QKeySequence(), [this] {
         MasterPage *m = m_ed->doc()->master(m_ed->masterView());
         if (!m) return;
         bool ok = false;
-        const QString n = QInputDialog::getText(this, QStringLiteral("Rename Master Page"), QStringLiteral("Description:"), QLineEdit::Normal, m->name, &ok);
-        if (ok && !n.trimmed().isEmpty()) m_ed->change(QStringLiteral("Rename Master Page"), [&] { m->name = n.trimmed(); });
+        const QString n = QInputDialog::getText(this, tr("Rename Master Page"), tr("Description:"), QLineEdit::Normal, m->name, &ok);
+        if (ok && !n.trimmed().isEmpty()) m_ed->change(tr("Rename Master Page"), [&] { m->name = n.trimmed(); });
     });
-    mk("mp.delete", QStringLiteral("Delete"), "trash-2", QKeySequence(), [ed] { ed->deleteMaster(ed->masterView()); });
-    mk("mp.twoPage", QStringLiteral("Two-Page Master"), "book-open", QKeySequence(), [ed] {
+    mk("mp.delete", tr("Delete"), "trash-2", QKeySequence(), [ed] { ed->deleteMaster(ed->masterView()); });
+    mk("mp.twoPage", tr("Two-Page Master"), "book-open", QKeySequence(), [ed] {
         MasterPage *m = ed->doc()->master(ed->masterView());
-        if (m) ed->change(QStringLiteral("Two-Page Master"), [m] { m->twoPage = !m->twoPage; });
+        if (m) ed->change(tr("Two-Page Master"), [m] { m->twoPage = !m->twoPage; });
         ed->notifyLive();
     }, true);
-    mk("mp.applyAll", QStringLiteral("Apply to All Pages"), "", QKeySequence(), [ed] {
+    mk("mp.applyAll", tr("Apply to All Pages"), "", QKeySequence(), [ed] {
         const QString id = ed->masterView().isEmpty() ? ed->doc()->masters.first()->id : ed->masterView();
-        ed->change(QStringLiteral("Apply Master Page"), [ed, id] { for (auto &p : ed->doc()->pages) p->masterId = id; });
+        ed->change(tr("Apply Master Page"), [ed, id] { for (auto &p : ed->doc()->pages) p->masterId = id; });
     });
-    mk("mp.applyCurrent", QStringLiteral("Apply to Current Page"), "", QKeySequence(), [ed] {
+    mk("mp.applyCurrent", tr("Apply to Current Page"), "", QKeySequence(), [ed] {
         const QString id = ed->masterView().isEmpty() ? ed->doc()->masters.first()->id : ed->masterView();
         ed->applyMaster(ed->currentPage(), id);
     });
-    mk("mp.none", QStringLiteral("None"), "", QKeySequence(), [ed] { ed->applyMaster(ed->currentPage(), QString()); });
-    mk("mp.close", QStringLiteral("Close Master Page"), "x", QKeySequence(), [ed] { ed->setMasterView(QString()); });
+    mk("mp.none", tr("None"), "", QKeySequence(), [ed] { ed->applyMaster(ed->currentPage(), QString()); });
+    mk("mp.close", tr("Close Master Page"), "x", QKeySequence(), [ed] { ed->setMasterView(QString()); });
 
     // ---------------- Mailings ----------------
-    mk("mm.wizard", QStringLiteral("Step-by-Step Mail Merge Wizard"), "wand-sparkles", QKeySequence(), [this] { showTaskPane("mailmerge"); });
-    mk("mm.typeNew", QStringLiteral("Type a New List…"), "user-plus", QKeySequence(), [this] { recipientsDialog(this, m_ed, true); });
-    mk("mm.existing", QStringLiteral("Use an Existing List…"), "file-spreadsheet", QKeySequence(), [this] {
-        const QString p = QFileDialog::getOpenFileName(this, QStringLiteral("Select Data Source"), QString(),
-                                                       QStringLiteral("Data Sources (*.csv *.txt *.tsv *.xlsx *.vcf);;All Files (*)"));
+    mk("mm.wizard", tr("Step-by-Step Mail Merge Wizard"), "wand-sparkles", QKeySequence(), [this] { showTaskPane("mailmerge"); });
+    mk("mm.typeNew", tr("Type a New List…"), "user-plus", QKeySequence(), [this] { recipientsDialog(this, m_ed, true); });
+    mk("mm.existing", tr("Use an Existing List…"), "file-spreadsheet", QKeySequence(), [this] {
+        const QString p = QFileDialog::getOpenFileName(this, tr("Select Data Source"), QString(),
+                                                       tr("Data Sources (*.csv *.txt *.tsv *.xlsx *.vcf)") + QStringLiteral(";;") + tr("All Files (*)"));
         if (p.isEmpty()) return;
         MergeSource src;
         QString err;
-        if (!loadMergeSource(p, &src, &err)) { QMessageBox::warning(this, QStringLiteral("Select Data Source"), err); return; }
-        m_ed->change(QStringLiteral("Select Recipients"), [&] { m_ed->doc()->merge = src; });
+        if (!loadMergeSource(p, &src, &err)) { QMessageBox::warning(this, tr("Select Data Source"), err); return; }
+        m_ed->change(tr("Select Recipients"), [&] { m_ed->doc()->merge = src; });
         recipientsDialog(this, m_ed, false);
     });
-    mk("mm.editList", QStringLiteral("Edit Recipient List"), "user-pen", QKeySequence(), [this] { recipientsDialog(this, m_ed, false); });
-    mk("mm.addressBlock", QStringLiteral("Address Block"), "mail-open", QKeySequence(), [this] { mergeFieldDialog(this, m_ed, 0); });
-    mk("mm.greeting", QStringLiteral("Greeting Line"), "hand", QKeySequence(), [this] { mergeFieldDialog(this, m_ed, 1); });
-    mk("mm.pictureField", QStringLiteral("Picture Field"), "image", QKeySequence(), [this] {
+    mk("mm.editList", tr("Edit Recipient List"), "user-pen", QKeySequence(), [this] { recipientsDialog(this, m_ed, false); });
+    mk("mm.addressBlock", tr("Address Block"), "mail-open", QKeySequence(), [this] { mergeFieldDialog(this, m_ed, 0); });
+    mk("mm.greeting", tr("Greeting Line"), "hand", QKeySequence(), [this] { mergeFieldDialog(this, m_ed, 1); });
+    mk("mm.pictureField", tr("Picture Field"), "image", QKeySequence(), [this] {
         const QStringList fields = m_ed->doc()->merge.fields;
-        if (fields.isEmpty()) { QMessageBox::information(this, QStringLiteral("Picture Field"), QStringLiteral("Select a recipient list first.")); return; }
+        if (fields.isEmpty()) { QMessageBox::information(this, tr("Picture Field"), tr("Select a recipient list first.")); return; }
         bool ok = false;
-        const QString f = QInputDialog::getItem(this, QStringLiteral("Picture Field"), QStringLiteral("Field that holds picture file names:"), fields, 0, false, &ok);
+        const QString f = QInputDialog::getItem(this, tr("Picture Field"), tr("Field that holds picture file names:"), fields, 0, false, &ok);
         if (!ok) return;
-        m_ed->change(QStringLiteral("Picture Field"), [&] { m_ed->doc()->merge.pictureField = f; });
+        m_ed->change(tr("Picture Field"), [&] { m_ed->doc()->merge.pictureField = f; });
         auto pic = std::make_shared<PictureItem>();
         pic->name = "merge:" + f;
         pic->rect = QRectF(72, 72, 144, 144);
         pic->imgRect = QRectF(0, 0, 144, 144);
         m_ed->addItem(pic);
     });
-    mk("mm.preview", QStringLiteral("Preview Results"), "eye", QKeySequence(), [ed] {
+    mk("mm.preview", tr("Preview Results"), "eye", QKeySequence(), [ed] {
         if (ed->mergeRecord() >= 0) ed->setMergeRecord(-1);
         else if (!ed->doc()->merge.isEmpty()) ed->setMergeRecord(ed->doc()->merge.includedRows().value(0, 0));
     }, true);
@@ -717,48 +719,48 @@ void MainWindow::createActions()
         else i = std::clamp(i + (how == 1 ? -step : step), 0, int(rows.size()) - 1);
         ed->setMergeRecord(rows[i]);
     };
-    mk("mm.first", QStringLiteral("First Record"), "chevrons-left", QKeySequence(), [stepRecord] { stepRecord(0); });
-    mk("mm.prev", QStringLiteral("Previous Record"), "chevron-left", QKeySequence(), [stepRecord] { stepRecord(1); });
-    mk("mm.next", QStringLiteral("Next Record"), "chevron-right", QKeySequence(), [stepRecord] { stepRecord(2); });
-    mk("mm.last", QStringLiteral("Last Record"), "chevrons-right", QKeySequence(), [stepRecord] { stepRecord(3); });
-    mk("mm.findRecipient", QStringLiteral("Find Recipient"), "search", QKeySequence(), [this] {
+    mk("mm.first", tr("First Record"), "chevrons-left", QKeySequence(), [stepRecord] { stepRecord(0); });
+    mk("mm.prev", tr("Previous Record"), "chevron-left", QKeySequence(), [stepRecord] { stepRecord(1); });
+    mk("mm.next", tr("Next Record"), "chevron-right", QKeySequence(), [stepRecord] { stepRecord(2); });
+    mk("mm.last", tr("Last Record"), "chevrons-right", QKeySequence(), [stepRecord] { stepRecord(3); });
+    mk("mm.findRecipient", tr("Find Recipient"), "search", QKeySequence(), [this] {
         bool ok = false;
-        const QString q = QInputDialog::getText(this, QStringLiteral("Find Recipient"), QStringLiteral("Find:"), QLineEdit::Normal, QString(), &ok);
+        const QString q = QInputDialog::getText(this, tr("Find Recipient"), tr("Find:"), QLineEdit::Normal, QString(), &ok);
         if (!ok || q.isEmpty()) return;
         const MergeSource &m = m_ed->doc()->merge;
         for (int r : m.includedRows())
             for (const QString &v : m.rows[r])
                 if (v.contains(q, Qt::CaseInsensitive)) { m_ed->setMergeRecord(r); return; }
-        statusBar()->showMessage(QStringLiteral("No recipient matches \"%1\".").arg(q), 4000);
+        statusBar()->showMessage(tr("No recipient matches \"%1\".").arg(q), 4000);
     });
-    mk("mm.mergeNew", QStringLiteral("Merge to New Publication"), "files", QKeySequence(), [this] {
-        if (m_ed->doc()->merge.isEmpty()) { QMessageBox::information(this, QStringLiteral("Merge"), QStringLiteral("Select a recipient list first.")); return; }
+    mk("mm.mergeNew", tr("Merge to New Publication"), "files", QKeySequence(), [this] {
+        if (m_ed->doc()->merge.isEmpty()) { QMessageBox::information(this, tr("Merge"), tr("Select a recipient list first.")); return; }
         if (!maybeSave()) return;
         newPublication(mergeToNewPublication(*m_ed->doc()));
     });
-    mk("mm.mergePrint", QStringLiteral("Merge to Printer…"), "printer", QKeySequence(), [this] {
-        if (m_ed->doc()->merge.isEmpty()) { QMessageBox::information(this, QStringLiteral("Merge"), QStringLiteral("Select a recipient list first.")); return; }
+    mk("mm.mergePrint", tr("Merge to Printer…"), "printer", QKeySequence(), [this] {
+        if (m_ed->doc()->merge.isEmpty()) { QMessageBox::information(this, tr("Merge"), tr("Select a recipient list first.")); return; }
         showBackstage("print");
     });
-    mk("mm.mergePdf", QStringLiteral("Merge to PDF…"), "file-text", QKeySequence(), [this] {
-        if (m_ed->doc()->merge.isEmpty()) { QMessageBox::information(this, QStringLiteral("Merge"), QStringLiteral("Select a recipient list first.")); return; }
+    mk("mm.mergePdf", tr("Merge to PDF…"), "file-text", QKeySequence(), [this] {
+        if (m_ed->doc()->merge.isEmpty()) { QMessageBox::information(this, tr("Merge"), tr("Select a recipient list first.")); return; }
         exportPdf(QString(), true);
     });
-    mk("mm.mergeEmail", QStringLiteral("Merge to Email…"), "mail", QKeySequence(), [this] {
+    mk("mm.mergeEmail", tr("Merge to Email…"), "mail", QKeySequence(), [this] {
         mergeToEmailFiles(this, m_ed);
     });
-    mk("mm.exportList", QStringLiteral("Export Recipient List…"), "file-down", QKeySequence(), [this] {
-        const QString p = askSavePath(this, QStringLiteral("Export Recipient List"), QString(), QStringLiteral("CSV (*.csv)"));
+    mk("mm.exportList", tr("Export Recipient List…"), "file-down", QKeySequence(), [this] {
+        const QString p = askSavePath(this, tr("Export Recipient List"), QString(), tr("CSV (*.csv)"));
         if (p.isEmpty()) return;
         saveMergeCsv(m_ed->doc()->merge, p);
     });
 
     // ---------------- Review ----------------
-    mk("rev.spelling", QStringLiteral("Spelling"), "spell-check", QKeySequence(Qt::Key_F7), [this] { spellingDialog(this, m_ed); });
-    mk("rev.checkAsType", QStringLiteral("Check Spelling as You Type"), "spell-check-2", QKeySequence(), [ed] { ed->setView([](ViewOptions &v) { v.spelling = !v.spelling; }); }, true);
-    mk("rev.thesaurus", QStringLiteral("Thesaurus"), "book-a", QKeySequence(Qt::SHIFT | Qt::Key_F7), [this] { thesaurusDialog(this, m_ed); });
-    mk("rev.research", QStringLiteral("Research"), "book-open-text", QKeySequence(Qt::ALT | Qt::Key_F7), [this] { showTaskPane("research"); });
-    mk("rev.translate", QStringLiteral("Translate"), "languages", QKeySequence(), [this] {
+    mk("rev.spelling", tr("Spelling"), "spell-check", QKeySequence(Qt::Key_F7), [this] { spellingDialog(this, m_ed); });
+    mk("rev.checkAsType", tr("Check Spelling as You Type"), "spell-check-2", QKeySequence(), [ed] { ed->setView([](ViewOptions &v) { v.spelling = !v.spelling; }); }, true);
+    mk("rev.thesaurus", tr("Thesaurus"), "book-a", QKeySequence(Qt::SHIFT | Qt::Key_F7), [this] { thesaurusDialog(this, m_ed); });
+    mk("rev.research", tr("Research"), "book-open-text", QKeySequence(Qt::ALT | Qt::Key_F7), [this] { showTaskPane("research"); });
+    mk("rev.translate", tr("Translate"), "languages", QKeySequence(), [this] {
         // The selected text, else the story being edited, else the selected box's text.
         QString text;
         if (m_ed->isEditingText()) {
@@ -773,26 +775,37 @@ void MainWindow::createActions()
         text.replace(QChar::ParagraphSeparator, '\n').replace(QChar::LineSeparator, '\n').remove(QChar(0x00AD)).remove(QChar::ObjectReplacementCharacter);
         text = text.trimmed();
         if (text.isEmpty()) {
-            QMessageBox::information(this, QStringLiteral("Translate"), QStringLiteral("Select the text you want to translate, then choose Translate."));
+            QMessageBox::information(this, tr("Translate"), tr("Select the text you want to translate, then choose Translate."));
             return;
         }
-        const QList<QPair<QString, QString>> langs = {
-            {"English", "en"}, {"Spanish", "es"}, {"French", "fr"}, {"German", "de"}, {"Italian", "it"}, {"Portuguese", "pt"},
-            {"Dutch", "nl"}, {"Polish", "pl"}, {"Russian", "ru"}, {"Ukrainian", "uk"}, {"Arabic", "ar"}, {"Hindi", "hi"},
-            {"Chinese (Simplified)", "zh-Hans"}, {"Japanese", "ja"}, {"Korean", "ko"}, {"Vietnamese", "vi"}, {"Turkish", "tr"}, {"Greek", "el"}};
+        // The saved setting keeps the English name, so it survives a change of language.
+        struct TargetLanguage { QString english, shown, code; };
+        const QList<TargetLanguage> langs = {
+            {"English", tr("English"), "en"}, {"Spanish", tr("Spanish"), "es"}, {"French", tr("French"), "fr"}, {"German", tr("German"), "de"},
+            {"Italian", tr("Italian"), "it"}, {"Portuguese", tr("Portuguese"), "pt"}, {"Dutch", tr("Dutch"), "nl"}, {"Polish", tr("Polish"), "pl"},
+            {"Russian", tr("Russian"), "ru"}, {"Ukrainian", tr("Ukrainian"), "uk"}, {"Arabic", tr("Arabic"), "ar"}, {"Hindi", tr("Hindi"), "hi"},
+            {"Chinese (Simplified)", tr("Chinese (Simplified)"), "zh-Hans"}, {"Japanese", tr("Japanese"), "ja"}, {"Korean", tr("Korean"), "ko"},
+            {"Vietnamese", tr("Vietnamese"), "vi"}, {"Turkish", tr("Turkish"), "tr"}, {"Greek", tr("Greek"), "el"}};
         QStringList names;
-        for (const auto &l : langs) names << l.first;
+        int lastIndex = 0;
         const QString last = Settings::get().value(QStringLiteral("translate/target"), QStringLiteral("Spanish")).toString();
+        for (const auto &l : langs) {
+            if (l.english == last) lastIndex = int(names.size());
+            names << l.shown;
+        }
         bool ok = false;
-        const QString choice = QInputDialog::getItem(this, QStringLiteral("Translate"),
-                                                     QStringLiteral("Translate the selected text into:\n\n"
-                                                                    "Your web browser will open LibreTranslate, a free, open-source translation service, "
-                                                                    "with this text. Nothing is sent until you click OK."),
-                                                     names, std::max(0, int(names.indexOf(last))), false, &ok);
+        const QString choice = QInputDialog::getItem(this, tr("Translate"),
+                                                     tr("Translate the selected text into:\n\n"
+                                                        "Your web browser will open LibreTranslate, a free, open-source translation service, "
+                                                        "with this text. Nothing is sent until you click OK."),
+                                                     names, lastIndex, false, &ok);
         if (!ok) return;
-        Settings::get().setValue(QStringLiteral("translate/target"), choice);
         QString code = QStringLiteral("en");
-        for (const auto &l : langs) if (l.first == choice) code = l.second;
+        for (const auto &l : langs)
+            if (l.shown == choice) {
+                code = l.code;
+                Settings::get().setValue(QStringLiteral("translate/target"), l.english);
+            }
         if (text.size() > 5000) text = text.left(5000);   // the service's limit for one request
         QUrl url(QStringLiteral("https://libretranslate.com/"));
         QUrlQuery q;
@@ -802,19 +815,19 @@ void MainWindow::createActions()
         url.setQuery(q);
         QDesktopServices::openUrl(url);
     });
-    mk("rev.language", QStringLiteral("Set Proofing Language…"), "globe", QKeySequence(), [this] {
+    mk("rev.language", tr("Set Proofing Language…"), "globe", QKeySequence(), [this] {
         // The languages with dictionaries, by name, starting at the text's own.
         const QVector<dict::Language> &langs = dict::languages();
         QStringList names;
         for (const dict::Language &l : langs) names << l.name;
-        names << QStringLiteral("Do not check spelling");
+        names << tr("Do not check spelling");
         const QTextCharFormat now = m_ed->currentCharFormat();
         int current = 0;
         for (int i = 0; i < langs.size(); ++i)
             if (langs[i].code == dict::match(now.stringProperty(tp::Language))) current = i;
         if (now.boolProperty(tp::NoProof)) current = int(names.size()) - 1;
         bool ok = false;
-        const QString pick = QInputDialog::getItem(this, QStringLiteral("Language"), QStringLiteral("Mark selected text as:"), names, current, false, &ok);
+        const QString pick = QInputDialog::getItem(this, tr("Language"), tr("Mark selected text as:"), names, current, false, &ok);
         if (!ok) return;
         const int i = int(names.indexOf(pick));
         QTextCharFormat f;
@@ -823,50 +836,50 @@ void MainWindow::createActions()
             f.setProperty(tp::Language, langs[i].code);
             f.setProperty(tp::NoProof, false);
         }
-        m_ed->mergeCharFormat(f, QStringLiteral("Language"));
+        m_ed->mergeCharFormat(f, tr("Language"));
     });
-    mk("rev.designChecker", QStringLiteral("Run Design Checker"), "shield-check", QKeySequence(), [this] { showTaskPane("designchecker"); });
-    mk("rev.wordCount", QStringLiteral("Word Count"), "whole-word", QKeySequence(), [this] { wordCountDialog(this, m_ed); });
-    mk("rev.hyphenation", QStringLiteral("Hyphenation…"), "hyphenation", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_H), [this] { hyphenationDialog(this, m_ed); });
+    mk("rev.designChecker", tr("Run Design Checker"), "shield-check", QKeySequence(), [this] { showTaskPane("designchecker"); });
+    mk("rev.wordCount", tr("Word Count"), "whole-word", QKeySequence(), [this] { wordCountDialog(this, m_ed); });
+    mk("rev.hyphenation", tr("Hyphenation…"), "hyphenation", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_H), [this] { hyphenationDialog(this, m_ed); });
 
     // ---------------- View ----------------
-    mk("view.single", QStringLiteral("Single Page"), "file", QKeySequence(), [ed] { ed->setTwoPageSpread(false); }, true);
-    mk("view.spread", QStringLiteral("Two-Page Spread"), "book-open", QKeySequence(), [ed] { ed->setTwoPageSpread(true); }, true);
+    mk("view.single", tr("Single Page"), "file", QKeySequence(), [ed] { ed->setTwoPageSpread(false); }, true);
+    mk("view.spread", tr("Two-Page Spread"), "book-open", QKeySequence(), [ed] { ed->setTwoPageSpread(true); }, true);
     auto toggle = [ed](bool ViewOptions::*m) { ed->setView([m](ViewOptions &v) { v.*m = !(v.*m); }); };
-    mk("view.boundaries", QStringLiteral("Boundaries"), "square-dashed", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O), [toggle] { toggle(&ViewOptions::boundaries); }, true);
-    mk("view.guides", QStringLiteral("Guides"), "layout-grid", QKeySequence(), [toggle] { toggle(&ViewOptions::guides); }, true);
-    mk("view.fields", QStringLiteral("Fields"), "braces", QKeySequence(), [toggle] { toggle(&ViewOptions::fields); }, true);
-    mk("view.rulers", QStringLiteral("Rulers"), "ruler", QKeySequence(), [this, toggle] {
+    mk("view.boundaries", tr("Boundaries"), "square-dashed", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O), [toggle] { toggle(&ViewOptions::boundaries); }, true);
+    mk("view.guides", tr("Guides"), "layout-grid", QKeySequence(), [toggle] { toggle(&ViewOptions::guides); }, true);
+    mk("view.fields", tr("Fields"), "braces", QKeySequence(), [toggle] { toggle(&ViewOptions::fields); }, true);
+    mk("view.rulers", tr("Rulers"), "ruler", QKeySequence(), [this, toggle] {
         toggle(&ViewOptions::rulers);
         m_canvas->setRulersVisible(m_ed->view.rulers);
     }, true);
-    mk("view.pageNav", QStringLiteral("Page Navigation"), "panel-left", QKeySequence(), [this, toggle] {
+    mk("view.pageNav", tr("Page Navigation"), "panel-left", QKeySequence(), [this, toggle] {
         toggle(&ViewOptions::pageNav);
         m_pages->setVisible(m_ed->view.pageNav);
     }, true);
-    mk("view.scratch", QStringLiteral("Scratch Area"), "layout-dashboard", QKeySequence(), [toggle] { toggle(&ViewOptions::scratch); }, true);
-    mk("view.baselines", QStringLiteral("Baselines"), "align-vertical-space-between", QKeySequence(Qt::CTRL | Qt::Key_F7), [toggle] { toggle(&ViewOptions::baselines); }, true);
-    mk("view.gridlines", QStringLiteral("View Gridlines"), "grid-2x2", QKeySequence(), [toggle] { toggle(&ViewOptions::gridlines); }, true);
-    mk("view.graphics", QStringLiteral("Graphics Manager"), "images", QKeySequence(), [this] {
+    mk("view.scratch", tr("Scratch Area"), "layout-dashboard", QKeySequence(), [toggle] { toggle(&ViewOptions::scratch); }, true);
+    mk("view.baselines", tr("Baselines"), "align-vertical-space-between", QKeySequence(Qt::CTRL | Qt::Key_F7), [toggle] { toggle(&ViewOptions::baselines); }, true);
+    mk("view.gridlines", tr("View Gridlines"), "grid-2x2", QKeySequence(), [toggle] { toggle(&ViewOptions::gridlines); }, true);
+    mk("view.graphics", tr("Graphics Manager"), "images", QKeySequence(), [this] {
         if (currentTaskPane() == "graphics") hideTaskPane(); else showTaskPane("graphics");
     }, true);
-    mk("view.measurement", QStringLiteral("Measurement"), "ruler-dimension-line", QKeySequence(), [this] { measurementWindow(this, m_ed); });
+    mk("view.measurement", tr("Measurement"), "ruler-dimension-line", QKeySequence(), [this] { measurementWindow(this, m_ed); });
     mk("zoom.100", QStringLiteral("100%"), "scan", QKeySequence(Qt::Key_F9), [this] {
         if (std::abs(m_canvas->zoom() - 1.0) < 0.01) m_canvas->zoomToFit(Canvas::Fit::WholePage);
         else { m_canvas->zoomToFit(Canvas::Fit::None); m_canvas->setZoom(1.0); }
     });
-    mk("zoom.page", QStringLiteral("Whole Page"), "maximize", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_L), [this] { m_canvas->zoomToFit(Canvas::Fit::WholePage); });
-    mk("zoom.width", QStringLiteral("Page Width"), "move-horizontal", QKeySequence(), [this] { m_canvas->zoomToFit(Canvas::Fit::PageWidth); });
-    mk("zoom.selection", QStringLiteral("Selected Objects"), "scan-search", QKeySequence(), [this] { m_canvas->zoomToFit(Canvas::Fit::Selection); });
-    mk("zoom.in", QStringLiteral("Zoom In"), "zoom-in", QKeySequence::ZoomIn, [this] { m_canvas->zoomToFit(Canvas::Fit::None); m_canvas->setZoom(m_canvas->zoom() * 1.2); });
-    mk("zoom.out", QStringLiteral("Zoom Out"), "zoom-out", QKeySequence::ZoomOut, [this] { m_canvas->zoomToFit(Canvas::Fit::None); m_canvas->setZoom(m_canvas->zoom() / 1.2); });
-    mk("win.new", QStringLiteral("New Window"), "app-window", QKeySequence(), [this] {
+    mk("zoom.page", tr("Whole Page"), "maximize", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_L), [this] { m_canvas->zoomToFit(Canvas::Fit::WholePage); });
+    mk("zoom.width", tr("Page Width"), "move-horizontal", QKeySequence(), [this] { m_canvas->zoomToFit(Canvas::Fit::PageWidth); });
+    mk("zoom.selection", tr("Selected Objects"), "scan-search", QKeySequence(), [this] { m_canvas->zoomToFit(Canvas::Fit::Selection); });
+    mk("zoom.in", tr("Zoom In"), "zoom-in", QKeySequence::ZoomIn, [this] { m_canvas->zoomToFit(Canvas::Fit::None); m_canvas->setZoom(m_canvas->zoom() * 1.2); });
+    mk("zoom.out", tr("Zoom Out"), "zoom-out", QKeySequence::ZoomOut, [this] { m_canvas->zoomToFit(Canvas::Fit::None); m_canvas->setZoom(m_canvas->zoom() / 1.2); });
+    mk("win.new", tr("New Window"), "app-window", QKeySequence(), [this] {
         auto *w = new MainWindow();
         w->setAttribute(Qt::WA_DeleteOnClose);
         if (!m_ed->filePath().isEmpty()) w->openFile(m_ed->filePath());
         w->show();
     });
-    mk("win.arrange", QStringLiteral("Arrange All"), "layout-panel-left", QKeySequence(), [] {
+    mk("win.arrange", tr("Arrange All"), "layout-panel-left", QKeySequence(), [] {
         QList<QWidget *> wins;
         for (QWidget *w : QApplication::topLevelWidgets())
             if (qobject_cast<MainWindow *>(w) && w->isVisible()) wins << w;
@@ -875,31 +888,31 @@ void MainWindow::createActions()
         const int wdt = area.width() / wins.size();
         for (int i = 0; i < wins.size(); ++i) wins[i]->setGeometry(area.left() + i * wdt, area.top(), wdt, area.height());
     });
-    mk("win.cascade", QStringLiteral("Cascade"), "layers-2", QKeySequence(), [] {
+    mk("win.cascade", tr("Cascade"), "layers-2", QKeySequence(), [] {
         int k = 0;
         for (QWidget *w : QApplication::topLevelWidgets())
             if (qobject_cast<MainWindow *>(w) && w->isVisible()) { w->move(40 + k * 30, 40 + k * 30); w->raise(); ++k; }
     });
 
     // ---------------- Shape / drawing tools ----------------
-    mk("shape.addText", QStringLiteral("Add Text"), "text-cursor", QKeySequence(), [ed] { if (Item *it = ed->single()) ed->beginTextEdit(it->id); });
-    mk("shape.editPoints", QStringLiteral("Edit Points"), "spline", QKeySequence(), [this] {
+    mk("shape.addText", tr("Add Text"), "text-cursor", QKeySequence(), [ed] { if (Item *it = ed->single()) ed->beginTextEdit(it->id); });
+    mk("shape.editPoints", tr("Edit Points"), "spline", QKeySequence(), [this] {
         auto *s = dynamic_cast<ShapeItem *>(m_ed->single());
         if (!s) return;
         if (m_ed->pointsItem == s->id) { m_ed->setPointsItem(QString()); return; }
         // Convert to a freeform path so its points can be dragged; Ctrl+click
         // a point deletes it, Ctrl+click an edge adds one, Esc finishes.
         if (s->customPath.isEmpty())
-            m_ed->change(QStringLiteral("Edit Points"), [&] { s->customPath = shapePath(s->shape, s->rect.size(), s->adj); });
+            m_ed->change(tr("Edit Points"), [&] { s->customPath = shapePath(s->shape, s->rect.size(), s->adj); });
         m_ed->setPointsItem(s->id);
-        statusBar()->showMessage(QStringLiteral("Drag a point to reshape. Ctrl+click a point to delete it, or an edge to add one. Press Esc when done."), 8000);
+        statusBar()->showMessage(tr("Drag a point to reshape. Ctrl+click a point to delete it, or an edge to add one. Press Esc when done."), 8000);
     });
-    mk("line.draw", QStringLiteral("Line"), "minus", QKeySequence(), [ed] { ed->setTool(Tool::Line); });
-    mk("line.arrow", QStringLiteral("Arrow"), "move-right", QKeySequence(), [ed] { ed->setTool(Tool::Arrow); });
-    mk("line.double", QStringLiteral("Double Arrow"), "move-horizontal", QKeySequence(), [ed] { ed->setTool(Tool::DoubleArrow); });
+    mk("line.draw", tr("Line"), "minus", QKeySequence(), [ed] { ed->setTool(Tool::Line); });
+    mk("line.arrow", tr("Arrow"), "move-right", QKeySequence(), [ed] { ed->setTool(Tool::Arrow); });
+    mk("line.double", tr("Double Arrow"), "move-horizontal", QKeySequence(), [ed] { ed->setTool(Tool::DoubleArrow); });
     for (double w : {0.25, 0.5, 0.75, 1.0, 1.5, 2.25, 3.0, 4.5, 6.0}) {
-        mk(QStringLiteral("weight.%1").arg(w), QStringLiteral("%1 pt").arg(w), "", QKeySequence(), [ed, w] {
-            ed->forEachSelected(QStringLiteral("Line Weight"), [w](Item *it) {
+        mk(QStringLiteral("weight.%1").arg(w), tr("%1 pt").arg(w), "", QKeySequence(), [ed, w] {
+            ed->forEachSelected(tr("Line Weight"), [w](Item *it) {
                 if (it->stroke.isNone()) it->stroke = Stroke::line(ColorRef::scheme(Main), w);
                 it->stroke.width = w;
             });
@@ -907,38 +920,38 @@ void MainWindow::createActions()
     }
     for (int d = 0; d < 8; ++d) {
         mk(QStringLiteral("dash.%1").arg(d), dashName(Stroke::Dash(d)), "", QKeySequence(), [ed, d] {
-            ed->forEachSelected(QStringLiteral("Dashes"), [d](Item *it) { it->stroke.dash = Stroke::Dash(d); });
+            ed->forEachSelected(tr("Dashes"), [d](Item *it) { it->stroke.dash = Stroke::Dash(d); });
         });
     }
-    const char *arrowNames[] = {"No Arrow", "Arrow", "Open Arrow", "Stealth Arrow", "Diamond Arrow", "Oval Arrow"};
+    const QString arrowNames[] = {tr("No Arrow"), tr("Arrow"), tr("Open Arrow"), tr("Stealth Arrow"), tr("Diamond Arrow"), tr("Oval Arrow")};
     for (int a = 0; a < 6; ++a) {
-        mk(QStringLiteral("arrowEnd.%1").arg(a), QStringLiteral("End: %1").arg(QString::fromLatin1(arrowNames[a])), "", QKeySequence(), [ed, a] {
-            ed->forEachSelected(QStringLiteral("Arrows"), [a](Item *it) { it->stroke.endArrow = Arrow(a); });
+        mk(QStringLiteral("arrowEnd.%1").arg(a), tr("End: %1").arg(arrowNames[a]), "", QKeySequence(), [ed, a] {
+            ed->forEachSelected(tr("Arrows"), [a](Item *it) { it->stroke.endArrow = Arrow(a); });
         });
-        mk(QStringLiteral("arrowStart.%1").arg(a), QStringLiteral("Start: %1").arg(QString::fromLatin1(arrowNames[a])), "", QKeySequence(), [ed, a] {
-            ed->forEachSelected(QStringLiteral("Arrows"), [a](Item *it) { it->stroke.startArrow = Arrow(a); });
+        mk(QStringLiteral("arrowStart.%1").arg(a), tr("Start: %1").arg(arrowNames[a]), "", QKeySequence(), [ed, a] {
+            ed->forEachSelected(tr("Arrows"), [a](Item *it) { it->stroke.startArrow = Arrow(a); });
         });
     }
-    mk("fill.effects", QStringLiteral("Fill Effects…"), "paint-bucket", QKeySequence(), [this] {
+    mk("fill.effects", tr("Fill Effects…"), "paint-bucket", QKeySequence(), [this] {
         Item *it = m_ed->single();
         if (!it) return;
         Fill f = it->fill;
-        if (fillEffectsDialog(this, m_ed, f)) m_ed->forEachSelected(QStringLiteral("Fill"), [f](Item *x) { x->fill = f; });
+        if (fillEffectsDialog(this, m_ed, f)) m_ed->forEachSelected(tr("Fill"), [f](Item *x) { x->fill = f; });
     });
-    mk("fill.picture", QStringLiteral("Picture Fill…"), "image", QKeySequence(), [this] {
-        const QString p = QFileDialog::getOpenFileName(this, QStringLiteral("Picture Fill"), QString(), QStringLiteral("Pictures (*.png *.jpg *.jpeg *.gif *.bmp *.tif *.webp *.svg)"));
+    mk("fill.picture", tr("Picture Fill…"), "image", QKeySequence(), [this] {
+        const QString p = QFileDialog::getOpenFileName(this, tr("Picture Fill"), QString(), tr("Pictures (*.png *.jpg *.jpeg *.gif *.bmp *.tif *.webp *.svg)"));
         if (p.isEmpty()) return;
         QFile file(p);
         if (!file.open(QIODevice::ReadOnly)) return;
         const QString id = m_ed->doc()->addImage(file.readAll(), QFileInfo(p).suffix().toLower(), p);
-        m_ed->forEachSelected(QStringLiteral("Picture Fill"), [id](Item *x) { x->fill.type = Fill::Picture; x->fill.imageId = id; x->fill.tile = false; });
+        m_ed->forEachSelected(tr("Picture Fill"), [id](Item *x) { x->fill.type = Fill::Picture; x->fill.imageId = id; x->fill.tile = false; });
     });
-    mk("fill.none", QStringLiteral("No Fill"), "ban", QKeySequence(), [ed] { ed->forEachSelected(QStringLiteral("Fill"), [](Item *x) { x->fill = Fill(); }); });
-    mk("line.none", QStringLiteral("No Outline"), "ban", QKeySequence(), [ed] { ed->forEachSelected(QStringLiteral("Outline"), [](Item *x) { x->stroke.color = ColorRef::none(); }); });
-    mk("line.more", QStringLiteral("More Lines…"), "", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 0); });
+    mk("fill.none", tr("No Fill"), "ban", QKeySequence(), [ed] { ed->forEachSelected(tr("Fill"), [](Item *x) { x->fill = Fill(); }); });
+    mk("line.none", tr("No Outline"), "ban", QKeySequence(), [ed] { ed->forEachSelected(tr("Outline"), [](Item *x) { x->stroke.color = ColorRef::none(); }); });
+    mk("line.more", tr("More Lines…"), "", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 0); });
     // Effects
     auto shadowPreset = [ed](int k) {
-        ed->forEachSelected(QStringLiteral("Shadow"), [k](Item *it) {
+        ed->forEachSelected(tr("Shadow"), [k](Item *it) {
             it->fx.shadow.on = k > 0;
             it->fx.shadow.blur = k == 1 ? 4 : k == 2 ? 0 : 8;
             it->fx.shadow.distance = k == 3 ? 0 : 3;
@@ -946,41 +959,42 @@ void MainWindow::createActions()
             it->fx.shadow.transparency = k == 3 ? 0.5 : 0.6;
         });
     };
-    const char *shadowNames[] = {"No Shadow", "Outer Shadow", "Hard Shadow", "Soft Glow Shadow", "Shadow Down-Left"};
-    for (int k = 0; k < 5; ++k) mk(QStringLiteral("shadow.%1").arg(k), QString::fromLatin1(shadowNames[k]), "", QKeySequence(), [shadowPreset, k] { shadowPreset(k); });
-    mk("shadow.options", QStringLiteral("Shadow Options…"), "", QKeySequence(), [this] { shadowDialog(this, m_ed); });
+    const QString shadowNames[] = {tr("No Shadow"), tr("Outer Shadow"), tr("Hard Shadow"), tr("Soft Glow Shadow"), tr("Shadow Down-Left")};
+    for (int k = 0; k < 5; ++k) mk(QStringLiteral("shadow.%1").arg(k), shadowNames[k], "", QKeySequence(), [shadowPreset, k] { shadowPreset(k); });
+    mk("shadow.options", tr("Shadow Options…"), "", QKeySequence(), [this] { shadowDialog(this, m_ed); });
     for (int g : {0, 5, 8, 11, 18}) {
-        mk(QStringLiteral("glow.%1").arg(g), g ? QStringLiteral("%1 pt Glow").arg(g) : QStringLiteral("No Glow"), "", QKeySequence(), [ed, g] {
-            ed->forEachSelected(QStringLiteral("Glow"), [g](Item *it) { it->fx.glow.on = g > 0; it->fx.glow.size = g; });
+        mk(QStringLiteral("glow.%1").arg(g), g ? tr("%1 pt Glow").arg(g) : tr("No Glow"), "", QKeySequence(), [ed, g] {
+            ed->forEachSelected(tr("Glow"), [g](Item *it) { it->fx.glow.on = g > 0; it->fx.glow.size = g; });
         });
     }
     for (int s : {0, 2, 5, 10, 25}) {
-        mk(QStringLiteral("soft.%1").arg(s), s ? QStringLiteral("%1 pt").arg(s) : QStringLiteral("No Soft Edges"), "", QKeySequence(), [ed, s] {
-            ed->forEachSelected(QStringLiteral("Soft Edges"), [s](Item *it) { it->fx.softEdge = s; });
+        mk(QStringLiteral("soft.%1").arg(s), s ? tr("%1 pt").arg(s) : tr("No Soft Edges"), "", QKeySequence(), [ed, s] {
+            ed->forEachSelected(tr("Soft Edges"), [s](Item *it) { it->fx.softEdge = s; });
         });
     }
-    const char *reflNames[] = {"No Reflection", "Tight Reflection", "Half Reflection", "Full Reflection"};
+    const QString reflNames[] = {tr("No Reflection"), tr("Tight Reflection"), tr("Half Reflection"), tr("Full Reflection")};
     for (int r = 0; r < 4; ++r) {
-        mk(QStringLiteral("refl.%1").arg(r), QString::fromLatin1(reflNames[r]), "", QKeySequence(), [ed, r] {
-            ed->forEachSelected(QStringLiteral("Reflection"), [r](Item *it) {
+        mk(QStringLiteral("refl.%1").arg(r), reflNames[r], "", QKeySequence(), [ed, r] {
+            ed->forEachSelected(tr("Reflection"), [r](Item *it) {
                 it->fx.reflection.on = r > 0;
                 it->fx.reflection.size = r == 1 ? 0.3 : r == 2 ? 0.5 : 1.0;
                 it->fx.reflection.distance = 2;
             });
         });
     }
-    const char *bevelNames[] = {"No Bevel", "Circle", "Relaxed Inset", "Cool Slant", "Angle", "Soft Round", "Convex"};
+    const QString bevelNames[] = {tr("No Bevel"), tr("Circle"), tr("Relaxed Inset"), tr("Cool Slant"), tr("Angle"), tr("Soft Round"), tr("Convex")};
     for (int b = 0; b < 7; ++b) {
-        mk(QStringLiteral("bevel.%1").arg(b), QString::fromLatin1(bevelNames[b]), "", QKeySequence(), [ed, b] {
-            ed->forEachSelected(QStringLiteral("Bevel"), [b](Item *it) { it->fx.bevel.type = b; it->fx.bevel.width = 4 + b; });
+        mk(QStringLiteral("bevel.%1").arg(b), bevelNames[b], "", QKeySequence(), [ed, b] {
+            ed->forEachSelected(tr("Bevel"), [b](Item *it) { it->fx.bevel.type = b; it->fx.bevel.width = 4 + b; });
         });
     }
-    const QPair<const char *, QPointF> rot3d[] = {{"No Rotation", {0, 0}}, {"Perspective Left", {0, 30}}, {"Perspective Right", {0, -30}},
-                                                  {"Perspective Above", {30, 0}}, {"Perspective Below", {-30, 0}}, {"Off Axis", {15, 25}}};
+    struct Rot3d { const char *id; QString name; QPointF angle; };
+    const Rot3d rot3d[] = {{"No Rotation", tr("No Rotation"), {0, 0}}, {"Perspective Left", tr("Perspective Left"), {0, 30}}, {"Perspective Right", tr("Perspective Right"), {0, -30}},
+                           {"Perspective Above", tr("Perspective Above"), {30, 0}}, {"Perspective Below", tr("Perspective Below"), {-30, 0}}, {"Off Axis", tr("Off Axis"), {15, 25}}};
     for (const auto &r : rot3d) {
-        const QPointF a = r.second;
-        mk(QStringLiteral("rot3d.%1").arg(QString::fromLatin1(r.first)), QString::fromLatin1(r.first), "", QKeySequence(), [ed, a] {
-            ed->forEachSelected(QStringLiteral("3-D Rotation"), [a](Item *it) { it->fx.rot3d.x = a.x(); it->fx.rot3d.y = a.y(); it->fx.rot3d.perspective = 30; });
+        const QPointF a = r.angle;
+        mk(QStringLiteral("rot3d.%1").arg(QString::fromLatin1(r.id)), r.name, "", QKeySequence(), [ed, a] {
+            ed->forEachSelected(tr("3-D Rotation"), [a](Item *it) { it->fx.rot3d.x = a.x(); it->fx.rot3d.y = a.y(); it->fx.rot3d.perspective = 30; });
         });
     }
 
@@ -989,53 +1003,54 @@ void MainWindow::createActions()
         Item *it = ed->isEditingText() ? ed->doc()->item(ed->textTarget().itemId) : ed->single();
         auto *t = dynamic_cast<TextItem *>(it);
         if (!t) return;
-        ed->change(QStringLiteral("Text Fit"), [ed, t, f] {
+        ed->change(tr("Text Fit"), [ed, t, f] {
             t->autofit = f;
             t->fitAsStored = false;   // fitted here from now on
             if (f == TextItem::GrowBox) ed->autoGrowText(t);
         });
     };
-    mk("fit.best", QStringLiteral("Best Fit"), "", QKeySequence(), [setAutofit] { setAutofit(TextItem::BestFit); }, true);
-    mk("fit.shrink", QStringLiteral("Shrink Text On Overflow"), "", QKeySequence(), [setAutofit] { setAutofit(TextItem::ShrinkOnOverflow); }, true);
-    mk("fit.grow", QStringLiteral("Grow Text Box to Fit"), "", QKeySequence(), [setAutofit] { setAutofit(TextItem::GrowBox); }, true);
-    mk("fit.none", QStringLiteral("Do Not Autofit"), "", QKeySequence(), [setAutofit] { setAutofit(TextItem::NoAutofit); }, true);
-    mk("tb.textFit", QStringLiteral("Text Fit"), "fold-vertical", QKeySequence(), [] {});
-    mk("tb.direction", QStringLiteral("Text Direction"), "arrow-down-wide-narrow", QKeySequence(), [ed] {
+    mk("fit.best", tr("Best Fit"), "", QKeySequence(), [setAutofit] { setAutofit(TextItem::BestFit); }, true);
+    mk("fit.shrink", tr("Shrink Text On Overflow"), "", QKeySequence(), [setAutofit] { setAutofit(TextItem::ShrinkOnOverflow); }, true);
+    mk("fit.grow", tr("Grow Text Box to Fit"), "", QKeySequence(), [setAutofit] { setAutofit(TextItem::GrowBox); }, true);
+    mk("fit.none", tr("Do Not Autofit"), "", QKeySequence(), [setAutofit] { setAutofit(TextItem::NoAutofit); }, true);
+    mk("tb.textFit", tr("Text Fit"), "fold-vertical", QKeySequence(), [] {});
+    mk("tb.direction", tr("Text Direction"), "arrow-down-wide-narrow", QKeySequence(), [ed] {
         Item *it = ed->isEditingText() ? ed->doc()->item(ed->textTarget().itemId) : ed->single();
-        if (auto *t = dynamic_cast<TextItem *>(it)) ed->change(QStringLiteral("Text Direction"), [t] { t->vertical = !t->vertical; });
+        if (auto *t = dynamic_cast<TextItem *>(it)) ed->change(tr("Text Direction"), [t] { t->vertical = !t->vertical; });
     }, true);
-    const QPair<const char *, int> valigns[] = {{"Align Top", 0}, {"Align Middle", 1}, {"Align Bottom", 2}};
+    const QPair<QString, int> valigns[] = {{tr("Align Top"), 0}, {tr("Align Middle"), 1}, {tr("Align Bottom"), 2}};
     for (const auto &v : valigns) {
         const int k = v.second;
-        mk(QStringLiteral("valign.%1").arg(k), QString::fromLatin1(v.first), k == 0 ? "align-vertical-justify-start" : k == 1 ? "align-vertical-justify-center" : "align-vertical-justify-end",
+        mk(QStringLiteral("valign.%1").arg(k), v.first, k == 0 ? "align-vertical-justify-start" : k == 1 ? "align-vertical-justify-center" : "align-vertical-justify-end",
            QKeySequence(), [ed, k] {
                Item *it = ed->isEditingText() ? ed->doc()->item(ed->textTarget().itemId) : ed->single();
-               if (auto *t = dynamic_cast<TextItem *>(it)) ed->change(QStringLiteral("Vertical Alignment"), [t, k] { t->valign = VAlign(k); });
-               else if (auto *s = dynamic_cast<ShapeItem *>(it)) ed->change(QStringLiteral("Vertical Alignment"), [s, k] { s->valign = VAlign(k); });
+               if (auto *t = dynamic_cast<TextItem *>(it)) ed->change(tr("Vertical Alignment"), [t, k] { t->valign = VAlign(k); });
+               else if (auto *s = dynamic_cast<ShapeItem *>(it)) ed->change(tr("Vertical Alignment"), [s, k] { s->valign = VAlign(k); });
                else if (auto *tb = dynamic_cast<TableItem *>(it); tb && ed->isEditingText()) {
                    const auto &tt = ed->textTarget();
-                   ed->change(QStringLiteral("Cell Alignment"), [tb, tt, k] { tb->cell(tt.row, tt.col).valign = VAlign(k); });
+                   ed->change(tr("Cell Alignment"), [tb, tt, k] { tb->cell(tt.row, tt.col).valign = VAlign(k); });
                }
            }, true);
     }
     for (int c = 1; c <= 4; ++c) {
-        mk(QStringLiteral("cols.%1").arg(c), c == 1 ? QStringLiteral("One Column") : QStringLiteral("%1 Columns").arg(c), c == 1 ? "square" : c == 2 ? "columns-2" : "columns-3",
+        mk(QStringLiteral("cols.%1").arg(c), c == 1 ? tr("One Column") : tr("%1 Columns").arg(c), c == 1 ? "square" : c == 2 ? "columns-2" : "columns-3",
            QKeySequence(), [ed, c] {
                Item *it = ed->isEditingText() ? ed->doc()->item(ed->textTarget().itemId) : ed->single();
-               if (auto *t = dynamic_cast<TextItem *>(it)) ed->change(QStringLiteral("Columns"), [t, c] { t->columns = c; });
+               if (auto *t = dynamic_cast<TextItem *>(it)) ed->change(tr("Columns"), [t, c] { t->columns = c; });
            });
     }
-    mk("cols.more", QStringLiteral("More Columns…"), "", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 3); });
-    const QPair<const char *, double> tbMargins[] = {{"None", 0}, {"Narrow", 2.88}, {"Moderate", 7.2}, {"Wide", 14.4}};
+    mk("cols.more", tr("More Columns…"), "", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 3); });
+    struct BoxMargin { const char *id; QString name; double pts; };
+    const BoxMargin tbMargins[] = {{"None", tr("None"), 0}, {"Narrow", tr("Narrow"), 2.88}, {"Moderate", tr("Moderate"), 7.2}, {"Wide", tr("Wide"), 14.4}};
     for (const auto &m : tbMargins) {
-        const double v = m.second;
-        mk(QStringLiteral("tbmargin.%1").arg(QString::fromLatin1(m.first)), QString::fromLatin1(m.first), "", QKeySequence(), [ed, v] {
+        const double v = m.pts;
+        mk(QStringLiteral("tbmargin.%1").arg(QString::fromLatin1(m.id)), m.name, "", QKeySequence(), [ed, v] {
             Item *it = ed->isEditingText() ? ed->doc()->item(ed->textTarget().itemId) : ed->single();
-            if (auto *t = dynamic_cast<TextItem *>(it)) ed->change(QStringLiteral("Margins"), [t, v] { t->insets = QMarginsF(v, v, v, v); });
-            else if (auto *s = dynamic_cast<ShapeItem *>(it)) ed->change(QStringLiteral("Margins"), [s, v] { s->insets = QMarginsF(v, v, v, v); });
+            if (auto *t = dynamic_cast<TextItem *>(it)) ed->change(tr("Margins"), [t, v] { t->insets = QMarginsF(v, v, v, v); });
+            else if (auto *s = dynamic_cast<ShapeItem *>(it)) ed->change(tr("Margins"), [s, v] { s->insets = QMarginsF(v, v, v, v); });
         });
     }
-    mk("tb.link", QStringLiteral("Create Link"), "link-2", QKeySequence(), [ed] {
+    mk("tb.link", tr("Create Link"), "link-2", QKeySequence(), [ed] {
         Item *it = ed->isEditingText() ? ed->doc()->item(ed->textTarget().itemId) : ed->single();
         if (!dynamic_cast<TextItem *>(it)) return;
         ed->endTextEdit();
@@ -1043,11 +1058,11 @@ void MainWindow::createActions()
         ed->setTool(Tool::Link);
         ed->linkSource = it->id;
     });
-    mk("tb.break", QStringLiteral("Break"), "unlink-2", QKeySequence(), [ed] {
+    mk("tb.break", tr("Break"), "unlink-2", QKeySequence(), [ed] {
         Item *it = ed->isEditingText() ? ed->doc()->item(ed->textTarget().itemId) : ed->single();
         if (it) ed->breakLink(it->id);
     });
-    mk("tb.prev", QStringLiteral("Previous"), "arrow-left", QKeySequence(), [ed] {
+    mk("tb.prev", tr("Previous"), "arrow-left", QKeySequence(), [ed] {
         Item *it = ed->single();
         if (!it) return;
         if (TextItem *p = ed->doc()->prevFrame(it->id)) {
@@ -1056,61 +1071,61 @@ void MainWindow::createActions()
             ed->select(p->id);
         }
     });
-    mk("tb.next", QStringLiteral("Next"), "arrow-right", QKeySequence(), [ed] {
+    mk("tb.next", tr("Next"), "arrow-right", QKeySequence(), [ed] {
         auto *t = dynamic_cast<TextItem *>(ed->single());
         if (!t || t->nextId.isEmpty()) return;
         const auto loc = ed->doc()->find(t->nextId);
         if (loc.page >= 0) ed->setCurrentPage(loc.page);
         ed->select(t->nextId);
     });
-    mk("tb.contOn", QStringLiteral("Include \"Continued on page…\""), "", QKeySequence(), [ed] {
-        if (auto *t = dynamic_cast<TextItem *>(ed->single())) ed->change(QStringLiteral("Continued Notice"), [t] { t->continuedOn = !t->continuedOn; });
+    mk("tb.contOn", tr("Include \"Continued on page…\""), "", QKeySequence(), [ed] {
+        if (auto *t = dynamic_cast<TextItem *>(ed->single())) ed->change(tr("Continued Notice"), [t] { t->continuedOn = !t->continuedOn; });
     }, true);
-    mk("tb.contFrom", QStringLiteral("Include \"Continued from page…\""), "", QKeySequence(), [ed] {
-        if (auto *t = dynamic_cast<TextItem *>(ed->single())) ed->change(QStringLiteral("Continued Notice"), [t] { t->continuedFrom = !t->continuedFrom; });
+    mk("tb.contFrom", tr("Include \"Continued from page…\""), "", QKeySequence(), [ed] {
+        if (auto *t = dynamic_cast<TextItem *>(ed->single())) ed->change(tr("Continued Notice"), [t] { t->continuedFrom = !t->continuedFrom; });
     }, true);
     for (int lines : {0, 2, 3, 4, 5}) {
-        mk(QStringLiteral("dropcap.%1").arg(lines), lines ? QStringLiteral("Drop Cap %1 Lines").arg(lines) : QStringLiteral("No Drop Cap"), "", QKeySequence(),
+        mk(QStringLiteral("dropcap.%1").arg(lines), lines ? tr("Drop Cap %1 Lines").arg(lines) : tr("No Drop Cap"), "", QKeySequence(),
            [ed, lines] { ed->setDropCap(lines); });
     }
-    mk("dropcap.custom", QStringLiteral("Custom Drop Cap…"), "", QKeySequence(), [this] { dropCapDialog(this, m_ed); });
+    mk("dropcap.custom", tr("Custom Drop Cap…"), "", QKeySequence(), [this] { dropCapDialog(this, m_ed); });
     auto boolProp = [ed](int prop, const QString &label) {
         const bool on = !ed->currentCharFormat().boolProperty(prop);
         ed->setCharProperty(prop, on, label);
     };
-    mk("tb.shadow", QStringLiteral("Shadow"), "", QKeySequence(), [boolProp] { boolProp(tp::Shadow, QStringLiteral("Text Shadow")); }, true);
-    mk("tb.outline", QStringLiteral("Outline"), "", QKeySequence(), [ed] {
-        if (!ed->currentCharFormat().stringProperty(tp::OutlineRef).isEmpty()) ed->clearCharProperty(tp::OutlineRef, QStringLiteral("Text Outline"));
-        else ed->setCharProperty(tp::OutlineRef, ColorRef::scheme(Main).toString(), QStringLiteral("Text Outline"));
+    mk("tb.shadow", tr("Shadow"), "", QKeySequence(), [boolProp] { boolProp(tp::Shadow, tr("Text Shadow")); }, true);
+    mk("tb.outline", tr("Outline"), "", QKeySequence(), [ed] {
+        if (!ed->currentCharFormat().stringProperty(tp::OutlineRef).isEmpty()) ed->clearCharProperty(tp::OutlineRef, tr("Text Outline"));
+        else ed->setCharProperty(tp::OutlineRef, ColorRef::scheme(Main).toString(), tr("Text Outline"));
     }, true);
-    mk("tb.emboss", QStringLiteral("Emboss"), "", QKeySequence(), [boolProp] { boolProp(tp::Emboss, QStringLiteral("Emboss")); }, true);
-    mk("tb.engrave", QStringLiteral("Engrave"), "", QKeySequence(), [boolProp] { boolProp(tp::Engrave, QStringLiteral("Engrave")); }, true);
-    mk("tb.trueSmallCaps", QStringLiteral("True Small Caps"), "", QKeySequence(), [boolProp] { boolProp(tp::TrueSmallCaps, QStringLiteral("Small Caps")); }, true);
-    mk("tb.swash", QStringLiteral("Swash"), "", QKeySequence(), [boolProp] { boolProp(tp::Swash, QStringLiteral("Swash")); }, true);
-    mk("tb.alternates", QStringLiteral("Stylistic Alternates"), "", QKeySequence(), [boolProp] { boolProp(tp::Alternates, QStringLiteral("Stylistic Alternates")); }, true);
-    const char *numStyles[] = {"Default", "Lining", "Old-style"};
-    for (int i = 0; i < 3; ++i) mk(QStringLiteral("numstyle.%1").arg(i), QString::fromLatin1(numStyles[i]), "", QKeySequence(), [ed, i] { ed->setCharProperty(tp::NumberStyle, i, QStringLiteral("Number Style")); });
-    const char *numSpacing[] = {"Default Spacing", "Proportional", "Tabular"};
-    for (int i = 0; i < 3; ++i) mk(QStringLiteral("numspacing.%1").arg(i), QString::fromLatin1(numSpacing[i]), "", QKeySequence(), [ed, i] { ed->setCharProperty(tp::NumberSpacing, i, QStringLiteral("Number Spacing")); });
-    const char *ligNames[] = {"Standard Ligatures", "No Ligatures", "All Ligatures"};
-    for (int i = 0; i < 3; ++i) mk(QStringLiteral("lig.%1").arg(i), QString::fromLatin1(ligNames[i]), "", QKeySequence(), [ed, i] { ed->setCharProperty(tp::Ligatures, i, QStringLiteral("Ligatures")); });
-    for (int i = 0; i <= 20; ++i) mk(QStringLiteral("ss.%1").arg(i), i ? QStringLiteral("Stylistic Set %1").arg(i) : QStringLiteral("Default Set"), "", QKeySequence(), [ed, i] { ed->setCharProperty(tp::StylisticSet, i, QStringLiteral("Stylistic Set")); });
+    mk("tb.emboss", tr("Emboss"), "", QKeySequence(), [boolProp] { boolProp(tp::Emboss, tr("Emboss")); }, true);
+    mk("tb.engrave", tr("Engrave"), "", QKeySequence(), [boolProp] { boolProp(tp::Engrave, tr("Engrave")); }, true);
+    mk("tb.trueSmallCaps", tr("True Small Caps"), "", QKeySequence(), [boolProp] { boolProp(tp::TrueSmallCaps, tr("Small Caps")); }, true);
+    mk("tb.swash", tr("Swash"), "", QKeySequence(), [boolProp] { boolProp(tp::Swash, tr("Swash")); }, true);
+    mk("tb.alternates", tr("Stylistic Alternates"), "", QKeySequence(), [boolProp] { boolProp(tp::Alternates, tr("Stylistic Alternates")); }, true);
+    const QString numStyles[] = {tr("Default"), tr("Lining"), tr("Old-style")};
+    for (int i = 0; i < 3; ++i) mk(QStringLiteral("numstyle.%1").arg(i), numStyles[i], "", QKeySequence(), [ed, i] { ed->setCharProperty(tp::NumberStyle, i, tr("Number Style")); });
+    const QString numSpacing[] = {tr("Default Spacing"), tr("Proportional"), tr("Tabular")};
+    for (int i = 0; i < 3; ++i) mk(QStringLiteral("numspacing.%1").arg(i), numSpacing[i], "", QKeySequence(), [ed, i] { ed->setCharProperty(tp::NumberSpacing, i, tr("Number Spacing")); });
+    const QString ligNames[] = {tr("Standard Ligatures"), tr("No Ligatures"), tr("All Ligatures")};
+    for (int i = 0; i < 3; ++i) mk(QStringLiteral("lig.%1").arg(i), ligNames[i], "", QKeySequence(), [ed, i] { ed->setCharProperty(tp::Ligatures, i, tr("Ligatures")); });
+    for (int i = 0; i <= 20; ++i) mk(QStringLiteral("ss.%1").arg(i), i ? tr("Stylistic Set %1").arg(i) : tr("Default Set"), "", QKeySequence(), [ed, i] { ed->setCharProperty(tp::StylisticSet, i, tr("Stylistic Set")); });
 
     // ---------------- Pictures ----------------
-    mk("pic.change", QStringLiteral("Change Picture"), "image-up", QKeySequence(), [this] {
+    mk("pic.change", tr("Change Picture"), "image-up", QKeySequence(), [this] {
         if (Item *it = m_ed->single(); it && it->type() == ItemType::Picture) insertPictureFromFile(it->id);
     });
-    mk("pic.remove", QStringLiteral("Remove Picture"), "image-off", QKeySequence(), [ed] {
-        if (auto *p = dynamic_cast<PictureItem *>(ed->single())) ed->change(QStringLiteral("Remove Picture"), [p] { p->imageId.clear(); });
+    mk("pic.remove", tr("Remove Picture"), "image-off", QKeySequence(), [ed] {
+        if (auto *p = dynamic_cast<PictureItem *>(ed->single())) ed->change(tr("Remove Picture"), [p] { p->imageId.clear(); });
     });
-    mk("pic.arrangeThumbs", QStringLiteral("Arrange Thumbnails"), "layout-grid", QKeySequence(), [ed] { ed->arrangeThumbnails(); });
-    mk("pic.swap", QStringLiteral("Swap"), "arrow-left-right", QKeySequence(), [ed] {
+    mk("pic.arrangeThumbs", tr("Arrange Thumbnails"), "layout-grid", QKeySequence(), [ed] { ed->arrangeThumbnails(); });
+    mk("pic.swap", tr("Swap"), "arrow-left-right", QKeySequence(), [ed] {
         const auto sel = ed->selectedItems();
-        if (sel.size() != 2) { Q_EMIT ed->status(QStringLiteral("Select two pictures to swap.")); return; }
+        if (sel.size() != 2) { Q_EMIT ed->status(tr("Select two pictures to swap.")); return; }
         auto *a = dynamic_cast<PictureItem *>(sel[0]);
         auto *b = dynamic_cast<PictureItem *>(sel[1]);
         if (!a || !b) return;
-        ed->change(QStringLiteral("Swap Pictures"), [&] {
+        ed->change(tr("Swap Pictures"), [&] {
             std::swap(a->imageId, b->imageId);
             a->fitImage(ed->doc()->imageSize(a->imageId), true);
             b->fitImage(ed->doc()->imageSize(b->imageId), true);
@@ -1118,42 +1133,42 @@ void MainWindow::createActions()
     });
     for (int b : {-40, -20, 0, 20, 40}) {
         for (int c : {-40, -20, 0, 20, 40}) {
-            mk(QStringLiteral("corr.%1.%2").arg(b).arg(c), QStringLiteral("Brightness %1%, Contrast %2%").arg(b > 0 ? "+" + QString::number(b) : QString::number(b)).arg(c > 0 ? "+" + QString::number(c) : QString::number(c)),
+            mk(QStringLiteral("corr.%1.%2").arg(b).arg(c), tr("Brightness %1%, Contrast %2%").arg(b > 0 ? "+" + QString::number(b) : QString::number(b)).arg(c > 0 ? "+" + QString::number(c) : QString::number(c)),
                "", QKeySequence(), [ed, b, c] {
-                   ed->forEachSelected(QStringLiteral("Corrections"), [b, c](Item *it) {
+                   ed->forEachSelected(tr("Corrections"), [b, c](Item *it) {
                        if (auto *p = dynamic_cast<PictureItem *>(it)) { p->brightness = b; p->contrast = c; }
                    });
                });
         }
     }
-    const char *recolorNames[] = {"No Recolor", "Grayscale", "Sepia", "Washout", "Black and White"};
+    const QString recolorNames[] = {tr("No Recolor"), tr("Grayscale"), tr("Sepia"), tr("Washout"), tr("Black and White")};
     for (int r = 0; r < 5; ++r) {
-        mk(QStringLiteral("recolor.%1").arg(r), QString::fromLatin1(recolorNames[r]), "", QKeySequence(), [ed, r] {
-            ed->forEachSelected(QStringLiteral("Recolor"), [r](Item *it) { if (auto *p = dynamic_cast<PictureItem *>(it)) p->recolor = PictureItem::Recolor(r); });
+        mk(QStringLiteral("recolor.%1").arg(r), recolorNames[r], "", QKeySequence(), [ed, r] {
+            ed->forEachSelected(tr("Recolor"), [r](Item *it) { if (auto *p = dynamic_cast<PictureItem *>(it)) p->recolor = PictureItem::Recolor(r); });
         });
     }
     for (int s = 1; s <= 5; ++s) {
         const ColorRef c = ColorRef::scheme(s);
-        mk(QStringLiteral("recolor.slot%1").arg(s), QStringLiteral("%1 Tint").arg(slotName(s)), "", QKeySequence(), [ed, c] {
-            ed->forEachSelected(QStringLiteral("Recolor"), [c](Item *it) {
+        mk(QStringLiteral("recolor.slot%1").arg(s), tr("%1 Tint").arg(slotName(s)), "", QKeySequence(), [ed, c] {
+            ed->forEachSelected(tr("Recolor"), [c](Item *it) {
                 if (auto *p = dynamic_cast<PictureItem *>(it)) { p->recolor = PictureItem::ColorTint; p->recolorColor = c; }
             });
         });
     }
-    mk("pic.transparent", QStringLiteral("Set Transparent Color"), "pipette", QKeySequence(), [this] {
+    mk("pic.transparent", tr("Set Transparent Color"), "pipette", QKeySequence(), [this] {
         auto *p = dynamic_cast<PictureItem *>(m_ed->single());
         if (!p) return;
         const QImage img = m_ed->doc()->image(p->imageId);
         if (img.isNull()) return;
         // Use the corner pixel, which is the background in most clip art and logos.
         const QColor c = img.pixelColor(0, 0);
-        m_ed->change(QStringLiteral("Set Transparent Color"), [p, c] { p->hasTransparentColor = true; p->transparentColor = c; });
+        m_ed->change(tr("Set Transparent Color"), [p, c] { p->hasTransparentColor = true; p->transparentColor = c; });
     });
-    mk("pic.compress", QStringLiteral("Compress Pictures…"), "minimize-2", QKeySequence(), [this] {
+    mk("pic.compress", tr("Compress Pictures…"), "minimize-2", QKeySequence(), [this] {
         compressPicturesDialog(this, m_ed);
     });
-    mk("pic.reset", QStringLiteral("Reset Picture"), "rotate-ccw", QKeySequence(), [ed] {
-        ed->forEachSelected(QStringLiteral("Reset Picture"), [ed](Item *it) {
+    mk("pic.reset", tr("Reset Picture"), "rotate-ccw", QKeySequence(), [ed] {
+        ed->forEachSelected(tr("Reset Picture"), [ed](Item *it) {
             if (auto *p = dynamic_cast<PictureItem *>(it)) {
                 p->brightness = p->contrast = 0;
                 p->recolor = PictureItem::NoRecolor;
@@ -1164,7 +1179,7 @@ void MainWindow::createActions()
             }
         });
     });
-    mk("pic.toShapes", QStringLiteral("Convert to Shapes"), "shapes", QKeySequence(), [this, ed] {
+    mk("pic.toShapes", tr("Convert to Shapes"), "shapes", QKeySequence(), [this, ed] {
         // An SVG picture becomes editable artwork shapes in its place.
         auto *pic = dynamic_cast<PictureItem *>(ed->single());
         if (!pic) return;
@@ -1176,29 +1191,29 @@ void MainWindow::createActions()
         bool partial = false;
         const ItemPtr made = svg::pictureShapes(data.bytes, *pic, &partial);
         if (!made) {
-            QMessageBox::information(this, QStringLiteral("Convert to Shapes"), QStringLiteral("This picture has no lines or areas to turn into shapes."));
+            QMessageBox::information(this, tr("Convert to Shapes"), tr("This picture has no lines or areas to turn into shapes."));
             return;
         }
         const qsizetype index = at - items.begin();
-        ed->change(QStringLiteral("Convert to Shapes"), [&] { items[index] = made; });
+        ed->change(tr("Convert to Shapes"), [&] { items[index] = made; });
         ed->select(made->id);
         if (partial)
-            QMessageBox::information(this, QStringLiteral("Convert to Shapes"),
-                                     QStringLiteral("Text and pictures inside this drawing can't become shapes, so they were left out. Undo brings the picture back."));
+            QMessageBox::information(this, tr("Convert to Shapes"),
+                                     tr("Text and pictures inside this drawing can't become shapes, so they were left out. Undo brings the picture back."));
     });
-    mk("pic.crop", QStringLiteral("Crop"), "crop", QKeySequence(), [ed] {
+    mk("pic.crop", tr("Crop"), "crop", QKeySequence(), [ed] {
         Item *it = ed->single();
         if (!it || it->type() != ItemType::Picture) return;
         ed->setCropItem(ed->cropItem == it->id ? QString() : it->id);
     }, true);
-    mk("pic.fit", QStringLiteral("Fit"), "shrink", QKeySequence(), [ed] {
-        ed->forEachSelected(QStringLiteral("Fit"), [ed](Item *it) { if (auto *p = dynamic_cast<PictureItem *>(it)) p->fitImage(ed->doc()->imageSize(p->imageId), false); });
+    mk("pic.fit", tr("Fit"), "shrink", QKeySequence(), [ed] {
+        ed->forEachSelected(tr("Fit"), [ed](Item *it) { if (auto *p = dynamic_cast<PictureItem *>(it)) p->fitImage(ed->doc()->imageSize(p->imageId), false); });
     });
-    mk("pic.fill", QStringLiteral("Fill"), "expand", QKeySequence(), [ed] {
-        ed->forEachSelected(QStringLiteral("Fill"), [ed](Item *it) { if (auto *p = dynamic_cast<PictureItem *>(it)) p->fitImage(ed->doc()->imageSize(p->imageId), true); });
+    mk("pic.fill", tr("Fill"), "expand", QKeySequence(), [ed] {
+        ed->forEachSelected(tr("Fill"), [ed](Item *it) { if (auto *p = dynamic_cast<PictureItem *>(it)) p->fitImage(ed->doc()->imageSize(p->imageId), true); });
     });
-    mk("pic.clearCrop", QStringLiteral("Clear Crop"), "eraser", QKeySequence(), [ed] {
-        ed->forEachSelected(QStringLiteral("Clear Crop"), [ed](Item *it) {
+    mk("pic.clearCrop", tr("Clear Crop"), "eraser", QKeySequence(), [ed] {
+        ed->forEachSelected(tr("Clear Crop"), [ed](Item *it) {
             auto *p = dynamic_cast<PictureItem *>(it);
             if (!p) return;
             // Grow the frame to show the whole picture.
@@ -1209,10 +1224,10 @@ void MainWindow::createActions()
             p->imgRect = QRectF(QPointF(0, 0), p->rect.size());
         });
     });
-    mk("pic.saveAs", QStringLiteral("Save as Picture…"), "image-down", QKeySequence(), [this] {
+    mk("pic.saveAs", tr("Save as Picture…"), "image-down", QKeySequence(), [this] {
         Item *it = m_ed->single();
         if (!it) return;
-        const QString p = askSavePath(this, QStringLiteral("Save as Picture"), QString(), QStringLiteral("PNG (*.png);;JPEG (*.jpg)"));
+        const QString p = askSavePath(this, tr("Save as Picture"), QString(), tr("PNG (*.png)") + QStringLiteral(";;") + tr("JPEG (*.jpg)"));
         if (p.isEmpty()) return;
         PaintContext ctx;
         ctx.doc = m_ed->doc();
@@ -1220,10 +1235,10 @@ void MainWindow::createActions()
         ctx.opt.output = true;
         Renderer::renderItemsToImage(ctx, {m_ed->doc()->itemPtr(it->id)}, 300.0 / 72).save(p);
     });
-    mk("pic.caption", QStringLiteral("Caption"), "captions", QKeySequence(), [ed] {
+    mk("pic.caption", tr("Caption"), "captions", QKeySequence(), [ed] {
         auto *p = dynamic_cast<PictureItem *>(ed->single());
         if (!p) return;
-        ed->beginChange(QStringLiteral("Caption"));
+        ed->beginChange(tr("Caption"));
         auto t = std::static_pointer_cast<TextItem>(ed->newTextBox(QRectF(p->rect.left(), p->rect.bottom() + 4, p->rect.width(), 22), QStringLiteral("Caption describing picture or graphic.")));
         ed->doc()->storyDoc(t->storyId);
         QTextCursor c(ed->doc()->storyDoc(t->storyId));
@@ -1234,8 +1249,8 @@ void MainWindow::createActions()
         ed->endChange();
         ed->select(t->id);
     });
-    mk("pic.shapeRect", QStringLiteral("Rectangle"), "", QKeySequence(), [ed] { ed->forEachSelected(QStringLiteral("Picture Shape"), [](Item *it) { if (auto *p = dynamic_cast<PictureItem *>(it)) p->maskShape = "rect"; }); });
-    mk("obj.transparency", QStringLiteral("Transparency…"), "blend", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 4); });
+    mk("pic.shapeRect", tr("Rectangle"), "", QKeySequence(), [ed] { ed->forEachSelected(tr("Picture Shape"), [](Item *it) { if (auto *p = dynamic_cast<PictureItem *>(it)) p->maskShape = "rect"; }); });
+    mk("obj.transparency", tr("Transparency…"), "blend", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 4); });
 
     // ---------------- Tables ----------------
     auto tableEdit = [this](const QString &label, const std::function<void(TableItem *, int, int)> &fn) {
@@ -1247,24 +1262,24 @@ void MainWindow::createActions()
         m_ed->change(label, [&] { fn(t, r, c); });
         m_ed->select(t->id);
     };
-    mk("tbl.insAbove", QStringLiteral("Insert Above"), "between-horizontal-end", QKeySequence(), [this, tableEdit] { tableEdit(QStringLiteral("Insert Row"), [this](TableItem *t, int r, int) { tableInsertRow(m_ed, t, r); }); });
-    mk("tbl.insBelow", QStringLiteral("Insert Below"), "between-horizontal-start", QKeySequence(), [this, tableEdit] { tableEdit(QStringLiteral("Insert Row"), [this](TableItem *t, int r, int) { tableInsertRow(m_ed, t, r + 1); }); });
-    mk("tbl.insLeft", QStringLiteral("Insert Left"), "between-vertical-end", QKeySequence(), [this, tableEdit] { tableEdit(QStringLiteral("Insert Column"), [this](TableItem *t, int, int c) { tableInsertCol(m_ed, t, c); }); });
-    mk("tbl.insRight", QStringLiteral("Insert Right"), "between-vertical-start", QKeySequence(), [this, tableEdit] { tableEdit(QStringLiteral("Insert Column"), [this](TableItem *t, int, int c) { tableInsertCol(m_ed, t, c + 1); }); });
-    mk("tbl.delRow", QStringLiteral("Delete Rows"), "", QKeySequence(), [tableEdit] { tableEdit(QStringLiteral("Delete Row"), [](TableItem *t, int r, int) { tableDeleteRow(t, r); }); });
-    mk("tbl.delCol", QStringLiteral("Delete Columns"), "", QKeySequence(), [tableEdit] { tableEdit(QStringLiteral("Delete Column"), [](TableItem *t, int, int c) { tableDeleteCol(t, c); }); });
-    mk("tbl.delTable", QStringLiteral("Delete Table"), "", QKeySequence(), [this] {
+    mk("tbl.insAbove", tr("Insert Above"), "between-horizontal-end", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Row"), [this](TableItem *t, int r, int) { tableInsertRow(m_ed, t, r); }); });
+    mk("tbl.insBelow", tr("Insert Below"), "between-horizontal-start", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Row"), [this](TableItem *t, int r, int) { tableInsertRow(m_ed, t, r + 1); }); });
+    mk("tbl.insLeft", tr("Insert Left"), "between-vertical-end", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Column"), [this](TableItem *t, int, int c) { tableInsertCol(m_ed, t, c); }); });
+    mk("tbl.insRight", tr("Insert Right"), "between-vertical-start", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Column"), [this](TableItem *t, int, int c) { tableInsertCol(m_ed, t, c + 1); }); });
+    mk("tbl.delRow", tr("Delete Rows"), "", QKeySequence(), [tableEdit] { tableEdit(tr("Delete Row"), [](TableItem *t, int r, int) { tableDeleteRow(t, r); }); });
+    mk("tbl.delCol", tr("Delete Columns"), "", QKeySequence(), [tableEdit] { tableEdit(tr("Delete Column"), [](TableItem *t, int, int c) { tableDeleteCol(t, c); }); });
+    mk("tbl.delTable", tr("Delete Table"), "", QKeySequence(), [this] {
         if (TableItem *t = selTable(m_ed)) { m_ed->endTextEdit(); m_ed->deleteItems({t->id}); }
     });
-    mk("tbl.merge", QStringLiteral("Merge Cells"), "table-cells-merge", QKeySequence(), [this] {
+    mk("tbl.merge", tr("Merge Cells"), "table-cells-merge", QKeySequence(), [this] {
         TableItem *t = selTable(m_ed);
-        if (!t || !m_ed->isEditingText()) { Q_EMIT m_ed->status(QStringLiteral("Click in a cell, then choose Merge Cells to merge it with the cell to its right.")); return; }
+        if (!t || !m_ed->isEditingText()) { Q_EMIT m_ed->status(tr("Click in a cell, then choose Merge Cells to merge it with the cell to its right.")); return; }
         const int r = m_ed->textTarget().row, c = m_ed->textTarget().col;
         TableCell &cell = t->cell(r, c);
         const int next = c + cell.colSpan;
         if (next >= t->cols) return;
         m_ed->endTextEdit();
-        m_ed->change(QStringLiteral("Merge Cells"), [&] {
+        m_ed->change(tr("Merge Cells"), [&] {
             TableCell &right = t->cell(r, next);
             // Move the right cell's text into this one.
             QTextDocument *dst = m_ed->doc()->storyDoc(cell.storyId), *src = m_ed->doc()->storyDoc(right.storyId);
@@ -1279,12 +1294,12 @@ void MainWindow::createActions()
         });
         m_ed->select(t->id);
     });
-    mk("tbl.split", QStringLiteral("Split Cells"), "table-cells-split", QKeySequence(), [this] {
+    mk("tbl.split", tr("Split Cells"), "table-cells-split", QKeySequence(), [this] {
         TableItem *t = selTable(m_ed);
         if (!t || !m_ed->isEditingText()) return;
         const int r = m_ed->textTarget().row, c = m_ed->textTarget().col;
         m_ed->endTextEdit();
-        m_ed->change(QStringLiteral("Split Cells"), [&] {
+        m_ed->change(tr("Split Cells"), [&] {
             TableCell &cell = t->cell(r, c);
             for (int rr = r; rr < r + cell.rowSpan; ++rr)
                 for (int cc = c; cc < c + cell.colSpan; ++cc)
@@ -1293,60 +1308,60 @@ void MainWindow::createActions()
         });
         m_ed->select(t->id);
     });
-    mk("tbl.diagDown", QStringLiteral("Divide Down"), "", QKeySequence(), [this] {
+    mk("tbl.diagDown", tr("Divide Down"), "", QKeySequence(), [this] {
         TableItem *t = selTable(m_ed);
         if (!t || !m_ed->isEditingText()) return;
         const auto tt = m_ed->textTarget();
-        m_ed->change(QStringLiteral("Diagonals"), [&] { t->cell(tt.row, tt.col).diagonal = 1; });
+        m_ed->change(tr("Diagonals"), [&] { t->cell(tt.row, tt.col).diagonal = 1; });
     });
-    mk("tbl.diagUp", QStringLiteral("Divide Up"), "", QKeySequence(), [this] {
+    mk("tbl.diagUp", tr("Divide Up"), "", QKeySequence(), [this] {
         TableItem *t = selTable(m_ed);
         if (!t || !m_ed->isEditingText()) return;
         const auto tt = m_ed->textTarget();
-        m_ed->change(QStringLiteral("Diagonals"), [&] { t->cell(tt.row, tt.col).diagonal = 2; });
+        m_ed->change(tr("Diagonals"), [&] { t->cell(tt.row, tt.col).diagonal = 2; });
     });
-    mk("tbl.diagNone", QStringLiteral("No Division"), "", QKeySequence(), [this] {
+    mk("tbl.diagNone", tr("No Division"), "", QKeySequence(), [this] {
         TableItem *t = selTable(m_ed);
         if (!t || !m_ed->isEditingText()) return;
         const auto tt = m_ed->textTarget();
-        m_ed->change(QStringLiteral("Diagonals"), [&] { t->cell(tt.row, tt.col).diagonal = 0; });
+        m_ed->change(tr("Diagonals"), [&] { t->cell(tt.row, tt.col).diagonal = 0; });
     });
-    mk("tbl.selectTable", QStringLiteral("Select Table"), "", QKeySequence(), [this] { if (TableItem *t = selTable(m_ed)) { m_ed->endTextEdit(); m_ed->select(t->id); } });
-    mk("tbl.selectCell", QStringLiteral("Select Cell"), "", QKeySequence(), [this] {
+    mk("tbl.selectTable", tr("Select Table"), "", QKeySequence(), [this] { if (TableItem *t = selTable(m_ed)) { m_ed->endTextEdit(); m_ed->select(t->id); } });
+    mk("tbl.selectCell", tr("Select Cell"), "", QKeySequence(), [this] {
         if (!m_ed->isEditingText()) return;
         QTextCursor c = m_ed->cursor();
         c.select(QTextCursor::Document);
         m_ed->setCursor(c);
     });
-    mk("tbl.grow", QStringLiteral("Grow to Fit Text"), "", QKeySequence(), [this] {
-        if (TableItem *t = selTable(m_ed)) m_ed->change(QStringLiteral("Grow to Fit Text"), [this, t] { t->growToFit = !t->growToFit; m_ed->fitTableRows(t); });
+    mk("tbl.grow", tr("Grow to Fit Text"), "", QKeySequence(), [this] {
+        if (TableItem *t = selTable(m_ed)) m_ed->change(tr("Grow to Fit Text"), [this, t] { t->growToFit = !t->growToFit; m_ed->fitTableRows(t); });
     }, true);
-    mk("tbl.distributeRows", QStringLiteral("Distribute Rows"), "", QKeySequence(), [this] {
-        if (TableItem *t = selTable(m_ed)) m_ed->change(QStringLiteral("Distribute Rows"), [t] {
+    mk("tbl.distributeRows", tr("Distribute Rows"), "", QKeySequence(), [this] {
+        if (TableItem *t = selTable(m_ed)) m_ed->change(tr("Distribute Rows"), [t] {
             double total = 0;
             for (double h : t->rowH) total += h;
             for (double &h : t->rowH) h = total / t->rows;
         });
     });
-    mk("tbl.distributeCols", QStringLiteral("Distribute Columns"), "", QKeySequence(), [this] {
-        if (TableItem *t = selTable(m_ed)) m_ed->change(QStringLiteral("Distribute Columns"), [t] {
+    mk("tbl.distributeCols", tr("Distribute Columns"), "", QKeySequence(), [this] {
+        if (TableItem *t = selTable(m_ed)) m_ed->change(tr("Distribute Columns"), [t] {
             double total = 0;
             for (double w : t->colW) total += w;
             for (double &w : t->colW) w = total / t->cols;
         });
     });
-    for (const auto &[id, label, which] : {std::tuple{"border.all", "All Borders", 0}, {"border.outside", "Outside Borders", 1}, {"border.inside", "Inside Borders", 2},
-                                            {"border.none", "No Border", 3}, {"border.top", "Top Border", 4}, {"border.bottom", "Bottom Border", 5},
-                                            {"border.left", "Left Border", 6}, {"border.right", "Right Border", 7}}) {
+    for (const auto &[id, label, which] : {std::tuple{"border.all", tr("All Borders"), 0}, {"border.outside", tr("Outside Borders"), 1}, {"border.inside", tr("Inside Borders"), 2},
+                                            {"border.none", tr("No Border"), 3}, {"border.top", tr("Top Border"), 4}, {"border.bottom", tr("Bottom Border"), 5},
+                                            {"border.left", tr("Left Border"), 6}, {"border.right", tr("Right Border"), 7}}) {
         const int w = which;
-        mk(id, QString::fromLatin1(label), "", QKeySequence(), [this, w] {
+        mk(id, label, "", QKeySequence(), [this, w] {
             TableItem *t = selTable(m_ed);
             if (!t) return;
             const Stroke s = w == 3 ? Stroke::none() : currentBorderStroke();
             const bool inCell = m_ed->isEditingText();
             const int r0 = inCell ? m_ed->textTarget().row : 0, c0 = inCell ? m_ed->textTarget().col : 0;
             const int r1 = inCell ? r0 : t->rows - 1, c1 = inCell ? c0 : t->cols - 1;
-            m_ed->change(QStringLiteral("Borders"), [&] {
+            m_ed->change(tr("Borders"), [&] {
                 for (int r = r0; r <= r1; ++r)
                     for (int c = c0; c <= c1; ++c) {
                         CellBorder &b = t->cell(r, c).border;
@@ -1366,25 +1381,25 @@ void MainWindow::createActions()
     }
 
     // ---------------- TextArt ----------------
-    mk("wa.edit", QStringLiteral("Edit Text"), "pencil", QKeySequence(), [this] { if (Item *it = m_ed->single(); it && it->type() == ItemType::TextArt) editTextArt(it->id); });
-    for (const auto &[id, label, v] : {std::tuple{"waspace.vt", "Very Tight", 0.8}, {"waspace.t", "Tight", 0.9}, {"waspace.n", "Normal", 1.0}, {"waspace.l", "Loose", 1.2}, {"waspace.vl", "Very Loose", 1.5}}) {
+    mk("wa.edit", tr("Edit Text"), "pencil", QKeySequence(), [this] { if (Item *it = m_ed->single(); it && it->type() == ItemType::TextArt) editTextArt(it->id); });
+    for (const auto &[id, label, v] : {std::tuple{"waspace.vt", tr("Very Tight"), 0.8}, {"waspace.t", tr("Tight"), 0.9}, {"waspace.n", tr("Normal"), 1.0}, {"waspace.l", tr("Loose"), 1.2}, {"waspace.vl", tr("Very Loose"), 1.5}}) {
         const double s = v;
-        mk(id, QString::fromLatin1(label), "", QKeySequence(), [ed, s] {
-            ed->forEachSelected(QStringLiteral("Spacing"), [s](Item *it) { if (auto *w = dynamic_cast<TextArtItem *>(it)) w->spacing = s; });
+        mk(id, label, "", QKeySequence(), [ed, s] {
+            ed->forEachSelected(tr("Spacing"), [s](Item *it) { if (auto *w = dynamic_cast<TextArtItem *>(it)) w->spacing = s; });
         });
     }
-    mk("wa.even", QStringLiteral("Even Height"), "move-vertical", QKeySequence(), [ed] {
-        ed->forEachSelected(QStringLiteral("Even Height"), [](Item *it) { if (auto *w = dynamic_cast<TextArtItem *>(it)) w->evenHeight = !w->evenHeight; });
+    mk("wa.even", tr("Even Height"), "move-vertical", QKeySequence(), [ed] {
+        ed->forEachSelected(tr("Even Height"), [](Item *it) { if (auto *w = dynamic_cast<TextArtItem *>(it)) w->evenHeight = !w->evenHeight; });
     }, true);
-    mk("wa.vertical", QStringLiteral("Text Art Vertical Text"), "arrow-down-narrow-wide", QKeySequence(), [ed] {
-        ed->forEachSelected(QStringLiteral("Vertical Text"), [](Item *it) {
+    mk("wa.vertical", tr("Text Art Vertical Text"), "arrow-down-narrow-wide", QKeySequence(), [ed] {
+        ed->forEachSelected(tr("Vertical Text"), [](Item *it) {
             if (auto *w = dynamic_cast<TextArtItem *>(it)) { w->vertical = !w->vertical; w->rect.setSize(w->rect.size().transposed()); }
         });
     }, true);
-    const char *waAlign[] = {"Left Align", "Center", "Right Align", "Word Justify", "Letter Justify", "Stretch Justify"};
+    const QString waAlign[] = {tr("Left Align"), tr("Center"), tr("Right Align"), tr("Word Justify"), tr("Letter Justify"), tr("Stretch Justify")};
     for (int i = 0; i < 6; ++i) {
-        mk(QStringLiteral("waalign.%1").arg(i), QString::fromLatin1(waAlign[i]), "", QKeySequence(), [ed, i] {
-            ed->forEachSelected(QStringLiteral("Align Text"), [i](Item *it) { if (auto *w = dynamic_cast<TextArtItem *>(it)) w->align = i; });
+        mk(QStringLiteral("waalign.%1").arg(i), waAlign[i], "", QKeySequence(), [ed, i] {
+            ed->forEachSelected(tr("Align Text"), [i](Item *it) { if (auto *w = dynamic_cast<TextArtItem *>(it)) w->align = i; });
         });
     }
 }
