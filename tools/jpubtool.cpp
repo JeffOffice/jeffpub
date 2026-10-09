@@ -294,6 +294,11 @@ int main(int argc, char **argv)
             ctx.opt.output = true;
             for (int i = 0; i < doc->pages.size(); ++i)
                 Renderer::renderToImage(ctx, i, dpi / 72.0).save(QDir(args[3]).filePath(QStringLiteral("%1-%2.png").arg(t.id).arg(i + 1)));
+            // JP_TEMPLATE_PUB=1 also saves it as <id>.pub (to check in the other program).
+            if (qEnvironmentVariableIsSet("JP_TEMPLATE_PUB")) {
+                QString err;
+                if (!exportPublisher(*doc, QDir(args[3]).filePath(t.id + QStringLiteral(".pub")), &err)) out << "save failed: " << err << "\n";
+            }
             out << t.id << "\tpages=" << doc->pages.size() << "\n";
         }
         return 0;

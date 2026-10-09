@@ -390,6 +390,17 @@ showed a booklet made in JeffPub with its master's objects on every page.
 JeffPub keeps a booklet's master as one two-page master (the right part a
 page width over); a single master in a booklet is written to both parts.
 
+A folded card is kept the same way (Publisher's own greeting cards, Oct 9):
+DOCUMENT flags `06` and `0b`, `11` = 3, two-part masters (`2d` counts
+both), and the pages as spreads; its print settings chunk (0x8A) is
+empty, the layout giving the sheet. Publisher's envelope designs don't set
+`11` at all (one page per sheet at an envelope's size); choosing Envelope
+in Page Setup sets `11` = 7. JeffPub writes 3 and 7 for its folded cards
+and envelopes, and Publisher kept both layouts when saving JeffPub's
+files again. (Publisher's object model reports a publication's design
+type instead, as `PublicationLayout`: 47 for a greeting card design, 23
+for JeffPub's copy, "custom".)
+
 ### Text wrapping
 
 How text in boxes behind an object wraps around it is the low byte of the

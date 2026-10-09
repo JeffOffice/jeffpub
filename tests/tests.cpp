@@ -8067,6 +8067,35 @@ private Q_SLOTS:
         QVERIFY(QFile::exists(to + "/Templates/club.jpub"));
     }
 
+    // Folded cards and envelopes keep their layout through a .pub, written
+    // as Publisher writes them (DOCUMENT field 11: 3 and 7; a card's pages as
+    // spreads, flags 06 and 0b); Publisher kept both when saving them again.
+    void pubFoldedCardAndEnvelope()
+    {
+        for (const auto &[id, layout, code] : {std::tuple{QStringLiteral("greeting-birthday"), PageSetup::FoldedCard, 3u},
+                                                std::tuple{QStringLiteral("envelope-10"), PageSetup::Envelope, 7u}}) {
+            const TemplateInfo *t = findTemplate(id);
+            QVERIFY(t);
+            auto doc = t->build(TemplateOptions());
+            QCOMPARE(doc->setup.layout, layout);
+            QTemporaryDir dir;
+            const QString path = dir.filePath(id + QStringLiteral(".pub"));
+            QString err;
+            QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+            const QByteArray contents = cfb::readStream(path, QStringLiteral("Contents"));
+            QByteArray field("\x11\x20\x00\x00\x00\x00", 6);
+            field[2] = char(code);
+            QVERIFY(contents.contains(field));
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::ReadOnly));
+            auto back = importPublisher(f.readAll(), nullptr);
+            QVERIFY(back);
+            QCOMPARE(back->setup.layout, layout);
+            QCOMPARE(back->pages.size(), doc->pages.size());
+            QCOMPARE(back->pageSize(), doc->pageSize());
+        }
+    }
+
     // Gradients keep their direction and colors through a .pub: Publisher
     // runs the first color toward 270 + the file's angle (its own pictures
     // of 113 gradients), and from the center the first color is the center.

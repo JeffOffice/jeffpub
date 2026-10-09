@@ -1329,13 +1329,17 @@ QByteArray PubWriter::write(QStringList *skipped)
     // page use the right part and even pages the left, and each canvas is
     // widened (right) or narrowed (left) by half a page toward its partner.
     const bool booklet = m_doc.setup.layout == PageSetup::Booklet;
+    // A folded card keeps its pages as spreads too, as a booklet does
+    // (Publisher's own greeting cards, Oct 9: DOCUMENT 06, 0b, 11 = 3,
+    // and two-part masters).
+    const bool spreads = booklet || m_doc.setup.layout == PageSetup::FoldedCard;
     struct MasterSeqs { quint32 seq, sub60, sub77, guides; quint32 left = 0, leftSub60 = 0, leftSub77 = 0, leftGuides = 0; };
     QVector<MasterSeqs> masterSeqs{{kMaster, 264, 265, 289}};
     for (int k = 1; k < m_doc.masters.size(); ++k) {
         masterSeqs << MasterSeqs{next, next + 1, next + 2, next + 3};
         next += 4;
     }
-    if (booklet)
+    if (spreads)
         for (MasterSeqs &m : masterSeqs) {
             m.left = next;
             m.leftSub60 = next + 1;
@@ -1344,7 +1348,7 @@ QByteArray PubWriter::write(QStringList *skipped)
             next += 4;
         }
     auto masterFor = [&](const Page &pg, int index) {
-        const bool left = booklet && index % 2 == 1;
+        const bool left = spreads && index % 2 == 1;
         for (int k = 0; k < m_doc.masters.size(); ++k)
             if (m_doc.masters[k]->abbr == pg.masterId) return left ? masterSeqs[k].left : masterSeqs[k].seq;
         return left ? masterSeqs[0].left : kMaster;
@@ -1409,7 +1413,7 @@ QByteArray PubWriter::write(QStringList *skipped)
     };
     for (int k = 0; k < m_doc.masters.size(); ++k) {
         const MasterPage &mp = *m_doc.masters[k];
-        if (!booklet) {
+        if (!spreads) {
             surfaces << &mp;
             surfaceSeq << masterSeqs[k].seq;
             masterSurface << int(surfaces.size()) - 1;
@@ -2201,18 +2205,22 @@ QByteArray PubWriter::write(QStringList *skipped)
     // layout (11 = 1), and counts both parts of each master (2d).
     QVector<B> pageList;
     for (const MasterSeqs &m : masterSeqs) {
-        if (booklet) pageList << ref(0x00, m.left);
+        if (spreads) pageList << ref(0x00, m.left);
         pageList << ref(0x00, m.seq);
     }
     for (quint32 s : pageSeq) pageList << ref(0x00, s);
     for (quint32 s : kSpecial) pageList << ref(0x00, s);
     QVector<B> docBody{u32(0x01, quint32(pageList.size())), list(0x02, pageList), ref(0x03, 287), ref(0x04, 291)};
-    if (booklet) docBody << flag(0x06);
+    if (spreads) docBody << flag(0x06);
     docBody << flag(0x08);
-    if (booklet) docBody << flag(0x0b) << u32(0x11, 1);
+    if (spreads) docBody << flag(0x0b);
+    // Page Setup's layout type: 1 booklet, 3 folded card, 7 envelope.
+    if (booklet) docBody << u32(0x11, 1);
+    else if (m_doc.setup.layout == PageSetup::FoldedCard) docBody << u32(0x11, 3);
+    else if (m_doc.setup.layout == PageSetup::Envelope) docBody << u32(0x11, 7);
     docBody << rec(0x12, {u32(0x01, quint32(pw)), u32(0x02, quint32(ph))}) << ref(0x18, 259) << ref(0x19, 261) << ref(0x1a, 257) << ref(0x20, 282)
             << ref(0x21, 262) << ref(0x22, 285) << u32(0x23, quint32(pageSeq.size())) << bytesB(0x2a, 0x38, {}) << u16(0x2c, 5)
-            << u16(0x2d, quint32(masterSeqs.size() * (booklet ? 2 : 1))) << ref(0x31, 278, 0x68) << flag(0x39, 0x00) << u32(0x3c, 1) << u32(0x41, 0)
+            << u16(0x2d, quint32(masterSeqs.size() * (spreads ? 2 : 1))) << ref(0x31, 278, 0x68) << flag(0x39, 0x00) << u32(0x3c, 1) << u32(0x41, 0)
             << ref(0x44, 292) << flag(0x4d);
     cw.put(256, {0x44, 0, docBody});
     cw.put(257, {0x72, 256, {}});
@@ -2224,7 +2232,7 @@ QByteArray PubWriter::write(QStringList *skipped)
     const qint64 halfW = emu(ps.width() / 2), halfH = emu(ps.height() / 2);
     auto canvas = [](qint64 dw, qint64 dh) { return QSizeF(double(22860000 + dw), double(22860000 + dh)); };
     auto extent = [](qint64 dw, qint64 dh) { return QSizeF(double(110185200 + dw), double(110185200 + dh)); };
-    const QSizeF scratch = canvas(booklet ? halfW : 0, 0), ext = extent(booklet ? halfW : 0, 0);
+    const QSizeF scratch = canvas(spreads ? halfW : 0, 0), ext = extent(spreads ? halfW : 0, 0);
     const QSizeF leftScratch = canvas(-halfW, 0), leftExt = extent(-halfW, 0);
     for (int k = 0; k < masterSeqs.size(); ++k) {
         const MasterSeqs &m = masterSeqs[k];
@@ -2232,10 +2240,10 @@ QByteArray PubWriter::write(QStringList *skipped)
         const QString abbr = mp && !mp->abbr.isEmpty() ? mp->abbr : QStringLiteral("A");
         const QString desc = mp && !mp->name.isEmpty() && mp->name != QLatin1String("Master Page") ? mp->name : QStringLiteral("Master Page ") + abbr;
         cw.put(m.seq, {0x43, 256, pageBody(mp ? pageShapes[masterSurface[k]] : QVector<quint32>{}, m.sub60, m.sub77, true, false, scratch, ext, 0,
-                                           kMaster, m.guides, abbr, desc, booklet ? 1 : 3)});
+                                           kMaster, m.guides, abbr, desc, spreads ? 1 : 3)});
         cw.put(m.sub60, {0x60, m.seq, {u32(0x05, 1)}});
         cw.put(m.sub77, {0x77, m.seq, webForm()});
-        if (!booklet) continue;
+        if (!spreads) continue;
         cw.put(m.left, {0x43, 256, pageBody(mp ? pageShapes[masterLeftSurface[k]] : QVector<quint32>{}, m.leftSub60, m.leftSub77, true, false,
                                             leftScratch, leftExt, 0, kMaster, m.leftGuides, abbr, desc, 0)});
         cw.put(m.leftSub60, {0x60, m.left, {u32(0x05, 1)}});
@@ -2243,18 +2251,18 @@ QByteArray PubWriter::write(QStringList *skipped)
     }
     for (int i = 0; i < pageSeq.size(); ++i) {
         // A booklet marks only its first page as a page (06 = 2).
-        const bool leftPage = booklet && i % 2 == 1;
-        cw.put(pageSeq[i], {0x43, 256, pageBody(pageShapes[i], pageSub[i].first, pageSub[i].second, false, booklet && i > 0,
+        const bool leftPage = spreads && i % 2 == 1;
+        cw.put(pageSeq[i], {0x43, 256, pageBody(pageShapes[i], pageSub[i].first, pageSub[i].second, false, spreads && i > 0,
                                                 leftPage ? leftScratch : scratch, leftPage ? leftExt : ext, i, masterFor(*m_doc.pages[i], i))});
         cw.put(pageSub[i].first, {0x60, pageSeq[i], {}});
         cw.put(pageSub[i].second, {0x77, pageSeq[i], webForm()});
     }
     // The special pages: the first half a page smaller each way (in a
     // booklet only in height), the others a booklet's left-hand size.
-    const QSizeF specScratch[4] = {canvas(booklet ? 0 : -halfW, -halfH), booklet ? leftScratch : canvas(0, 0), booklet ? leftScratch : canvas(0, 0),
-                                   booklet ? leftScratch : canvas(0, 0)};
-    const QSizeF specExt[4] = {extent(booklet ? 0 : -halfW, -halfH), booklet ? leftExt : extent(0, 0), booklet ? leftExt : extent(0, 0),
-                               booklet ? leftExt : extent(0, 0)};
+    const QSizeF specScratch[4] = {canvas(spreads ? 0 : -halfW, -halfH), spreads ? leftScratch : canvas(0, 0), spreads ? leftScratch : canvas(0, 0),
+                                   spreads ? leftScratch : canvas(0, 0)};
+    const QSizeF specExt[4] = {extent(spreads ? 0 : -halfW, -halfH), spreads ? leftExt : extent(0, 0), spreads ? leftExt : extent(0, 0),
+                               spreads ? leftExt : extent(0, 0)};
     for (int k = 0; k < 4; ++k) {
         const quint32 s = kSpecial[k];
         // The last holds the objects set in text.
@@ -2334,7 +2342,7 @@ QByteArray PubWriter::write(QStringList *skipped)
         };
         for (const MasterSeqs &m : masterSeqs) {
             cw.put(m.guides, {0x4c, m.seq, guides()});
-            if (booklet) cw.put(m.leftGuides, {0x4c, m.left, guides()});   // the same on a booklet's left-hand part
+            if (spreads) cw.put(m.leftGuides, {0x4c, m.left, guides()});   // the same on a booklet's left-hand part
         }
     }
     // Bullet characters (Symbol font).
@@ -2376,7 +2384,10 @@ QByteArray PubWriter::write(QStringList *skipped)
                       0x90)
               << u32(0x13, 1) << list(0x14, {rec(0x00, sheetRec)}, 0x90);
         if (booklet) print << u32(0x15, 4);
-        cw.put(292, {0x8a, 256, {rec(0x04, print)}});
+        // A folded card's print settings are its layout's (Publisher's own
+        // cards leave the chunk empty).
+        if (m_doc.setup.layout == PageSetup::FoldedCard) cw.put(292, {0x8a, 256, {}});
+        else cw.put(292, {0x8a, 256, {rec(0x04, print)}});
     }
     // Fonts used by the text.
     if (fontSeq) {
