@@ -19,6 +19,7 @@
 #include <QCheckBox>
 
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QJsonDocument>
 #include <QDateTimeEdit>
 #include <QDialog>
@@ -99,7 +100,7 @@ QDoubleSpinBox *points(double v, QWidget *p, double min = 0, double max = 1000, 
 
 ColorButton *colorPick(Editor *ed, const ColorRef &c, bool allowNone, QWidget *p)
 {
-    auto *b = new ColorButton("square", QString(), allowNone, QStringLiteral("No Color"), p);
+    auto *b = new ColorButton("square", QString(), allowNone, QCoreApplication::translate("Dialogs", "No Color"), p);
     b->setScheme(ed->doc()->colors);
     b->setCurrent(c);
     b->setPopupMode(QToolButton::InstantPopup);
@@ -147,7 +148,7 @@ struct PageForm {
             pageForm->setRowVisible(f, m);
         if (m) {
             const auto g = grid();
-            fits->setText(QStringLiteral("%1 across × %2 down = %3 per sheet").arg(g.first).arg(g.second).arg(g.first * g.second));
+            fits->setText(QCoreApplication::translate("Dialogs", "%1 across × %2 down = %3 per sheet").arg(g.first).arg(g.second).arg(g.first * g.second));
         }
         // Grow or shrink the dialog with the rows shown, so none are squeezed.
         if (QWidget *win = fits->window(); win && (changed || win->width() < win->sizeHint().width()))
@@ -178,10 +179,10 @@ PageForm buildPageForm(QTabWidget *tabs, const PageSetup &s)
     auto *form = new QFormLayout(page);
     f.pageForm = form;
     f.layout = new QComboBox(page);
-    f.layout->addItems({"One page per sheet", "Booklet", "Multiple pages per sheet", "Envelope", "Folded card", "Labels"});
+    f.layout->addItems({QCoreApplication::translate("Dialogs", "One page per sheet"), QCoreApplication::translate("Dialogs", "Booklet"), QCoreApplication::translate("Dialogs", "Multiple pages per sheet"), QCoreApplication::translate("Dialogs", "Envelope"), QCoreApplication::translate("Dialogs", "Folded card"), QCoreApplication::translate("Dialogs", "Labels")});
     f.layout->setCurrentIndex(int(s.layout));
     f.preset = new QComboBox(page);
-    f.preset->addItem(QStringLiteral("Custom"));
+    f.preset->addItem(QCoreApplication::translate("Dialogs", "Custom"));
     for (const auto &bs : blankSizes()) f.preset->addItem(bs.name);
     const QJsonArray custom = Settings::get().customPageSizes();
     for (const QJsonValue &c : custom) f.preset->addItem(c.toObject()["name"].toString(), QStringLiteral("custom"));
@@ -204,7 +205,7 @@ PageForm buildPageForm(QTabWidget *tabs, const PageSetup &s)
     f.gapH->setObjectName("gapH");
     f.gapV->setObjectName("gapV");
     f.fits->setObjectName("perSheet");
-    auto *portrait = new QRadioButton(QStringLiteral("Portrait"), page), *land = new QRadioButton(QStringLiteral("Landscape"), page);
+    auto *portrait = new QRadioButton(QCoreApplication::translate("Dialogs", "Portrait"), page), *land = new QRadioButton(QCoreApplication::translate("Dialogs", "Landscape"), page);
     (s.size.width() > s.size.height() ? land : portrait)->setChecked(true);
     MeasureSpin *w = f.w, *h = f.h;
     auto swapIf = [=](bool landscape) {
@@ -219,34 +220,34 @@ PageForm buildPageForm(QTabWidget *tabs, const PageSetup &s)
     auto *orient = new QHBoxLayout();
     orient->addWidget(portrait);
     orient->addWidget(land);
-    form->addRow(QStringLiteral("Layout type:"), f.layout);
-    form->addRow(QStringLiteral("Page size:"), f.preset);
-    form->addRow(QStringLiteral("Width:"), f.w);
-    form->addRow(QStringLiteral("Height:"), f.h);
-    form->addRow(QStringLiteral("Orientation:"), orient);
-    form->addRow(QStringLiteral("Paper width:"), f.sheetW);
-    form->addRow(QStringLiteral("Paper height:"), f.sheetH);
-    form->addRow(QStringLiteral("Side margin:"), f.side);
-    form->addRow(QStringLiteral("Top margin:"), f.top);
-    form->addRow(QStringLiteral("Horizontal gap:"), f.gapH);
-    form->addRow(QStringLiteral("Vertical gap:"), f.gapV);
+    form->addRow(QCoreApplication::translate("Dialogs", "Layout type:"), f.layout);
+    form->addRow(QCoreApplication::translate("Dialogs", "Page size:"), f.preset);
+    form->addRow(QCoreApplication::translate("Dialogs", "Width:"), f.w);
+    form->addRow(QCoreApplication::translate("Dialogs", "Height:"), f.h);
+    form->addRow(QCoreApplication::translate("Dialogs", "Orientation:"), orient);
+    form->addRow(QCoreApplication::translate("Dialogs", "Paper width:"), f.sheetW);
+    form->addRow(QCoreApplication::translate("Dialogs", "Paper height:"), f.sheetH);
+    form->addRow(QCoreApplication::translate("Dialogs", "Side margin:"), f.side);
+    form->addRow(QCoreApplication::translate("Dialogs", "Top margin:"), f.top);
+    form->addRow(QCoreApplication::translate("Dialogs", "Horizontal gap:"), f.gapH);
+    form->addRow(QCoreApplication::translate("Dialogs", "Vertical gap:"), f.gapV);
     form->addRow(QString(), f.fits);
-    tabs->addTab(page, QStringLiteral("Page"));
+    tabs->addTab(page, QCoreApplication::translate("Dialogs", "Page"));
 
     auto *mg = new QWidget();
     auto *mf = new QFormLayout(mg);
-    auto *note = new QLabel(QStringLiteral("Margin guides are non-printing lines on every page for lining up objects."), mg);
+    auto *note = new QLabel(QCoreApplication::translate("Dialogs", "Margin guides are non-printing lines on every page for lining up objects."), mg);
     note->setWordWrap(true);
     mf->addRow(note);
     f.gTop = measure(s.margins.top(), mg);
     f.gBottom = measure(s.margins.bottom(), mg);
     f.gLeft = measure(s.margins.left(), mg);
     f.gRight = measure(s.margins.right(), mg);
-    mf->addRow(QStringLiteral("Top:"), f.gTop);
-    mf->addRow(QStringLiteral("Bottom:"), f.gBottom);
-    mf->addRow(QStringLiteral("Left:"), f.gLeft);
-    mf->addRow(QStringLiteral("Right:"), f.gRight);
-    tabs->addTab(mg, QStringLiteral("Margin Guides"));
+    mf->addRow(QCoreApplication::translate("Dialogs", "Top:"), f.gTop);
+    mf->addRow(QCoreApplication::translate("Dialogs", "Bottom:"), f.gBottom);
+    mf->addRow(QCoreApplication::translate("Dialogs", "Left:"), f.gLeft);
+    mf->addRow(QCoreApplication::translate("Dialogs", "Right:"), f.gRight);
+    tabs->addTab(mg, QCoreApplication::translate("Dialogs", "Margin Guides"));
 
     // Choosing a size fills the fields; a custom size brings its whole setup.
     PageForm *pf = new PageForm(f);
@@ -306,7 +307,7 @@ void applyPageSetup(Editor *ed, const PageSetup &ns, const QString &sizeName, co
 void pageSetupDialog(QWidget *p, Editor *ed)
 {
     Document *doc = ed->doc();
-    Dlg dlg(p, QStringLiteral("Page Setup"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Page Setup"));
     auto *tabs = new QTabWidget(&dlg.d);
     const PageForm f = buildPageForm(tabs, doc->setup);
     int pi = f.preset->findText(doc->setup.sizeName);
@@ -317,7 +318,7 @@ void pageSetupDialog(QWidget *p, Editor *ed)
     if (!dlg.exec()) return;
     PageSetup ns = doc->setup;
     f.read(ns);
-    applyPageSetup(ed, ns, f.preset->currentIndex() > 0 ? f.preset->currentText() : QStringLiteral("Custom"), QStringLiteral("Page Setup"));
+    applyPageSetup(ed, ns, f.preset->currentIndex() > 0 ? f.preset->currentText() : QStringLiteral("Custom"), QCoreApplication::translate("Dialogs", "Page Setup"));
 }
 
 QVector<QPair<QString, PageSetup>> customPageSizes()
@@ -333,11 +334,11 @@ bool createPageSizeDialog(QWidget *p, Editor *ed, int editIndex, bool apply)
     QJsonArray sizes = Settings::get().customPageSizes();
     const bool editing = editIndex >= 0 && editIndex < sizes.size();
     PageSetup start = editing ? PageSetup::fromJson(sizes.at(editIndex).toObject()["setup"].toObject()) : ed->doc()->setup;
-    Dlg dlg(p, editing ? QStringLiteral("Edit Page Size") : QStringLiteral("Create New Page Size"));
+    Dlg dlg(p, editing ? QCoreApplication::translate("Dialogs", "Edit Page Size") : QCoreApplication::translate("Dialogs", "Create New Page Size"));
     auto *nameRow = new QFormLayout();
-    auto *name = new QLineEdit(editing ? sizes.at(editIndex).toObject()["name"].toString() : QStringLiteral("Custom %1").arg(sizes.size() + 1), &dlg.d);
+    auto *name = new QLineEdit(editing ? sizes.at(editIndex).toObject()["name"].toString() : QCoreApplication::translate("Dialogs", "Custom %1").arg(sizes.size() + 1), &dlg.d);
     name->setObjectName("pageSizeName");
-    nameRow->addRow(QStringLiteral("Name:"), name);
+    nameRow->addRow(QCoreApplication::translate("Dialogs", "Name:"), name);
     dlg.v->addLayout(nameRow);
     auto *tabs = new QTabWidget(&dlg.d);
     const PageForm f = buildPageForm(tabs, start);
@@ -351,24 +352,24 @@ bool createPageSizeDialog(QWidget *p, Editor *ed, int editIndex, bool apply)
     if (editing) sizes.replace(editIndex, entry);
     else sizes.append(entry);
     Settings::get().setCustomPageSizes(sizes);
-    if (!editing && apply) applyPageSetup(ed, ns, n, QStringLiteral("Page Size"));
+    if (!editing && apply) applyPageSetup(ed, ns, n, QCoreApplication::translate("Dialogs", "Page Size"));
     return true;
 }
 
 void customPageSizesDialog(QWidget *p, Editor *ed)
 {
-    Dlg dlg(p, QStringLiteral("Custom Page Sizes"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Custom Page Sizes"));
     auto *list = new QListWidget(&dlg.d);
     auto fill = [list] {
         list->clear();
         for (const auto &c : customPageSizes())
-            list->addItem(QStringLiteral("%1 (%2 × %3)").arg(c.first, Settings::get().format(c.second.size.width()), Settings::get().format(c.second.size.height())));
+            list->addItem(QCoreApplication::translate("Dialogs", "%1 (%2 × %3)").arg(c.first, Settings::get().format(c.second.size.width()), Settings::get().format(c.second.size.height())));
         list->setCurrentRow(0);
     };
     fill();
     auto *row = new QHBoxLayout();
-    auto *add = new QPushButton(QStringLiteral("New…"), &dlg.d), *edit = new QPushButton(QStringLiteral("Edit…"), &dlg.d),
-         *del = new QPushButton(QStringLiteral("Delete"), &dlg.d), *use = new QPushButton(QStringLiteral("Use This Size"), &dlg.d);
+    auto *add = new QPushButton(QCoreApplication::translate("Dialogs", "New…"), &dlg.d), *edit = new QPushButton(QCoreApplication::translate("Dialogs", "Edit…"), &dlg.d),
+         *del = new QPushButton(QCoreApplication::translate("Dialogs", "Delete"), &dlg.d), *use = new QPushButton(QCoreApplication::translate("Dialogs", "Use This Size"), &dlg.d);
     for (QPushButton *b : {add, edit, del, use}) row->addWidget(b);
     QObject::connect(add, &QPushButton::clicked, &dlg.d, [&] { if (createPageSizeDialog(&dlg.d, ed)) fill(); });
     QObject::connect(edit, &QPushButton::clicked, &dlg.d, [&] { if (list->currentRow() >= 0 && createPageSizeDialog(&dlg.d, ed, list->currentRow())) fill(); });
@@ -384,7 +385,7 @@ void customPageSizesDialog(QWidget *p, Editor *ed)
         const auto all = customPageSizes();
         const int r = list->currentRow();
         if (r < 0 || r >= all.size()) return;
-        applyPageSetup(ed, all[r].second, all[r].first, QStringLiteral("Page Size"));
+        applyPageSetup(ed, all[r].second, all[r].first, QCoreApplication::translate("Dialogs", "Page Size"));
         dlg.d.accept();
     });
     dlg.v->addWidget(list);
@@ -398,7 +399,7 @@ void gridGuidesDialog(QWidget *p, Editor *ed, int startTab)
     Document *doc = ed->doc();
     MasterPage *mp = ed->masterView().isEmpty() ? doc->masterFor(*doc->pages[ed->currentPage()]) : doc->master(ed->masterView());
     if (!mp) mp = doc->masters.first().get();
-    Dlg dlg(p, QStringLiteral("Layout Guides"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Layout Guides"));
     auto *tabs = new QTabWidget(&dlg.d);
     auto *g = new QWidget();
     auto *gf = new QFormLayout(g);
@@ -408,44 +409,44 @@ void gridGuidesDialog(QWidget *p, Editor *ed, int startTab)
     cols->setValue(mp->grid.cols);
     rows->setValue(mp->grid.rows);
     auto *cg = measure(mp->grid.colGap, g), *rg = measure(mp->grid.rowGap, g);
-    auto *center = new QCheckBox(QStringLiteral("Add center guide between columns and rows"), g);
+    auto *center = new QCheckBox(QCoreApplication::translate("Dialogs", "Add center guide between columns and rows"), g);
     center->setChecked(mp->grid.centerGuide);
-    gf->addRow(QStringLiteral("Columns:"), cols);
-    gf->addRow(QStringLiteral("Column spacing:"), cg);
-    gf->addRow(QStringLiteral("Rows:"), rows);
-    gf->addRow(QStringLiteral("Row spacing:"), rg);
+    gf->addRow(QCoreApplication::translate("Dialogs", "Columns:"), cols);
+    gf->addRow(QCoreApplication::translate("Dialogs", "Column spacing:"), cg);
+    gf->addRow(QCoreApplication::translate("Dialogs", "Rows:"), rows);
+    gf->addRow(QCoreApplication::translate("Dialogs", "Row spacing:"), rg);
     gf->addRow(center);
-    tabs->addTab(g, QStringLiteral("Grid Guides"));
+    tabs->addTab(g, QCoreApplication::translate("Dialogs", "Grid Guides"));
     auto *b = new QWidget();
     auto *bf = new QFormLayout(b);
     auto *spacing = points(mp->grid.baseline, b, 1, 200);
     auto *offset = points(mp->grid.baselineOffset, b, 0, 200);
-    bf->addRow(QStringLiteral("Horizontal baseline spacing:"), spacing);
-    bf->addRow(QStringLiteral("Offset:"), offset);
-    tabs->addTab(b, QStringLiteral("Baseline Guides"));
+    bf->addRow(QCoreApplication::translate("Dialogs", "Horizontal baseline spacing:"), spacing);
+    bf->addRow(QCoreApplication::translate("Dialogs", "Offset:"), offset);
+    tabs->addTab(b, QCoreApplication::translate("Dialogs", "Baseline Guides"));
     auto *mg = new QWidget();
     auto *mgf = new QFormLayout(mg);
-    auto *twoPage = new QCheckBox(QStringLiteral("Two-page master"), mg);
+    auto *twoPage = new QCheckBox(QCoreApplication::translate("Dialogs", "Two-page master"), mg);
     twoPage->setChecked(mp->twoPage);
     mgf->addRow(twoPage);
     const QMarginsF m = doc->setup.margins;
     auto *mt = measure(m.top(), mg), *mb = measure(m.bottom(), mg), *ml = measure(m.left(), mg), *mr = measure(m.right(), mg);
-    mgf->addRow(QStringLiteral("Top:"), mt);
-    mgf->addRow(QStringLiteral("Bottom:"), mb);
-    mgf->addRow(QStringLiteral("Left:"), ml);
-    mgf->addRow(QStringLiteral("Right:"), mr);
+    mgf->addRow(QCoreApplication::translate("Dialogs", "Top:"), mt);
+    mgf->addRow(QCoreApplication::translate("Dialogs", "Bottom:"), mb);
+    mgf->addRow(QCoreApplication::translate("Dialogs", "Left:"), ml);
+    mgf->addRow(QCoreApplication::translate("Dialogs", "Right:"), mr);
     // A two-page master's side guides are inside and outside.
     auto sideNames = [=](bool two) {
-        if (auto *l = qobject_cast<QLabel *>(mgf->labelForField(ml))) l->setText(two ? QStringLiteral("Inside:") : QStringLiteral("Left:"));
-        if (auto *l = qobject_cast<QLabel *>(mgf->labelForField(mr))) l->setText(two ? QStringLiteral("Outside:") : QStringLiteral("Right:"));
+        if (auto *l = qobject_cast<QLabel *>(mgf->labelForField(ml))) l->setText(two ? QCoreApplication::translate("Dialogs", "Inside:") : QCoreApplication::translate("Dialogs", "Left:"));
+        if (auto *l = qobject_cast<QLabel *>(mgf->labelForField(mr))) l->setText(two ? QCoreApplication::translate("Dialogs", "Outside:") : QCoreApplication::translate("Dialogs", "Right:"));
     };
     sideNames(mp->twoPage);
     QObject::connect(twoPage, &QCheckBox::toggled, mg, sideNames);
-    tabs->insertTab(0, mg, QStringLiteral("Margin Guides"));
+    tabs->insertTab(0, mg, QCoreApplication::translate("Dialogs", "Margin Guides"));
     tabs->setCurrentIndex(std::clamp(startTab, 0, tabs->count() - 1));
     dlg.v->addWidget(tabs);
     if (!dlg.exec()) return;
-    ed->change(QStringLiteral("Layout Guides"), [&] {
+    ed->change(QCoreApplication::translate("Dialogs", "Layout Guides"), [&] {
         mp->grid.cols = cols->value();
         mp->grid.rows = rows->value();
         mp->grid.colGap = cg->value();
@@ -463,7 +464,7 @@ void rulerGuidesDialog(QWidget *p, Editor *ed)
 {
     RulerGuides guides = ed->surface()->guides;
     const QSizeF page = ed->doc()->pageSize();
-    Dlg dlg(p, QStringLiteral("Ruler Guides"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Ruler Guides"));
     auto *row = new QHBoxLayout();
     row->setSpacing(18);
     // One side: its guides listed by position, with a field to add one, move
@@ -485,31 +486,31 @@ void rulerGuidesDialog(QWidget *p, Editor *ed)
             if (select >= 0 && select < items->count()) items->setCurrentRow(select);
         };
         auto *pos = measure(limit / 2, box, 0, limit);
-        auto *add = new QPushButton(QStringLiteral("Add"), box), *move = new QPushButton(QStringLiteral("Move"), box);
+        auto *add = new QPushButton(QCoreApplication::translate("Dialogs", "Add"), box), *move = new QPushButton(QCoreApplication::translate("Dialogs", "Move"), box);
         auto *posRow = new QHBoxLayout();
-        posRow->addWidget(new QLabel(QStringLiteral("Position:"), box));
+        posRow->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "Position:"), box));
         posRow->addWidget(pos);
         posRow->addWidget(add);
         posRow->addWidget(move);
         posRow->addStretch(1);
         v->addLayout(posRow);
-        auto *remove = new QPushButton(QStringLiteral("Remove"), box), *removeAll = new QPushButton(QStringLiteral("Remove All"), box);
+        auto *remove = new QPushButton(QCoreApplication::translate("Dialogs", "Remove"), box), *removeAll = new QPushButton(QCoreApplication::translate("Dialogs", "Remove All"), box);
         auto *rmRow = new QHBoxLayout();
         rmRow->addWidget(remove);
         rmRow->addWidget(removeAll);
         rmRow->addStretch(1);
         v->addLayout(rmRow);
-        auto *series = new QGroupBox(QStringLiteral("Add a series"), box);
+        auto *series = new QGroupBox(QCoreApplication::translate("Dialogs", "Add a series"), box);
         auto *sf = new QFormLayout(series);
         auto *count = new QSpinBox(series);
         count->setRange(1, 200);
         count->setValue(4);
         count->setFixedWidth(110);
         auto *start = measure(0, series, 0, limit), *every = measure(72, series, 1, limit);
-        auto *addSeries = new QPushButton(QStringLiteral("Add Series"), series);
-        sf->addRow(QStringLiteral("Guides:"), count);
-        sf->addRow(QStringLiteral("First at:"), start);
-        sf->addRow(QStringLiteral("Spacing:"), every);
+        auto *addSeries = new QPushButton(QCoreApplication::translate("Dialogs", "Add Series"), series);
+        sf->addRow(QCoreApplication::translate("Dialogs", "Guides:"), count);
+        sf->addRow(QCoreApplication::translate("Dialogs", "First at:"), start);
+        sf->addRow(QCoreApplication::translate("Dialogs", "Spacing:"), every);
         sf->addRow(addSeries);
         v->addWidget(series);
         refill(-1);
@@ -549,18 +550,18 @@ void rulerGuidesDialog(QWidget *p, Editor *ed)
         });
         row->addWidget(box);
     };
-    side(QStringLiteral("Horizontal Guides"), QStringLiteral("Measured from the top of the page"), &guides.h, page.height());
-    side(QStringLiteral("Vertical Guides"), QStringLiteral("Measured from the left of the page"), &guides.v, page.width());
+    side(QCoreApplication::translate("Dialogs", "Horizontal Guides"), QCoreApplication::translate("Dialogs", "Measured from the top of the page"), &guides.h, page.height());
+    side(QCoreApplication::translate("Dialogs", "Vertical Guides"), QCoreApplication::translate("Dialogs", "Measured from the left of the page"), &guides.v, page.width());
     dlg.v->addLayout(row);
     if (!dlg.exec()) return;
-    ed->change(QStringLiteral("Ruler Guides"), [&] { ed->surface()->guides = guides; });
+    ed->change(QCoreApplication::translate("Dialogs", "Ruler Guides"), [&] { ed->surface()->guides = guides; });
 }
 
 // ---------------- Font ----------------
 void fontDialog(QWidget *p, Editor *ed)
 {
     const QTextCharFormat cur = ed->currentCharFormat();
-    Dlg dlg(p, QStringLiteral("Font"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Font"));
     auto *grid = new QGridLayout();
     auto *font = new FontCombo(&dlg.d);
     font->setSchemeFonts(ed->doc()->fonts.heading, ed->doc()->fonts.body);
@@ -569,33 +570,33 @@ void fontDialog(QWidget *p, Editor *ed)
     QString chosenFamily;
     QObject::connect(font, &FontCombo::familyChosen, &dlg.d, [&](const QString &f) { chosenFamily = f; });
     auto *style = new QComboBox(&dlg.d);
-    style->addItems({"Regular", "Italic", "Bold", "Bold Italic"});
+    style->addItems({QCoreApplication::translate("Dialogs", "Regular"), QCoreApplication::translate("Dialogs", "Italic"), QCoreApplication::translate("Dialogs", "Bold"), QCoreApplication::translate("Dialogs", "Bold Italic")});
     style->setCurrentIndex((cur.fontWeight() >= QFont::DemiBold ? 2 : 0) + (cur.fontItalic() ? 1 : 0));
     auto *size = new DecimalSpin(&dlg.d);
     size->setRange(0.5, 999);
     size->setValue(cur.hasProperty(QTextFormat::FontPointSize) ? cur.fontPointSize() : 11);
     auto *color = colorPick(ed, cur.stringProperty(tp::ColorRefP).isEmpty() ? ColorRef::scheme(Main) : ColorRef::fromString(cur.stringProperty(tp::ColorRefP)), false, &dlg.d);
     auto *underline = new QComboBox(&dlg.d);
-    underline->addItems({"(none)", "Single", "Words only", "Double", "Dotted", "Dashed", "Wave"});
+    underline->addItems({QCoreApplication::translate("Dialogs", "(none)"), QCoreApplication::translate("Dialogs", "Single"), QCoreApplication::translate("Dialogs", "Words only"), QCoreApplication::translate("Dialogs", "Double"), QCoreApplication::translate("Dialogs", "Dotted"), QCoreApplication::translate("Dialogs", "Dashed"), QCoreApplication::translate("Dialogs", "Wave")});
     underline->setCurrentIndex(cur.underlineStyle() == QTextCharFormat::NoUnderline ? 0 : cur.underlineStyle() == QTextCharFormat::DotLine ? 4
                                    : cur.underlineStyle() == QTextCharFormat::DashUnderline ? 5 : cur.underlineStyle() == QTextCharFormat::WaveUnderline ? 6 : 1);
-    grid->addWidget(new QLabel(QStringLiteral("Font:")), 0, 0);
+    grid->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "Font:")), 0, 0);
     grid->addWidget(font, 1, 0);
-    grid->addWidget(new QLabel(QStringLiteral("Font style:")), 0, 1);
+    grid->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "Font style:")), 0, 1);
     grid->addWidget(style, 1, 1);
-    grid->addWidget(new QLabel(QStringLiteral("Size:")), 0, 2);
+    grid->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "Size:")), 0, 2);
     grid->addWidget(size, 1, 2);
-    grid->addWidget(new QLabel(QStringLiteral("Underline:")), 2, 0);
+    grid->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "Underline:")), 2, 0);
     grid->addWidget(underline, 3, 0);
-    grid->addWidget(new QLabel(QStringLiteral("Color:")), 2, 1);
+    grid->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "Color:")), 2, 1);
     grid->addWidget(color, 3, 1);
     dlg.v->addLayout(grid);
-    auto *effects = new QGroupBox(QStringLiteral("Effects"), &dlg.d);
+    auto *effects = new QGroupBox(QCoreApplication::translate("Dialogs", "Effects"), &dlg.d);
     auto *eg = new QGridLayout(effects);
     struct Fx { const char *name; QCheckBox *box = nullptr; };
-    QCheckBox *sup = new QCheckBox(QStringLiteral("Superscript")), *sub = new QCheckBox(QStringLiteral("Subscript")), *strike = new QCheckBox(QStringLiteral("Strikethrough"));
-    QCheckBox *smallcaps = new QCheckBox(QStringLiteral("Small caps")), *allcaps = new QCheckBox(QStringLiteral("All caps")), *shadow = new QCheckBox(QStringLiteral("Shadow"));
-    QCheckBox *outline = new QCheckBox(QStringLiteral("Outline")), *emboss = new QCheckBox(QStringLiteral("Emboss")), *engrave = new QCheckBox(QStringLiteral("Engrave"));
+    QCheckBox *sup = new QCheckBox(QCoreApplication::translate("Dialogs", "Superscript")), *sub = new QCheckBox(QCoreApplication::translate("Dialogs", "Subscript")), *strike = new QCheckBox(QCoreApplication::translate("Dialogs", "Strikethrough"));
+    QCheckBox *smallcaps = new QCheckBox(QCoreApplication::translate("Dialogs", "Small caps")), *allcaps = new QCheckBox(QCoreApplication::translate("Dialogs", "All caps")), *shadow = new QCheckBox(QCoreApplication::translate("Dialogs", "Shadow"));
+    QCheckBox *outline = new QCheckBox(QCoreApplication::translate("Dialogs", "Outline")), *emboss = new QCheckBox(QCoreApplication::translate("Dialogs", "Emboss")), *engrave = new QCheckBox(QCoreApplication::translate("Dialogs", "Engrave"));
     sup->setChecked(cur.verticalAlignment() == QTextCharFormat::AlignSuperScript);
     sub->setChecked(cur.verticalAlignment() == QTextCharFormat::AlignSubScript);
     strike->setChecked(cur.fontStrikeOut());
@@ -608,7 +609,7 @@ void fontDialog(QWidget *p, Editor *ed)
     const QList<QCheckBox *> boxes{sup, sub, strike, smallcaps, allcaps, shadow, outline, emboss, engrave};
     for (int i = 0; i < boxes.size(); ++i) eg->addWidget(boxes[i], i / 3, i % 3);
     dlg.v->addWidget(effects);
-    auto *preview = new QLabel(QStringLiteral("JeffPub sample text"), &dlg.d);
+    auto *preview = new QLabel(QCoreApplication::translate("Dialogs", "JeffPub sample text"), &dlg.d);
     preview->setMinimumHeight(48);
     preview->setAlignment(Qt::AlignCenter);
     preview->setFrameShape(QFrame::StyledPanel);
@@ -630,7 +631,7 @@ void fontDialog(QWidget *p, Editor *ed)
     dlg.v->addWidget(preview);
     if (!dlg.exec()) return;
     QString f = chosenFamily.isEmpty() ? font->currentText() : chosenFamily;
-    ed->beginChange(QStringLiteral("Font"));
+    ed->beginChange(QCoreApplication::translate("Dialogs", "Font"));
     if (!f.isEmpty() && f != fam) ed->setFontFamily(f.contains(" (Headings)") ? "+Heading" : f.contains(" (Body)") ? "+Body" : f);
     QTextCharFormat cf;
     cf.setFontPointSize(size->value());
@@ -647,8 +648,8 @@ void fontDialog(QWidget *p, Editor *ed)
     cf.setProperty(tp::Engrave, engrave->isChecked());
     if (outline->isChecked()) cf.setProperty(tp::OutlineRef, color->current().toString());
     cf.setProperty(tp::ColorRefP, color->current().toString());
-    ed->mergeCharFormat(cf, QStringLiteral("Font"));
-    if (!outline->isChecked()) ed->clearCharProperty(tp::OutlineRef, QStringLiteral("Font"));
+    ed->mergeCharFormat(cf, QCoreApplication::translate("Dialogs", "Font"));
+    if (!outline->isChecked()) ed->clearCharProperty(tp::OutlineRef, QCoreApplication::translate("Dialogs", "Font"));
     ed->endChange();
 }
 
@@ -656,19 +657,19 @@ void fontDialog(QWidget *p, Editor *ed)
 void paragraphDialog(QWidget *p, Editor *ed, int tab)
 {
     const QTextBlockFormat bf = ed->currentBlockFormat();
-    Dlg dlg(p, QStringLiteral("Paragraph"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Paragraph"));
     auto *tabs = new QTabWidget(&dlg.d);
     auto *t1 = new QWidget();
     auto *f1 = new QFormLayout(t1);
     auto *align = new QComboBox(t1);
-    align->addItems({"Left", "Center", "Right", "Justified", "Distributed"});
+    align->addItems({QCoreApplication::translate("Dialogs", "Left"), QCoreApplication::translate("Dialogs", "Center"), QCoreApplication::translate("Dialogs", "Right"), QCoreApplication::translate("Dialogs", "Justified"), QCoreApplication::translate("Dialogs", "Distributed")});
     const Qt::Alignment al = bf.alignment() & Qt::AlignHorizontal_Mask;
     align->setCurrentIndex(bf.boolProperty(tp::Distribute) ? 4 : al == Qt::AlignHCenter ? 1 : al == Qt::AlignRight ? 2 : al == Qt::AlignJustify ? 3 : 0);
     auto *left = measure(bf.leftMargin(), t1, 0), *first = measure(bf.textIndent(), t1, -2000), *right = measure(bf.rightMargin(), t1, 0);
     first->setMinimum(-2000);
     auto *before = points(bf.topMargin(), t1), *after = points(bf.bottomMargin(), t1);
     auto *lineType = new QComboBox(t1);
-    lineType->addItems({"Single", "Multiple (sp)", "Exactly (pt)", "At least (pt)"});
+    lineType->addItems({QCoreApplication::translate("Dialogs", "Single"), QCoreApplication::translate("Dialogs", "Multiple (sp)"), QCoreApplication::translate("Dialogs", "Exactly (pt)"), QCoreApplication::translate("Dialogs", "At least (pt)")});
     auto *lineVal = new DecimalSpin(t1);
     lineVal->setRange(0.1, 1000);
     switch (bf.lineHeightType()) {
@@ -677,30 +678,30 @@ void paragraphDialog(QWidget *p, Editor *ed, int tab)
     case QTextBlockFormat::MinimumHeight: lineType->setCurrentIndex(3); lineVal->setValue(bf.lineHeight()); break;
     default: lineType->setCurrentIndex(0); lineVal->setValue(1.0); break;
     }
-    auto *baseline = new QCheckBox(QStringLiteral("Align text to baseline guides"), t1);
+    auto *baseline = new QCheckBox(QCoreApplication::translate("Dialogs", "Align text to baseline guides"), t1);
     baseline->setChecked(bf.boolProperty(tp::AlignToBaseline));
     auto *direction = new QComboBox(t1);
-    direction->addItems({"Left to right", "Right to left"});
+    direction->addItems({QCoreApplication::translate("Dialogs", "Left to right"), QCoreApplication::translate("Dialogs", "Right to left")});
     direction->setCurrentIndex(bf.layoutDirection() == Qt::RightToLeft ? 1 : 0);
-    f1->addRow(QStringLiteral("Alignment:"), align);
-    f1->addRow(QStringLiteral("Direction:"), direction);
-    f1->addRow(QStringLiteral("Left indent:"), left);
-    f1->addRow(QStringLiteral("First line indent:"), first);
-    f1->addRow(QStringLiteral("Right indent:"), right);
-    f1->addRow(QStringLiteral("Space before:"), before);
-    f1->addRow(QStringLiteral("Space after:"), after);
+    f1->addRow(QCoreApplication::translate("Dialogs", "Alignment:"), align);
+    f1->addRow(QCoreApplication::translate("Dialogs", "Direction:"), direction);
+    f1->addRow(QCoreApplication::translate("Dialogs", "Left indent:"), left);
+    f1->addRow(QCoreApplication::translate("Dialogs", "First line indent:"), first);
+    f1->addRow(QCoreApplication::translate("Dialogs", "Right indent:"), right);
+    f1->addRow(QCoreApplication::translate("Dialogs", "Space before:"), before);
+    f1->addRow(QCoreApplication::translate("Dialogs", "Space after:"), after);
     auto *lrow = new QHBoxLayout();
     lrow->addWidget(lineType);
     lrow->addWidget(lineVal);
-    f1->addRow(QStringLiteral("Line spacing:"), lrow);
+    f1->addRow(QCoreApplication::translate("Dialogs", "Line spacing:"), lrow);
     f1->addRow(baseline);
-    tabs->addTab(t1, QStringLiteral("Indents and Spacing"));
+    tabs->addTab(t1, QCoreApplication::translate("Dialogs", "Indents and Spacing"));
     auto *t2 = new QWidget();
     auto *f2 = new QVBoxLayout(t2);
-    auto *widow = new QCheckBox(QStringLiteral("Widow/Orphan control"), t2);
-    auto *withNext = new QCheckBox(QStringLiteral("Keep with next"), t2);
-    auto *together = new QCheckBox(QStringLiteral("Keep lines together"), t2);
-    auto *nextBox = new QCheckBox(QStringLiteral("Start in next text box"), t2);
+    auto *widow = new QCheckBox(QCoreApplication::translate("Dialogs", "Widow/Orphan control"), t2);
+    auto *withNext = new QCheckBox(QCoreApplication::translate("Dialogs", "Keep with next"), t2);
+    auto *together = new QCheckBox(QCoreApplication::translate("Dialogs", "Keep lines together"), t2);
+    auto *nextBox = new QCheckBox(QCoreApplication::translate("Dialogs", "Start in next text box"), t2);
     widow->setChecked(bf.boolProperty(tp::WidowControl));
     withNext->setChecked(bf.boolProperty(tp::KeepWithNext));
     together->setChecked(bf.boolProperty(tp::KeepTogether));
@@ -710,12 +711,12 @@ void paragraphDialog(QWidget *p, Editor *ed, int tab)
     f2->addWidget(together);
     f2->addWidget(nextBox);
     f2->addStretch(1);
-    tabs->addTab(t2, QStringLiteral("Line and Paragraph Breaks"));
+    tabs->addTab(t2, QCoreApplication::translate("Dialogs", "Line and Paragraph Breaks"));
     // Tabs.
     auto *t3 = new QWidget();
     auto *f3 = new QVBoxLayout(t3);
     auto *tabList = new QTableWidget(0, 3, t3);
-    tabList->setHorizontalHeaderLabels({"Position", "Alignment", "Leader"});
+    tabList->setHorizontalHeaderLabels({QCoreApplication::translate("Dialogs", "Position"), QCoreApplication::translate("Dialogs", "Alignment"), QCoreApplication::translate("Dialogs", "Leader")});
     tabList->horizontalHeader()->setStretchLastSection(true);
     QList<QTextOption::Tab> tabs0 = bf.tabPositions();
     const QString leaders = bf.stringProperty(tp::TabLeaders);
@@ -724,19 +725,19 @@ void paragraphDialog(QWidget *p, Editor *ed, int tab)
         tabList->insertRow(r);
         tabList->setItem(r, 0, new QTableWidgetItem(Settings::get().format(t.position)));
         auto *a = new QComboBox();
-        a->addItems({"Left", "Center", "Right", "Decimal"});
+        a->addItems({QCoreApplication::translate("Dialogs", "Left"), QCoreApplication::translate("Dialogs", "Center"), QCoreApplication::translate("Dialogs", "Right"), QCoreApplication::translate("Dialogs", "Decimal")});
         a->setCurrentIndex(t.type == QTextOption::LeftTab ? 0 : t.type == QTextOption::CenterTab ? 1 : t.type == QTextOption::RightTab ? 2 : 3);
         tabList->setCellWidget(r, 1, a);
         auto *l = new QComboBox();
-        l->addItems({"None", "Dot", "Dash", "Line", "Bullet"});
+        l->addItems({QCoreApplication::translate("Dialogs", "None"), QCoreApplication::translate("Dialogs", "Dot"), QCoreApplication::translate("Dialogs", "Dash"), QCoreApplication::translate("Dialogs", "Line"), QCoreApplication::translate("Dialogs", "Bullet")});
         l->setCurrentIndex(leader == '.' ? 1 : leader == '-' ? 2 : leader == '_' ? 3 : leader == QChar(0x2022) ? 4 : 0);
         tabList->setCellWidget(r, 2, l);
     };
     for (int i = 0; i < tabs0.size(); ++i) addTabRow(tabs0[i], i < leaders.size() ? leaders.at(i) : QChar());
     auto *trow = new QHBoxLayout();
-    auto *addTab = new QPushButton(QStringLiteral("Add"), t3);
-    auto *delTab = new QPushButton(QStringLiteral("Delete"), t3);
-    auto *clrTab = new QPushButton(QStringLiteral("Clear All"), t3);
+    auto *addTab = new QPushButton(QCoreApplication::translate("Dialogs", "Add"), t3);
+    auto *delTab = new QPushButton(QCoreApplication::translate("Dialogs", "Delete"), t3);
+    auto *clrTab = new QPushButton(QCoreApplication::translate("Dialogs", "Clear All"), t3);
     trow->addWidget(addTab);
     trow->addWidget(delTab);
     trow->addWidget(clrTab);
@@ -745,7 +746,7 @@ void paragraphDialog(QWidget *p, Editor *ed, int tab)
     QObject::connect(clrTab, &QPushButton::clicked, t3, [&] { tabList->setRowCount(0); });
     f3->addWidget(tabList);
     f3->addLayout(trow);
-    tabs->addTab(t3, QStringLiteral("Tabs"));
+    tabs->addTab(t3, QCoreApplication::translate("Dialogs", "Tabs"));
     tabs->setCurrentIndex(std::clamp(tab, 0, 2));
     dlg.v->addWidget(tabs);
     if (!dlg.exec()) return;
@@ -789,13 +790,13 @@ void paragraphDialog(QWidget *p, Editor *ed, int tab)
     }
     f.setTabPositions(newTabs);
     f.setProperty(tp::TabLeaders, newLeaders);
-    ed->mergeBlockFormat(f, QStringLiteral("Paragraph"));
+    ed->mergeBlockFormat(f, QCoreApplication::translate("Dialogs", "Paragraph"));
 }
 
 // ---------------- Bullets and Numbering ----------------
 void bulletsDialog(QWidget *p, Editor *ed, bool numbering)
 {
-    Dlg dlg(p, QStringLiteral("Bullets and Numbering"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Bullets and Numbering"));
     auto *tabs = new QTabWidget(&dlg.d);
     auto *bw = new QWidget();
     auto *bl = new QGridLayout(bw);
@@ -812,27 +813,27 @@ void bulletsDialog(QWidget *p, Editor *ed, bool numbering)
         bl->addWidget(b, i / 6, i % 6);
     }
     group->button(0)->setChecked(true);
-    auto *custom = new QPushButton(QStringLiteral("Character…"), bw);
+    auto *custom = new QPushButton(QCoreApplication::translate("Dialogs", "Character…"), bw);
     QString customChar;
     QObject::connect(custom, &QPushButton::clicked, bw, [&] {
         bool ok = false;
-        const QString c = QInputDialog::getText(bw, QStringLiteral("Bullet Character"), QStringLiteral("Character:"), QLineEdit::Normal, QString(), &ok);
+        const QString c = QInputDialog::getText(bw, QCoreApplication::translate("Dialogs", "Bullet Character"), QCoreApplication::translate("Dialogs", "Character:"), QLineEdit::Normal, QString(), &ok);
         if (ok && !c.isEmpty()) customChar = c.left(2);
     });
     bl->addWidget(custom, 2, 0, 1, 2);
     auto *indent = measure(18, bw);
-    bl->addWidget(new QLabel(QStringLiteral("Indent list by:")), 3, 0, 1, 2);
+    bl->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "Indent list by:")), 3, 0, 1, 2);
     bl->addWidget(indent, 3, 2, 1, 2);
-    tabs->addTab(bw, QStringLiteral("Bullets"));
+    tabs->addTab(bw, QCoreApplication::translate("Dialogs", "Bullets"));
     auto *nw = new QWidget();
     auto *nf = new QFormLayout(nw);
     auto *format = new QComboBox(nw);
     format->addItems({"1. 2. 3.", "a. b. c.", "A. B. C.", "i. ii. iii.", "I. II. III.", "1) 2) 3)", "(1) (2) (3)"});
     auto *start = new QSpinBox(nw);
     start->setRange(1, 9999);
-    nf->addRow(QStringLiteral("Format:"), format);
-    nf->addRow(QStringLiteral("Start at:"), start);
-    tabs->addTab(nw, QStringLiteral("Numbering"));
+    nf->addRow(QCoreApplication::translate("Dialogs", "Format:"), format);
+    nf->addRow(QCoreApplication::translate("Dialogs", "Start at:"), start);
+    tabs->addTab(nw, QCoreApplication::translate("Dialogs", "Numbering"));
     if (numbering) tabs->setCurrentIndex(1);
     dlg.v->addWidget(tabs);
     if (!dlg.exec()) return;
@@ -845,10 +846,10 @@ void bulletsDialog(QWidget *p, Editor *ed, bool numbering)
 void dropCapDialog(QWidget *p, Editor *ed)
 {
     const QTextBlockFormat bf = ed->currentBlockFormat();
-    Dlg dlg(p, QStringLiteral("Drop Cap"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Drop Cap"));
     auto *form = new QFormLayout();
     auto *pos = new QComboBox(&dlg.d);
-    pos->addItems({"Dropped", "Up"});
+    pos->addItems({QCoreApplication::translate("Dialogs", "Dropped"), QCoreApplication::translate("Dialogs", "Up")});
     pos->setCurrentIndex(bf.boolProperty(tp::DropCapUpper) ? 1 : 0);
     auto *lines = new QSpinBox(&dlg.d);
     lines->setRange(1, 20);
@@ -857,17 +858,17 @@ void dropCapDialog(QWidget *p, Editor *ed)
     chars->setRange(1, 15);
     chars->setValue(bf.intProperty(tp::DropCapChars) ? bf.intProperty(tp::DropCapChars) : 1);
     auto *font = new FontCombo(&dlg.d);
-    font->setCurrentFamily(bf.stringProperty(tp::DropCapFont).isEmpty() ? QStringLiteral("(current font)") : bf.stringProperty(tp::DropCapFont));
+    font->setCurrentFamily(bf.stringProperty(tp::DropCapFont).isEmpty() ? QCoreApplication::translate("Dialogs", "(current font)") : bf.stringProperty(tp::DropCapFont));
     QString chosen = bf.stringProperty(tp::DropCapFont);
     QObject::connect(font, &FontCombo::familyChosen, &dlg.d, [&](const QString &f) { chosen = f.startsWith('+') ? QString() : f; });
     auto *color = colorPick(ed, bf.stringProperty(tp::DropCapColor).isEmpty() ? ColorRef::scheme(Accent1) : ColorRef::fromString(bf.stringProperty(tp::DropCapColor)), true, &dlg.d);
-    form->addRow(QStringLiteral("Letter position:"), pos);
-    form->addRow(QStringLiteral("Size of letters (lines high):"), lines);
-    form->addRow(QStringLiteral("Number of letters:"), chars);
-    form->addRow(QStringLiteral("Font:"), font);
-    form->addRow(QStringLiteral("Color:"), color);
+    form->addRow(QCoreApplication::translate("Dialogs", "Letter position:"), pos);
+    form->addRow(QCoreApplication::translate("Dialogs", "Size of letters (lines high):"), lines);
+    form->addRow(QCoreApplication::translate("Dialogs", "Number of letters:"), chars);
+    form->addRow(QCoreApplication::translate("Dialogs", "Font:"), font);
+    form->addRow(QCoreApplication::translate("Dialogs", "Color:"), color);
     dlg.v->addLayout(form);
-    auto *remove = new QPushButton(QStringLiteral("Remove"), &dlg.d);
+    auto *remove = new QPushButton(QCoreApplication::translate("Dialogs", "Remove"), &dlg.d);
     bool removed = false;
     QObject::connect(remove, &QPushButton::clicked, &dlg.d, [&] { removed = true; dlg.d.accept(); });
     dlg.bb->addButton(remove, QDialogButtonBox::ResetRole);
@@ -880,11 +881,11 @@ void dropCapDialog(QWidget *p, Editor *ed)
     f.setProperty(tp::DropCapFont, chosen);
     f.setProperty(tp::DropCapColor, color->current().isNone() ? QString() : color->current().toString());
     if (ed->isEditingText()) {
-        ed->beginChange(QStringLiteral("Drop Cap"));
+        ed->beginChange(QCoreApplication::translate("Dialogs", "Drop Cap"));
         ed->cursor().mergeBlockFormat(f);
         ed->endChange();
     } else {
-        ed->mergeBlockFormat(f, QStringLiteral("Drop Cap"));
+        ed->mergeBlockFormat(f, QCoreApplication::translate("Dialogs", "Drop Cap"));
     }
 }
 
@@ -894,41 +895,44 @@ void textGradientDialog(QWidget *p, Editor *ed)
     const QTextCharFormat cf = ed->currentCharFormat();
     Fill current = Fill::fromJson(QJsonDocument::fromJson(cf.stringProperty(tp::TextFill).toUtf8()).object());
     if (current.type != Fill::Gradient) current = Fill::gradient(ColorRef::scheme(Accent1), ColorRef::scheme(Accent2), 0);
-    Dlg dlg(p, QStringLiteral("Gradient Text Fill"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Gradient Text Fill"));
     auto *form = new QFormLayout();
     auto *from = colorPick(ed, current.color, false, &dlg.d);
     auto *to = colorPick(ed, current.color2, false, &dlg.d);
     auto *dir = new QComboBox(&dlg.d);
-    dir->addItems({QStringLiteral("Left to right"), QStringLiteral("Top to bottom"), QStringLiteral("Diagonal down"), QStringLiteral("Diagonal up")});
+    dir->addItems({QCoreApplication::translate("Dialogs", "Left to right"), QCoreApplication::translate("Dialogs", "Top to bottom"), QCoreApplication::translate("Dialogs", "Diagonal down"), QCoreApplication::translate("Dialogs", "Diagonal up")});
     const double angles[] = {0, 90, 45, -45};
     for (int i = 0; i < 4; ++i)
         if (std::abs(current.angle - angles[i]) < 0.5) dir->setCurrentIndex(i);
-    form->addRow(QStringLiteral("From:"), from);
-    form->addRow(QStringLiteral("To:"), to);
-    form->addRow(QStringLiteral("Direction:"), dir);
+    form->addRow(QCoreApplication::translate("Dialogs", "From:"), from);
+    form->addRow(QCoreApplication::translate("Dialogs", "To:"), to);
+    form->addRow(QCoreApplication::translate("Dialogs", "Direction:"), dir);
     dlg.v->addLayout(form);
     if (!dlg.exec()) return;
     const Fill g = Fill::gradient(from->current(), to->current(), angles[dir->currentIndex()]);
     QTextCharFormat f;
     f.setProperty(tp::TextFill, QString::fromUtf8(QJsonDocument(g.toJson()).toJson(QJsonDocument::Compact)));
-    ed->mergeCharFormat(f, QStringLiteral("Text Fill"));
+    ed->mergeCharFormat(f, QCoreApplication::translate("Dialogs", "Text Fill"));
 }
 
 // ---------------- Character Spacing ----------------
 void characterSpacingDialog(QWidget *p, Editor *ed)
 {
     const QTextCharFormat cf = ed->currentCharFormat();
-    Dlg dlg(p, QStringLiteral("Character Spacing"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Character Spacing"));
     auto *form = new QFormLayout();
     auto *scale = new QSpinBox(&dlg.d);
     scale->setRange(1, 600);
     scale->setSuffix(QStringLiteral("%"));
     scale->setValue(cf.hasProperty(QTextFormat::FontStretch) ? cf.fontStretch() : 100);
     // Tracking: a preset or a percentage of normal spacing, as Publisher has it.
-    static const QPair<const char *, double> presets[] = {{"Very tight", 75}, {"Tight", 87.5}, {"Normal", 100}, {"Loose", 112.5}, {"Very loose", 125}};
     auto *trackKind = new QComboBox(&dlg.d);
-    for (const auto &pr : presets) trackKind->addItem(QString::fromLatin1(pr.first), pr.second);
-    trackKind->addItem(QStringLiteral("Custom"), -1.0);
+    trackKind->addItem(QCoreApplication::translate("Dialogs", "Very tight"), 75.0);
+    trackKind->addItem(QCoreApplication::translate("Dialogs", "Tight"), 87.5);
+    trackKind->addItem(QCoreApplication::translate("Dialogs", "Normal"), 100.0);
+    trackKind->addItem(QCoreApplication::translate("Dialogs", "Loose"), 112.5);
+    trackKind->addItem(QCoreApplication::translate("Dialogs", "Very loose"), 125.0);
+    trackKind->addItem(QCoreApplication::translate("Dialogs", "Custom"), -1.0);
     auto *track = new DecimalSpin(&dlg.d);
     track->setRange(0, 600);
     track->setSuffix(QStringLiteral("%"));
@@ -947,7 +951,7 @@ void characterSpacingDialog(QWidget *p, Editor *ed)
     QObject::connect(track, &QDoubleSpinBox::valueChanged, &dlg.d, syncTrackKind);
     // Kerning: space added (or taken) after each selected letter.
     auto *kernKind = new QComboBox(&dlg.d);
-    kernKind->addItems({QStringLiteral("Normal"), QStringLiteral("Expand"), QStringLiteral("Condense")});
+    kernKind->addItems({QCoreApplication::translate("Dialogs", "Normal"), QCoreApplication::translate("Dialogs", "Expand"), QCoreApplication::translate("Dialogs", "Condense")});
     const double kernNow = tp::kerningOf(cf);
     auto *kernBy = points(std::abs(kernNow), &dlg.d, 0, 600);
     kernKind->setCurrentIndex(kernNow > 0.0005 ? 1 : kernNow < -0.0005 ? 2 : 0);
@@ -957,28 +961,28 @@ void characterSpacingDialog(QWidget *p, Editor *ed)
         if (i == 0) kernBy->setValue(0);
         else if (kernBy->value() < 0.0005) kernBy->setValue(1);
     });
-    auto *kern = new QCheckBox(QStringLiteral("Automatic pair kerning for fonts"), &dlg.d);
+    auto *kern = new QCheckBox(QCoreApplication::translate("Dialogs", "Automatic pair kerning for fonts"), &dlg.d);
     kern->setChecked(!cf.hasProperty(QTextFormat::FontKerning) || cf.fontKerning());
     auto *kernFrom = points(cf.hasProperty(tp::KernAbove) ? cf.property(tp::KernAbove).toDouble() : 14.0, &dlg.d, 0, 1638);
     kernFrom->setEnabled(kern->isChecked());
     QObject::connect(kern, &QCheckBox::toggled, kernFrom, &QWidget::setEnabled);
     auto *word = points(cf.fontWordSpacing(), &dlg.d, -50, 200);
-    form->addRow(QStringLiteral("Scaling (shrink or stretch):"), scale);
+    form->addRow(QCoreApplication::translate("Dialogs", "Scaling (shrink or stretch):"), scale);
     auto *trackRow = new QHBoxLayout();
     trackRow->addWidget(trackKind);
-    trackRow->addWidget(new QLabel(QStringLiteral("By this amount:"), &dlg.d));
+    trackRow->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "By this amount:"), &dlg.d));
     trackRow->addWidget(track);
-    form->addRow(QStringLiteral("Tracking (selected text):"), trackRow);
+    form->addRow(QCoreApplication::translate("Dialogs", "Tracking (selected text):"), trackRow);
     auto *kernByRow = new QHBoxLayout();
     kernByRow->addWidget(kernKind);
-    kernByRow->addWidget(new QLabel(QStringLiteral("By this amount:"), &dlg.d));
+    kernByRow->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "By this amount:"), &dlg.d));
     kernByRow->addWidget(kernBy);
-    form->addRow(QStringLiteral("Kerning (selected letters):"), kernByRow);
-    form->addRow(QStringLiteral("Word spacing:"), word);
+    form->addRow(QCoreApplication::translate("Dialogs", "Kerning (selected letters):"), kernByRow);
+    form->addRow(QCoreApplication::translate("Dialogs", "Word spacing:"), word);
     auto *kernRow = new QHBoxLayout();
     kernRow->addWidget(kern);
     kernRow->addWidget(kernFrom);
-    kernRow->addWidget(new QLabel(QStringLiteral("and above"), &dlg.d));
+    kernRow->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "and above"), &dlg.d));
     kernRow->addStretch(1);
     form->addRow(kernRow);
     dlg.v->addLayout(form);
@@ -991,7 +995,7 @@ void characterSpacingDialog(QWidget *p, Editor *ed)
     f.setFontKerning(kern->isChecked());
     f.setProperty(tp::KernAbove, kernFrom->value());
     f.setFontWordSpacing(word->value());
-    ed->mergeCharFormat(f, QStringLiteral("Character Spacing"));
+    ed->mergeCharFormat(f, QCoreApplication::translate("Dialogs", "Character Spacing"));
 }
 
 // ---------------- Format Object ----------------
@@ -1002,14 +1006,14 @@ void formatObjectDialog(QWidget *p, Editor *ed, int tab)
         if (ed->selection().isEmpty()) return;
         it = ed->selectedItems().first();
     }
-    Dlg dlg(p, QStringLiteral("Format %1").arg(itemTypeName(it->type())));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Format %1").arg(itemTypeName(it->type())));
     auto *tabs = new QTabWidget(&dlg.d);
     // Colors and Lines.
     auto *cl = new QWidget();
     auto *clf = new QFormLayout(cl);
     Fill fill = it->fill;
     auto *fillColor = colorPick(ed, fill.type == Fill::Solid ? fill.color : ColorRef::none(), true, cl);
-    auto *fillFx = new QPushButton(QStringLiteral("Fill Effects…"), cl);
+    auto *fillFx = new QPushButton(QCoreApplication::translate("Dialogs", "Fill Effects…"), cl);
     QObject::connect(fillFx, &QPushButton::clicked, cl, [&] { if (fillEffectsDialog(cl, ed, fill)) fillColor->setCurrent(fill.type == Fill::Solid ? fill.color : ColorRef::none()); });
     QObject::connect(fillColor, &ColorButton::colorPicked, cl, [&](const ColorRef &c) { fill = c.isNone() ? Fill() : Fill::solid(c, fill.transparency); });
     auto *fillRow = new QHBoxLayout();
@@ -1024,23 +1028,23 @@ void formatObjectDialog(QWidget *p, Editor *ed, int tab)
     for (int d = 0; d < 8; ++d) dash->addItem(dashName(Stroke::Dash(d)));
     dash->setCurrentIndex(int(it->stroke.dash));
     auto *compound = new QComboBox(cl);
-    compound->addItems({"Single", "Double", "Thick-thin", "Thin-thick", "Triple"});
+    compound->addItems({QCoreApplication::translate("Dialogs", "Single"), QCoreApplication::translate("Dialogs", "Double"), QCoreApplication::translate("Dialogs", "Thick-thin"), QCoreApplication::translate("Dialogs", "Thin-thick"), QCoreApplication::translate("Dialogs", "Triple")});
     compound->setCurrentIndex(int(it->stroke.compound));
     auto *begin = new QComboBox(cl), *end = new QComboBox(cl);
-    for (QComboBox *c : {begin, end}) c->addItems({"None", "Arrow", "Open arrow", "Stealth arrow", "Diamond", "Oval"});
+    for (QComboBox *c : {begin, end}) c->addItems({QCoreApplication::translate("Dialogs", "None"), QCoreApplication::translate("Dialogs", "Arrow"), QCoreApplication::translate("Dialogs", "Open arrow"), QCoreApplication::translate("Dialogs", "Stealth arrow"), QCoreApplication::translate("Dialogs", "Diamond"), QCoreApplication::translate("Dialogs", "Oval")});
     begin->setCurrentIndex(int(it->stroke.startArrow));
     end->setCurrentIndex(int(it->stroke.endArrow));
-    clf->addRow(QStringLiteral("Fill color:"), fillRow);
-    clf->addRow(QStringLiteral("Transparency:"), trans);
-    clf->addRow(QStringLiteral("Line color:"), lineColor);
-    clf->addRow(QStringLiteral("Line weight:"), lineWidth);
-    clf->addRow(QStringLiteral("Dash type:"), dash);
-    clf->addRow(QStringLiteral("Compound type:"), compound);
+    clf->addRow(QCoreApplication::translate("Dialogs", "Fill color:"), fillRow);
+    clf->addRow(QCoreApplication::translate("Dialogs", "Transparency:"), trans);
+    clf->addRow(QCoreApplication::translate("Dialogs", "Line color:"), lineColor);
+    clf->addRow(QCoreApplication::translate("Dialogs", "Line weight:"), lineWidth);
+    clf->addRow(QCoreApplication::translate("Dialogs", "Dash type:"), dash);
+    clf->addRow(QCoreApplication::translate("Dialogs", "Compound type:"), compound);
     if (it->type() == ItemType::Line) {
-        clf->addRow(QStringLiteral("Begin style:"), begin);
-        clf->addRow(QStringLiteral("End style:"), end);
+        clf->addRow(QCoreApplication::translate("Dialogs", "Begin style:"), begin);
+        clf->addRow(QCoreApplication::translate("Dialogs", "End style:"), end);
     }
-    tabs->addTab(cl, QStringLiteral("Colors and Lines"));
+    tabs->addTab(cl, QCoreApplication::translate("Dialogs", "Colors and Lines"));
     // Size.
     auto *sz = new QWidget();
     auto *szf = new QFormLayout(sz);
@@ -1049,16 +1053,16 @@ void formatObjectDialog(QWidget *p, Editor *ed, int tab)
     rot->setRange(-360, 360);
     rot->setSuffix(QStringLiteral("°"));
     rot->setValue(it->rotation);
-    auto *lockAspect = new QCheckBox(QStringLiteral("Lock aspect ratio"), sz);
+    auto *lockAspect = new QCheckBox(QCoreApplication::translate("Dialogs", "Lock aspect ratio"), sz);
     lockAspect->setChecked(it->type() == ItemType::Picture);
     const double ratio = it->rect.width() / std::max(1.0, it->rect.height());
     QObject::connect(w, &QDoubleSpinBox::valueChanged, sz, [=](double v) { if (lockAspect->isChecked() && !h->hasFocus()) { const QSignalBlocker b(h); h->setValue(v / ratio); } });
     QObject::connect(h, &QDoubleSpinBox::valueChanged, sz, [=](double v) { if (lockAspect->isChecked() && !w->hasFocus()) { const QSignalBlocker b(w); w->setValue(v * ratio); } });
-    szf->addRow(QStringLiteral("Height:"), h);
-    szf->addRow(QStringLiteral("Width:"), w);
-    szf->addRow(QStringLiteral("Rotation:"), rot);
+    szf->addRow(QCoreApplication::translate("Dialogs", "Height:"), h);
+    szf->addRow(QCoreApplication::translate("Dialogs", "Width:"), w);
+    szf->addRow(QCoreApplication::translate("Dialogs", "Rotation:"), rot);
     szf->addRow(lockAspect);
-    tabs->addTab(sz, QStringLiteral("Size"));
+    tabs->addTab(sz, QCoreApplication::translate("Dialogs", "Size"));
     // Layout.
     auto *lay = new QWidget();
     auto *layf = new QFormLayout(lay);
@@ -1066,21 +1070,21 @@ void formatObjectDialog(QWidget *p, Editor *ed, int tab)
     x->setMinimum(-10000);
     y->setMinimum(-10000);
     auto *wrap = new QComboBox(lay);
-    wrap->addItems({"None", "Square", "Tight", "Through", "Top and bottom"});
+    wrap->addItems({QCoreApplication::translate("Dialogs", "None"), QCoreApplication::translate("Dialogs", "Square"), QCoreApplication::translate("Dialogs", "Tight"), QCoreApplication::translate("Dialogs", "Through"), QCoreApplication::translate("Dialogs", "Top and bottom")});
     wrap->setCurrentIndex(int(it->wrap.mode));
     auto *side = new QComboBox(lay);
-    side->addItems({"Both sides", "Left only", "Right only", "Largest side"});
+    side->addItems({QCoreApplication::translate("Dialogs", "Both sides"), QCoreApplication::translate("Dialogs", "Left only"), QCoreApplication::translate("Dialogs", "Right only"), QCoreApplication::translate("Dialogs", "Largest side")});
     side->setCurrentIndex(int(it->wrap.side));
     auto *dt = measure(it->wrap.top, lay), *db = measure(it->wrap.bottom, lay), *dl = measure(it->wrap.left, lay), *dr = measure(it->wrap.right, lay);
-    layf->addRow(QStringLiteral("Horizontal position:"), x);
-    layf->addRow(QStringLiteral("Vertical position:"), y);
-    layf->addRow(QStringLiteral("Wrapping style:"), wrap);
-    layf->addRow(QStringLiteral("Wrap text:"), side);
-    layf->addRow(QStringLiteral("Distance from text — top:"), dt);
-    layf->addRow(QStringLiteral("bottom:"), db);
-    layf->addRow(QStringLiteral("left:"), dl);
-    layf->addRow(QStringLiteral("right:"), dr);
-    tabs->addTab(lay, QStringLiteral("Layout"));
+    layf->addRow(QCoreApplication::translate("Dialogs", "Horizontal position:"), x);
+    layf->addRow(QCoreApplication::translate("Dialogs", "Vertical position:"), y);
+    layf->addRow(QCoreApplication::translate("Dialogs", "Wrapping style:"), wrap);
+    layf->addRow(QCoreApplication::translate("Dialogs", "Wrap text:"), side);
+    layf->addRow(QCoreApplication::translate("Dialogs", "Distance from text — top:"), dt);
+    layf->addRow(QCoreApplication::translate("Dialogs", "bottom:"), db);
+    layf->addRow(QCoreApplication::translate("Dialogs", "left:"), dl);
+    layf->addRow(QCoreApplication::translate("Dialogs", "right:"), dr);
+    tabs->addTab(lay, QCoreApplication::translate("Dialogs", "Layout"));
     // Text box.
     QMarginsF ins;
     int columns = 1;
@@ -1092,14 +1096,14 @@ void formatObjectDialog(QWidget *p, Editor *ed, int tab)
     auto *tbf = new QFormLayout(tb);
     auto *tl = measure(0, tb), *tt = measure(0, tb), *tr = measure(0, tb), *tbm = measure(0, tb);
     auto *va = new QComboBox(tb);
-    va->addItems({"Top", "Middle", "Bottom"});
+    va->addItems({QCoreApplication::translate("Dialogs", "Top"), QCoreApplication::translate("Dialogs", "Middle"), QCoreApplication::translate("Dialogs", "Bottom")});
     auto *fit = new QComboBox(tb);
-    fit->addItems({"Do Not Autofit", "Best Fit", "Shrink Text On Overflow", "Grow Text Box to Fit"});
+    fit->addItems({QCoreApplication::translate("Dialogs", "Do Not Autofit"), QCoreApplication::translate("Dialogs", "Best Fit"), QCoreApplication::translate("Dialogs", "Shrink Text On Overflow"), QCoreApplication::translate("Dialogs", "Grow Text Box to Fit")});
     auto *cols = new QSpinBox(tb);
     cols->setRange(1, 63);
     auto *gap = measure(9, tb);
-    auto *cOn = new QCheckBox(QStringLiteral("Include \"Continued on page…\""), tb);
-    auto *cFrom = new QCheckBox(QStringLiteral("Include \"Continued from page…\""), tb);
+    auto *cOn = new QCheckBox(QCoreApplication::translate("Dialogs", "Include \"Continued on page…\""), tb);
+    auto *cFrom = new QCheckBox(QCoreApplication::translate("Dialogs", "Include \"Continued from page…\""), tb);
     const bool isText = it->type() == ItemType::Text, isShape = it->type() == ItemType::Shape;
     if (auto *t = dynamic_cast<TextItem *>(it)) {
         ins = t->insets; columns = t->columns; colGap = t->columnGap; valign = t->valign; autofit = int(t->autofit); contOn = t->continuedOn; contFrom = t->continuedFrom;
@@ -1113,19 +1117,19 @@ void formatObjectDialog(QWidget *p, Editor *ed, int tab)
     gap->setValue(colGap);
     cOn->setChecked(contOn);
     cFrom->setChecked(contFrom);
-    tbf->addRow(QStringLiteral("Vertical alignment:"), va);
-    if (isText) tbf->addRow(QStringLiteral("Text autofitting:"), fit);
-    tbf->addRow(QStringLiteral("Left margin:"), tl);
-    tbf->addRow(QStringLiteral("Right margin:"), tr);
-    tbf->addRow(QStringLiteral("Top margin:"), tt);
-    tbf->addRow(QStringLiteral("Bottom margin:"), tbm);
+    tbf->addRow(QCoreApplication::translate("Dialogs", "Vertical alignment:"), va);
+    if (isText) tbf->addRow(QCoreApplication::translate("Dialogs", "Text autofitting:"), fit);
+    tbf->addRow(QCoreApplication::translate("Dialogs", "Left margin:"), tl);
+    tbf->addRow(QCoreApplication::translate("Dialogs", "Right margin:"), tr);
+    tbf->addRow(QCoreApplication::translate("Dialogs", "Top margin:"), tt);
+    tbf->addRow(QCoreApplication::translate("Dialogs", "Bottom margin:"), tbm);
     if (isText) {
-        tbf->addRow(QStringLiteral("Columns:"), cols);
-        tbf->addRow(QStringLiteral("Column spacing:"), gap);
+        tbf->addRow(QCoreApplication::translate("Dialogs", "Columns:"), cols);
+        tbf->addRow(QCoreApplication::translate("Dialogs", "Column spacing:"), gap);
         tbf->addRow(cOn);
         tbf->addRow(cFrom);
     }
-    if (isText || isShape) tabs->addTab(tb, QStringLiteral("Text Box"));
+    if (isText || isShape) tabs->addTab(tb, QCoreApplication::translate("Dialogs", "Text Box"));
     // Picture.
     auto *pic = dynamic_cast<PictureItem *>(it);
     auto *pw = new QWidget();
@@ -1134,7 +1138,7 @@ void formatObjectDialog(QWidget *p, Editor *ed, int tab)
     bright->setRange(-100, 100);
     contrast->setRange(-100, 100);
     auto *recolor = new QComboBox(pw);
-    recolor->addItems({"None", "Grayscale", "Sepia", "Washout", "Black and white", "Tint"});
+    recolor->addItems({QCoreApplication::translate("Dialogs", "None"), QCoreApplication::translate("Dialogs", "Grayscale"), QCoreApplication::translate("Dialogs", "Sepia"), QCoreApplication::translate("Dialogs", "Washout"), QCoreApplication::translate("Dialogs", "Black and white"), QCoreApplication::translate("Dialogs", "Tint")});
     auto *ptrans = new QSlider(Qt::Horizontal, pw);
     ptrans->setRange(0, 100);
     if (pic) {
@@ -1142,27 +1146,27 @@ void formatObjectDialog(QWidget *p, Editor *ed, int tab)
         contrast->setValue(int(pic->contrast));
         recolor->setCurrentIndex(int(pic->recolor));
         ptrans->setValue(int(pic->transparency * 100));
-        pf->addRow(QStringLiteral("Brightness:"), bright);
-        pf->addRow(QStringLiteral("Contrast:"), contrast);
-        pf->addRow(QStringLiteral("Color:"), recolor);
-        pf->addRow(QStringLiteral("Transparency:"), ptrans);
-        tabs->addTab(pw, QStringLiteral("Picture"));
+        pf->addRow(QCoreApplication::translate("Dialogs", "Brightness:"), bright);
+        pf->addRow(QCoreApplication::translate("Dialogs", "Contrast:"), contrast);
+        pf->addRow(QCoreApplication::translate("Dialogs", "Color:"), recolor);
+        pf->addRow(QCoreApplication::translate("Dialogs", "Transparency:"), ptrans);
+        tabs->addTab(pw, QCoreApplication::translate("Dialogs", "Picture"));
     }
     // Web / Alt text.
     auto *wb = new QWidget();
     auto *wbf = new QFormLayout(wb);
     auto *alt = new QPlainTextEdit(it->altText, wb);
     auto *link = new QLineEdit(it->hyperlink, wb);
-    wbf->addRow(QStringLiteral("Alternative text:"), alt);
-    wbf->addRow(QStringLiteral("Hyperlink:"), link);
-    tabs->addTab(wb, QStringLiteral("Alt Text"));
+    wbf->addRow(QCoreApplication::translate("Dialogs", "Alternative text:"), alt);
+    wbf->addRow(QCoreApplication::translate("Dialogs", "Hyperlink:"), link);
+    tabs->addTab(wb, QCoreApplication::translate("Dialogs", "Alt Text"));
     // Map caller's tab index (0 colors, 1 size, 2 layout, 3 text box, 4 picture, 5 alt text).
     QWidget *want[] = {cl, sz, lay, tb, pw, wb};
     const int idx = tabs->indexOf(want[std::clamp(tab, 0, 5)]);
     if (idx >= 0) tabs->setCurrentIndex(idx);
     dlg.v->addWidget(tabs);
     if (!dlg.exec()) return;
-    ed->forEachSelected(QStringLiteral("Format Object"), [&](Item *o) {
+    ed->forEachSelected(QCoreApplication::translate("Dialogs", "Format Object"), [&](Item *o) {
         fill.transparency = trans->value() / 100.0;
         if (fill.type != Fill::NoFill || fillColor->current().isNone()) o->fill = fill;
         o->stroke.color = lineColor->current();
@@ -1212,7 +1216,7 @@ void formatObjectDialog(QWidget *p, Editor *ed, int tab)
 // ---------------- Insert Table / Page ----------------
 void insertTableDialog(QWidget *p, Editor *ed)
 {
-    Dlg dlg(p, QStringLiteral("Create Table"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Create Table"));
     auto *form = new QFormLayout();
     auto *rows = new QSpinBox(&dlg.d), *cols = new QSpinBox(&dlg.d);
     rows->setRange(1, 128);
@@ -1220,35 +1224,45 @@ void insertTableDialog(QWidget *p, Editor *ed)
     rows->setValue(4);
     cols->setValue(4);
     auto *fmt = new QComboBox(&dlg.d);
-    fmt->addItem("None");
-    for (int i = 1; i <= 20; ++i) fmt->addItem(QStringLiteral("Table Style %1").arg(i));
-    fmt->addItems({"Basic 1", "Basic 2", "Basic 3", "Checkbook Register", "List 1", "List 2", "List 3", "Numbers 1", "Numbers 2"});
+    // Each format shows in the program's language; its English name, which
+    // the table code knows it by, rides along as the item's data.
+    fmt->addItem(QCoreApplication::translate("Dialogs", "None"), QStringLiteral("None"));
+    for (int i = 1; i <= 20; ++i) fmt->addItem(QCoreApplication::translate("Dialogs", "Table Style %1").arg(i), QStringLiteral("Table Style %1").arg(i));
+    fmt->addItem(QCoreApplication::translate("Dialogs", "Basic 1"), QStringLiteral("Basic 1"));
+    fmt->addItem(QCoreApplication::translate("Dialogs", "Basic 2"), QStringLiteral("Basic 2"));
+    fmt->addItem(QCoreApplication::translate("Dialogs", "Basic 3"), QStringLiteral("Basic 3"));
+    fmt->addItem(QCoreApplication::translate("Dialogs", "Checkbook Register"), QStringLiteral("Checkbook Register"));
+    fmt->addItem(QCoreApplication::translate("Dialogs", "List 1"), QStringLiteral("List 1"));
+    fmt->addItem(QCoreApplication::translate("Dialogs", "List 2"), QStringLiteral("List 2"));
+    fmt->addItem(QCoreApplication::translate("Dialogs", "List 3"), QStringLiteral("List 3"));
+    fmt->addItem(QCoreApplication::translate("Dialogs", "Numbers 1"), QStringLiteral("Numbers 1"));
+    fmt->addItem(QCoreApplication::translate("Dialogs", "Numbers 2"), QStringLiteral("Numbers 2"));
     fmt->setCurrentIndex(1);
-    form->addRow(QStringLiteral("Number of rows:"), rows);
-    form->addRow(QStringLiteral("Number of columns:"), cols);
-    form->addRow(QStringLiteral("Table format:"), fmt);
+    form->addRow(QCoreApplication::translate("Dialogs", "Number of rows:"), rows);
+    form->addRow(QCoreApplication::translate("Dialogs", "Number of columns:"), cols);
+    form->addRow(QCoreApplication::translate("Dialogs", "Table format:"), fmt);
     dlg.v->addLayout(form);
     if (!dlg.exec()) return;
     const QSizeF ps = ed->doc()->pageSize();
     const double w = std::min(ps.width() * 0.8, 72.0 * cols->value()), h = 22.0 * rows->value();
-    ed->addItem(ed->newTable(QRectF((ps.width() - w) / 2, (ps.height() - h) / 2, w, h), rows->value(), cols->value(), fmt->currentText()));
+    ed->addItem(ed->newTable(QRectF((ps.width() - w) / 2, (ps.height() - h) / 2, w, h), rows->value(), cols->value(), fmt->currentData().toString()));
 }
 
 void insertPageDialog(QWidget *p, Editor *ed)
 {
-    Dlg dlg(p, QStringLiteral("Insert Page"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Insert Page"));
     auto *form = new QFormLayout();
     auto *count = new QSpinBox(&dlg.d);
     count->setRange(1, 999);
-    auto *before = new QRadioButton(QStringLiteral("Before current page"), &dlg.d), *after = new QRadioButton(QStringLiteral("After current page"), &dlg.d);
+    auto *before = new QRadioButton(QCoreApplication::translate("Dialogs", "Before current page"), &dlg.d), *after = new QRadioButton(QCoreApplication::translate("Dialogs", "After current page"), &dlg.d);
     after->setChecked(true);
-    auto *blank = new QRadioButton(QStringLiteral("Insert blank pages"), &dlg.d), *textbox = new QRadioButton(QStringLiteral("Create one text box on each page"), &dlg.d),
-         *dup = new QRadioButton(QStringLiteral("Duplicate all objects on page:"), &dlg.d);
+    auto *blank = new QRadioButton(QCoreApplication::translate("Dialogs", "Insert blank pages"), &dlg.d), *textbox = new QRadioButton(QCoreApplication::translate("Dialogs", "Create one text box on each page"), &dlg.d),
+         *dup = new QRadioButton(QCoreApplication::translate("Dialogs", "Duplicate all objects on page:"), &dlg.d);
     blank->setChecked(true);
     auto *srcPage = new QSpinBox(&dlg.d);
     srcPage->setRange(1, ed->doc()->pages.size());
     srcPage->setValue(ed->currentPage() + 1);
-    form->addRow(QStringLiteral("Number of new pages:"), count);
+    form->addRow(QCoreApplication::translate("Dialogs", "Number of new pages:"), count);
     form->addRow(before);
     form->addRow(after);
     form->addRow(blank);
@@ -1259,13 +1273,13 @@ void insertPageDialog(QWidget *p, Editor *ed)
     form->addRow(dupRow);
     auto *master = new QComboBox(&dlg.d);
     for (const auto &m : ed->doc()->masters) master->addItem(QStringLiteral("(%1) %2").arg(m->abbr, m->name), m->id);
-    form->addRow(QStringLiteral("Master page:"), master);
+    form->addRow(QCoreApplication::translate("Dialogs", "Master page:"), master);
     dlg.v->addLayout(form);
     if (!dlg.exec()) return;
     int at = before->isChecked() ? ed->currentPage() - 1 : ed->currentPage();
     if (dup->isChecked()) {
         const int src = srcPage->value() - 1;
-        ed->beginChange(QStringLiteral("Insert Page"));
+        ed->beginChange(QCoreApplication::translate("Dialogs", "Insert Page"));
         for (int i = 0; i < count->value(); ++i) {
             auto pg = ed->doc()->addPage(at + 1 + i, master->currentData().toString());
             for (const auto &it : ed->doc()->cloneItems(ed->doc()->pages[src < at + 1 + i ? src : src + 1]->items)) pg->items.push_back(it);
@@ -1283,18 +1297,18 @@ QStringList recentSymbols() { return Settings::get().value(QStringLiteral("symbo
 bool insertSymbol(QWidget *p, Editor *ed, const QString &ch, const QString &font)
 {
     if (!ed->isEditingText()) {
-        QMessageBox::information(p, QStringLiteral("Symbol"), QStringLiteral("Click in a text box first."));
+        QMessageBox::information(p, QCoreApplication::translate("Dialogs", "Symbol"), QCoreApplication::translate("Dialogs", "Click in a text box first."));
         return false;
     }
     if (!font.isEmpty()) {
         QTextCharFormat cf = ed->cursor().charFormat();
         cf.setFontFamilies(QStringList{font});
-        ed->beginChange(QStringLiteral("Insert Symbol"));
+        ed->beginChange(QCoreApplication::translate("Dialogs", "Insert Symbol"));
         ed->cursor().insertText(ch, cf);
         ed->endChange();
         ed->textEdited();
     } else {
-        ed->insertTextBlock(ch, QStringLiteral("Insert Symbol"));
+        ed->insertTextBlock(ch, QCoreApplication::translate("Dialogs", "Insert Symbol"));
     }
     QStringList recents = recentSymbols();
     const QString entry = font.isEmpty() ? ch : ch + QLatin1Char('\t') + font;
@@ -1307,21 +1321,21 @@ bool insertSymbol(QWidget *p, Editor *ed, const QString &ch, const QString &font
 
 void symbolDialog(QWidget *p, Editor *ed)
 {
-    Dlg dlg(p, QStringLiteral("Symbol"), QDialogButtonBox::Close);
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Symbol"), QDialogButtonBox::Close);
     auto *font = new QComboBox(&dlg.d);
-    font->addItem(QStringLiteral("(normal text)"));
+    font->addItem(QCoreApplication::translate("Dialogs", "(normal text)"));
     font->addItems(QFontDatabase::families());
     auto *subset = new QComboBox(&dlg.d);
-    const QVector<QPair<QString, QPair<int, int>>> ranges = {{"Basic Latin", {0x20, 0x7E}}, {"Latin-1 Supplement", {0xA0, 0xFF}}, {"Latin Extended-A", {0x100, 0x17F}},
-                                                            {"Greek", {0x370, 0x3FF}}, {"Cyrillic", {0x400, 0x4FF}}, {"General Punctuation", {0x2000, 0x206F}},
-                                                            {"Currency Symbols", {0x20A0, 0x20CF}}, {"Letterlike Symbols", {0x2100, 0x214F}}, {"Number Forms", {0x2150, 0x218F}},
-                                                            {"Arrows", {0x2190, 0x21FF}}, {"Mathematical Operators", {0x2200, 0x22FF}}, {"Box Drawing", {0x2500, 0x257F}},
-                                                            {"Geometric Shapes", {0x25A0, 0x25FF}}, {"Miscellaneous Symbols", {0x2600, 0x26FF}}, {"Dingbats", {0x2700, 0x27BF}}};
+    const QVector<QPair<QString, QPair<int, int>>> ranges = {{QCoreApplication::translate("Dialogs", "Basic Latin"), {0x20, 0x7E}}, {QCoreApplication::translate("Dialogs", "Latin-1 Supplement"), {0xA0, 0xFF}}, {QCoreApplication::translate("Dialogs", "Latin Extended-A"), {0x100, 0x17F}},
+                                                            {QCoreApplication::translate("Dialogs", "Greek"), {0x370, 0x3FF}}, {QCoreApplication::translate("Dialogs", "Cyrillic"), {0x400, 0x4FF}}, {QCoreApplication::translate("Dialogs", "General Punctuation"), {0x2000, 0x206F}},
+                                                            {QCoreApplication::translate("Dialogs", "Currency Symbols"), {0x20A0, 0x20CF}}, {QCoreApplication::translate("Dialogs", "Letterlike Symbols"), {0x2100, 0x214F}}, {QCoreApplication::translate("Dialogs", "Number Forms"), {0x2150, 0x218F}},
+                                                            {QCoreApplication::translate("Dialogs", "Arrows"), {0x2190, 0x21FF}}, {QCoreApplication::translate("Dialogs", "Mathematical Operators"), {0x2200, 0x22FF}}, {QCoreApplication::translate("Dialogs", "Box Drawing"), {0x2500, 0x257F}},
+                                                            {QCoreApplication::translate("Dialogs", "Geometric Shapes"), {0x25A0, 0x25FF}}, {QCoreApplication::translate("Dialogs", "Miscellaneous Symbols"), {0x2600, 0x26FF}}, {QCoreApplication::translate("Dialogs", "Dingbats"), {0x2700, 0x27BF}}};
     for (const auto &r : ranges) subset->addItem(r.first);
     auto *top = new QHBoxLayout();
-    top->addWidget(new QLabel(QStringLiteral("Font:")));
+    top->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "Font:")));
     top->addWidget(font, 1);
-    top->addWidget(new QLabel(QStringLiteral("Subset:")));
+    top->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "Subset:")));
     top->addWidget(subset, 1);
     dlg.v->addLayout(top);
     auto makeGrid = [&](int rows) {
@@ -1381,7 +1395,7 @@ void symbolDialog(QWidget *p, Editor *ed)
     fillRecent();
     QTableWidget *chosenFrom = grid;
     auto showCode = [=](QTableWidgetItem *it) {
-        if (it) code->setText(QStringLiteral("Character code: %1 (Unicode U+%2)").arg(it->data(Qt::UserRole).toInt()).arg(it->data(Qt::UserRole).toInt(), 4, 16, QChar('0')).toUpper());
+        if (it) code->setText(QCoreApplication::translate("Dialogs", "Character code: %1 (Unicode U+%2)").arg(it->data(Qt::UserRole).toInt()).arg(it->data(Qt::UserRole).toInt(), 4, 16, QChar('0')).toUpper());
     };
     QObject::connect(grid, &QTableWidget::currentItemChanged, &dlg.d, [&, showCode](QTableWidgetItem *it) { chosenFrom = grid; showCode(it); });
     QObject::connect(recent, &QTableWidget::currentItemChanged, &dlg.d, [&, showCode](QTableWidgetItem *it) { chosenFrom = recent; showCode(it); });
@@ -1391,10 +1405,10 @@ void symbolDialog(QWidget *p, Editor *ed)
     };
     QObject::connect(grid, &QTableWidget::itemDoubleClicked, &dlg.d, insert);
     QObject::connect(recent, &QTableWidget::itemDoubleClicked, &dlg.d, insert);
-    auto *ins = dlg.bb->addButton(QStringLiteral("Insert"), QDialogButtonBox::ActionRole);
+    auto *ins = dlg.bb->addButton(QCoreApplication::translate("Dialogs", "Insert"), QDialogButtonBox::ActionRole);
     QObject::connect(ins, &QPushButton::clicked, &dlg.d, [&] { insert(chosenFrom->currentItem()); });
     dlg.v->addWidget(grid, 1);
-    dlg.v->addWidget(new QLabel(QStringLiteral("Recently used symbols:"), &dlg.d));
+    dlg.v->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "Recently used symbols:"), &dlg.d));
     dlg.v->addWidget(recent);
     dlg.v->addWidget(code);
     dlg.exec();
@@ -1404,10 +1418,10 @@ void symbolDialog(QWidget *p, Editor *ed)
 void dateTimeDialog(QWidget *p, Editor *ed)
 {
     if (!ed->isEditingText()) {
-        QMessageBox::information(p, QStringLiteral("Date and Time"), QStringLiteral("Click in a text box first."));
+        QMessageBox::information(p, QCoreApplication::translate("Dialogs", "Date and Time"), QCoreApplication::translate("Dialogs", "Click in a text box first."));
         return;
     }
-    Dlg dlg(p, QStringLiteral("Date and Time"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Date and Time"));
     auto *list = new QListWidget(&dlg.d);
     const QStringList &formats = dateTimeFormats();
     const QDateTime now = QDateTime::currentDateTime();
@@ -1417,42 +1431,42 @@ void dateTimeDialog(QWidget *p, Editor *ed)
         list->addItem(it);
     }
     list->setCurrentRow(0);
-    auto *update = new QCheckBox(QStringLiteral("Update automatically"), &dlg.d);
+    auto *update = new QCheckBox(QCoreApplication::translate("Dialogs", "Update automatically"), &dlg.d);
     dlg.v->addWidget(list);
     dlg.v->addWidget(update);
     QObject::connect(list, &QListWidget::itemDoubleClicked, &dlg.d, &QDialog::accept);
     if (!dlg.exec()) return;
     const QString f = list->currentItem()->data(Qt::UserRole).toString();
     if (update->isChecked()) ed->insertField(QStringLiteral("datetime:") + f);
-    else ed->insertTextBlock(now.toString(f), QStringLiteral("Insert Date and Time"));
+    else ed->insertTextBlock(now.toString(f), QCoreApplication::translate("Dialogs", "Insert Date and Time"));
 }
 
 // ---------------- Hyperlink / Bookmark ----------------
 void hyperlinkDialog(QWidget *p, Editor *ed)
 {
-    Dlg dlg(p, QStringLiteral("Insert Hyperlink"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Insert Hyperlink"));
     auto *kind = new QComboBox(&dlg.d);
-    kind->addItems({"Existing file or web page", "Place in this document", "Email address"});
+    kind->addItems({QCoreApplication::translate("Dialogs", "Existing file or web page"), QCoreApplication::translate("Dialogs", "Place in this document"), QCoreApplication::translate("Dialogs", "Email address")});
     auto *addr = new QLineEdit(&dlg.d);
     auto *display = new QLineEdit(&dlg.d);
     const QTextCharFormat cf = ed->currentCharFormat();
     addr->setText(cf.anchorHref());
     if (ed->isEditingText() && ed->cursor().hasSelection()) display->setText(ed->cursor().selectedText());
     auto *pages = new QComboBox(&dlg.d);
-    for (int i = 0; i < ed->doc()->pages.size(); ++i) pages->addItem(QStringLiteral("Page %1").arg(i + 1));
+    for (int i = 0; i < ed->doc()->pages.size(); ++i) pages->addItem(QCoreApplication::translate("Dialogs", "Page %1").arg(i + 1));
     auto *form = new QFormLayout();
-    form->addRow(QStringLiteral("Link to:"), kind);
-    form->addRow(QStringLiteral("Text to display:"), display);
-    form->addRow(QStringLiteral("Address:"), addr);
-    form->addRow(QStringLiteral("Page:"), pages);
+    form->addRow(QCoreApplication::translate("Dialogs", "Link to:"), kind);
+    form->addRow(QCoreApplication::translate("Dialogs", "Text to display:"), display);
+    form->addRow(QCoreApplication::translate("Dialogs", "Address:"), addr);
+    form->addRow(QCoreApplication::translate("Dialogs", "Page:"), pages);
     pages->setEnabled(false);
     QObject::connect(kind, &QComboBox::currentIndexChanged, &dlg.d, [=](int i) {
         pages->setEnabled(i == 1);
         addr->setEnabled(i != 1);
-        addr->setPlaceholderText(i == 2 ? QStringLiteral("name@example.com") : QStringLiteral("https://"));
+        addr->setPlaceholderText(i == 2 ? QCoreApplication::translate("Dialogs", "name@example.com") : QStringLiteral("https://"));
     });
     dlg.v->addLayout(form);
-    auto *remove = dlg.bb->addButton(QStringLiteral("Remove Link"), QDialogButtonBox::ResetRole);
+    auto *remove = dlg.bb->addButton(QCoreApplication::translate("Dialogs", "Remove Link"), QDialogButtonBox::ResetRole);
     bool removing = false;
     QObject::connect(remove, &QPushButton::clicked, &dlg.d, [&] { removing = true; dlg.d.accept(); });
     if (!dlg.exec()) return;
@@ -1460,7 +1474,7 @@ void hyperlinkDialog(QWidget *p, Editor *ed)
                  : kind->currentIndex() == 2 ? "mailto:" + addr->text().remove("mailto:") : addr->text().trimmed();
     if (kind->currentIndex() == 0 && !href.contains("://") && !href.isEmpty() && !QFileInfo::exists(href)) href = "https://" + href;
     if (!ed->isEditingText()) {
-        ed->forEachSelected(QStringLiteral("Hyperlink"), [&](Item *it) { it->hyperlink = removing ? QString() : href; });
+        ed->forEachSelected(QCoreApplication::translate("Dialogs", "Hyperlink"), [&](Item *it) { it->hyperlink = removing ? QString() : href; });
         return;
     }
     QTextCharFormat f;
@@ -1468,30 +1482,30 @@ void hyperlinkDialog(QWidget *p, Editor *ed)
         f.setAnchor(false);
         f.setAnchorHref(QString());
         f.setFontUnderline(false);
-        ed->mergeCharFormat(f, QStringLiteral("Remove Hyperlink"));
+        ed->mergeCharFormat(f, QCoreApplication::translate("Dialogs", "Remove Hyperlink"));
         return;
     }
     f.setAnchor(true);
     f.setAnchorHref(href);
     if (!ed->cursor().hasSelection()) {
-        ed->beginChange(QStringLiteral("Insert Hyperlink"));
+        ed->beginChange(QCoreApplication::translate("Dialogs", "Insert Hyperlink"));
         QTextCharFormat cf2 = ed->cursor().charFormat();
         cf2.merge(f);
         ed->cursor().insertText(display->text().isEmpty() ? href : display->text(), cf2);
         ed->endChange();
         ed->textEdited();
     } else {
-        ed->mergeCharFormat(f, QStringLiteral("Insert Hyperlink"));
+        ed->mergeCharFormat(f, QCoreApplication::translate("Dialogs", "Insert Hyperlink"));
     }
 }
 
 void bookmarkDialog(QWidget *p, Editor *ed)
 {
     bool ok = false;
-    const QString name = QInputDialog::getText(p, QStringLiteral("Bookmark"), QStringLiteral("Bookmark name:"), QLineEdit::Normal, QString(), &ok);
+    const QString name = QInputDialog::getText(p, QCoreApplication::translate("Dialogs", "Bookmark"), QCoreApplication::translate("Dialogs", "Bookmark name:"), QLineEdit::Normal, QString(), &ok);
     if (!ok || name.trimmed().isEmpty()) return;
-    if (ed->isEditingText()) ed->setCharProperty(QTextFormat::AnchorName, QStringList{name.trimmed()}, QStringLiteral("Bookmark"));
-    else ed->forEachSelected(QStringLiteral("Bookmark"), [&](Item *it) { it->name = "bookmark:" + name.trimmed(); });
+    if (ed->isEditingText()) ed->setCharProperty(QTextFormat::AnchorName, QStringList{name.trimmed()}, QCoreApplication::translate("Dialogs", "Bookmark"));
+    else ed->forEachSelected(QCoreApplication::translate("Dialogs", "Bookmark"), [&](Item *it) { it->name = "bookmark:" + name.trimmed(); });
 }
 
 // ---------------- Business Information ----------------
@@ -1500,14 +1514,14 @@ void businessInfoDialog(QWidget *p, Editor *ed)
     Document *doc = ed->doc();
     QVector<BusinessInfo> sets = doc->biz;
     int current = doc->bizCurrent;
-    Dlg dlg(p, QStringLiteral("Business Information"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Business Information"));
     auto *top = new QHBoxLayout();
     auto *setBox = new QComboBox(&dlg.d);
     for (const auto &b : sets) setBox->addItem(b.setName);
     setBox->setCurrentIndex(current);
-    auto *newSet = new QPushButton(QStringLiteral("New…"), &dlg.d);
-    auto *delSet = new QPushButton(QStringLiteral("Delete"), &dlg.d);
-    top->addWidget(new QLabel(QStringLiteral("Select a Business Information set:")));
+    auto *newSet = new QPushButton(QCoreApplication::translate("Dialogs", "New…"), &dlg.d);
+    auto *delSet = new QPushButton(QCoreApplication::translate("Dialogs", "Delete"), &dlg.d);
+    top->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "Select a Business Information set:")));
     top->addWidget(setBox, 1);
     top->addWidget(newSet);
     top->addWidget(delSet);
@@ -1519,21 +1533,21 @@ void businessInfoDialog(QWidget *p, Editor *ed)
         if (k == "address") { auto *pe = new QPlainTextEdit(&dlg.d); pe->setFixedHeight(60); w = pe; }
         else w = new QLineEdit(&dlg.d);
         edits[k] = w;
-        form->addRow(BusinessInfo::label(k) + ':', w);
+        form->addRow(QCoreApplication::translate("Dialogs", "%1:").arg(BusinessInfo::label(k)), w);
     }
     auto *setName = new QLineEdit(&dlg.d);
-    form->addRow(QStringLiteral("Business Information set name:"), setName);
+    form->addRow(QCoreApplication::translate("Dialogs", "Business Information set name:"), setName);
     auto *logo = new QLabel(&dlg.d);
     logo->setFixedSize(96, 64);
     logo->setFrameShape(QFrame::StyledPanel);
     logo->setAlignment(Qt::AlignCenter);
-    auto *addLogo = new QPushButton(QStringLiteral("Add Logo…"), &dlg.d);
-    auto *removeLogo = new QPushButton(QStringLiteral("Remove Logo"), &dlg.d);
+    auto *addLogo = new QPushButton(QCoreApplication::translate("Dialogs", "Add Logo…"), &dlg.d);
+    auto *removeLogo = new QPushButton(QCoreApplication::translate("Dialogs", "Remove Logo"), &dlg.d);
     auto *logoRow = new QHBoxLayout();
     logoRow->addWidget(logo);
     logoRow->addWidget(addLogo);
     logoRow->addWidget(removeLogo);
-    form->addRow(QStringLiteral("Logo:"), logoRow);
+    form->addRow(QCoreApplication::translate("Dialogs", "Logo:"), logoRow);
     dlg.v->addLayout(form);
     auto load = [&](int i) {
         const BusinessInfo &b = sets[i];
@@ -1563,7 +1577,7 @@ void businessInfoDialog(QWidget *p, Editor *ed)
     QObject::connect(newSet, &QPushButton::clicked, &dlg.d, [&] {
         store(current);
         BusinessInfo b;
-        b.setName = QStringLiteral("Business Information %1").arg(sets.size() + 1);
+        b.setName = QCoreApplication::translate("Dialogs", "Business Information %1").arg(sets.size() + 1);
         sets << b;
         setBox->addItem(b.setName);
         setBox->setCurrentIndex(sets.size() - 1);
@@ -1579,7 +1593,7 @@ void businessInfoDialog(QWidget *p, Editor *ed)
     });
     QString pendingLogo;
     QObject::connect(addLogo, &QPushButton::clicked, &dlg.d, [&] {
-        const QString f = QFileDialog::getOpenFileName(&dlg.d, QStringLiteral("Logo"), QString(), QStringLiteral("Pictures (*.png *.jpg *.jpeg *.gif *.bmp *.svg *.wmf *.emf)"));
+        const QString f = QFileDialog::getOpenFileName(&dlg.d, QCoreApplication::translate("Dialogs", "Logo"), QString(), QCoreApplication::translate("Dialogs", "Pictures (*.png *.jpg *.jpeg *.gif *.bmp *.svg *.wmf *.emf)"));
         if (f.isEmpty()) return;
         QFile file(f);
         if (!file.open(QIODevice::ReadOnly)) return;
@@ -1589,7 +1603,7 @@ void businessInfoDialog(QWidget *p, Editor *ed)
     QObject::connect(removeLogo, &QPushButton::clicked, &dlg.d, [&] { sets[current].logoImageId.clear(); load(current); });
     if (!dlg.exec()) return;
     store(current);
-    ed->change(QStringLiteral("Business Information"), [&] {
+    ed->change(QCoreApplication::translate("Dialogs", "Business Information"), [&] {
         doc->biz = sets;
         doc->bizCurrent = current;
     });
@@ -1600,7 +1614,7 @@ void businessInfoDialog(QWidget *p, Editor *ed)
 void colorSchemeDialog(QWidget *p, Editor *ed)
 {
     ColorScheme s = ed->doc()->colors;
-    Dlg dlg(p, QStringLiteral("Create New Color Scheme"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Create New Color Scheme"));
     auto *form = new QFormLayout();
     QVector<QPushButton *> btns;
     for (int i = 0; i < SlotCount; ++i) {
@@ -1612,35 +1626,36 @@ void colorSchemeDialog(QWidget *p, Editor *ed)
             const QColor c = colorsDialog(b, s.c[i], slotName(i));
             if (c.isValid()) { s.c[i] = c; paint(); }
         });
-        form->addRow(slotName(i) + ':', b);
+        form->addRow(QCoreApplication::translate("Dialogs", "%1:").arg(slotName(i)), b);
         btns << b;
     }
-    auto *name = new QLineEdit(QStringLiteral("Custom 1"), &dlg.d);
-    form->addRow(QStringLiteral("Color scheme name:"), name);
+    auto *name = new QLineEdit(QCoreApplication::translate("Dialogs", "Custom 1"), &dlg.d);
+    form->addRow(QCoreApplication::translate("Dialogs", "Color scheme name:"), name);
     dlg.v->addLayout(form);
     if (!dlg.exec()) return;
     s.name = name->text().trimmed().isEmpty() ? QStringLiteral("Custom") : name->text().trimmed();
-    ed->change(QStringLiteral("Color Scheme"), [&] { ed->doc()->colors = s; });
+    ed->change(QCoreApplication::translate("Dialogs", "Color Scheme"), [&] { ed->doc()->colors = s; });
 }
 
 void fontSchemeDialog(QWidget *p, Editor *ed)
 {
     FontScheme s = ed->doc()->fonts;
-    Dlg dlg(p, QStringLiteral("Create New Font Scheme"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Create New Font Scheme"));
     auto *form = new QFormLayout();
     auto *heading = new QComboBox(&dlg.d), *body = new QComboBox(&dlg.d);
     heading->addItems(QFontDatabase::families());
     body->addItems(QFontDatabase::families());
     heading->setCurrentText(s.heading);
     body->setCurrentText(s.body);
-    auto *name = new QLineEdit(QStringLiteral("Custom 1"), &dlg.d);
-    form->addRow(QStringLiteral("Heading font:"), heading);
-    form->addRow(QStringLiteral("Body font:"), body);
-    form->addRow(QStringLiteral("Font scheme name:"), name);
+    auto *name = new QLineEdit(QCoreApplication::translate("Dialogs", "Custom 1"), &dlg.d);
+    form->addRow(QCoreApplication::translate("Dialogs", "Heading font:"), heading);
+    form->addRow(QCoreApplication::translate("Dialogs", "Body font:"), body);
+    form->addRow(QCoreApplication::translate("Dialogs", "Font scheme name:"), name);
     auto *sample = new QLabel(&dlg.d);
     auto upd = [&] {
-        sample->setText(QStringLiteral("<span style=\"font-family:'%1'; font-size:18pt\">Heading</span><br><span style=\"font-family:'%2'; font-size:10pt\">Body text, lorem-free: the quick brown fox jumps over the lazy dog.</span>")
-                            .arg(heading->currentText(), body->currentText()));
+        sample->setText(QStringLiteral("<span style=\"font-family:'%1'; font-size:18pt\">%3</span><br><span style=\"font-family:'%2'; font-size:10pt\">%4</span>")
+                            .arg(heading->currentText(), body->currentText(), QCoreApplication::translate("Dialogs", "Heading").toHtmlEscaped(),
+                                 QCoreApplication::translate("Dialogs", "Body text, lorem-free: the quick brown fox jumps over the lazy dog.").toHtmlEscaped()));
     };
     QObject::connect(heading, &QComboBox::currentTextChanged, &dlg.d, upd);
     QObject::connect(body, &QComboBox::currentTextChanged, &dlg.d, upd);
@@ -1649,60 +1664,75 @@ void fontSchemeDialog(QWidget *p, Editor *ed)
     dlg.v->addWidget(sample);
     if (!dlg.exec()) return;
     s = FontScheme{name->text().trimmed().isEmpty() ? QStringLiteral("Custom") : name->text().trimmed(), heading->currentText(), body->currentText()};
-    ed->change(QStringLiteral("Font Scheme"), [&] { ed->doc()->fonts = s; });
+    ed->change(QCoreApplication::translate("Dialogs", "Font Scheme"), [&] { ed->doc()->fonts = s; });
 }
 
 // ---------------- Fill Effects ----------------
 bool fillEffectsDialog(QWidget *p, Editor *ed, Fill &fill, const QString &title)
 {
     Fill f = fill;
-    Dlg dlg(p, title.isEmpty() ? QStringLiteral("Fill Effects") : title);
+    Dlg dlg(p, title.isEmpty() ? QCoreApplication::translate("Dialogs", "Fill Effects") : title);
     auto *tabs = new QTabWidget(&dlg.d);
     // Gradient.
     auto *g = new QWidget();
     auto *gf = new QFormLayout(g);
     auto *oneTwo = new QComboBox(g);
-    oneTwo->addItems({"Two colors", "Preset"});
+    oneTwo->addItems({QCoreApplication::translate("Dialogs", "Two colors"), QCoreApplication::translate("Dialogs", "Preset")});
     auto *c1 = colorPick(ed, f.type == Fill::Gradient ? f.color : ColorRef::scheme(Accent1), false, g);
     auto *c2 = colorPick(ed, f.type == Fill::Gradient ? f.color2 : ColorRef::rgb(Qt::white), false, g);
     auto *gstyle = new QComboBox(g);
-    gstyle->addItems({"Linear", "Radial", "Rectangular", "From center"});
+    gstyle->addItems({QCoreApplication::translate("Dialogs", "Linear"), QCoreApplication::translate("Dialogs", "Radial"), QCoreApplication::translate("Dialogs", "Rectangular"), QCoreApplication::translate("Dialogs", "From center")});
     gstyle->setCurrentIndex(int(f.gradType));
     auto *angle = new QSpinBox(g);
     angle->setRange(0, 359);
     angle->setSuffix(QStringLiteral("°"));
     angle->setValue(int(f.angle));
     auto *preset = new QComboBox(g);
-    preset->addItems({"Early Sunset", "Late Sunset", "Nightfall", "Daybreak", "Horizon", "Desert", "Ocean", "Calm Water", "Fire", "Fog", "Moss", "Peacock", "Wheat", "Parchment", "Mahogany", "Rainbow", "Gold", "Silver", "Chrome", "Brass"});
-    gf->addRow(QStringLiteral("Colors:"), oneTwo);
-    gf->addRow(QStringLiteral("Color 1:"), c1);
-    gf->addRow(QStringLiteral("Color 2:"), c2);
-    gf->addRow(QStringLiteral("Preset:"), preset);
-    gf->addRow(QStringLiteral("Shading style:"), gstyle);
-    gf->addRow(QStringLiteral("Angle:"), angle);
-    tabs->addTab(g, QStringLiteral("Gradient"));
+    preset->addItems({QCoreApplication::translate("Dialogs", "Early Sunset"), QCoreApplication::translate("Dialogs", "Late Sunset"), QCoreApplication::translate("Dialogs", "Nightfall"), QCoreApplication::translate("Dialogs", "Daybreak"), QCoreApplication::translate("Dialogs", "Horizon"), QCoreApplication::translate("Dialogs", "Desert"), QCoreApplication::translate("Dialogs", "Ocean"), QCoreApplication::translate("Dialogs", "Calm Water"), QCoreApplication::translate("Dialogs", "Fire"), QCoreApplication::translate("Dialogs", "Fog"), QCoreApplication::translate("Dialogs", "Moss"), QCoreApplication::translate("Dialogs", "Peacock"), QCoreApplication::translate("Dialogs", "Wheat"), QCoreApplication::translate("Dialogs", "Parchment"), QCoreApplication::translate("Dialogs", "Mahogany"), QCoreApplication::translate("Dialogs", "Rainbow"), QCoreApplication::translate("Dialogs", "Gold"), QCoreApplication::translate("Dialogs", "Silver"), QCoreApplication::translate("Dialogs", "Chrome"), QCoreApplication::translate("Dialogs", "Brass")});
+    gf->addRow(QCoreApplication::translate("Dialogs", "Colors:"), oneTwo);
+    gf->addRow(QCoreApplication::translate("Dialogs", "Color 1:"), c1);
+    gf->addRow(QCoreApplication::translate("Dialogs", "Color 2:"), c2);
+    gf->addRow(QCoreApplication::translate("Dialogs", "Preset:"), preset);
+    gf->addRow(QCoreApplication::translate("Dialogs", "Shading style:"), gstyle);
+    gf->addRow(QCoreApplication::translate("Dialogs", "Angle:"), angle);
+    tabs->addTab(g, QCoreApplication::translate("Dialogs", "Gradient"));
     // Texture / picture.
     auto *t = new QWidget();
     auto *tf = new QVBoxLayout(t);
     auto *texList = new QListWidget(t);
     texList->setViewMode(QListView::IconMode);
     texList->setIconSize(QSize(56, 56));
-    const QStringList textures{"Canvas", "Denim", "Linen", "Paper", "Parchment", "Recycled", "Wood", "Marble", "Granite", "Cork", "Sand", "Stationery"};
-    for (const QString &n : textures) {
-        auto *it = new QListWidgetItem(QIcon(QPixmap::fromImage(proceduralTexture(n, 112))), n);
+    // Each texture shows in the program's language; its English name, which
+    // makes the texture, rides along as the item's data.
+    const QVector<QPair<QString, QString>> textures{
+        {QStringLiteral("Canvas"), QCoreApplication::translate("Dialogs", "Canvas")},
+        {QStringLiteral("Denim"), QCoreApplication::translate("Dialogs", "Denim")},
+        {QStringLiteral("Linen"), QCoreApplication::translate("Dialogs", "Linen")},
+        {QStringLiteral("Paper"), QCoreApplication::translate("Dialogs", "Paper")},
+        {QStringLiteral("Parchment"), QCoreApplication::translate("Dialogs", "Parchment")},
+        {QStringLiteral("Recycled"), QCoreApplication::translate("Dialogs", "Recycled")},
+        {QStringLiteral("Wood"), QCoreApplication::translate("Dialogs", "Wood")},
+        {QStringLiteral("Marble"), QCoreApplication::translate("Dialogs", "Marble")},
+        {QStringLiteral("Granite"), QCoreApplication::translate("Dialogs", "Granite")},
+        {QStringLiteral("Cork"), QCoreApplication::translate("Dialogs", "Cork")},
+        {QStringLiteral("Sand"), QCoreApplication::translate("Dialogs", "Sand")},
+        {QStringLiteral("Stationery"), QCoreApplication::translate("Dialogs", "Stationery")}};
+    for (const auto &[key, shown] : textures) {
+        auto *it = new QListWidgetItem(QIcon(QPixmap::fromImage(proceduralTexture(key, 112))), shown);
+        it->setData(Qt::UserRole, key);
         texList->addItem(it);
     }
     tf->addWidget(texList);
-    auto *otherTex = new QPushButton(QStringLiteral("Other Texture…"), t);
+    auto *otherTex = new QPushButton(QCoreApplication::translate("Dialogs", "Other Texture…"), t);
     tf->addWidget(otherTex);
-    tabs->addTab(t, QStringLiteral("Texture"));
+    tabs->addTab(t, QCoreApplication::translate("Dialogs", "Texture"));
     auto *pt = new QWidget();
     auto *pv = new QVBoxLayout(pt);
-    auto *pickPic = new QPushButton(QStringLiteral("Select Picture…"), pt);
+    auto *pickPic = new QPushButton(QCoreApplication::translate("Dialogs", "Select Picture…"), pt);
     auto *picLabel = new QLabel(pt);
     picLabel->setFixedSize(200, 140);
     picLabel->setFrameShape(QFrame::StyledPanel);
-    auto *tile = new QCheckBox(QStringLiteral("Tile picture as texture"), pt);
+    auto *tile = new QCheckBox(QCoreApplication::translate("Dialogs", "Tile picture as texture"), pt);
     tile->setChecked(f.tile);
     pv->addWidget(pickPic);
     pv->addWidget(picLabel);
@@ -1710,7 +1740,7 @@ bool fillEffectsDialog(QWidget *p, Editor *ed, Fill &fill, const QString &title)
     pv->addStretch(1);
     if (f.type == Fill::Picture && !f.imageId.isEmpty())
         picLabel->setPixmap(QPixmap::fromImage(ed->doc()->image(f.imageId).scaled(200, 140, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
-    tabs->addTab(pt, QStringLiteral("Picture"));
+    tabs->addTab(pt, QCoreApplication::translate("Dialogs", "Picture"));
     // Pattern.
     auto *pa = new QWidget();
     auto *paf = new QFormLayout(pa);
@@ -1730,9 +1760,9 @@ bool fillEffectsDialog(QWidget *p, Editor *ed, Fill &fill, const QString &title)
     auto *fg = colorPick(ed, f.type == Fill::Pattern ? f.color : ColorRef::scheme(Main), false, pa);
     auto *bg = colorPick(ed, f.type == Fill::Pattern ? f.color2 : ColorRef::rgb(Qt::white), true, pa);
     paf->addRow(patList);
-    paf->addRow(QStringLiteral("Foreground:"), fg);
-    paf->addRow(QStringLiteral("Background:"), bg);
-    tabs->addTab(pa, QStringLiteral("Pattern"));
+    paf->addRow(QCoreApplication::translate("Dialogs", "Foreground:"), fg);
+    paf->addRow(QCoreApplication::translate("Dialogs", "Background:"), bg);
+    tabs->addTab(pa, QCoreApplication::translate("Dialogs", "Pattern"));
     // Tint.
     auto *ti = new QWidget();
     auto *tif = new QFormLayout(ti);
@@ -1740,21 +1770,21 @@ bool fillEffectsDialog(QWidget *p, Editor *ed, Fill &fill, const QString &title)
     auto *tintSlider = new QSlider(Qt::Horizontal, ti);
     tintSlider->setRange(-90, 90);
     tintSlider->setValue(f.color.lighten() ? -f.color.lighten() : f.color.darken());
-    tif->addRow(QStringLiteral("Base color:"), base);
-    tif->addRow(QStringLiteral("Tint (left) or shade (right):"), tintSlider);
-    tabs->addTab(ti, QStringLiteral("Tint"));
+    tif->addRow(QCoreApplication::translate("Dialogs", "Base color:"), base);
+    tif->addRow(QCoreApplication::translate("Dialogs", "Tint (left) or shade (right):"), tintSlider);
+    tabs->addTab(ti, QCoreApplication::translate("Dialogs", "Tint"));
     tabs->setCurrentIndex(f.type == Fill::Gradient ? 0 : f.type == Fill::Texture ? 1 : f.type == Fill::Picture ? 2 : f.type == Fill::Pattern ? 3 : 0);
     dlg.v->addWidget(tabs);
     QString texChoice, picChoice = f.imageId;
-    QObject::connect(texList, &QListWidget::currentTextChanged, &dlg.d, [&](const QString &n) { texChoice = n; });
+    QObject::connect(texList, &QListWidget::currentItemChanged, &dlg.d, [&](QListWidgetItem *cur) { texChoice = cur ? cur->data(Qt::UserRole).toString() : QString(); });
     QObject::connect(otherTex, &QPushButton::clicked, &dlg.d, [&] {
-        const QString file = QFileDialog::getOpenFileName(&dlg.d, QStringLiteral("Texture"), QString(), QStringLiteral("Pictures (*.png *.jpg *.jpeg *.bmp *.gif)"));
+        const QString file = QFileDialog::getOpenFileName(&dlg.d, QCoreApplication::translate("Dialogs", "Texture"), QString(), QCoreApplication::translate("Dialogs", "Pictures (*.png *.jpg *.jpeg *.bmp *.gif)"));
         if (file.isEmpty()) return;
         QFile fl(file);
         if (fl.open(QIODevice::ReadOnly)) texChoice = "file:" + ed->doc()->addImage(fl.readAll(), QFileInfo(file).suffix().toLower(), file);
     });
     QObject::connect(pickPic, &QPushButton::clicked, &dlg.d, [&] {
-        const QString file = QFileDialog::getOpenFileName(&dlg.d, QStringLiteral("Picture"), QString(), QStringLiteral("Pictures (*.png *.jpg *.jpeg *.bmp *.gif *.svg)"));
+        const QString file = QFileDialog::getOpenFileName(&dlg.d, QCoreApplication::translate("Dialogs", "Picture"), QString(), QCoreApplication::translate("Dialogs", "Pictures (*.png *.jpg *.jpeg *.bmp *.gif *.svg)"));
         if (file.isEmpty()) return;
         QFile fl(file);
         if (!fl.open(QIODevice::ReadOnly)) return;
@@ -1836,9 +1866,9 @@ void shadowDialog(QWidget *p, Editor *ed)
     Item *it = ed->single();
     if (!it) return;
     ShadowFx s = it->fx.shadow;
-    Dlg dlg(p, QStringLiteral("Shadow"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Shadow"));
     auto *form = new QFormLayout();
-    auto *on = new QCheckBox(QStringLiteral("Shadow"), &dlg.d);
+    auto *on = new QCheckBox(QCoreApplication::translate("Dialogs", "Shadow"), &dlg.d);
     on->setChecked(s.on);
     auto *color = colorPick(ed, s.color, false, &dlg.d);
     auto *trans = new QSlider(Qt::Horizontal, &dlg.d);
@@ -1851,14 +1881,14 @@ void shadowDialog(QWidget *p, Editor *ed)
     angle->setSuffix(QStringLiteral("°"));
     angle->setValue(int(s.angle));
     form->addRow(on);
-    form->addRow(QStringLiteral("Color:"), color);
-    form->addRow(QStringLiteral("Transparency:"), trans);
-    form->addRow(QStringLiteral("Blur:"), blur);
-    form->addRow(QStringLiteral("Distance:"), dist);
-    form->addRow(QStringLiteral("Angle:"), angle);
+    form->addRow(QCoreApplication::translate("Dialogs", "Color:"), color);
+    form->addRow(QCoreApplication::translate("Dialogs", "Transparency:"), trans);
+    form->addRow(QCoreApplication::translate("Dialogs", "Blur:"), blur);
+    form->addRow(QCoreApplication::translate("Dialogs", "Distance:"), dist);
+    form->addRow(QCoreApplication::translate("Dialogs", "Angle:"), angle);
     dlg.v->addLayout(form);
     if (!dlg.exec()) return;
-    ed->forEachSelected(QStringLiteral("Shadow"), [&](Item *x) {
+    ed->forEachSelected(QCoreApplication::translate("Dialogs", "Shadow"), [&](Item *x) {
         x->fx.shadow.on = on->isChecked();
         x->fx.shadow.color = color->current();
         x->fx.shadow.transparency = trans->value() / 100.0;
@@ -1873,7 +1903,7 @@ void textArtTextDialog(QWidget *p, Editor *ed, const QString &itemId)
 {
     auto *w = dynamic_cast<TextArtItem *>(ed->doc()->item(itemId));
     if (!w) return;
-    Dlg dlg(p, QStringLiteral("Edit Text Art Text"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Edit Text Art Text"));
     auto *row = new QHBoxLayout();
     auto *font = new QComboBox(&dlg.d);
     font->addItems(QFontDatabase::families());
@@ -1881,13 +1911,13 @@ void textArtTextDialog(QWidget *p, Editor *ed, const QString &itemId)
     auto *size = new QSpinBox(&dlg.d);
     size->setRange(4, 400);
     size->setValue(int(w->size));
-    auto *bold = new QCheckBox(QStringLiteral("Bold"), &dlg.d);
+    auto *bold = new QCheckBox(QCoreApplication::translate("Dialogs", "Bold"), &dlg.d);
     bold->setChecked(w->bold);
-    auto *italic = new QCheckBox(QStringLiteral("Italic"), &dlg.d);
+    auto *italic = new QCheckBox(QCoreApplication::translate("Dialogs", "Italic"), &dlg.d);
     italic->setChecked(w->italic);
-    row->addWidget(new QLabel(QStringLiteral("Font:")));
+    row->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "Font:")));
     row->addWidget(font, 1);
-    row->addWidget(new QLabel(QStringLiteral("Size:")));
+    row->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "Size:")));
     row->addWidget(size);
     row->addWidget(bold);
     row->addWidget(italic);
@@ -1901,7 +1931,7 @@ void textArtTextDialog(QWidget *p, Editor *ed, const QString &itemId)
     dlg.v->addWidget(text);
     text->selectAll();
     if (!dlg.exec()) return;
-    ed->change(QStringLiteral("Edit Text Art Text"), [&] {
+    ed->change(QCoreApplication::translate("Dialogs", "Edit Text Art Text"), [&] {
         const double oldSize = w->size;
         w->text = text->toPlainText().isEmpty() ? QStringLiteral(" ") : text->toPlainText();
         w->font = font->currentText();
@@ -1921,7 +1951,7 @@ void textArtTextDialog(QWidget *p, Editor *ed, const QString &itemId)
 // ---------------- Calendar ----------------
 void calendarDialog(QWidget *p, Editor *ed)
 {
-    Dlg dlg(p, QStringLiteral("Calendar"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Calendar"));
     auto *form = new QFormLayout();
     auto *month = new QComboBox(&dlg.d);
     for (int m = 1; m <= 12; ++m) month->addItem(QLocale().monthName(m));
@@ -1930,14 +1960,14 @@ void calendarDialog(QWidget *p, Editor *ed)
     year->setRange(1900, 2200);
     year->setValue(QDate::currentDate().year());
     auto *style = new QComboBox(&dlg.d);
-    style->addItems({"Classic grid", "Banded", "Minimal", "Bold header", "One per page (12 months)"});
-    form->addRow(QStringLiteral("Month:"), month);
-    form->addRow(QStringLiteral("Year:"), year);
-    form->addRow(QStringLiteral("Design:"), style);
+    style->addItems({QCoreApplication::translate("Dialogs", "Classic grid"), QCoreApplication::translate("Dialogs", "Banded"), QCoreApplication::translate("Dialogs", "Minimal"), QCoreApplication::translate("Dialogs", "Bold header"), QCoreApplication::translate("Dialogs", "One per page (12 months)")});
+    form->addRow(QCoreApplication::translate("Dialogs", "Month:"), month);
+    form->addRow(QCoreApplication::translate("Dialogs", "Year:"), year);
+    form->addRow(QCoreApplication::translate("Dialogs", "Design:"), style);
     dlg.v->addLayout(form);
     if (!dlg.exec()) return;
     const QRectF content = QRectF(QPointF(0, 0), ed->doc()->pageSize()).marginsRemoved(ed->doc()->setup.margins);
-    ed->beginChange(QStringLiteral("Insert Calendar"));
+    ed->beginChange(QCoreApplication::translate("Dialogs", "Insert Calendar"));
     QStringList ids;
     if (style->currentIndex() == 4) {
         for (int m = 1; m <= 12; ++m) {
@@ -1961,51 +1991,51 @@ void styleDialog(QWidget *p, Editor *ed, const QString &styleName)
     const TextStyle *existing = styleName.isEmpty() ? nullptr : doc->style(styleName);
     TextStyle s = existing ? *existing : TextStyle();
     if (!existing) {
-        s.name = QStringLiteral("New Style");
+        s.name = QCoreApplication::translate("Dialogs", "New Style");
         s.basedOn = QStringLiteral("Normal");
         s.chr = ed->currentCharFormat();
         s.blk = ed->currentBlockFormat();
     }
-    Dlg dlg(p, existing ? QStringLiteral("Modify Style") : QStringLiteral("New Style"));
+    Dlg dlg(p, existing ? QCoreApplication::translate("Dialogs", "Modify Style") : QCoreApplication::translate("Dialogs", "New Style"));
     auto *form = new QFormLayout();
     auto *name = new QLineEdit(s.name, &dlg.d);
     auto *basedOn = new QComboBox(&dlg.d), *next = new QComboBox(&dlg.d);
-    basedOn->addItem(QStringLiteral("(none)"));
+    basedOn->addItem(QCoreApplication::translate("Dialogs", "(none)"));
     for (const auto &st : doc->styles) { basedOn->addItem(st.name); next->addItem(st.name); }
-    basedOn->setCurrentText(s.basedOn.isEmpty() ? QStringLiteral("(none)") : s.basedOn);
+    basedOn->setCurrentText(s.basedOn.isEmpty() ? QCoreApplication::translate("Dialogs", "(none)") : s.basedOn);
     next->setCurrentText(s.next.isEmpty() ? s.name : s.next);
-    auto *charOnly = new QCheckBox(QStringLiteral("Character style (applies to selected text only)"), &dlg.d);
+    auto *charOnly = new QCheckBox(QCoreApplication::translate("Dialogs", "Character style (applies to selected text only)"), &dlg.d);
     charOnly->setChecked(s.charOnly);
     auto *font = new QComboBox(&dlg.d);
-    font->addItem(QStringLiteral("(scheme font)"));
+    font->addItem(QCoreApplication::translate("Dialogs", "(scheme font)"));
     font->addItems(QFontDatabase::families());
     if (s.chr.hasProperty(QTextFormat::FontFamilies)) font->setCurrentText(s.chr.fontFamilies().toStringList().value(0));
     auto *size = new DecimalSpin(&dlg.d);
     size->setRange(1, 999);
     size->setValue(s.chr.hasProperty(QTextFormat::FontPointSize) ? s.chr.fontPointSize() : 11);
-    auto *bold = new QCheckBox(QStringLiteral("Bold"), &dlg.d), *italic = new QCheckBox(QStringLiteral("Italic"), &dlg.d);
+    auto *bold = new QCheckBox(QCoreApplication::translate("Dialogs", "Bold"), &dlg.d), *italic = new QCheckBox(QCoreApplication::translate("Dialogs", "Italic"), &dlg.d);
     bold->setChecked(s.chr.fontWeight() >= QFont::DemiBold);
     italic->setChecked(s.chr.fontItalic());
     auto *color = colorPick(ed, s.chr.stringProperty(tp::ColorRefP).isEmpty() ? ColorRef::scheme(Main) : ColorRef::fromString(s.chr.stringProperty(tp::ColorRefP)), false, &dlg.d);
     auto *before = points(s.blk.topMargin(), &dlg.d), *after = points(s.blk.bottomMargin(), &dlg.d);
     auto *align = new QComboBox(&dlg.d);
-    align->addItems({"Left", "Center", "Right", "Justify"});
+    align->addItems({QCoreApplication::translate("Dialogs", "Left"), QCoreApplication::translate("Dialogs", "Center"), QCoreApplication::translate("Dialogs", "Right"), QCoreApplication::translate("Dialogs", "Justify")});
     const Qt::Alignment al = s.blk.alignment() & Qt::AlignHorizontal_Mask;
     align->setCurrentIndex(al == Qt::AlignHCenter ? 1 : al == Qt::AlignRight ? 2 : al == Qt::AlignJustify ? 3 : 0);
-    form->addRow(QStringLiteral("Style name:"), name);
-    form->addRow(QStringLiteral("Based on:"), basedOn);
-    form->addRow(QStringLiteral("Style for the next paragraph:"), next);
+    form->addRow(QCoreApplication::translate("Dialogs", "Style name:"), name);
+    form->addRow(QCoreApplication::translate("Dialogs", "Based on:"), basedOn);
+    form->addRow(QCoreApplication::translate("Dialogs", "Style for the next paragraph:"), next);
     form->addRow(charOnly);
-    form->addRow(QStringLiteral("Font:"), font);
-    form->addRow(QStringLiteral("Size:"), size);
+    form->addRow(QCoreApplication::translate("Dialogs", "Font:"), font);
+    form->addRow(QCoreApplication::translate("Dialogs", "Size:"), size);
     auto *bi = new QHBoxLayout();
     bi->addWidget(bold);
     bi->addWidget(italic);
     form->addRow(bi);
-    form->addRow(QStringLiteral("Color:"), color);
-    form->addRow(QStringLiteral("Alignment:"), align);
-    form->addRow(QStringLiteral("Space before:"), before);
-    form->addRow(QStringLiteral("Space after:"), after);
+    form->addRow(QCoreApplication::translate("Dialogs", "Color:"), color);
+    form->addRow(QCoreApplication::translate("Dialogs", "Alignment:"), align);
+    form->addRow(QCoreApplication::translate("Dialogs", "Space before:"), before);
+    form->addRow(QCoreApplication::translate("Dialogs", "Space after:"), after);
     dlg.v->addLayout(form);
     if (!dlg.exec()) return;
     const QString newName = name->text().trimmed().isEmpty() ? s.name : name->text().trimmed();
@@ -2024,7 +2054,7 @@ void styleDialog(QWidget *p, Editor *ed, const QString &styleName)
     s.blk.setTopMargin(before->value());
     s.blk.setBottomMargin(after->value());
     s.blk.setProperty(tp::StyleName, s.name);
-    ed->change(existing ? QStringLiteral("Modify Style") : QStringLiteral("New Style"), [&] {
+    ed->change(existing ? QCoreApplication::translate("Dialogs", "Modify Style") : QCoreApplication::translate("Dialogs", "New Style"), [&] {
         bool replaced = false;
         for (auto &st : doc->styles)
             if (st.name == styleName && existing) { st = s; replaced = true; }
@@ -2066,10 +2096,11 @@ void wordCountDialog(QWidget *p, Editor *ed)
     });
     QString sel;
     if (ed->isEditingText() && ed->cursor().hasSelection())
-        sel = QStringLiteral("<br><br><b>Selection</b><br>Words: %1").arg(ed->cursor().selectedText().split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).size());
-    QMessageBox::information(p, QStringLiteral("Word Count"), QStringLiteral("<b>Publication</b><br>Pages: %1<br>Words: %2<br>Characters (no spaces): %3<br>Characters (with spaces): %4"
-                                                                             "<br>Paragraphs: %5<br>Text boxes: %6<br>Pictures: %7%8")
-                                                                  .arg(d->pages.size()).arg(words).arg(charsNoSpace).arg(chars).arg(paras).arg(boxes).arg(pics).arg(sel));
+        sel = QCoreApplication::translate("Dialogs", "<br><br><b>Selection</b><br>Words: %1").arg(ed->cursor().selectedText().split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).size());
+    QMessageBox::information(p, QCoreApplication::translate("Dialogs", "Word Count"),
+                             QCoreApplication::translate("Dialogs", "<b>Publication</b><br>Pages: %1<br>Words: %2<br>Characters (no spaces): %3<br>Characters (with spaces): %4"
+                                                                    "<br>Paragraphs: %5<br>Text boxes: %6<br>Pictures: %7%8")
+                                 .arg(d->pages.size()).arg(words).arg(charsNoSpace).arg(chars).arg(paras).arg(boxes).arg(pics).arg(sel));
     Q_UNUSED(lines);
 }
 
@@ -2077,40 +2108,40 @@ void wordCountDialog(QWidget *p, Editor *ed)
 void optionsDialog(QWidget *p, Editor *ed)
 {
     Settings &st = Settings::get();
-    Dlg dlg(p, QStringLiteral("JeffPub Options"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "JeffPub Options"));
     auto *tabs = new QTabWidget(&dlg.d);
     auto *gen = new QWidget();
     auto *gf = new QFormLayout(gen);
     auto *name = new QLineEdit(st.userName(), gen);
     auto *initials = new QLineEdit(st.value("user/initials").toString(), gen);
     auto *theme = new QComboBox(gen);
-    theme->addItems({"Use system setting", "Light", "Dark"});
+    theme->addItems({QCoreApplication::translate("Dialogs", "Use system setting"), QCoreApplication::translate("Dialogs", "Light"), QCoreApplication::translate("Dialogs", "Dark")});
     const int oldTheme = st.value("ui/theme", 0).toInt();
     theme->setCurrentIndex(oldTheme);
-    gf->addRow(QStringLiteral("User name:"), name);
-    gf->addRow(QStringLiteral("Initials:"), initials);
-    gf->addRow(QStringLiteral("Theme:"), theme);
+    gf->addRow(QCoreApplication::translate("Dialogs", "User name:"), name);
+    gf->addRow(QCoreApplication::translate("Dialogs", "Initials:"), initials);
+    gf->addRow(QCoreApplication::translate("Dialogs", "Theme:"), theme);
     // The language of JeffPub's own text; it takes effect at the next start.
     auto *uiLang = new QComboBox(gen);
-    uiLang->addItem(QStringLiteral("Use system language"), QString());
+    uiLang->addItem(QCoreApplication::translate("Dialogs", "Use system language"), QString());
     uiLang->addItem(QStringLiteral("English"), QStringLiteral("en"));
     for (const QString &l : availableUiLanguages()) uiLang->addItem(QLocale(l).nativeLanguageName(), l);
     const QString oldLang = st.value("ui/language").toString();
     uiLang->setCurrentIndex(std::max(0, uiLang->findData(oldLang)));
-    gf->addRow(QStringLiteral("Display language:"), uiLang);
-    tabs->addTab(gen, QStringLiteral("General"));
+    gf->addRow(QCoreApplication::translate("Dialogs", "Display language:"), uiLang);
+    tabs->addTab(gen, QCoreApplication::translate("Dialogs", "General"));
     auto *proof = new QWidget();
     auto *pf = new QFormLayout(proof);
-    auto *asType = new QCheckBox(QStringLiteral("Check spelling as you type"), proof);
+    auto *asType = new QCheckBox(QCoreApplication::translate("Dialogs", "Check spelling as you type"), proof);
     asType->setChecked(ed->view.spelling);
-    auto *ignoreUpper = new QCheckBox(QStringLiteral("Ignore words in UPPERCASE"), proof);
+    auto *ignoreUpper = new QCheckBox(QCoreApplication::translate("Dialogs", "Ignore words in UPPERCASE"), proof);
     ignoreUpper->setChecked(st.value("proof/ignoreUpper", true).toBool());
-    auto *ignoreNum = new QCheckBox(QStringLiteral("Ignore words that contain numbers"), proof);
+    auto *ignoreNum = new QCheckBox(QCoreApplication::translate("Dialogs", "Ignore words that contain numbers"), proof);
     ignoreNum->setChecked(st.value("proof/ignoreNumbers", true).toBool());
-    auto *autocorrect = new QCheckBox(QStringLiteral("Replace text as you type (AutoCorrect)"), proof);
+    auto *autocorrect = new QCheckBox(QCoreApplication::translate("Dialogs", "Replace text as you type (AutoCorrect)"), proof);
     autocorrect->setChecked(st.value("proof/autocorrect", true).toBool());
-    auto *quotes = new QCheckBox(QStringLiteral("Replace straight quotes with smart quotes"), proof);
-    auto *autoformat = new QCheckBox(QStringLiteral("AutoFormat as you type (dashes, fractions, ordinals, automatic lists)"), proof);
+    auto *quotes = new QCheckBox(QCoreApplication::translate("Dialogs", "Replace straight quotes with smart quotes"), proof);
+    auto *autoformat = new QCheckBox(QCoreApplication::translate("Dialogs", "AutoFormat as you type (dashes, fractions, ordinals, automatic lists)"), proof);
     autoformat->setChecked(st.value("proof/autoformat", true).toBool());
     quotes->setChecked(st.value("proof/smartQuotes", true).toBool());
     pf->addRow(asType);
@@ -2119,40 +2150,40 @@ void optionsDialog(QWidget *p, Editor *ed)
     pf->addRow(autocorrect);
     pf->addRow(quotes);
     pf->addRow(autoformat);
-    tabs->addTab(proof, QStringLiteral("Proofing"));
+    tabs->addTab(proof, QCoreApplication::translate("Dialogs", "Proofing"));
     auto *save = new QWidget();
     auto *sf = new QFormLayout(save);
     auto *recover = new QSpinBox(save);
     recover->setRange(1, 120);
     recover->setValue(st.autoRecoverMinutes());
-    recover->setSuffix(QStringLiteral(" minutes"));
-    auto *backup = new QCheckBox(QStringLiteral("Always create backup copy"), save);
+    recover->setSuffix(QCoreApplication::translate("Dialogs", " minutes"));
+    auto *backup = new QCheckBox(QCoreApplication::translate("Dialogs", "Always create backup copy"), save);
     backup->setChecked(st.value("save/backup", false).toBool());
-    sf->addRow(QStringLiteral("Save AutoRecover information every:"), recover);
+    sf->addRow(QCoreApplication::translate("Dialogs", "Save AutoRecover information every:"), recover);
     sf->addRow(backup);
-    tabs->addTab(save, QStringLiteral("Save"));
+    tabs->addTab(save, QCoreApplication::translate("Dialogs", "Save"));
     auto *adv = new QWidget();
     auto *af = new QFormLayout(adv);
     auto *units = new QComboBox(adv);
-    units->addItems({"Inches", "Centimeters", "Millimeters", "Points", "Picas"});
+    units->addItems({QCoreApplication::translate("Dialogs", "Inches"), QCoreApplication::translate("Dialogs", "Centimeters"), QCoreApplication::translate("Dialogs", "Millimeters"), QCoreApplication::translate("Dialogs", "Points"), QCoreApplication::translate("Dialogs", "Picas")});
     units->setCurrentIndex(int(st.unit()));
     auto *nudge = measure(st.nudge(), adv, 0.1, 720);
     auto *recent = new QSpinBox(adv);
     recent->setRange(0, 50);
     recent->setValue(st.value("recentCount", 25).toInt());
-    auto *wholeWord = new QCheckBox(QStringLiteral("When selecting, automatically select entire word"), adv);
+    auto *wholeWord = new QCheckBox(QCoreApplication::translate("Dialogs", "When selecting, automatically select entire word"), adv);
     wholeWord->setChecked(st.value("edit/wholeWord", true).toBool());
-    auto *dragText = new QCheckBox(QStringLiteral("Allow text to be dragged and dropped"), adv);
+    auto *dragText = new QCheckBox(QCoreApplication::translate("Dialogs", "Allow text to be dragged and dropped"), adv);
     dragText->setChecked(st.value("edit/dragText", true).toBool());
-    auto *hyphenate = new QCheckBox(QStringLiteral("Automatically hyphenate in new text boxes"), adv);
+    auto *hyphenate = new QCheckBox(QCoreApplication::translate("Dialogs", "Automatically hyphenate in new text boxes"), adv);
     hyphenate->setChecked(st.value("edit/hyphenate", true).toBool());
-    af->addRow(QStringLiteral("Measurement units:"), units);
-    af->addRow(QStringLiteral("Arrow keys nudge objects by:"), nudge);
-    af->addRow(QStringLiteral("Show this number of Recent Publications:"), recent);
+    af->addRow(QCoreApplication::translate("Dialogs", "Measurement units:"), units);
+    af->addRow(QCoreApplication::translate("Dialogs", "Arrow keys nudge objects by:"), nudge);
+    af->addRow(QCoreApplication::translate("Dialogs", "Show this number of Recent Publications:"), recent);
     af->addRow(wholeWord);
     af->addRow(dragText);
     af->addRow(hyphenate);
-    tabs->addTab(adv, QStringLiteral("Advanced"));
+    tabs->addTab(adv, QCoreApplication::translate("Dialogs", "Advanced"));
     dlg.v->addWidget(tabs);
     if (!dlg.exec()) return;
     st.setValue("user/name", name->text());
@@ -2161,7 +2192,7 @@ void optionsDialog(QWidget *p, Editor *ed)
     if (theme->currentIndex() != oldTheme) applyUiTheme(theme->currentIndex());   // the whole program changes now
     if (const QString lang = uiLang->currentData().toString(); lang != oldLang) {
         st.setValue("ui/language", lang);
-        QMessageBox::information(p, QStringLiteral("Display Language"), QStringLiteral("JeffPub shows its text in the new language the next time it starts."));
+        QMessageBox::information(p, QCoreApplication::translate("Dialogs", "Display Language"), QCoreApplication::translate("Dialogs", "JeffPub shows its text in the new language the next time it starts."));
     }
     st.setValue("proof/ignoreUpper", ignoreUpper->isChecked());
     st.setValue("proof/ignoreNumbers", ignoreNum->isChecked());
@@ -2182,17 +2213,17 @@ void optionsDialog(QWidget *p, Editor *ed)
 // ---------------- Page numbers ----------------
 void pageNumberDialog(QWidget *p, Editor *ed)
 {
-    Dlg dlg(p, QStringLiteral("Page Number"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Page Number"));
     auto *form = new QFormLayout();
     auto *pos = new QComboBox(&dlg.d);
-    pos->addItems({"Top left", "Top center", "Top right", "Bottom left", "Bottom center", "Bottom right"});
+    pos->addItems({QCoreApplication::translate("Dialogs", "Top left"), QCoreApplication::translate("Dialogs", "Top center"), QCoreApplication::translate("Dialogs", "Top right"), QCoreApplication::translate("Dialogs", "Bottom left"), QCoreApplication::translate("Dialogs", "Bottom center"), QCoreApplication::translate("Dialogs", "Bottom right")});
     pos->setCurrentIndex(4);
     auto *format = new QComboBox(&dlg.d);
     format->addItems({"1, 2, 3", "i, ii, iii", "I, II, III", "a, b, c"});
-    auto *first = new QCheckBox(QStringLiteral("Show page number on first page"), &dlg.d);
+    auto *first = new QCheckBox(QCoreApplication::translate("Dialogs", "Show page number on first page"), &dlg.d);
     first->setChecked(true);
-    form->addRow(QStringLiteral("Position:"), pos);
-    form->addRow(QStringLiteral("Number format:"), format);
+    form->addRow(QCoreApplication::translate("Dialogs", "Position:"), pos);
+    form->addRow(QCoreApplication::translate("Dialogs", "Number format:"), format);
     form->addRow(first);
     dlg.v->addLayout(form);
     if (!dlg.exec()) return;
@@ -2204,7 +2235,7 @@ void pageNumberDialog(QWidget *p, Editor *ed)
     const QRectF content = QRectF(QPointF(0, 0), ps).marginsRemoved(d->setup.margins);
     const int pi = pos->currentIndex();
     const double y = pi < 3 ? std::max(6.0, content.top() - 28) : std::min(ps.height() - 30, content.bottom() + 6);
-    ed->change(QStringLiteral("Page Number"), [&] {
+    ed->change(QCoreApplication::translate("Dialogs", "Page Number"), [&] {
         auto t = std::static_pointer_cast<TextItem>(ed->newTextBox(QRectF(content.left(), y, content.width(), 22)));
         t->name = QStringLiteral("Page Number");
         QTextCursor c(d->storyDoc(t->storyId));
@@ -2233,30 +2264,30 @@ void pageNumberDialog(QWidget *p, Editor *ed)
 void documentPropertiesDialog(QWidget *p, Editor *ed, int tab)
 {
     DocProps pr = ed->doc()->props;
-    Dlg dlg(p, QStringLiteral("Properties"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Properties"));
     auto *tabs = new QTabWidget(&dlg.d);
     auto *sum = new QWidget();
     auto *form = new QFormLayout(sum);
     auto *title = new QLineEdit(pr.title), *subject = new QLineEdit(pr.subject), *author = new QLineEdit(pr.author), *manager = new QLineEdit(pr.manager);
     auto *company = new QLineEdit(pr.company), *category = new QLineEdit(pr.category), *keywords = new QLineEdit(pr.keywords);
     auto *comments = new QPlainTextEdit(pr.comments);
-    form->addRow(QStringLiteral("Title:"), title);
-    form->addRow(QStringLiteral("Subject:"), subject);
-    form->addRow(QStringLiteral("Author:"), author);
-    form->addRow(QStringLiteral("Manager:"), manager);
-    form->addRow(QStringLiteral("Company:"), company);
-    form->addRow(QStringLiteral("Category:"), category);
-    form->addRow(QStringLiteral("Keywords:"), keywords);
-    form->addRow(QStringLiteral("Comments:"), comments);
-    tabs->addTab(sum, QStringLiteral("Summary"));
+    form->addRow(QCoreApplication::translate("Dialogs", "Title:"), title);
+    form->addRow(QCoreApplication::translate("Dialogs", "Subject:"), subject);
+    form->addRow(QCoreApplication::translate("Dialogs", "Author:"), author);
+    form->addRow(QCoreApplication::translate("Dialogs", "Manager:"), manager);
+    form->addRow(QCoreApplication::translate("Dialogs", "Company:"), company);
+    form->addRow(QCoreApplication::translate("Dialogs", "Category:"), category);
+    form->addRow(QCoreApplication::translate("Dialogs", "Keywords:"), keywords);
+    form->addRow(QCoreApplication::translate("Dialogs", "Comments:"), comments);
+    tabs->addTab(sum, QCoreApplication::translate("Dialogs", "Summary"));
     auto *print = new QWidget();
     auto *pf = new QFormLayout(print);
     auto *model = new QComboBox(print);
-    model->addItems({"RGB (best for desktop printers and screens)", "Single color (spot)", "Spot colors", "Process colors (CMYK)", "Process plus spot colors"});
+    model->addItems({QCoreApplication::translate("Dialogs", "RGB (best for desktop printers and screens)"), QCoreApplication::translate("Dialogs", "Single color (spot)"), QCoreApplication::translate("Dialogs", "Spot colors"), QCoreApplication::translate("Dialogs", "Process colors (CMYK)"), QCoreApplication::translate("Dialogs", "Process plus spot colors")});
     model->setCurrentIndex(int(ed->doc()->print.model));
-    auto *embed = new QCheckBox(QStringLiteral("Embed TrueType fonts when saving PDF"), print);
+    auto *embed = new QCheckBox(QCoreApplication::translate("Dialogs", "Embed TrueType fonts when saving PDF"), print);
     embed->setChecked(ed->doc()->print.embedFonts);
-    pf->addRow(QStringLiteral("Color model:"), model);
+    pf->addRow(QCoreApplication::translate("Dialogs", "Color model:"), model);
     // Spot colors: inks the print shop mixes, by name and color. They show
     // in every color drop-down, and print on plates of their own.
     QVector<QColor> spotColors = ed->doc()->print.spotColors;
@@ -2278,35 +2309,35 @@ void documentPropertiesDialog(QWidget *p, Editor *ed, int tab)
     };
     fillSpots();
     auto *sr = new QHBoxLayout();
-    auto *addSpot = new QPushButton(QStringLiteral("Add…"), spotBox), *editSpot = new QPushButton(QStringLiteral("Modify…"), spotBox),
-         *delSpot = new QPushButton(QStringLiteral("Remove"), spotBox);
+    auto *addSpot = new QPushButton(QCoreApplication::translate("Dialogs", "Add…"), spotBox), *editSpot = new QPushButton(QCoreApplication::translate("Dialogs", "Modify…"), spotBox),
+         *delSpot = new QPushButton(QCoreApplication::translate("Dialogs", "Remove"), spotBox);
     sr->addWidget(addSpot);
     sr->addWidget(editSpot);
     sr->addWidget(delSpot);
     sr->addStretch(1);
     sv->addWidget(spotList);
     sv->addLayout(sr);
-    pf->addRow(QStringLiteral("Spot colors:"), spotBox);
+    pf->addRow(QCoreApplication::translate("Dialogs", "Spot colors:"), spotBox);
     // Name and color of one spot color.
     auto askSpot = [&](QString *name, QColor *color) {
         QDialog sd(&dlg.d);
-        sd.setWindowTitle(QStringLiteral("Spot Color"));
+        sd.setWindowTitle(QCoreApplication::translate("Dialogs", "Spot Color"));
         auto *f = new QFormLayout(&sd);
         auto *n = new QLineEdit(*name, &sd);
-        n->setPlaceholderText(QStringLiteral("The ink's name, as the print shop knows it"));
+        n->setPlaceholderText(QCoreApplication::translate("Dialogs", "The ink's name, as the print shop knows it"));
         auto *c = new QPushButton(&sd);
         QColor chosen = *color;
         auto paintBtn = [c, &chosen] { c->setStyleSheet(QStringLiteral("background:%1; border:1px solid #888; min-width:80px; min-height:22px;").arg(chosen.name())); };
         paintBtn();
         QObject::connect(c, &QPushButton::clicked, &sd, [&] {
-            const QColor got = colorsDialog(&sd, chosen, QStringLiteral("Spot Color"));
+            const QColor got = colorsDialog(&sd, chosen, QCoreApplication::translate("Dialogs", "Spot Color"));
             if (got.isValid()) { chosen = got; paintBtn(); }
         });
         auto *bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &sd);
         QObject::connect(bb, &QDialogButtonBox::accepted, &sd, &QDialog::accept);
         QObject::connect(bb, &QDialogButtonBox::rejected, &sd, &QDialog::reject);
-        f->addRow(QStringLiteral("Name:"), n);
-        f->addRow(QStringLiteral("Color:"), c);
+        f->addRow(QCoreApplication::translate("Dialogs", "Name:"), n);
+        f->addRow(QCoreApplication::translate("Dialogs", "Color:"), c);
         f->addRow(bb);
         if (sd.exec() != QDialog::Accepted) return false;
         *name = n->text().trimmed();
@@ -2315,7 +2346,7 @@ void documentPropertiesDialog(QWidget *p, Editor *ed, int tab)
     };
     QObject::connect(addSpot, &QPushButton::clicked, &dlg.d, [&] {
         if (model->currentIndex() == int(PrintInfo::SingleSpot) && !spotColors.isEmpty()) return;
-        QString name = QStringLiteral("Spot color %1").arg(spotColors.size() + 1);
+        QString name = QCoreApplication::translate("Dialogs", "Spot color %1").arg(spotColors.size() + 1);
         QColor color(0, 90, 170);
         if (!askSpot(&name, &color)) return;
         spotColors << color;
@@ -2344,19 +2375,19 @@ void documentPropertiesDialog(QWidget *p, Editor *ed, int tab)
     // Black overprinting in files for a printer (PDF/X): black prints over
     // the inks under it, so a shifted plate leaves no white edge.
     const OverprintSettings op0 = ed->doc()->print.overprint;
-    auto *opBox = new QGroupBox(QStringLiteral("Overprint black in files for a printer (PDF/X)"), print);
+    auto *opBox = new QGroupBox(QCoreApplication::translate("Dialogs", "Overprint black in files for a printer (PDF/X)"), print);
     auto *og = new QGridLayout(opBox);
-    auto *opText = new QCheckBox(QStringLiteral("Text below:"), opBox);
+    auto *opText = new QCheckBox(QCoreApplication::translate("Dialogs", "Text below:"), opBox);
     auto *opSize = new QDoubleSpinBox(opBox);
     opSize->setRange(1, 1638);
     opSize->setDecimals(1);
     opSize->setSuffix(QStringLiteral(" pt"));
-    auto *opLines = new QCheckBox(QStringLiteral("Lines"), opBox);
-    auto *opFills = new QCheckBox(QStringLiteral("Fills"), opBox);
+    auto *opLines = new QCheckBox(QCoreApplication::translate("Dialogs", "Lines"), opBox);
+    auto *opFills = new QCheckBox(QCoreApplication::translate("Dialogs", "Fills"), opBox);
     auto *opThreshold = new QSpinBox(opBox);
     opThreshold->setRange(1, 100);
     opThreshold->setSuffix(QStringLiteral("%"));
-    auto *opReset = new QPushButton(QStringLiteral("Reset All"), opBox);
+    auto *opReset = new QPushButton(QCoreApplication::translate("Dialogs", "Reset All"), opBox);
     auto showOverprint = [=](const OverprintSettings &v) {
         opText->setChecked(v.text);
         opSize->setValue(v.textBelow);
@@ -2372,16 +2403,16 @@ void documentPropertiesDialog(QWidget *p, Editor *ed, int tab)
     og->addWidget(opSize, 0, 1);
     og->addWidget(opLines, 1, 0);
     og->addWidget(opFills, 2, 0);
-    og->addWidget(new QLabel(QStringLiteral("Black counts from:"), opBox), 3, 0);
+    og->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "Black counts from:"), opBox), 3, 0);
     og->addWidget(opThreshold, 3, 1);
     og->addWidget(opReset, 4, 0);
     og->setColumnStretch(2, 1);
     pf->addRow(opBox);
-    tabs->addTab(print, QStringLiteral("Commercial Print"));
+    tabs->addTab(print, QCoreApplication::translate("Dialogs", "Commercial Print"));
     tabs->setCurrentIndex(std::clamp(tab, 0, 1));
     dlg.v->addWidget(tabs);
     if (!dlg.exec()) return;
-    ed->change(QStringLiteral("Properties"), [&] {
+    ed->change(QCoreApplication::translate("Dialogs", "Properties"), [&] {
         DocProps &d = ed->doc()->props;
         d.title = title->text(); d.subject = subject->text(); d.author = author->text(); d.manager = manager->text();
         d.company = company->text(); d.category = category->text(); d.keywords = keywords->text(); d.comments = comments->toPlainText();
@@ -2404,7 +2435,7 @@ void measurementWindow(QWidget *p, Editor *ed)
     static QPointer<QDialog> win;
     if (win) { win->raise(); win->show(); return; }
     win = new QDialog(p, Qt::Tool);
-    win->setWindowTitle(QStringLiteral("Measurement"));
+    win->setWindowTitle(QCoreApplication::translate("Dialogs", "Measurement"));
     win->setAttribute(Qt::WA_DeleteOnClose);
     auto *form = new QFormLayout(win);
     auto *x = measure(0, win, -10000), *y = measure(0, win, -10000), *w = measure(0, win, 1), *h = measure(0, win, 1);
@@ -2425,15 +2456,15 @@ void measurementWindow(QWidget *p, Editor *ed)
     auto *line = new DecimalSpin(win);
     line->setRange(0.1, 20);
     line->setSuffix(QStringLiteral(" sp"));
-    form->addRow(QStringLiteral("Horizontal position:"), x);
-    form->addRow(QStringLiteral("Vertical position:"), y);
-    form->addRow(QStringLiteral("Width:"), w);
-    form->addRow(QStringLiteral("Height:"), h);
-    form->addRow(QStringLiteral("Rotation:"), rot);
-    form->addRow(QStringLiteral("Tracking:"), track);
-    form->addRow(QStringLiteral("Text scaling:"), scale);
-    form->addRow(QStringLiteral("Kerning:"), kern);
-    form->addRow(QStringLiteral("Line spacing:"), line);
+    form->addRow(QCoreApplication::translate("Dialogs", "Horizontal position:"), x);
+    form->addRow(QCoreApplication::translate("Dialogs", "Vertical position:"), y);
+    form->addRow(QCoreApplication::translate("Dialogs", "Width:"), w);
+    form->addRow(QCoreApplication::translate("Dialogs", "Height:"), h);
+    form->addRow(QCoreApplication::translate("Dialogs", "Rotation:"), rot);
+    form->addRow(QCoreApplication::translate("Dialogs", "Tracking:"), track);
+    form->addRow(QCoreApplication::translate("Dialogs", "Text scaling:"), scale);
+    form->addRow(QCoreApplication::translate("Dialogs", "Kerning:"), kern);
+    form->addRow(QCoreApplication::translate("Dialogs", "Line spacing:"), line);
     auto refresh = [=] {
         Item *it = ed->single();
         const bool on = it && it->type() != ItemType::Line && it->type() != ItemType::Group;
@@ -2455,7 +2486,7 @@ void measurementWindow(QWidget *p, Editor *ed)
     auto applyGeom = [=] {
         Item *it = ed->single();
         if (!it || it->type() == ItemType::Line || it->type() == ItemType::Group) return;
-        ed->change(QStringLiteral("Measurement"), [&] {
+        ed->change(QCoreApplication::translate("Dialogs", "Measurement"), [&] {
             const QRectF before = it->rect;
             if (std::abs(w->value() - before.width()) > 0.01 || std::abs(h->value() - before.height()) > 0.01)
                 it->scaleInto(before, QRectF(before.topLeft(), QSizeF(w->value(), h->value())));
@@ -2468,18 +2499,18 @@ void measurementWindow(QWidget *p, Editor *ed)
     QObject::connect(track, &QDoubleSpinBox::editingFinished, win, [=] {
         QTextCharFormat f;
         f.setProperty(tp::Tracking, track->value());
-        ed->mergeCharFormat(f, QStringLiteral("Tracking"));
+        ed->mergeCharFormat(f, QCoreApplication::translate("Dialogs", "Tracking"));
     });
     QObject::connect(kern, &QDoubleSpinBox::editingFinished, win, [=] {
         QTextCharFormat f;
         f.setFontLetterSpacingType(QFont::AbsoluteSpacing);
         f.setFontLetterSpacing(kern->value());
-        ed->mergeCharFormat(f, QStringLiteral("Kerning"));
+        ed->mergeCharFormat(f, QCoreApplication::translate("Dialogs", "Kerning"));
     });
     QObject::connect(scale, &QSpinBox::editingFinished, win, [=] {
         QTextCharFormat f;
         f.setFontStretch(scale->value());
-        ed->mergeCharFormat(f, QStringLiteral("Text Scaling"));
+        ed->mergeCharFormat(f, QCoreApplication::translate("Dialogs", "Text Scaling"));
     });
     QObject::connect(line, &QDoubleSpinBox::editingFinished, win, [=] { ed->setLineSpacing(QTextBlockFormat::ProportionalHeight, line->value() * 100); });
     refresh();
@@ -2489,7 +2520,7 @@ void measurementWindow(QWidget *p, Editor *ed)
 // ---------------- Tints ----------------
 void tintsDialog(QWidget *p, Editor *ed, const std::function<void(const ColorRef &)> &apply)
 {
-    Dlg dlg(p, QStringLiteral("Tints"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Tints"));
     auto *form = new QFormLayout();
     auto *base = new QComboBox(&dlg.d);
     for (int i = 0; i < SlotCount; ++i) base->addItem(slotName(i));
@@ -2503,14 +2534,14 @@ void tintsDialog(QWidget *p, Editor *ed, const std::function<void(const ColorRef
             const ColorRef c = ColorRef::scheme(base->currentIndex(), t < 0 ? -t : 0, t > 0 ? t : 0);
             QPixmap pm(36, 24);
             pm.fill(c.resolve(ed->doc()->colors));
-            auto *it = new QListWidgetItem(QIcon(pm), t < 0 ? QStringLiteral("%1% tint").arg(100 + t) : t > 0 ? QStringLiteral("%1% shade").arg(100 - t) : QStringLiteral("Base"));
+            auto *it = new QListWidgetItem(QIcon(pm), t < 0 ? QCoreApplication::translate("Dialogs", "%1% tint").arg(100 + t) : t > 0 ? QCoreApplication::translate("Dialogs", "%1% shade").arg(100 - t) : QCoreApplication::translate("Dialogs", "Base"));
             it->setData(Qt::UserRole, c.toString());
             list->addItem(it);
         }
     };
     QObject::connect(base, &QComboBox::currentIndexChanged, &dlg.d, fill);
     fill();
-    form->addRow(QStringLiteral("Base color:"), base);
+    form->addRow(QCoreApplication::translate("Dialogs", "Base color:"), base);
     form->addRow(list);
     dlg.v->addLayout(form);
     if (!dlg.exec() || !list->currentItem()) return;
@@ -2525,34 +2556,34 @@ void hyphenationDialog(QWidget *p, Editor *ed)
     const QString id = ed->isEditingText() ? ed->textTarget().itemId : (ed->single() ? ed->single()->id : QString());
     auto *t = dynamic_cast<TextItem *>(d->item(id));
     if (!t) {
-        QMessageBox::information(p, QStringLiteral("Hyphenation"), QStringLiteral("Click in a text box first."));
+        QMessageBox::information(p, QCoreApplication::translate("Dialogs", "Hyphenation"), QCoreApplication::translate("Dialogs", "Click in a text box first."));
         return;
     }
     const QVector<TextItem *> chain = d->chainOf(t->id);
-    Dlg dlg(p, QStringLiteral("Hyphenation"));
-    auto *autoH = new QCheckBox(QStringLiteral("Automatically hyphenate this story"), &dlg.d);
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Hyphenation"));
+    auto *autoH = new QCheckBox(QCoreApplication::translate("Dialogs", "Automatically hyphenate this story"), &dlg.d);
     autoH->setChecked(t->hyphenate);
     auto *zone = measure(t->hyphenZone, &dlg.d, 0, 720);
-    zone->setToolTip(QStringLiteral("A word is broken only if moving it whole to the next line would leave more space than this."));
+    zone->setToolTip(QCoreApplication::translate("Dialogs", "A word is broken only if moving it whole to the next line would leave more space than this."));
     auto *form = new QFormLayout();
     form->addRow(autoH);
-    form->addRow(QStringLiteral("Hyphenation zone:"), zone);
+    form->addRow(QCoreApplication::translate("Dialogs", "Hyphenation zone:"), zone);
     dlg.v->addLayout(form);
-    auto *manual = dlg.bb->addButton(QStringLiteral("Insert Optional Hyphen"), QDialogButtonBox::ActionRole);
+    auto *manual = dlg.bb->addButton(QCoreApplication::translate("Dialogs", "Insert Optional Hyphen"), QDialogButtonBox::ActionRole);
     manual->setEnabled(ed->isEditingText());
-    QObject::connect(manual, &QPushButton::clicked, &dlg.d, [&] { if (ed->isEditingText()) ed->insertTextBlock(QString(QChar(0x00AD)), QStringLiteral("Optional Hyphen")); });
-    auto *everywhere = dlg.bb->addButton(QStringLiteral("Add Optional Hyphens"), QDialogButtonBox::ActionRole);
-    everywhere->setToolTip(QStringLiteral("Put an optional hyphen at every place each long word can break; they show only where a line breaks."));
+    QObject::connect(manual, &QPushButton::clicked, &dlg.d, [&] { if (ed->isEditingText()) ed->insertTextBlock(QString(QChar(0x00AD)), QCoreApplication::translate("Dialogs", "Optional Hyphen")); });
+    auto *everywhere = dlg.bb->addButton(QCoreApplication::translate("Dialogs", "Add Optional Hyphens"), QDialogButtonBox::ActionRole);
+    everywhere->setToolTip(QCoreApplication::translate("Dialogs", "Put an optional hyphen at every place each long word can break; they show only where a line breaks."));
     QObject::connect(everywhere, &QPushButton::clicked, &dlg.d, [&] {
         int n = 0;
         QTextDocument *sd = d->storyDoc(t->storyId);
-        if (sd) ed->change(QStringLiteral("Hyphenate"), [&] { n = hyphenateStory(sd); });
-        Q_EMIT ed->status(QStringLiteral("Added %1 optional hyphens.").arg(n));
+        if (sd) ed->change(QCoreApplication::translate("Dialogs", "Hyphenate"), [&] { n = hyphenateStory(sd); });
+        Q_EMIT ed->status(QCoreApplication::translate("Dialogs", "Added %1 optional hyphens.").arg(n));
     });
     zone->setEnabled(autoH->isChecked());
     QObject::connect(autoH, &QCheckBox::toggled, zone, &QWidget::setEnabled);
     if (!dlg.exec()) return;
-    ed->change(QStringLiteral("Hyphenation"), [&] {
+    ed->change(QCoreApplication::translate("Dialogs", "Hyphenation"), [&] {
         for (TextItem *f : chain) {
             f->hyphenate = autoH->isChecked();
             f->hyphenZone = zone->value();
@@ -2562,9 +2593,9 @@ void hyphenationDialog(QWidget *p, Editor *ed)
 
 void pasteSpecialDialog(QWidget *p, Editor *ed)
 {
-    Dlg dlg(p, QStringLiteral("Paste Special"));
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Paste Special"));
     auto *list = new QListWidget(&dlg.d);
-    list->addItems({"Keep source formatting", "Keep text only (unformatted text)", "Picture (PNG)"});
+    list->addItems({QCoreApplication::translate("Dialogs", "Keep source formatting"), QCoreApplication::translate("Dialogs", "Keep text only (unformatted text)"), QCoreApplication::translate("Dialogs", "Picture (PNG)")});
     list->setCurrentRow(0);
     dlg.v->addWidget(list);
     if (!dlg.exec()) return;
@@ -2602,7 +2633,7 @@ int autoflowText(Editor *ed, const QString &boxId)
         return fl.layout && fl.layout->overflow();
     };
     int added = 0;
-    ed->beginChange(QStringLiteral("Autoflow"));
+    ed->beginChange(QCoreApplication::translate("Dialogs", "Autoflow"));
     while (added < 500 && overflows()) {
         TextItem *last = d->chainOf(boxId).last();
         const int pg = d->find(last->id).page;
@@ -2636,21 +2667,22 @@ static void offerAutoflow(QWidget *p, Editor *ed, const QString &boxId)
     RenderOptions opt;
     const auto fl = ed->cache().textFrame(*d, *last, d->find(last->id).page + 1, opt);
     if (!fl.layout || !fl.layout->overflow()) return;
-    if (QMessageBox::question(p, QStringLiteral("Autoflow"),
-                              QStringLiteral("The inserted text doesn't fit in the text box. Do you want to continue it on new pages, in text boxes like this one?"))
+    if (QMessageBox::question(p, QCoreApplication::translate("Dialogs", "Autoflow"),
+                              QCoreApplication::translate("Dialogs", "The inserted text doesn't fit in the text box. Do you want to continue it on new pages, in text boxes like this one?"))
         != QMessageBox::Yes)
         return;
     const int n = autoflowText(ed, boxId);
-    Q_EMIT ed->status(QStringLiteral("Added %1 page%2 for the rest of the text.").arg(n).arg(n == 1 ? "" : "s"));
+    Q_EMIT ed->status(QCoreApplication::translate("Dialogs", "Added %n page(s) for the rest of the text.", "", n));
 }
 
 void insertFileDialog(QWidget *p, Editor *ed)
 {
-    const QString f = QFileDialog::getOpenFileName(p, QStringLiteral("Insert Text"), QString(),
-                                                   QStringLiteral("Text Files (*.txt *.rtf *.html *.htm *.docx *.md);;All Files (*)"));
+    const QString f = QFileDialog::getOpenFileName(p, QCoreApplication::translate("Dialogs", "Insert Text"), QString(),
+                                                   QCoreApplication::translate("Dialogs", "Text Files (*.txt *.rtf *.html *.htm *.docx *.md)") + QStringLiteral(";;")
+                                                       + QCoreApplication::translate("Dialogs", "All Files (*)"));
     if (f.isEmpty()) return;
     if (ed->isEditingText()) {
-        ed->beginChange(QStringLiteral("Insert File"));
+        ed->beginChange(QCoreApplication::translate("Dialogs", "Insert File"));
         QTextDocument tmp;
         loadTextFileInto(&tmp, f);
         ed->cursor().insertFragment(QTextDocumentFragment(&tmp));
@@ -2681,13 +2713,13 @@ void recipientsDialog(QWidget *p, Editor *ed, bool typeNew)
         m.include << true;
     }
     if (m.isEmpty()) {
-        QMessageBox::information(p, QStringLiteral("Mail Merge Recipients"), QStringLiteral("Select a recipient list first (Mailings > Select Recipients)."));
+        QMessageBox::information(p, QCoreApplication::translate("Dialogs", "Mail Merge Recipients"), QCoreApplication::translate("Dialogs", "Select a recipient list first (Mailings > Select Recipients)."));
         return;
     }
-    Dlg dlg(p, typeNew ? QStringLiteral("New Address List") : QStringLiteral("Mail Merge Recipients"));
+    Dlg dlg(p, typeNew ? QCoreApplication::translate("Dialogs", "New Address List") : QCoreApplication::translate("Dialogs", "Mail Merge Recipients"));
     dlg.d.resize(900, 520);
     auto *search = new QLineEdit(&dlg.d);
-    search->setPlaceholderText(QStringLiteral("Filter recipients"));
+    search->setPlaceholderText(QCoreApplication::translate("Dialogs", "Filter recipients"));
     dlg.v->addWidget(search);
     auto *table = new QTableWidget(m.rows.size(), m.fields.size() + 1, &dlg.d);
     QStringList headers{QString()};
@@ -2702,11 +2734,11 @@ void recipientsDialog(QWidget *p, Editor *ed, bool typeNew)
     table->setSortingEnabled(true);
     dlg.v->addWidget(table, 1);
     auto *row = new QHBoxLayout();
-    auto *add = new QPushButton(QStringLiteral("New Entry"), &dlg.d);
-    auto *del = new QPushButton(QStringLiteral("Delete Entry"), &dlg.d);
-    auto *addField = new QPushButton(QStringLiteral("Customize Columns…"), &dlg.d);
-    auto *dups = new QPushButton(QStringLiteral("Find Duplicates"), &dlg.d);
-    auto *validate = new QPushButton(QStringLiteral("Validate Addresses"), &dlg.d);
+    auto *add = new QPushButton(QCoreApplication::translate("Dialogs", "New Entry"), &dlg.d);
+    auto *del = new QPushButton(QCoreApplication::translate("Dialogs", "Delete Entry"), &dlg.d);
+    auto *addField = new QPushButton(QCoreApplication::translate("Dialogs", "Customize Columns…"), &dlg.d);
+    auto *dups = new QPushButton(QCoreApplication::translate("Dialogs", "Find Duplicates"), &dlg.d);
+    auto *validate = new QPushButton(QCoreApplication::translate("Dialogs", "Validate Addresses"), &dlg.d);
     row->addWidget(add);
     row->addWidget(del);
     row->addWidget(addField);
@@ -2737,7 +2769,7 @@ void recipientsDialog(QWidget *p, Editor *ed, bool typeNew)
     QObject::connect(del, &QPushButton::clicked, &dlg.d, [=] { if (table->currentRow() >= 0) table->removeRow(table->currentRow()); });
     QObject::connect(addField, &QPushButton::clicked, &dlg.d, [=] {
         bool ok = false;
-        const QString n = QInputDialog::getText(table, QStringLiteral("Add Field"), QStringLiteral("Field name:"), QLineEdit::Normal, QString(), &ok);
+        const QString n = QInputDialog::getText(table, QCoreApplication::translate("Dialogs", "Add Field"), QCoreApplication::translate("Dialogs", "Field name:"), QLineEdit::Normal, QString(), &ok);
         if (!ok || n.trimmed().isEmpty()) return;
         const int c = table->columnCount();
         table->insertColumn(c);
@@ -2752,7 +2784,7 @@ void recipientsDialog(QWidget *p, Editor *ed, bool typeNew)
             if (seen.contains(key)) { table->item(r, 0)->setCheckState(Qt::Unchecked); ++n; }
             else seen.insert(key, r);
         }
-        QMessageBox::information(table, QStringLiteral("Find Duplicates"), QStringLiteral("Unchecked %1 duplicate entries.").arg(n));
+        QMessageBox::information(table, QCoreApplication::translate("Dialogs", "Find Duplicates"), QCoreApplication::translate("Dialogs", "Unchecked %1 duplicate entries.").arg(n));
     });
     QObject::connect(validate, &QPushButton::clicked, &dlg.d, [=] {
         int bad = 0;
@@ -2770,8 +2802,8 @@ void recipientsDialog(QWidget *p, Editor *ed, bool typeNew)
                 if (table->item(r, c)) table->item(r, c)->setBackground(ok ? QBrush() : QBrush(QColor(255, 220, 200)));
             bad += !ok;
         }
-        QMessageBox::information(table, QStringLiteral("Validate Addresses"), bad ? QStringLiteral("%1 entries have a missing address or a ZIP code that doesn't look right (highlighted).").arg(bad)
-                                                                                  : QStringLiteral("All entries have an address and a well-formed ZIP code."));
+        QMessageBox::information(table, QCoreApplication::translate("Dialogs", "Validate Addresses"), bad ? QCoreApplication::translate("Dialogs", "%1 entries have a missing address or a ZIP code that doesn't look right (highlighted).").arg(bad)
+                                                                                  : QCoreApplication::translate("Dialogs", "All entries have an address and a well-formed ZIP code."));
     });
     if (!dlg.exec()) return;
     MergeSource out;
@@ -2791,16 +2823,16 @@ void recipientsDialog(QWidget *p, Editor *ed, bool typeNew)
         out.include << (table->item(r, 0) && table->item(r, 0)->checkState() == Qt::Checked);
     }
     if (typeNew) {
-        const QString path = askSavePath(p, QStringLiteral("Save Address List"), QStringLiteral("Recipients.csv"), QStringLiteral("CSV (*.csv)"));
+        const QString path = askSavePath(p, QCoreApplication::translate("Dialogs", "Save Address List"), QStringLiteral("Recipients.csv"), QCoreApplication::translate("Dialogs", "CSV (*.csv)"));
         if (!path.isEmpty()) { saveMergeCsv(out, path); out.path = path; }
     }
-    ed->change(QStringLiteral("Recipients"), [&] { ed->doc()->merge = out; });
+    ed->change(QCoreApplication::translate("Dialogs", "Recipients"), [&] { ed->doc()->merge = out; });
 }
 
 void mergeFieldDialog(QWidget *p, Editor *ed, int kind)
 {
     if (ed->doc()->merge.isEmpty()) {
-        QMessageBox::information(p, QStringLiteral("Mail Merge"), QStringLiteral("Select a recipient list first."));
+        QMessageBox::information(p, QCoreApplication::translate("Dialogs", "Mail Merge"), QCoreApplication::translate("Dialogs", "Select a recipient list first."));
         return;
     }
     const QString code = kind == 0 ? QStringLiteral("mergeblock:address") : QStringLiteral("mergeblock:greeting");

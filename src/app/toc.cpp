@@ -6,6 +6,7 @@
 #include "render/renderer.h"
 #include "text/textprops.h"
 
+#include <QCoreApplication>
 #include <QSet>
 #include <QTextBlock>
 #include <QTextCursor>
@@ -192,7 +193,7 @@ void insertTableOfContents(Editor *ed)
     if (ed->isEditingText() && ed->textTarget().row < 0) {
         QTextDocument *sd = d->storyDoc(ed->textTarget().storyId);
         if (!sd) return;
-        ed->change(QStringLiteral("Insert Table of Contents"), [&] {
+        ed->change(QCoreApplication::translate("TableOfContents", "Insert Table of Contents"), [&] {
             QTextCursor c = ed->cursor();
             c.removeSelectedText();
             // On paragraphs of its own, before the text after the cursor.
@@ -208,7 +209,7 @@ void insertTableOfContents(Editor *ed)
     }
     // On the current page when it's empty, else on a new page after it:
     // a text box inside the margins, so nothing on the page has to make room.
-    ed->change(QStringLiteral("Insert Table of Contents"), [&] {
+    ed->change(QCoreApplication::translate("TableOfContents", "Insert Table of Contents"), [&] {
         const int page = ed->currentPage();
         TextItem *t = nullptr;
         if (d->pages.value(page) && d->pages[page]->items.empty()) {
@@ -231,7 +232,7 @@ int updateTablesOfContents(Editor *ed)
     int tables = 0;
     for (auto it = d->stories.cbegin(); it != d->stories.cend(); ++it)
         if (it.value() && it.value()->doc) tables += int(tablesIn(it.value()->doc.get()).size());
-    if (tables) ed->change(QStringLiteral("Update Table of Contents"), [&] { rebuildTables(d); });
+    if (tables) ed->change(QCoreApplication::translate("TableOfContents", "Update Table of Contents"), [&] { rebuildTables(d); });
     return tables;
 }
 
