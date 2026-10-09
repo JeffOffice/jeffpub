@@ -184,6 +184,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     connect(m_ed, &Editor::documentReplaced, this, [this] {
         dropRecoveryCopy();
         m_recoveredFrom.clear();
+        m_recovered = false;
     });
     connect(m_ed, &Editor::modifiedChanged, this, [this](bool modified) {
         if (!modified) dropRecoveryCopy();
@@ -249,7 +250,10 @@ QAction *MainWindow::mk(const QString &id, const QString &text, const QString &i
 
 void MainWindow::updateTitle()
 {
-    setWindowTitle(tr("%1%2 - JeffPub").arg(m_ed->displayName(), m_ed->isModified() ? QStringLiteral("*") : QString()));
+    // Recovered work says so until it's saved; the publication's own title
+    // (saved in it, and in its PDFs) stays as its author set it.
+    const QString name = m_recovered && m_ed->filePath().isEmpty() ? tr("%1 (Recovered)").arg(m_ed->displayName()) : m_ed->displayName();
+    setWindowTitle(tr("%1%2 - JeffPub").arg(name, m_ed->isModified() ? QStringLiteral("*") : QString()));
 }
 
 void MainWindow::resizeEvent(QResizeEvent *e)
@@ -510,28 +514,32 @@ void MainWindow::offerRecovery(bool askIfNone)
             continue;
         }
         QString err;
-        auto doc = loadPublication(r.file, &err);
-        if (!doc) {
+        if (!openRecovered(r, &err))
             QMessageBox::warning(this, tr("Recover Unsaved Work"), tr("JeffPub can't open the copy of \"%1\".\n%2").arg(r.title, err));
-            continue;
-        }
-        // Into this window while it holds nothing, else a new one.
-        MainWindow *target = this;
-        if (!m_ed->filePath().isEmpty() || m_ed->isModified()) {
-            target = new MainWindow();
-            target->setAttribute(Qt::WA_DeleteOnClose);
-            target->show();
-        }
-        doc->props.title = r.title + QStringLiteral(" (Recovered)");
-        target->m_ed->setDocument(std::move(doc));
-        target->m_recoveredFrom = r.source;
-        target->m_ed->markUnsaved();
-        target->hideBackstage();
-        target->updateTitle();
-        // This run keeps its own copy before the old one goes.
-        target->autoRecover();
-        if (!target->m_recoveryCopy.isEmpty()) recovery::discard(r);
     }
+}
+
+MainWindow *MainWindow::openRecovered(const recovery::Recovered &r, QString *error)
+{
+    auto doc = loadPublication(r.file, error);
+    if (!doc) return nullptr;
+    MainWindow *target = this;
+    if (!m_ed->filePath().isEmpty() || m_ed->isModified()) {
+        target = new MainWindow();
+        target->setAttribute(Qt::WA_DeleteOnClose);
+        target->show();
+    }
+    target->m_ed->setDocument(std::move(doc));
+    target->m_ed->setUntitledName(r.title);
+    target->m_recoveredFrom = r.source;
+    target->m_recovered = true;
+    target->m_ed->markUnsaved();
+    target->hideBackstage();
+    target->updateTitle();
+    // This run keeps its own copy before the old one goes.
+    target->autoRecover();
+    if (!target->m_recoveryCopy.isEmpty()) recovery::discard(r);
+    return target;
 }
 
 QImage MainWindow::pageThumbnail(int page, int maxSide)

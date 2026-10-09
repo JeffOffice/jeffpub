@@ -34,7 +34,11 @@ QString safeName(QString s)
     s = s.trimmed();
     while (s.startsWith(QLatin1Char('.'))) s[0] = QLatin1Char('_');
     if (s.isEmpty()) s = QStringLiteral("Publication");
-    return s.left(60);
+    if (s.size() > 60) {
+        s.truncate(60);
+        if (s.back().isHighSurrogate()) s.chop(1);   // not half a character
+    }
+    return s;
 }
 
 QString sidecar(const QString &copy) { return copy.left(copy.size() - 5) + QStringLiteral(".json"); }

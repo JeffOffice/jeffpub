@@ -47,6 +47,9 @@ public:
     QString filePath() const { return m_path; }
     void setFilePath(const QString &p);
     QString displayName() const;
+    // What a document with no file of its own is called, in place of its
+    // title (recovered work keeps its file's name until it's saved again).
+    void setUntitledName(const QString &name) { m_untitledName = name; }
     bool isModified() const { return !m_undo.isClean(); }
     void markSaved() { m_undo.setClean(); }
     void markUnsaved() { m_undo.resetClean(); }   // a recovered copy: unsaved until saved
@@ -246,6 +249,7 @@ private:
     mutable QHash<QString, SpellEntry> m_spell;
     QUndoStack m_undo;
     QString m_path;
+    QString m_untitledName;
     int m_page = 0;
     QString m_master;
     bool m_spread = false;

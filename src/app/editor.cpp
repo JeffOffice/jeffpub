@@ -75,6 +75,7 @@ void Editor::setDocument(std::unique_ptr<Document> d, const QString &path)
     m_doc = std::move(d);
     m_cache.clear();
     m_path = path;
+    m_untitledName.clear();
     m_page = 0;
     m_master.clear();
     m_sel.clear();
@@ -99,6 +100,7 @@ void Editor::setFilePath(const QString &p)
 QString Editor::displayName() const
 {
     if (!m_path.isEmpty()) return QFileInfo(m_path).completeBaseName();
+    if (!m_untitledName.isEmpty()) return m_untitledName;
     return m_doc->props.title.isEmpty() ? tr("Publication1") : m_doc->props.title;
 }
 

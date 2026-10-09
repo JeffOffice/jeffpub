@@ -20,6 +20,9 @@ class QToolButton;
 class QComboBox;
 
 namespace jp {
+namespace recovery {
+struct Recovered;
+}
 
 class Canvas;
 class Ribbon;
@@ -55,6 +58,9 @@ public:
     // normally: offered for opening or deleting (askIfNone: say so when
     // there are none, from File > Open).
     void offerRecovery(bool askIfNone = false);
+    // Opens one recovered copy, in this window while it holds nothing, else
+    // in a new one, which is returned (null if the copy can't be read).
+    MainWindow *openRecovered(const recovery::Recovered &r, QString *error = nullptr);
     // The AutoRecover copy this window keeps of its document, if any.
     QString recoveryCopy() const { return m_recoveryCopy; }
     KeyTips *keyTips() const { return m_keyTips; }
@@ -155,6 +161,7 @@ private:
     quint64 m_serial;               // this window, among this run's (names an unsaved document's copy)
     QString m_recoveryCopy;         // this window's AutoRecover copy, if written
     QString m_recoveredFrom;        // a recovered document's original file, for Save As
+    bool m_recovered = false;       // the document is recovered work, not yet saved
     QPointer<QWidget> m_measurement;
 };
 

@@ -1945,6 +1945,36 @@ private Q_SLOTS:
             ed->setDocument(jp::Document::blank(QSizeF(612, 792)));   // File > New in this window
             QVERIFY(!QFile::exists(second));
         }
+
+        // Recovered work opens under its file's name, marked as recovered
+        // in the window only: the publication's own title (saved in it and
+        // in its PDFs) became "Cover (Recovered)".
+        {
+            auto titled = jp::Document::blank(QSizeF(612, 792));
+            titled->props.title = QStringLiteral("Spring Newsletter");
+            const QString lost = dir.filePath(QStringLiteral("AutoRecover/lost"));
+            QDir().mkpath(lost);
+            QVERIFY(jp::recovery::write(*titled, lost + QStringLiteral("/Cover 0123abcd.jpub"), QStringLiteral("/docs/Cover.jpub"), QStringLiteral("Cover")));
+            const QVector<jp::recovery::Recovered> left = jp::recovery::orphans();
+            QCOMPARE(left.size(), 2);   // and the loose Publication1 copy
+            const auto it = std::find_if(left.begin(), left.end(), [](const auto &r) { return r.title == QLatin1String("Cover"); });
+            QVERIFY(it != left.end());
+            jp::MainWindow w;
+            QCOMPARE(w.openRecovered(*it), &w);
+            QCOMPARE(w.editor()->doc()->props.title, QStringLiteral("Spring Newsletter"));
+            QCOMPARE(w.editor()->displayName(), QStringLiteral("Cover"));
+            QVERIFY2(w.windowTitle().startsWith(QLatin1String("Cover (Recovered)")), qPrintable(w.windowTitle()));
+            QVERIFY(w.editor()->isModified());
+            QVERIFY(QFileInfo(w.recoveryCopy()).fileName().startsWith(QLatin1String("Cover ")));   // a second crash still says Cover
+            QVERIFY(!QDir(lost).exists());   // the old copy goes once this run has its own
+            QVERIFY(w.saveTo(dir.filePath(QStringLiteral("Cover.jpub"))));
+            QVERIFY2(!w.windowTitle().contains(QLatin1String("Recovered")), qPrintable(w.windowTitle()));
+            QCOMPARE(w.editor()->doc()->props.title, QStringLiteral("Spring Newsletter"));
+        }
+
+        // Long names are cut between characters, never inside one.
+        const QString emoji = QString(59, QLatin1Char('a')) + QString::fromUtf8("\xF0\x9F\x98\x80");
+        QVERIFY(QFileInfo(jp::recovery::copyPath(QString(), emoji, 1)).fileName().isValidUtf16());
         jp::recovery::endSession();
         jp::recovery::setRoot(QString());
     }
@@ -6721,7 +6751,7 @@ private Q_SLOTS:
         // The table alone, then with a text box too (two stories).
         QTemporaryDir dir;
         QString path;
-        for (const QString name : {QStringLiteral("test10-table.pub"), QStringLiteral("test11-table-text.pub")}) {
+        for (const QString &name : {QStringLiteral("test10-table.pub"), QStringLiteral("test11-table-text.pub")}) {
             if (name.startsWith(QLatin1String("test11"))) {
                 auto label = std::make_shared<jp::TextItem>();
                 label->rect = QRectF(72, 36, 400, 40);
@@ -8948,7 +8978,7 @@ private Q_SLOTS:
         // Its folder of templates and building blocks moves to the new name.
         const QString from = dir.filePath("JeffPub/JeffPub 79"), to = dir.filePath("JeffOffice/JeffPub");
         QVERIFY(QDir().mkpath(from + "/Templates") && QDir().mkpath(from + "/BuildingBlocks"));
-        for (const QString f : {QStringLiteral("/Templates/club.jpub"), QStringLiteral("/BuildingBlocks/logo.json")}) {
+        for (const QString &f : {QStringLiteral("/Templates/club.jpub"), QStringLiteral("/BuildingBlocks/logo.json")}) {
             QFile file(from + f);
             QVERIFY(file.open(QIODevice::WriteOnly));
             file.write("kept");
