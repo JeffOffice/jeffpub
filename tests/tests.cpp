@@ -1809,6 +1809,36 @@ private Q_SLOTS:
         qApp->setStyleSheet(sheet);
     }
 
+    // The ribbon's text, in resources/ribbon.json where lupdate can't see
+    // it, is listed for translators in src/app/ribbon_strings.cpp; this
+    // keeps that list current (run tools/ribbon_strings.py).
+    void ribbonStringsListed()
+    {
+        QFile json(QStringLiteral(":/ribbon.json"));
+        QVERIFY(json.open(QIODevice::ReadOnly));
+        QFile listed(QStringLiteral(JP_TEST_DATA "/../../src/app/ribbon_strings.cpp"));
+        QVERIFY(listed.open(QIODevice::ReadOnly | QIODevice::Text));
+        const QString have = QString::fromUtf8(listed.readAll());
+        QStringList missing;
+        const QStringList keys = {"name", "text", "launcherTip", "tip", "label", "section", "submenu", "context"};
+        std::function<void(const QJsonValue &)> walk = [&](const QJsonValue &v) {
+            if (v.isObject()) {
+                const QJsonObject o = v.toObject();
+                for (auto it = o.begin(); it != o.end(); ++it) {
+                    if (keys.contains(it.key()) && it.value().isString() && !it.value().toString().isEmpty()) {
+                        const QString lit = QStringLiteral("QT_TRANSLATE_NOOP(\"Ribbon\", \"%1\")").arg(it.value().toString().replace(QLatin1Char('"'), QStringLiteral("\\\"")));
+                        if (!have.contains(lit)) missing << it.value().toString();
+                    }
+                    walk(it.value());
+                }
+            } else if (v.isArray()) {
+                for (const QJsonValue &x : v.toArray()) walk(x);
+            }
+        };
+        walk(QJsonDocument::fromJson(json.readAll()).object());
+        QVERIFY2(missing.isEmpty(), qPrintable(QStringLiteral("not in ribbon_strings.cpp (run tools/ribbon_strings.py): ") + missing.join(QStringLiteral(", "))));
+    }
+
     // AutoRecover keeps one copy per document and run: two "Cover.pub"
     // files in different folders overwrote each other's copy, copies were
     // never offered after a crash, and never removed.
