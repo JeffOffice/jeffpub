@@ -13,6 +13,7 @@
 #include "app/recovery.h"
 #include "app/theme.h"
 #include "app/i18n.h"
+#include "app/focusring.h"
 #include "app/ribbon.h"
 #include "app/updater.h"
 #include "app/settings.h"
@@ -65,6 +66,7 @@ int main(int argc, char **argv)
     jp::applyUiTheme(jp::Settings::get().value(QStringLiteral("ui/theme"), 0).toInt());
     jp::followSystemTheme();
     jp::installUiPolish();
+    jp::installFocusRing(&app);
 
     auto *w = new jp::MainWindow();
     w->setAttribute(Qt::WA_DeleteOnClose);

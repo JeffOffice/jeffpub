@@ -24,14 +24,28 @@ bool uiDark()
 }
 void setUiDark(bool dark) { g_uiDark = dark ? 1 : 0; }
 
+static bool g_highContrast = false;
+bool uiHighContrast() { return g_highContrast; }
+void setUiHighContrast(bool on) { g_highContrast = on; }
+
+// In high contrast, the system's colors (the palette holds them) rather
+// than JeffPub's own.
 QColor uiText()
 {
+    if (g_highContrast) return QGuiApplication::palette().color(QPalette::WindowText);
     return uiDark() ? QColor(0xDF, 0xE3, 0xEA) : QColor(0x2A, 0x30, 0x3B);
 }
 
 QColor uiAccent()
 {
+    if (g_highContrast) return QGuiApplication::palette().color(QPalette::Highlight);
     return uiDark() ? QColor(0xE0, 0x6A, 0xA5) : QColor(0x9E, 0x1F, 0x63);
+}
+
+QColor focusRingColor()
+{
+    if (g_highContrast) return QGuiApplication::palette().color(QPalette::Highlight);
+    return uiDark() ? QColor(0x7F, 0xB2, 0xFF) : QColor(0x1A, 0x5F, 0xD6);   // a blue that reads on the ribbon and on accents
 }
 
 // Style sheets can only load arrow images from files, so write small tinted

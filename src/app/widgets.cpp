@@ -1,4 +1,5 @@
 #include "app/widgets.h"
+#include "app/keyboardnav.h"
 #include "app/ribbon.h"
 
 #include "app/icons.h"
@@ -70,9 +71,10 @@ class Swatch : public QToolButton {
 public:
     Swatch(const QColor &c, QWidget *parent) : QToolButton(parent), m_c(c)
     {
+        setObjectName(QStringLiteral("swatch"));
         setFixedSize(18, 18);
         setAutoRaise(true);
-        setFocusPolicy(Qt::NoFocus);
+        setFocusPolicy(Qt::StrongFocus);
     }
 
 protected:
@@ -187,6 +189,7 @@ QWidget *ColorPopup::swatch(const ColorRef &c, const QColor &shown, const QStrin
 {
     auto *b = new Swatch(shown, this);
     b->setToolTip(tip);
+    b->setAccessibleName(tip);
     connect(b, &QToolButton::clicked, this, [this, c] {
         if (c.kind() == ColorRef::Rgb) addRecent(c.rgbValue());
         Q_EMIT picked(c);
@@ -208,6 +211,9 @@ void ColorPopup::showBelow(QWidget *anchor)
     adjustSize();
     move(anchor->mapToGlobal(QPoint(0, anchor->height())));
     show();
+    // The arrow keys move among the colors; the first has the focus.
+    installArrowNavigation(this);
+    if (auto *first = findChild<QToolButton *>(QStringLiteral("swatch"))) first->setFocus(Qt::PopupFocusReason);
 }
 
 // ---------------- ColorButton ----------------
@@ -215,9 +221,11 @@ ColorButton::ColorButton(const QString &iconName, const QString &text, bool allo
     : QToolButton(parent), m_icon(iconName), m_allowNone(allowNone), m_noneLabel(noneLabel)
 {
     setToolTip(text);
+    setAccessibleName(text);
+    setAccessibleDescription(QStringLiteral("Applies the color shown; Down arrow or F4 opens more colors."));
     setPopupMode(QToolButton::MenuButtonPopup);
     setAutoRaise(true);
-    setFocusPolicy(Qt::NoFocus);
+    setFocusPolicy(Qt::TabFocus);   // the keyboard reaches it; a click leaves the focus in the text
     setIconSize(QSize(16, 16));
     setFixedHeight(24);
     auto *menu = new QMenu(this);
@@ -231,6 +239,15 @@ ColorButton::ColorButton(const QString &iconName, const QString &text, bool allo
     refreshIcon();
 }
 
+void ColorButton::keyPressEvent(QKeyEvent *e)
+{
+    if (e->key() == Qt::Key_F4 || (e->key() == Qt::Key_Down && !(e->modifiers() & ~Qt::AltModifier))) {
+        openPopup();
+        return;
+    }
+    QToolButton::keyPressEvent(e);
+}
+
 void ColorButton::refreshIcon()
 {
     setIcon(colorBarIcon(m_icon, m_current.isNone() ? QColor(Qt::transparent) : m_current.resolve(m_scheme)));
@@ -240,7 +257,7 @@ void ColorButton::setWell(bool on)
 {
     m_well = on;
     setAutoRaise(!on);
-    setFocusPolicy(on ? Qt::StrongFocus : Qt::NoFocus);
+    setFocusPolicy(on ? Qt::StrongFocus : Qt::TabFocus);
     setCursor(on ? Qt::PointingHandCursor : Qt::ArrowCursor);
     setMinimumHeight(on ? 32 : 0);
     setMaximumHeight(on ? 32 : 24);
@@ -439,7 +456,9 @@ Gallery::Gallery(const QSize &itemSize, int visibleColumns, QWidget *parent) : Q
     m_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_list->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_list->setFrameShape(QFrame::NoFrame);
-    m_list->setFocusPolicy(Qt::NoFocus);
+    m_list->setFocusPolicy(Qt::TabFocus);   // the keyboard reaches it; a click leaves the focus in the text
+    m_list->setAccessibleName(QStringLiteral("Gallery"));
+    m_list->installEventFilter(this);
     m_list->setMouseTracking(true);
     m_list->setStyleSheet(QStringLiteral("QListWidget{background:transparent; border:none;}"));
     m_list->setItemDelegate(new TileDelegate(m_list));
@@ -456,7 +475,8 @@ Gallery::Gallery(const QSize &itemSize, int visibleColumns, QWidget *parent) : Q
         b->setAutoRaise(true);
         b->setFixedSize(20, std::max(18, (m_list->height() - 6) / 3));
         b->setToolTip(tip);
-        b->setFocusPolicy(Qt::NoFocus);
+        b->setAccessibleName(tip);
+        b->setFocusPolicy(Qt::TabFocus);
         b->setCursor(Qt::PointingHandCursor);
         b->setStyleSheet(QStringLiteral("QToolButton{border:none; border-radius:6px; background:transparent;}"
                                         "QToolButton:hover{background:rgba(127,127,127,0.18);}"));
@@ -477,11 +497,30 @@ void Gallery::setItems(const QVector<GalleryItem> &items)
     for (const auto &g : items) {
         auto *it = new QListWidgetItem(g.icon, QString());
         it->setToolTip(g.tip);
+        it->setData(Qt::AccessibleTextRole, g.tip);
         it->setData(Qt::UserRole, g.id);
         it->setSizeHint(m_itemSize + QSize(14, 14));
         m_list->addItem(it);
         if (g.id == m_current) it->setSelected(true);
     }
+}
+
+void Gallery::setTitle(const QString &title)
+{
+    setAccessibleName(title);
+    m_list->setAccessibleName(title);
+}
+
+bool Gallery::eventFilter(QObject *o, QEvent *e)
+{
+    if (o == m_list && e->type() == QEvent::KeyPress) {
+        const int k = static_cast<QKeyEvent *>(e)->key();
+        if ((k == Qt::Key_Return || k == Qt::Key_Enter || k == Qt::Key_Space) && m_list->currentItem()) {
+            Q_EMIT activated(m_list->currentItem()->data(Qt::UserRole).toString());
+            return true;
+        }
+    }
+    return QFrame::eventFilter(o, e);
 }
 
 void Gallery::reload()
@@ -513,6 +552,26 @@ void Gallery::openMore()
                  [this](const QString &id) { Q_EMIT activated(id); }, this);
 }
 
+namespace {
+// Enter, Return or Space on a gallery list picks its current tile.
+class PickOnEnter : public QObject {
+public:
+    PickOnEnter(QListWidget *list, std::function<void(const QString &)> pick) : QObject(list), m_list(list), m_pick(std::move(pick)) { list->installEventFilter(this); }
+    bool eventFilter(QObject *, QEvent *e) override
+    {
+        if (e->type() != QEvent::KeyPress) return false;
+        const int k = static_cast<QKeyEvent *>(e)->key();
+        if ((k != Qt::Key_Return && k != Qt::Key_Enter && k != Qt::Key_Space) || !m_list->currentItem()) return false;
+        m_pick(m_list->currentItem()->data(Qt::UserRole).toString());
+        return true;
+    }
+
+private:
+    QListWidget *m_list;
+    std::function<void(const QString &)> m_pick;
+};
+} // namespace
+
 QFrame *galleryPopup(const QVector<GalleryItem> &items, const QSize &itemSize, int columns, const QList<QAction *> &footer,
                      const std::function<void(const QString &)> &onPick, QWidget *parent)
 {
@@ -540,6 +599,10 @@ QFrame *galleryPopup(const QVector<GalleryItem> &items, const QSize &itemSize, i
             pop->close();
             onPick(id);
         });
+        new PickOnEnter(list, [pop, onPick](const QString &id) {
+            pop->close();
+            onPick(id);
+        });
         v->addWidget(list);
     };
     QHash<QListWidget *, int> counts;
@@ -559,6 +622,7 @@ QFrame *galleryPopup(const QVector<GalleryItem> &items, const QSize &itemSize, i
         if (!list) newList();
         auto *it = new QListWidgetItem(g.icon, QString());
         it->setToolTip(g.tip);
+        it->setData(Qt::AccessibleTextRole, g.tip);
         it->setData(Qt::UserRole, g.id);
         list->addItem(it);
         ++counts[list];
@@ -586,6 +650,10 @@ QFrame *galleryPopup(const QVector<GalleryItem> &items, const QSize &itemSize, i
     if (p.y() + pop->height() > screen.bottom()) p.setY(std::max(screen.top(), screen.bottom() - pop->height()));
     pop->move(p);
     pop->show();
+    if (auto *first = pop->findChild<QListWidget *>()) {
+        first->setFocus(Qt::PopupFocusReason);
+        if (first->count()) first->setCurrentRow(0);
+    }
     Q_UNUSED(totalRows);
     return pop;
 }
@@ -608,8 +676,9 @@ GalleryButton::GalleryButton(const QIcon &ic, const QString &text, const QSize &
 {
     setIcon(ic);
     setText(text);
+    setAccessibleName(text);
     setAutoRaise(true);
-    setFocusPolicy(Qt::NoFocus);
+    setFocusPolicy(Qt::TabFocus);   // the keyboard reaches it; a click leaves the focus in the text
     setPopupMode(QToolButton::InstantPopup);
     m_large = large;
     if (large) {
@@ -898,7 +967,34 @@ void MeasureSpin::setPoints(double pt)
 }
 
 // ---------------- TableGrid ----------------
-TableGrid::TableGrid(QWidget *parent) : QFrame(parent) { setMouseTracking(true); }
+TableGrid::TableGrid(QWidget *parent) : QFrame(parent)
+{
+    setMouseTracking(true);
+    setFocusPolicy(Qt::StrongFocus);
+    setAccessibleName(QStringLiteral("Table size"));
+    setAccessibleDescription(QStringLiteral("Arrow keys choose rows and columns; Enter inserts the table."));
+}
+
+void TableGrid::keyPressEvent(QKeyEvent *e)
+{
+    const int rows = std::max(1, m_rows), cols = std::max(1, m_cols);
+    switch (e->key()) {
+    case Qt::Key_Right: m_cols = std::min(10, cols + (m_cols ? 1 : 0)); m_rows = rows; break;
+    case Qt::Key_Left: m_cols = std::max(1, cols - 1); m_rows = rows; break;
+    case Qt::Key_Down: m_rows = std::min(8, rows + (m_rows ? 1 : 0)); m_cols = cols; break;
+    case Qt::Key_Up: m_rows = std::max(1, rows - 1); m_cols = cols; break;
+    case Qt::Key_Return:
+    case Qt::Key_Enter:
+    case Qt::Key_Space:
+        mousePressEvent(nullptr);
+        return;
+    default:
+        QFrame::keyPressEvent(e);
+        return;
+    }
+    setAccessibleName(QStringLiteral("Table size: %1 by %2").arg(m_rows).arg(m_cols));
+    update();
+}
 
 QSize TableGrid::sizeHint() const { return QSize(10 * 20 + 4, 8 * 20 + 26); }
 

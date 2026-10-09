@@ -56,6 +56,7 @@ Q_SIGNALS:
 
 protected:
     void paintEvent(QPaintEvent *e) override;
+    void keyPressEvent(QKeyEvent *e) override;
 
 private:
     void refreshIcon();
@@ -86,12 +87,14 @@ public:
     void setFooterActions(const QList<QAction *> &a) { m_footer = a; }
     void setCurrent(const QString &id);
     void reload();   // refill the inline row from the provider
+    void setTitle(const QString &title);   // its name for screen readers
 
 Q_SIGNALS:
     void activated(const QString &id);
 
 protected:
     void showEvent(QShowEvent *e) override;
+    bool eventFilter(QObject *o, QEvent *e) override;
 
 private:
     void openMore();
@@ -198,6 +201,7 @@ protected:
     void paintEvent(QPaintEvent *) override;
     void mouseMoveEvent(QMouseEvent *e) override;
     void mousePressEvent(QMouseEvent *e) override;
+    void keyPressEvent(QKeyEvent *e) override;
 
 private:
     int m_rows = 0, m_cols = 0;

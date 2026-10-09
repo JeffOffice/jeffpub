@@ -38,6 +38,8 @@
 #include "app/editor.h"
 #include "app/mainwindow.h"
 #include "app/recovery.h"
+#include "app/focusring.h"
+#include "app/keyboardnav.h"
 #include "app/pagespane.h"
 #include "app/theme.h"
 #include "app/ribbon.h"
@@ -83,6 +85,8 @@
 #include <QtEndian>
 #include <QLockFile>
 #include <QStyleHints>
+#include <QGridLayout>
+#include <QListWidget>
 #include <clocale>
 
 using namespace jp;
@@ -1305,6 +1309,100 @@ private Q_SLOTS:
             QVERIFY(f.open(QIODevice::WriteOnly));
             f.write(d.toUtf8());
         }
+    }
+
+    // The keyboard reaches the shared controls: arrow keys move among
+    // colors and table cells, Enter picks, and a ring shows the focus while
+    // the keyboard is in use (the ribbon's controls drew none and refused
+    // the focus).
+    void keyboardReachesSharedControls()
+    {
+        // The nearest control in each direction, in a 3 x 3 grid.
+        QWidget grid;
+        auto *gl = new QGridLayout(&grid);
+        QToolButton *b[3][3];
+        for (int r = 0; r < 3; ++r)
+            for (int c = 0; c < 3; ++c) {
+                b[r][c] = new QToolButton(&grid);
+                b[r][c]->setFixedSize(30, 30);
+                b[r][c]->setFocusPolicy(Qt::TabFocus);
+                gl->addWidget(b[r][c], r, c);
+            }
+        grid.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&grid));
+        QList<QWidget *> all;
+        for (auto &row : b) for (QToolButton *x : row) all << x;
+        QCOMPARE(jp::nearestInDirection(b[1][1], Qt::Key_Right, all), static_cast<QWidget *>(b[1][2]));
+        QCOMPARE(jp::nearestInDirection(b[1][1], Qt::Key_Left, all), static_cast<QWidget *>(b[1][0]));
+        QCOMPARE(jp::nearestInDirection(b[1][1], Qt::Key_Up, all), static_cast<QWidget *>(b[0][1]));
+        QCOMPARE(jp::nearestInDirection(b[1][1], Qt::Key_Down, all), static_cast<QWidget *>(b[2][1]));
+        QCOMPARE(jp::nearestInDirection(b[1][2], Qt::Key_Right, all), static_cast<QWidget *>(nullptr));
+
+        // Colors: the first has the focus; Right moves; Enter picks.
+        {
+            auto *pop = new jp::ColorPopup(jp::ColorScheme(), true, QStringLiteral("No Color"));
+            jp::ColorRef got;
+            bool picked = false;
+            connect(pop, &jp::ColorPopup::picked, &grid, [&](const jp::ColorRef &c) { got = c; picked = true; });
+            pop->showBelow(&grid);
+            QVERIFY(QTest::qWaitForWindowExposed(pop));
+            QWidget *first = QApplication::focusWidget();
+            QVERIFY(first && first->objectName() == QLatin1String("swatch"));
+            QVERIFY(!first->accessibleName().isEmpty());
+            QTest::keyClick(first, Qt::Key_Right);
+            QWidget *second = QApplication::focusWidget();
+            QVERIFY(second && second != first && second->objectName() == QLatin1String("swatch"));
+            QTest::keyClick(second, Qt::Key_Return);
+            QVERIFY(picked);
+            QCOMPARE(got.kind(), jp::ColorRef::Scheme);
+        }
+
+        // Table size: arrows choose, Enter inserts.
+        {
+            jp::TableGrid tg;
+            int rows = 0, cols = 0;
+            connect(&tg, &jp::TableGrid::picked, &tg, [&](int r, int c) { rows = r; cols = c; });
+            tg.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&tg));
+            for (int k : {Qt::Key_Right, Qt::Key_Right, Qt::Key_Right, Qt::Key_Down}) QTest::keyClick(&tg, Qt::Key(k));
+            QTest::keyClick(&tg, Qt::Key_Return);
+            QCOMPARE(rows, 2);
+            QCOMPARE(cols, 3);
+        }
+
+        // A gallery: Enter applies the tile with the focus.
+        {
+            jp::Gallery g(QSize(20, 20), 3);
+            g.setItems({jp::GalleryItem{QStringLiteral("a"), QStringLiteral("First"), QIcon(), QString()},
+                        jp::GalleryItem{QStringLiteral("b"), QStringLiteral("Second"), QIcon(), QString()}});
+            g.setTitle(QStringLiteral("Styles"));
+            QString chosen;
+            connect(&g, &jp::Gallery::activated, &g, [&](const QString &id) { chosen = id; });
+            g.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&g));
+            auto *list = g.findChild<QListWidget *>();
+            QVERIFY(list && (list->focusPolicy() & Qt::TabFocus));
+            QCOMPARE(list->accessibleName(), QStringLiteral("Styles"));
+            QCOMPARE(list->item(1)->data(Qt::AccessibleTextRole).toString(), QStringLiteral("Second"));
+            list->setFocus();
+            list->setCurrentRow(1);
+            QTest::keyClick(list, Qt::Key_Return);
+            QCOMPARE(chosen, QStringLiteral("b"));
+        }
+
+        // The ring: shown around the focused control after a key, gone after a click.
+        jp::installFocusRing(qApp);
+        grid.activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(&grid));
+        b[2][2]->setFocus(Qt::TabFocusReason);
+        QTest::keyClick(b[0][0], Qt::Key_Shift);
+        b[0][0]->setFocus(Qt::TabFocusReason);
+        QCoreApplication::processEvents();
+        auto *ring = grid.findChild<QWidget *>(QStringLiteral("jpFocusRing"));
+        QVERIFY(ring && ring->isVisible());
+        QVERIFY(ring->geometry().contains(b[0][0]->geometry()));
+        QTest::mouseClick(b[2][2], Qt::LeftButton);
+        QVERIFY(!ring->isVisible());
     }
 
     // Switching light or dark in Options applies at once: it half-applied

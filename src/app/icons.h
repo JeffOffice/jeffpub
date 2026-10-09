@@ -23,8 +23,12 @@ QIcon lineToolIcon(const QString &kind);
 // system's color scheme) and records it here; every part of the UI asks this.
 bool uiDark();
 void setUiDark(bool dark);
+// Windows' high contrast: the system's own colors replace JeffPub's.
+bool uiHighContrast();
+void setUiHighContrast(bool on);
 QColor uiText();
 QColor uiAccent();
+QColor focusRingColor();   // the ring around the control with the keyboard focus
 // App-wide widget tweaks the style sheet can't express (tab bars that never scroll).
 void installUiPolish();
 // Application-wide style sheet: rounded fields and buttons, accent focus
