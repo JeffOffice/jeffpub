@@ -8024,6 +8024,15 @@ private Q_SLOTS:
         QVERIFY(!jp::Updater::isNewer("v0.1.6", "0.1.6"));
         QVERIFY(!jp::Updater::isNewer("v0.1.0-preview5", "0.1.6"));
         QVERIFY(jp::Updater::isNewer("v0.1.0", "v0.1.0-preview5"));
+        // The newest version is offered whatever order the list comes in (a
+        // release published again is listed first, as the newest made).
+        auto rel = [](const char *tag, bool draft = false) { return QJsonObject{{"tag_name", QString::fromLatin1(tag)}, {"draft", draft}}; };
+        const QJsonArray list{rel("v0.1.9"), rel("v0.5.2"), rel("v0.6.0", true), rel("v0.5.1"), rel("v0.1.39")};
+        const auto newer = jp::Updater::newerReleases(list, QStringLiteral("0.5.0"));
+        QCOMPARE(newer.size(), 2);
+        QCOMPARE(newer[0].value("tag_name").toString(), QStringLiteral("v0.5.2"));
+        QCOMPARE(newer[1].value("tag_name").toString(), QStringLiteral("v0.5.1"));
+        QVERIFY(jp::Updater::newerReleases(list, QStringLiteral("0.5.2")).isEmpty());
     }
 
     void movesJeffPub79Settings()

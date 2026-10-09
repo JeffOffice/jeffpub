@@ -3,7 +3,10 @@
 // offers to download and run its installer. Sends nothing about the user.
 
 #include <QNetworkAccessManager>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QObject>
+#include <QVector>
 #include <QPointer>
 
 class QDialog;
@@ -31,6 +34,10 @@ public:
     // The part of a release's notes worth showing in the offer: its "New
     // in" sections (headings made bold), without the install steps.
     static QString releaseHighlights(const QString &notes);
+    // The releases (not drafts) newer than `current`, newest version first,
+    // whatever order the list gives them in (a release published again is
+    // listed as the newest made).
+    static QVector<QJsonObject> newerReleases(const QJsonArray &releases, const QString &current);
     // What the offer's exec() returns besides Rejected (Later).
     enum OfferChoice { Install = 1, Skip, OpenPage };
     // The update offer: the new version, its notes (Markdown) and a choice;

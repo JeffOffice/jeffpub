@@ -36,7 +36,7 @@
 namespace jp {
 
 namespace {
-const char *kReleases = "https://api.github.com/repos/JeffOffice/jeffpub/releases?per_page=10";
+const char *kReleases = "https://api.github.com/repos/JeffOffice/jeffpub/releases?per_page=30";
 Updater *g_updater = nullptr;
 
 // (major, minor, patch, preview); a final release sorts after its previews.
@@ -102,19 +102,13 @@ void Updater::check(bool interactive)
         const QJsonArray releases = QJsonDocument::fromJson(r->readAll()).array();
         // The newest release is offered, with the notes of every release
         // since the one running (newest first).
-        QJsonObject newest;
+        const QVector<QJsonObject> newer = newerReleases(releases, QStringLiteral(JP_VERSION));
+        const QJsonObject newest = newer.value(0);
+        if (!newest.isEmpty() && !interactive && Settings::get().value(QStringLiteral("updates/skip")).toString() == newest.value("tag_name").toString())
+            return;
         QStringList notes;
-        for (const QJsonValue &v : releases) {
-            const QJsonObject rel = v.toObject();
-            if (rel.value("draft").toBool()) continue;
-            const QString tag = rel.value("tag_name").toString();
-            if (!isNewer(tag, QStringLiteral(JP_VERSION))) break;   // newest first: nothing newer
-            if (newest.isEmpty()) {
-                if (!interactive && Settings::get().value(QStringLiteral("updates/skip")).toString() == tag) return;
-                newest = rel;
-            }
+        for (const QJsonObject &rel : newer)
             if (const QString h = releaseHighlights(rel.value("body").toString()); !h.isEmpty()) notes << h;
-        }
         if (!newest.isEmpty()) {
             const QString tag = newest.value("tag_name").toString();
             QString setup, digest;
@@ -133,6 +127,19 @@ void Updater::check(bool interactive)
             QMessageBox::information(m_win, QStringLiteral("Check for Updates"),
                                      QStringLiteral("You have the latest version of JeffPub (%1).").arg(QStringLiteral(JP_VERSION)));
     });
+}
+
+QVector<QJsonObject> Updater::newerReleases(const QJsonArray &releases, const QString &current)
+{
+    QVector<QJsonObject> out;
+    for (const QJsonValue &v : releases) {
+        const QJsonObject rel = v.toObject();
+        if (!rel.value("draft").toBool() && isNewer(rel.value("tag_name").toString(), current)) out << rel;
+    }
+    std::stable_sort(out.begin(), out.end(), [](const QJsonObject &a, const QJsonObject &b) {
+        return isNewer(a.value("tag_name").toString(), b.value("tag_name").toString());
+    });
+    return out;
 }
 
 QString Updater::releaseHighlights(const QString &notes)
