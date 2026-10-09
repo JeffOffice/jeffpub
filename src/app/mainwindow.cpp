@@ -1,5 +1,6 @@
 #include "app/mainwindow.h"
 #include "app/recovery.h"
+#include "app/keytips.h"
 #include <QComboBox>
 #include <QLineEdit>
 #include <QLocale>
@@ -123,6 +124,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     m_backstage = new Backstage(this);
     m_backstage->hide();
     connect(m_backstage, &Backstage::closeRequested, this, &MainWindow::hideBackstage);
+    m_keyTips = new KeyTips(this, m_ribbon, [this] { showBackstage(); });
     connect(m_ribbon, &Ribbon::fileClicked, this, [this] { showBackstage(); });
     connect(m_ribbon, &Ribbon::leaveRequested, this, [this] { m_canvas->setFocus(Qt::OtherFocusReason); });
     // F6 and Shift+F6 move the keyboard between the window's parts: the

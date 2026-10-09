@@ -40,6 +40,7 @@
 #include "app/editor.h"
 #include "app/mainwindow.h"
 #include "app/recovery.h"
+#include "app/keytips.h"
 #include "app/focusring.h"
 #include "app/keyboardnav.h"
 #include "app/pagespane.h"
@@ -88,6 +89,7 @@
 #include <QtEndian>
 #include <QLockFile>
 #include <QStyleHints>
+#include <QSignalSpy>
 #include <QSlider>
 #include <QAccessible>
 #include <QGridLayout>
@@ -1551,6 +1553,64 @@ private Q_SLOTS:
         QVERIFY2(checked > 300, qPrintable(QString::number(checked)));
         QVERIFY2(unnamed.isEmpty(), qPrintable(QStringLiteral("no name: ") + unnamed.join(QStringLiteral("; "))));
         QVERIFY2(unreachable.isEmpty(), qPrintable(QStringLiteral("no keyboard focus: ") + unreachable.join(QStringLiteral("; "))));
+    }
+
+    // KeyTips: Alt shows letters on the top row, a tab's letter opens it and
+    // shows its controls' letters, a control's letters use it; Escape steps
+    // back; Alt held while typing goes straight there; a click ends it.
+    void keyTipsUseTheRibbon()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        QVERIFY(QTest::qWaitForWindowActive(&w));
+        auto *r = w.findChild<jp::Ribbon *>();
+        jp::KeyTips *kt = w.keyTips();
+        QVERIFY(kt);
+        auto keys = [&] {
+            QStringList k;
+            for (const auto &p : kt->shown()) k << p.first;
+            return k;
+        };
+        QTest::keyPress(&w, Qt::Key_Alt);
+        QTest::keyRelease(&w, Qt::Key_Alt);
+        QCOMPARE(kt->level(), jp::KeyTips::Top);
+        for (const char *k : {"F", "H", "N", "G", "1"}) QVERIFY2(keys().contains(QLatin1String(k)), qPrintable(keys().join(QLatin1Char(' '))));
+        QTest::keyClick(&w, Qt::Key_H);
+        QCOMPARE(kt->level(), jp::KeyTips::InTab);
+        QCOMPARE(r->current(), r->tab(QStringLiteral("Home")));
+        QVERIFY(keys().contains(QStringLiteral("V")));   // Paste
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) w.grab(QRect(0, 0, 1400, 170)).save(qEnvironmentVariable("JP_SHOT_DIR") + QStringLiteral("/keytips-home.png"));
+        for (const auto &p : kt->shown()) QVERIFY(r->current()->isAncestorOf(p.second));
+        // Two letters on another tab: View > Show > Rulers (W, then S R).
+        QTest::keyClick(&w, Qt::Key_Escape);
+        QTest::keyClick(&w, Qt::Key_W);
+        QCOMPARE(r->current(), r->tab(QStringLiteral("View")));
+        QSignalSpy rulers(w.act(QStringLiteral("view.rulers")), &QAction::triggered);
+        QTest::keyClick(&w, Qt::Key_S);
+        QCOMPARE(rulers.count(), 0);   // "S" starts several; they wait for the second letter
+        QVERIFY(!keys().contains(QStringLiteral("NM")));
+        QTest::keyClick(&w, Qt::Key_R);
+        QCOMPARE(rulers.count(), 1);
+        QCOMPARE(kt->level(), jp::KeyTips::Off);
+        // Escape steps back a level at a time.
+        QTest::keyPress(&w, Qt::Key_Alt);
+        QTest::keyRelease(&w, Qt::Key_Alt);
+        QTest::keyClick(&w, Qt::Key_N);
+        QCOMPARE(r->current(), r->tab(QStringLiteral("Insert")));
+        QTest::keyClick(&w, Qt::Key_Escape);
+        QCOMPARE(kt->level(), jp::KeyTips::Top);
+        QTest::keyClick(&w, Qt::Key_Escape);
+        QCOMPARE(kt->level(), jp::KeyTips::Off);
+        // Alt held while typing: straight to the tab.
+        QTest::keyPress(&w, Qt::Key_Alt);
+        QTest::keyClick(&w, Qt::Key_G, Qt::AltModifier);
+        QTest::keyRelease(&w, Qt::Key_Alt);
+        QCOMPARE(r->current(), r->tab(QStringLiteral("Page Design")));
+        QCOMPARE(kt->level(), jp::KeyTips::InTab);
+        // A click puts the letters away.
+        QTest::mouseClick(w.findChild<jp::Canvas *>(), Qt::LeftButton);
+        QCOMPARE(kt->level(), jp::KeyTips::Off);
     }
 
     // Using the ribbon with the keyboard alone: F6 enters it on the current

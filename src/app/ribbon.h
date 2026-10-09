@@ -63,6 +63,10 @@ public:
     void finish();
     QSize minimumSizeHint() const override;
     int collapsedCount() const;
+    // The single button each group shows when there's no room.
+    QToolButton *collapsedButton(int i) const { return m_buttons.value(i); }
+    bool isCollapsed(int i) const { return m_collapsed.value(i); }
+    void popUp(int i);   // a collapsed group in a dropdown
 
 protected:
     void resizeEvent(QResizeEvent *e) override;
@@ -70,7 +74,6 @@ protected:
 
 private:
     void relayout();
-    void popUp(int i);
     QHBoxLayout *m_layout;
     QVector<RibbonGroup *> m_groups;
     QVector<QToolButton *> m_buttons;   // collapsed form of each group
@@ -103,6 +106,8 @@ public:
     QString tabName(int i) const { return m_tabs.value(i).name; }
     QString tabTitle(int i) const { return m_tabs.value(i).title; }
     QString tabKeytip(int i) const { return m_tabs.value(i).keytip; }
+    bool tabVisible(int i) const { return m_tabs.value(i).visible; }
+    RibbonTab *tabPage(int i) const { return m_tabs.value(i).page; }
     QWidget *tabButton(int i) const;   // the tab's control in the top row
     QWidget *fileButton() const;
     void setTabKeytip(RibbonTab *t, const QString &k);

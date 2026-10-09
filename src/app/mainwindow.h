@@ -23,6 +23,7 @@ namespace jp {
 
 class Canvas;
 class Ribbon;
+class KeyTips;
 class RibbonTab;
 class PagesPane;
 class TaskPane;
@@ -56,6 +57,7 @@ public:
     void offerRecovery(bool askIfNone = false);
     // The AutoRecover copy this window keeps of its document, if any.
     QString recoveryCopy() const { return m_recoveryCopy; }
+    KeyTips *keyTips() const { return m_keyTips; }
     void autoRecover();
     bool save();
     bool saveAs(const QString &format = QString());
@@ -130,6 +132,7 @@ private:
     Editor *m_ed;
     Canvas *m_canvas;
     Ribbon *m_ribbon;
+    KeyTips *m_keyTips = nullptr;
     PagesPane *m_pages;
     TaskPane *m_task;
     Backstage *m_backstage;
