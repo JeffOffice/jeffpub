@@ -2747,9 +2747,12 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
             const int geoT = p_geoTop ? int(*p_geoTop) : 0;
             const int geoR = p_geoRight ? int(*p_geoRight) : 21600;
             const int geoB = p_geoBottom ? int(*p_geoBottom) : 21600;
+            // In 64 bits: -2^31..2^31-1 is a valid space, and its width
+            // overflows an int.
+            const int64_t geoW = int64_t(geoR) - geoL, geoH = int64_t(geoB) - geoT;
             DynamicCustomShape dcs = getDynamicCustomShape(vertexData, segmentData, guideData,
-                                                           geoR > geoL ? unsigned(geoR - geoL) : 21600,
-                                                           geoB > geoT ? unsigned(geoB - geoT) : 21600);
+                                                           geoW > 0 ? unsigned(geoW) : 21600,
+                                                           geoH > 0 ? unsigned(geoH) : 21600);
             dcs.m_coordLeft = geoL;
             dcs.m_coordTop = geoT;
             m_collector->setShapeCustomPath(*shapeSeqNum, dcs);

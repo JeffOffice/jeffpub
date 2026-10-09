@@ -538,7 +538,7 @@ MSPUBCollector::MSPUBCollector(librevenge::RVNGDrawingInterface *painter) :
   m_shapesWithCoordinatesRotated90(),
   m_masterPagesByPageSeqNum(),
   m_tableCellTextEndsByTextId(), m_stringOffsetsByTextId(),
-  m_calculationValuesSeen(), m_pageSeqNumsOrdered(),
+  m_calculationValues(), m_calculationDone(), m_calculationBusy(), m_pageSeqNumsOrdered(),
   m_encodingHeuristic(false), m_allText(),
   m_calculatedEncoding(),
   m_metaData()
@@ -1739,16 +1739,34 @@ double MSPUBCollector::getCalculationValue(const ShapeInfo &info, unsigned index
   }
   if (! recursiveEntry)
   {
-    m_calculationValuesSeen.clear();
-    m_calculationValuesSeen.resize(shape.m_numCalculations);
+    if (m_calculationValues.size() != shape.m_numCalculations)
+    {
+      m_calculationValues.assign(shape.m_numCalculations, 0);
+      m_calculationDone.assign(shape.m_numCalculations, 0);
+      m_calculationBusy.assign(shape.m_numCalculations, 0);
+    }
+    if (++m_calculationStamp == 0)
+    {
+      std::fill(m_calculationDone.begin(), m_calculationDone.end(), 0u);
+      std::fill(m_calculationBusy.begin(), m_calculationBusy.end(), 0u);
+      m_calculationStamp = 1;
+    }
   }
-  if (m_calculationValuesSeen[index])
+  if (index >= m_calculationValues.size())
+  {
+    return 0;
+  }
+  if (m_calculationDone[index] == m_calculationStamp)
+  {
+    return m_calculationValues[index];
+  }
+  if (m_calculationBusy[index] == m_calculationStamp)
   {
     //recursion detected. The simplest way to avoid infinite recursion, at the "cost"
     // of making custom shape parsing not Turing-complete ;), is to ban recursion entirely.
     return 0;
   }
-  m_calculationValuesSeen[index] = true;
+  m_calculationBusy[index] = m_calculationStamp;
 
   const Calculation &c = shape.mp_calculations[index];
   bool oneSpecial = (c.m_flags & 0x2000) != 0;
@@ -1758,8 +1776,19 @@ double MSPUBCollector::getCalculationValue(const ShapeInfo &info, unsigned index
   double valOne = oneSpecial ? getSpecialValue(info, shape, c.m_argOne, adjustValues) : c.m_argOne;
   double valTwo = twoSpecial ? getSpecialValue(info, shape, c.m_argTwo, adjustValues) : c.m_argTwo;
   double valThree = threeSpecial ? getSpecialValue(info, shape, c.m_argThree, adjustValues) : c.m_argThree;
-  m_calculationValuesSeen[index] = false;
-  switch (c.m_flags & 0xFF)
+  m_calculationBusy[index] = 0;
+  double v = calculate(c.m_flags & 0xFF, valOne, valTwo, valThree);
+  if (!std::isfinite(v))   // JeffPub: a square root of a negative or a division by 0 is no coordinate
+    v = 0;
+  m_calculationDone[index] = m_calculationStamp;
+  m_calculationValues[index] = v;
+  return v;
+}
+
+// One formula's operation on its three values.
+double MSPUBCollector::calculate(unsigned op, double valOne, double valTwo, double valThree)
+{
+  switch (op)
   {
   case 0:
   case 14:

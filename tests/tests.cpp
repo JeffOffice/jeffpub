@@ -152,6 +152,67 @@ static QByteArray testCmykProfile()
     return head + count + table + body;
 }
 
+// Rebuilds a .pub's drawing records (Escher/EscherStm) with the first
+// shape properties table (OPT) that `edit` changes: `edit` gets its body
+// and header and returns true once it has changed them. Container lengths
+// are recomputed; padding between drawings is kept.
+static QByteArray editFirstOpt(const QByteArray &escher, const std::function<bool(QByteArray &body, quint16 &head)> &edit)
+{
+    bool done = false;
+    std::function<QByteArray(int, int)> rebuild = [&](int from, int to) {
+        QByteArray out;
+        int off = from;
+        while (off + 8 <= to) {
+            const quint16 vi = qFromLittleEndian<quint16>(escher.constData() + off);
+            const quint16 type = qFromLittleEndian<quint16>(escher.constData() + off + 2);
+            const quint32 len = qFromLittleEndian<quint32>(escher.constData() + off + 4);
+            if (type < 0xF000 || type > 0xF200 || off + 8 + qint64(len) > to) {   // padding between drawings
+                out += escher.at(off++);
+                continue;
+            }
+            QByteArray body = escher.mid(off + 8, len);
+            quint16 head = vi;
+            if ((vi & 0xF) == 0xF) body = rebuild(off + 8, off + 8 + int(len));
+            else if (type == 0xF00B && !done) done = edit(body, head);
+            QByteArray h(8, 0);
+            qToLittleEndian<quint16>(head, h.data());
+            qToLittleEndian<quint16>(type, h.data() + 2);
+            qToLittleEndian<quint32>(quint32(body.size()), h.data() + 4);
+            out += h + body;
+            off += 8 + int(len);
+        }
+        out += escher.mid(off, to - off);
+        return out;
+    };
+    const QByteArray out = rebuild(0, int(escher.size()));
+    return done ? out : QByteArray();
+}
+
+// Adds a property to an OPT body (after the others, its complex data last).
+static void addOptProp(QByteArray &body, quint16 &head, quint16 id, quint32 value, const QByteArray &complex = {})
+{
+    const int count = head >> 4;
+    QByteArray entry(6, 0);
+    qToLittleEndian<quint16>(id, entry.data());
+    qToLittleEndian<quint32>(complex.isEmpty() ? value : quint32(complex.size()), entry.data() + 2);
+    body = body.left(count * 6) + entry + body.mid(count * 6) + complex;
+    head = quint16((head & 0xF) | ((count + 1) << 4));
+}
+
+// Where a complex property's data starts in an OPT body, or -1.
+static int optComplexAt(const QByteArray &body, quint16 head, quint16 want)
+{
+    const int count = head >> 4;
+    int at = count * 6;
+    for (int i = 0; i < count; ++i) {
+        const quint16 id = qFromLittleEndian<quint16>(body.constData() + i * 6);
+        const quint32 v = qFromLittleEndian<quint32>(body.constData() + i * 6 + 2);
+        if ((id & 0x3FFF) == want) return at;
+        if (id & 0x8000) at += int(v);
+    }
+    return -1;
+}
+
 class Tests : public QObject {
     Q_OBJECT
     QTemporaryDir m_settingsDir;   // tests never touch the user's own settings
@@ -1169,6 +1230,58 @@ private Q_SLOTS:
         sf.setPixelSize(1000);
         const double cap = QFontMetricsF(sf).capHeight() / 1000 * 100;   // the stand-in's H at 100 pt
         QVERIFY2(std::abs(ink - cap * scale) < cap * 0.03, qPrintable(QStringLiteral("ink %1, stand-in cap %2, scale %3").arg(ink).arg(cap).arg(scale)));
+    }
+
+    // Text drawn run by run (a stand-in drawn taller or shorter) keeps its
+    // underline and strikethrough.
+    void scaledRunsKeepLines()
+    {
+        if (QFontDatabase::hasFamily(QStringLiteral("Franklin Gothic Demi"))) QSKIP("Franklin Gothic Demi is installed");
+        jp::LayoutEnv env;
+        QTextCharFormat f;
+        f.setFontFamilies(QStringList{QStringLiteral("Franklin Gothic Demi")});
+        f.setFontPointSize(60);
+        if (!jp::resolveCharFormat(f, env).hasProperty(jp::tp::GlyphScaleY)) QSKIP("the stand-in isn't drawn here");
+        auto ink = [&](bool underline, bool strike) {
+            auto doc = Document::blank(QSizeF(612, 792));
+            auto t = std::make_shared<TextItem>();
+            t->id = QStringLiteral("t");
+            t->rect = QRectF(36, 36, 500, 200);
+            t->insets = QMarginsF(0, 0, 0, 0);
+            t->storyId = doc->createStory(QStringLiteral("mmmm"));
+            QTextCharFormat g = f;
+            g.setFontUnderline(underline);
+            g.setFontStrikeOut(strike);
+            QTextCursor c(doc->storyDoc(t->storyId));
+            c.select(QTextCursor::Document);
+            c.mergeCharFormat(g);
+            doc->pages[0]->items.push_back(t);
+            LayoutCache cache;
+            PaintContext ctx;
+            ctx.doc = doc.get();
+            ctx.cache = &cache;
+            QImage img(612, 300, QImage::Format_ARGB32);
+            img.fill(Qt::white);
+            QPainter p(&img);
+            jp::Renderer::paintPage(&p, ctx, 0);
+            p.end();
+            QVector<int> rows;
+            for (int y = 0; y < img.height(); ++y) {
+                int n = 0;
+                for (int x = 0; x < img.width(); ++x) n += qGray(img.pixel(x, y)) < 128;
+                rows << n;
+            }
+            return rows;
+        };
+        const QVector<int> plain = ink(false, false), under = ink(true, false), strike = ink(false, true);
+        int belowPlain = 0, belowUnder = 0, extraStrike = 0;
+        int last = 0;
+        for (int y = 0; y < plain.size(); ++y) if (plain[y]) last = y;
+        for (int y = last + 1; y < plain.size(); ++y) { belowPlain += plain[y]; belowUnder += under[y]; }
+        for (int y = 0; y < plain.size(); ++y) extraStrike += std::max(0, strike[y] - plain[y]);
+        QVERIFY2(belowUnder > 100, qPrintable(QString::number(belowUnder)));   // a line under the letters
+        QCOMPARE(belowPlain, 0);
+        QVERIFY2(extraStrike > 100, qPrintable(QString::number(extraStrike)));   // a line through them
     }
 
     // A run that states its character scaling, even 100%, still gets its
@@ -8309,6 +8422,113 @@ private Q_SLOTS:
         QCOMPARE(got[1]->fill.type, Fill::Solid);
         QCOMPARE(got[1]->fill.color.rgbValue(), QColor(0x33, 0x66, 0x66));
         QCOMPARE(got[0]->fill.type, Fill::NoFill);
+    }
+
+    // A freeform's formulas can refer to earlier ones (up to 256 back),
+    // each up to three times: evaluated afresh at every reference, a chain
+    // of them took exponential time, so a crafted file hung on opening.
+    // Each formula is now worked out once per point.
+    void pubFormulaChainIsFast()
+    {
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto s = std::make_shared<ShapeItem>();
+        s->shape = QStringLiteral("rect");
+        s->rect = QRectF(100, 100, 200, 150);
+        QPainterPath path;
+        path.moveTo(0, 0);
+        path.lineTo(200, 20);
+        path.lineTo(120, 150);
+        path.closeSubpath();
+        s->customPath = path;
+        s->fill = Fill::solid(ColorRef::rgb(Qt::red));
+        doc->pages[0]->items.push_back(s);
+        QTemporaryDir dir;
+        const QString pathName = dir.filePath(QStringLiteral("chain.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, pathName, &err), qPrintable(err));
+        QFile f(pathName);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        cfb::File file;
+        QVERIFY(cfb::read(f.readAll(), &file, &err));
+        const QByteArray escher = cfb::readStream(pathName, QStringLiteral("Escher/EscherStm"));
+
+        // 22 formulas: the first is 1, each next the average of the one
+        // before taken twice (still 1); every point's x refers to the last.
+        const int n = 22;
+        QByteArray guides(6 + 8 * n, 0);
+        qToLittleEndian<quint16>(n, guides.data());
+        qToLittleEndian<quint16>(n, guides.data() + 2);
+        qToLittleEndian<quint16>(8, guides.data() + 4);
+        for (int i = 0; i < n; ++i) {
+            char *g = guides.data() + 6 + 8 * i;
+            if (i == 0) {
+                qToLittleEndian<quint16>(0, g);   // a + b - c
+                qToLittleEndian<qint16>(1, g + 2);
+            } else {
+                qToLittleEndian<quint16>(0x6002, g);   // (a + b) / 2, a and b refer
+                qToLittleEndian<qint16>(qint16(0x400 | (i - 1)), g + 2);
+                qToLittleEndian<qint16>(qint16(0x400 | (i - 1)), g + 4);
+            }
+        }
+        // The formulas go with the freeform's points (0xC145), whose x
+        // values are set to refer to the last formula.
+        const QByteArray rebuilt = editFirstOpt(escher, [&](QByteArray &body, quint16 &head) {
+            const int pointsAt = optComplexAt(body, head, 0x0145);
+            if (pointsAt < 0) return false;
+            const int points = qFromLittleEndian<quint16>(body.constData() + pointsAt);
+            for (int i = 0; i < points; ++i) qToLittleEndian<quint32>(0x80000000u | (n - 1), body.data() + pointsAt + 6 + 8 * i);
+            addOptProp(body, head, 0xC156, 0, guides);
+            return true;
+        });
+        QVERIFY(!rebuilt.isEmpty());
+        QVERIFY(file.setStream(QStringLiteral("Escher/EscherStm"), rebuilt));
+        QElapsedTimer t;
+        t.start();
+        auto back = importPublisher(cfb::write(file), nullptr);
+        QVERIFY(back);
+        QVERIFY2(t.elapsed() < 1500, qPrintable(QStringLiteral("%1 ms").arg(t.elapsed())));
+    }
+
+    // A freeform's coordinate space (0x0140-0x0143) is any 32-bit range;
+    // its width came from a 32-bit subtraction, which overflows (undefined
+    // behavior; the sanitizer build reports it) for -2^31 to 2^31-1.
+    void pubHugeCoordinateSpace()
+    {
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto s = std::make_shared<ShapeItem>();
+        s->shape = QStringLiteral("rect");
+        s->rect = QRectF(100, 100, 200, 150);
+        QPainterPath path;
+        path.moveTo(0, 0);
+        path.lineTo(200, 20);
+        path.lineTo(120, 150);
+        path.closeSubpath();
+        s->customPath = path;
+        s->fill = Fill::solid(ColorRef::rgb(Qt::red));
+        doc->pages[0]->items.push_back(s);
+        QTemporaryDir dir;
+        const QString name = dir.filePath(QStringLiteral("space.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, name, &err), qPrintable(err));
+        QFile f(name);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        cfb::File file;
+        QVERIFY(cfb::read(f.readAll(), &file, &err));
+        const QByteArray rebuilt = editFirstOpt(cfb::readStream(name, QStringLiteral("Escher/EscherStm")), [&](QByteArray &body, quint16 &head) {
+            if (optComplexAt(body, head, 0x0145) < 0) return false;
+            for (int i = 0; i < (head >> 4); ++i)
+                if (qFromLittleEndian<quint16>(body.constData() + i * 6) == 0x0142) qToLittleEndian<quint32>(0x7FFFFFFFu, body.data() + i * 6 + 2);
+            addOptProp(body, head, 0x0140, 0x80000000u);
+            return true;
+        });
+        QVERIFY(!rebuilt.isEmpty());
+        QVERIFY(file.setStream(QStringLiteral("Escher/EscherStm"), rebuilt));
+        auto back = importPublisher(cfb::write(file), nullptr);
+        QVERIFY(back);
+        for (const auto &it : back->pages[0]->items) {
+            const QRectF r = it->rect;
+            QVERIFY(std::isfinite(r.x()) && std::isfinite(r.y()) && std::isfinite(r.width()) && std::isfinite(r.height()));
+        }
     }
 
     // Publisher's default text box shadow is stored as "the line color,

@@ -37,6 +37,9 @@ using namespace jp;
 
 int main(int argc, char **argv)
 {
+    // No typing here, so no input method: Qt's IBus plugin can wait 15-20
+    // seconds for a slow IBus daemon at every start.
+    if (!qEnvironmentVariableIsSet("QT_IM_MODULE")) qputenv("QT_IM_MODULE", "none");
     QGuiApplication app(argc, argv);
     initCore();
     const QStringList args = app.arguments();

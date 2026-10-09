@@ -238,7 +238,14 @@ private:
   std::map<unsigned, int> m_pageKinds;   // JeffPub: first byte of each page's field 06
   std::map<unsigned, std::vector<unsigned> > m_tableCellTextEndsByTextId;
   std::map<unsigned, unsigned> m_stringOffsetsByTextId;
-  mutable std::vector<bool> m_calculationValuesSeen;
+  // JeffPub patch: each formula's value, worked out once per point (a
+  // formula can refer to an earlier one up to three times; evaluated afresh
+  // at each reference, a chain took exponential time). A stamp of the
+  // current point marks values done and formulas being worked out.
+  mutable std::vector<double> m_calculationValues;
+  mutable std::vector<unsigned> m_calculationDone;
+  mutable std::vector<unsigned> m_calculationBusy;
+  mutable unsigned m_calculationStamp = 0;
   std::vector<unsigned> m_pageSeqNumsOrdered;
   bool m_encodingHeuristic;
   std::vector<unsigned char> m_allText;
@@ -262,6 +269,7 @@ private:
   bool pageIsMaster(unsigned pageSeqNum) const;
 
   std::function<void(void)> paintShape(const ShapeInfo &info, const Coordinate &relativeTo, const VectorTransformation2D &foldedTransform, bool isGroup, const VectorTransformation2D &thisTransform) const;
+  static double calculate(unsigned op, double valOne, double valTwo, double valThree);
   double getCalculationValue(const ShapeInfo &info, unsigned index, bool recursiveEntry, const std::vector<int> &adjustValues) const;
 
   librevenge::RVNGPropertyList getCharStyleProps(const CharacterStyle &, boost::optional<unsigned> defaultCharStyleIndex) const;

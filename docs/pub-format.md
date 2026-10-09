@@ -120,7 +120,8 @@ OPT holds the line props (0x01C0 color, 0x01CB width, 0x01FF 0x00080008,
 `02:08, 03:08, 04:10 = 256, 0c, 0d, b7 = 0`, directory version 0x0102.
 Any line or outline can add 0x01D6, its corners: 0 bevel, 1 miter, or 2
 round (Publisher's designs store 2 for many shapes). Without it Publisher
-draws mitered corners, as its own new shapes do.
+draws mitered corners, as its own new shapes do. Publisher opened a JeffPub
+file with all three, drew each as such, and kept 0 and 2 when saving again.
 
 ### Pictures
 

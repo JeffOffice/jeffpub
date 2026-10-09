@@ -1119,14 +1119,15 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
         B->tl = std::make_unique<QTextLayout>(B->disp, fineFont(base));
         B->tl->setFormats(fineRanges(ranges));
         // Letters drawn taller or shorter are drawn run by run, unless the
-        // paragraph has outlined or highlighted text (Qt's own drawing then)
-        // or text no run covers.
+        // paragraph has outlined, highlighted or wavy-underlined text (Qt's
+        // own drawing then) or text no run covers.
         {
             bool scaled = false, plain = true;
             int covered = 0;
             for (const auto &r : ranges) {
                 scaled |= r.format.hasProperty(tp::GlyphScaleY);
-                plain &= !r.format.hasProperty(QTextFormat::TextOutline) && !r.format.hasProperty(QTextFormat::BackgroundBrush);
+                plain &= !r.format.hasProperty(QTextFormat::TextOutline) && !r.format.hasProperty(QTextFormat::BackgroundBrush)
+                         && r.format.underlineStyle() != QTextCharFormat::WaveUnderline;
                 covered += r.length;
             }
             B->directGlyphs = scaled && plain && covered == B->disp.size();
@@ -1902,6 +1903,29 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
                     }
                     for (const QGlyphRun &g : line.glyphRuns(s, e - s)) p->drawGlyphRun(QPointF(0, 0), g);
                     p->restore();
+                    // Lines under, through and over the run, unscaled, where
+                    // Qt's own drawing puts them (glyph runs carry none).
+                    const QTextCharFormat &cf = r.format;
+                    const bool under = cf.underlineStyle() != QTextCharFormat::NoUnderline, through = cf.fontStrikeOut(), over = cf.fontOverline();
+                    if (under || through || over) {
+                        const QFontMetricsF fm(cf.font());
+                        const double x1 = line.cursorToX(s), x2 = line.cursorToX(e);
+                        QPen pen(br, std::max(1.0, fm.lineWidth()));
+                        pen.setCapStyle(Qt::FlatCap);
+                        p->save();
+                        if (under) {
+                            QPen up = pen;
+                            if (cf.underlineColor().isValid()) up.setColor(cf.underlineColor());
+                            if (cf.underlineStyle() == QTextCharFormat::DotLine) up.setStyle(Qt::DotLine);
+                            else if (cf.underlineStyle() == QTextCharFormat::DashUnderline) up.setStyle(Qt::DashLine);
+                            p->setPen(up);
+                            p->drawLine(QLineF(x1, base + fm.underlinePos(), x2, base + fm.underlinePos()));
+                        }
+                        p->setPen(pen);
+                        if (through) p->drawLine(QLineF(x1, base - fm.strikeOutPos(), x2, base - fm.strikeOutPos()));
+                        if (over) p->drawLine(QLineF(x1, base - fm.overlinePos(), x2, base - fm.overlinePos()));
+                        p->restore();
+                    }
                 }
             }
         }
