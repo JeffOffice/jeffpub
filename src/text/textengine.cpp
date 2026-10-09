@@ -481,6 +481,8 @@ static KnownMetrics knownMetrics(const QString &family, bool bold = false)
     if (f == "book antiqua") return {(1489.0 + 578 + 124) / 2048, 578.0 / 2048};
     if (f == "bookman old style") return {(1929.0 + 475) / 2048, 475.0 / 2048};             // hhea
     if (f == "century gothic") return {(1536.0 + 426 + 229) / 2048, 426.0 / 2048};
+    if (f == "gill sans mt condensed") return {(1913.0 + 553) / 2048, 553.0 / 2048};   // hhea
+    if (f == "gill sans mt ext condensed bold") return {1.227, 407.0 / 2048};   // measured (Publisher test page); nearest metric hhea = 1.197
     if (f.startsWith("franklin gothic")) return {(1877.0 + 445) / 2048, 445.0 / 2048};   // hhea
     if (f == "georgia") return {(1549.0 + 444 + 198) / 2048, 444.0 / 2048};              // OS/2 typo
     if (f == "arial black") return {(1466.0 + 434 + 291) / 2048, 434.0 / 2048};
@@ -506,6 +508,152 @@ static KnownMetrics knownMetrics(const QString &family, bool bold = false)
     if (f == "calisto mt") return {(1894.0 + 470) / 2048, 470.0 / 2048};                 // hhea
     if (f == "lucida sans typewriter") return {(1974.0 + 432) / 2048, 432.0 / 2048};     // hhea
     if (f == "rockwell") return {(1937.0 + 468) / 2048, 468.0 / 2048};                   // hhea
+    // From Publisher's own test page of each font (Oct 8): the Windows
+    // metric its line spacing matches, or the spacing measured there.
+    if (f == "algerian") return {(1819.0 + 458 + 426) / 2048, 458.0 / 2048};   // hhea
+    if (f == "bahnschrift") return {(1626.0 + 422 + 410) / 2048, 422.0 / 2048};   // hhea
+    if (f == "bahnschrift condensed") return {(1626.0 + 422 + 410) / 2048, 422.0 / 2048};   // hhea
+    if (f == "bahnschrift light") return {(1626.0 + 422 + 410) / 2048, 422.0 / 2048};   // hhea
+    if (f == "bahnschrift light condensed") return {(1626.0 + 422 + 410) / 2048, 422.0 / 2048};   // hhea
+    if (f == "bahnschrift light semicondensed") return {(1626.0 + 422 + 410) / 2048, 422.0 / 2048};   // hhea
+    if (f == "bahnschrift semibold") return {(1626.0 + 422 + 410) / 2048, 422.0 / 2048};   // hhea
+    if (f == "bahnschrift semibold condensed") return {(1626.0 + 422 + 410) / 2048, 422.0 / 2048};   // hhea
+    if (f == "bahnschrift semibold semicondensed") return {(1626.0 + 422 + 410) / 2048, 422.0 / 2048};   // hhea
+    if (f == "bahnschrift semicondensed") return {(1626.0 + 422 + 410) / 2048, 422.0 / 2048};   // hhea
+    if (f == "bahnschrift semilight") return {(1626.0 + 422 + 410) / 2048, 422.0 / 2048};   // hhea
+    if (f == "bahnschrift semilight condensed") return {(1626.0 + 422 + 410) / 2048, 422.0 / 2048};   // hhea
+    if (f == "bahnschrift semilight semicondensed") return {(1626.0 + 422 + 410) / 2048, 422.0 / 2048};   // hhea
+    if (f == "bauhaus 93") return {(1841.0 + 477 + 673) / 2048, 477.0 / 2048};   // hhea
+    if (f == "bell mt") return bold ? KnownMetrics{(1772.0 + 547) / 2048, 547.0 / 2048}
+                               : KnownMetrics{(1716.0 + 546) / 2048, 546.0 / 2048};   // win, bold differs
+    if (f == "berlin sans fb") return bold ? KnownMetrics{(1857.0 + 678) / 2048, 678.0 / 2048}
+                                      : KnownMetrics{(1835.0 + 416) / 2048, 416.0 / 2048};   // hhea, bold differs
+    if (f == "berlin sans fb demi") return {(1880.0 + 419) / 2048, 419.0 / 2048};   // win
+    if (f == "bernard mt condensed") return {(1986.0 + 446) / 2048, 446.0 / 2048};   // hhea
+    if (f == "blackadder itc") return {(1836.0 + 791) / 2048, 791.0 / 2048};   // typo
+    if (f == "bodoni mt") return {(1878.0 + 578) / 2048, 578.0 / 2048};   // hhea
+    if (f == "bodoni mt black") return {(1878.0 + 514) / 2048, 514.0 / 2048};   // hhea
+    if (f == "bodoni mt condensed") return {(1878.0 + 532) / 2048, 532.0 / 2048};   // hhea
+    if (f == "bodoni mt poster compressed") return {1.174, 442.0 / 2048};   // measured (Publisher test page); nearest metric hhea = 1.147
+    if (f == "bradley hand itc") return {(1739.0 + 815) / 2048, 815.0 / 2048};   // hhea
+    if (f == "britannic bold") return {(1835.0 + 434) / 2048, 434.0 / 2048};   // win
+    if (f == "broadway") return {(1869.0 + 450) / 2048, 450.0 / 2048};   // hhea
+    if (f == "brush script mt") return {(1820.0 + 692) / 2048, 692.0 / 2048};   // hhea
+    if (f == "californian fb") return {(1803.0 + 523) / 2048, 523.0 / 2048};   // hhea
+    if (f == "cambria") return {(1946.0 + 455) / 2048, 455.0 / 2048};   // hhea
+    if (f == "cambria math") return {(1595.0 + 455 + 353) / 2048, 455.0 / 2048};   // hhea
+    if (f == "cascadia code") return {(1900.0 + 480) / 2048, 480.0 / 2048};   // hhea
+    if (f == "cascadia code extralight") return {(1900.0 + 480) / 2048, 480.0 / 2048};   // hhea
+    if (f == "cascadia code light") return {(1900.0 + 480) / 2048, 480.0 / 2048};   // hhea
+    if (f == "cascadia code semibold") return {(1900.0 + 480) / 2048, 480.0 / 2048};   // hhea
+    if (f == "cascadia code semilight") return {(1900.0 + 480) / 2048, 480.0 / 2048};   // hhea
+    if (f == "cascadia mono") return {(1900.0 + 480) / 2048, 480.0 / 2048};   // hhea
+    if (f == "cascadia mono extralight") return {(1900.0 + 480) / 2048, 480.0 / 2048};   // hhea
+    if (f == "cascadia mono light") return {(1900.0 + 480) / 2048, 480.0 / 2048};   // hhea
+    if (f == "cascadia mono semibold") return {(1900.0 + 480) / 2048, 480.0 / 2048};   // hhea
+    if (f == "cascadia mono semilight") return {(1900.0 + 480) / 2048, 480.0 / 2048};   // hhea
+    if (f == "centaur") return {(1745.0 + 590) / 2048, 590.0 / 2048};   // hhea
+    if (f == "century") return {(2019.0 + 443) / 2048, 443.0 / 2048};   // hhea
+    if (f == "chiller") return {(1738.0 + 625) / 2048, 625.0 / 2048};   // hhea
+    if (f == "colonna mt") return {(1220.0 + 682 + 289) / 2048, 682.0 / 2048};   // typo
+    if (f == "consolas") return {(1521.0 + 527 + 350) / 2048, 527.0 / 2048};   // hhea
+    if (f == "constantia") return {(1538.0 + 510 + 452) / 2048, 510.0 / 2048};   // hhea
+    if (f == "cooper black") return {(1880.0 + 469) / 2048, 469.0 / 2048};   // hhea
+    if (f == "copperplate gothic bold") return {(1813.0 + 465) / 2048, 465.0 / 2048};   // hhea
+    if (f == "copperplate gothic light") return {(1786.0 + 465) / 2048, 465.0 / 2048};   // hhea
+    if (f == "corbel") return {(1523.0 + 525 + 425) / 2048, 525.0 / 2048};   // hhea
+    if (f == "curlz mt") return {(2103.0 + 614) / 2048, 614.0 / 2048};   // hhea
+    if (f == "dubai") return {(1129.0 + 559) / 1000, 559.0 / 1000};   // hhea
+    if (f == "dubai light") return {(1129.0 + 559) / 1000, 559.0 / 1000};   // hhea
+    if (f == "dubai medium") return {(1129.0 + 559) / 1000, 559.0 / 1000};   // hhea
+    if (f == "edwardian script itc") return {1.200, 672.0 / 2048};   // measured (Publisher test page); nearest metric hhea = 1.179
+    if (f == "elephant") return {(983.0 + 306) / 1000, 306.0 / 1000};   // win
+    if (f == "engravers mt") return {(1920.0 + 465) / 2048, 465.0 / 2048};   // hhea
+    if (f == "eras bold itc") return {(1859.0 + 512) / 2048, 512.0 / 2048};   // hhea
+    if (f == "eras demi itc") return {(1841.0 + 512) / 2048, 512.0 / 2048};   // hhea
+    if (f == "eras light itc") return {(1810.0 + 512) / 2048, 512.0 / 2048};   // hhea
+    if (f == "felix titling") return {(1901.0 + 494) / 2048, 494.0 / 2048};   // hhea
+    if (f == "footlight mt light") return {(1702.0 + 460) / 2048, 460.0 / 2048};   // win
+    if (f == "forte") return {(1802.0 + 438 + 541) / 2048, 438.0 / 2048};   // hhea
+    if (f == "freestyle script") return {(1742.0 + 670) / 2048, 670.0 / 2048};   // hhea
+    if (f == "french script mt") return {1.160, 625.0 / 2048};   // measured (Publisher test page); nearest metric hhea = 1.140
+    if (f == "gabriola") return {(2800.0 + 1296 + 2867) / 4096, 1296.0 / 4096};   // hhea
+    if (f == "gigi") return {(1988.0 + 842) / 2048, 842.0 / 2048};   // hhea
+    if (f == "gill sans ultra bold") return {(2036.0 + 516) / 2048, 516.0 / 2048};   // hhea
+    if (f == "gill sans ultra bold condensed") return {(2036.0 + 514) / 2048, 514.0 / 2048};   // hhea
+    if (f == "gloucester mt extra condensed") return {(1936.0 + 446) / 2048, 446.0 / 2048};   // hhea
+    if (f == "goudy old style") return {(1832.0 + 486 + 140) / 2048, 486.0 / 2048};   // hhea
+    if (f == "haettenschweiler") return {(1802.0 + 246 + 137) / 2048, 246.0 / 2048};   // hhea
+    if (f == "harlow solid italic") return {(1791.0 + 795 + 1) / 2048, 795.0 / 2048};   // hhea
+    if (f == "harrington") return {(1936.0 + 472) / 2048, 472.0 / 2048};   // hhea
+    if (f == "high tower text") return {(1516.0 + 532 + 335) / 2048, 532.0 / 2048};   // hhea
+    if (f == "impact") return {(1619.0 + 229 + 343) / 2048, 229.0 / 2048};   // typo
+    if (f == "informal roman") return {(1946.0 + 512) / 2048, 512.0 / 2048};   // hhea
+    if (f == "ink free") return {(910.0 + 328) / 1000, 328.0 / 1000};   // win
+    if (f == "jokerman") return {(2368.0 + 729) / 2048, 729.0 / 2048};   // hhea
+    if (f == "kristen itc") return {(2105.0 + 680) / 2048, 680.0 / 2048};   // hhea
+    if (f == "kunstler script") return {1.120, 547.0 / 2048};   // measured (Publisher test page); nearest metric hhea = 1.094
+    if (f == "lucida bright") return {(1980.0 + 432) / 2048, 432.0 / 2048};   // hhea
+    if (f == "lucida calligraphy") return {(2122.0 + 666) / 2048, 666.0 / 2048};   // hhea
+    if (f == "lucida console") return {(1616.0 + 432) / 2048, 432.0 / 2048};   // hhea
+    if (f == "lucida fax") return {(1980.0 + 432) / 2048, 432.0 / 2048};   // hhea
+    if (f == "lucida sans") return {(1980.0 + 432) / 2048, 432.0 / 2048};   // hhea
+    if (f == "lucida sans unicode") return {(2246.0 + 901) / 2048, 901.0 / 2048};   // hhea
+    if (f == "magneto") return {(1633.0 + 415 + 433) / 2048, 415.0 / 2048};   // hhea
+    if (f == "matura mt script capitals") return {(1755.0 + 970) / 2048, 970.0 / 2048};   // hhea
+    if (f == "microsoft sans serif") return {(1491.0 + 431 + 269) / 2048, 431.0 / 2048};   // typo
+    if (f == "mistral") return {1.240, 647.0 / 2048};   // measured (Publisher test page); nearest metric win = 1.218
+    if (f == "modern no. 20") return {1.088, 209.0 / 1000};   // measured (Publisher test page); nearest metric hhea = 1.070
+    if (f == "monotype corsiva") return {(1618.0 + 620 + 60) / 2048, 620.0 / 2048};   // hhea
+    if (f == "ms reference sans serif") return {(2059.0 + 430) / 2048, 430.0 / 2048};   // hhea
+    if (f == "mv boli") return {(2333.0 + 967) / 2048, 967.0 / 2048};   // hhea
+    if (f == "niagara engraved") return {(1792.0 + 401) / 2048, 401.0 / 2048};   // hhea
+    if (f == "niagara solid") return {(1792.0 + 401) / 2048, 401.0 / 2048};   // hhea
+    if (f == "old english text mt") return {(2054.0 + 442) / 2048, 442.0 / 2048};   // win
+    if (f == "onyx") return {1.174, 442.0 / 2048};   // measured (Publisher test page); nearest metric win = 1.147
+    if (f == "palace script mt") return {0.907, 496.0 / 2048};   // measured (Publisher test page); nearest metric hhea = 0.926
+    if (f == "palatino linotype") return {(1499.0 + 582 + 682) / 2048, 582.0 / 2048};   // hhea
+    if (f == "papyrus") return {(2155.0 + 1068) / 2048, 1068.0 / 2048};   // hhea
+    if (f == "parchment") return {1.040, 651.0 / 2048};   // measured (Publisher test page); nearest metric win = 1.067
+    if (f == "perpetua") return {(1679.0 + 668) / 2048, 668.0 / 2048};   // hhea
+    if (f == "perpetua titling mt") return bold ? KnownMetrics{(1536.0 + 512 + 416) / 2048, 512.0 / 2048}
+                                           : KnownMetrics{(1536.0 + 512 + 375) / 2048, 512.0 / 2048};   // hhea, bold differs
+    if (f == "playbill") return {(1696.0 + 376) / 2048, 376.0 / 2048};   // win
+    if (f == "poor richard") return {(1861.0 + 442) / 2048, 442.0 / 2048};   // win
+    if (f == "pristina") return {(1770.0 + 915) / 2048, 915.0 / 2048};   // win
+    if (f == "rage italic") return {(1733.0 + 840) / 2048, 840.0 / 2048};   // hhea
+    if (f == "rockwell condensed") return {(1927.0 + 481) / 2048, 481.0 / 2048};   // hhea
+    if (f == "rockwell extra bold") return {(1937.0 + 468) / 2048, 468.0 / 2048};   // hhea
+    if (f == "script mt bold") return {(1950.0 + 516) / 2048, 516.0 / 2048};   // hhea
+    if (f == "segoe print") return {(2555.0 + 1014 + 46) / 2048, 1014.0 / 2048};   // hhea
+    if (f == "segoe script") return {(1526.0 + 494 + 171) / 2048, 494.0 / 2048};   // typo
+    if (f == "segoe ui black") return {(2210.0 + 514) / 2048, 514.0 / 2048};   // hhea
+    if (f == "segoe ui light") return {(1491.0 + 431 + 269) / 2048, 431.0 / 2048};   // typo
+    if (f == "segoe ui semibold") return {(1491.0 + 431 + 269) / 2048, 431.0 / 2048};   // typo
+    if (f == "segoe ui semilight") return {(1491.0 + 431 + 269) / 2048, 431.0 / 2048};   // typo
+    if (f == "segoe ui variable display") return {(1491.0 + 431 + 269) / 2048, 431.0 / 2048};   // typo
+    if (f == "segoe ui variable display light") return {(1491.0 + 431 + 269) / 2048, 431.0 / 2048};   // typo
+    if (f == "segoe ui variable display semibold") return {(1491.0 + 431 + 269) / 2048, 431.0 / 2048};   // typo
+    if (f == "segoe ui variable display semilight") return {(1491.0 + 431 + 269) / 2048, 431.0 / 2048};   // typo
+    if (f == "segoe ui variable small") return {(1491.0 + 431 + 269) / 2048, 431.0 / 2048};   // typo
+    if (f == "segoe ui variable small light") return {(1491.0 + 431 + 269) / 2048, 431.0 / 2048};   // typo
+    if (f == "segoe ui variable small semibold") return {(1491.0 + 431 + 269) / 2048, 431.0 / 2048};   // typo
+    if (f == "segoe ui variable small semilight") return {(1491.0 + 431 + 269) / 2048, 431.0 / 2048};   // typo
+    if (f == "segoe ui variable text") return {(1491.0 + 431 + 269) / 2048, 431.0 / 2048};   // typo
+    if (f == "segoe ui variable text light") return {(1491.0 + 431 + 269) / 2048, 431.0 / 2048};   // typo
+    if (f == "segoe ui variable text semibold") return {(1491.0 + 431 + 269) / 2048, 431.0 / 2048};   // typo
+    if (f == "segoe ui variable text semilight") return {(1491.0 + 431 + 269) / 2048, 431.0 / 2048};   // typo
+    if (f == "showcard gothic") return {(1633.0 + 415 + 487) / 2048, 415.0 / 2048};   // hhea
+    if (f == "snap itc") return {(2075.0 + 557) / 2048, 557.0 / 2048};   // hhea
+    if (f == "stencil") return {(1860.0 + 567) / 2048, 567.0 / 2048};   // win
+    if (f == "sylfaen") return {(1510.0 + 576 + 611) / 2048, 576.0 / 2048};   // hhea
+    if (f == "tempus sans itc") return {(1974.0 + 698) / 2048, 698.0 / 2048};   // hhea
+    if (f == "trebuchet ms") return {(1510.0 + 420) / 2048, 420.0 / 2048};   // typo
+    if (f == "tw cen mt") return {(1753.0 + 477) / 2048, 477.0 / 2048};   // hhea
+    if (f == "tw cen mt condensed extra bold") return {(1788.0 + 430) / 2048, 430.0 / 2048};   // hhea
+    if (f == "viner hand itc") return {(2046.0 + 1260) / 2048, 1260.0 / 2048};   // hhea
+    if (f == "vladimir script") return {(1843.0 + 639) / 2048, 639.0 / 2048};   // hhea
+    if (f == "wide latin") return {(1975.0 + 546) / 2048, 546.0 / 2048};   // win
     return {};
 }
 static bool isSubstituted(const QString &family) { return !substituteFor(family).isEmpty() || substituteStretch(family) != 100; }
