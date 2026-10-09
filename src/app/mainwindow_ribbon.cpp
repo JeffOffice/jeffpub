@@ -1,5 +1,5 @@
-// Ribbon layout (Home, Insert, Page Design, Mailings, Review, View and the
-// contextual tabs), the status bar, and keeping controls in sync with the
+// The ribbon's controls (its layout is resources/ribbon.json, built by
+// ribbonbuilder.cpp), the status bar, and keeping controls in sync with the
 // selection.
 
 #include "app/appfuncs.h"
@@ -10,6 +10,7 @@
 #include "app/icons.h"
 #include "app/pagespane.h"
 #include "app/ribbon.h"
+#include "app/ribbonbuilder.h"
 #include "app/settings.h"
 #include "app/widgets.h"
 #include "canvas/canvas.h"
@@ -33,6 +34,8 @@
 #include <QToolButton>
 #include <QWidgetAction>
 #include <QApplication>
+#include <QComboBox>
+#include <QFile>
 
 namespace jp {
 
@@ -45,47 +48,65 @@ static TableItem *selTableForUi(Editor *ed)
 static Stroke g_borderStroke = Stroke::line(ColorRef::scheme(Main), 0.75);
 Stroke currentBorderStroke() { return g_borderStroke; }
 
-static QMenu *menuOf(QWidget *parent, const QList<QAction *> &actions)
-{
-    auto *m = new QMenu(parent);
-    for (QAction *a : actions) {
-        if (a) m->addAction(a); else m->addSeparator();
-    }
-    return m;
-}
-
-// A plain action that only opens a menu (for ribbon buttons).
-static QAction *menuAction(QObject *parent, const QString &text, const QString &iconName)
-{
-    auto *a = new QAction(icon(iconName), text, parent);
-    return a;
-}
-
 void MainWindow::buildRibbon()
 {
-    Editor *ed = m_ed;
-    Ribbon *r = m_ribbon;
-    for (const char *id : {"file.save", "edit.undo", "edit.redo", "file.print"}) r->addQuickAccess(act(id));
+    RibbonParts parts;
+    // Not act(): an unknown id is the loader's to report, once, with where it was used.
+    parts.action = [this](const QString &id) { return m_actions.value(id); };
+    ribbonControlParts(parts);
+    ribbonGalleryParts(parts);
+    ribbonMenuParts(parts);
 
-    auto fontRow = [this]() {
+    parts.launchers[QStringLiteral("font")] = [this] { fontDialog(this, m_ed); };
+    parts.launchers[QStringLiteral("paragraph")] = [this] { paragraphDialog(this, m_ed, 0); };
+    parts.launchers[QStringLiteral("pageSetup")] = [this] { pageSetupDialog(this, m_ed); };
+    parts.launchers[QStringLiteral("formatShape")] = [this] { formatObjectDialog(this, m_ed, 0); };
+    parts.launchers[QStringLiteral("sizePosition")] = [this] { formatObjectDialog(this, m_ed, 1); };
+    parts.triggers[QStringLiteral("ribbon.catalogPages")] = [this] { showTaskPane("catalog"); };
+    parts.colors[QStringLiteral("masterPage")] = QColor(0x7A, 0x5C, 0xA8);
+    parts.colors[QStringLiteral("textBox")] = QColor(0x2C, 0x6E, 0x91);
+    parts.colors[QStringLiteral("shapeFormat")] = QColor(0xB5, 0x6A, 0x1E);
+    parts.colors[QStringLiteral("pictureFormat")] = QColor(0x2F, 0x7D, 0x4F);
+    parts.colors[QStringLiteral("table")] = QColor(0x8E, 0x2A, 0x5E);   // Table Design and Layout share it
+    parts.colors[QStringLiteral("textArt")] = QColor(0x1D, 0x6F, 0x9E);
+
+    // Only one view and one layout can be on at a time.
+    auto *views = new QActionGroup(this);
+    views->addAction(act("view.normal"));
+    views->addAction(act("view.master"));
+    auto *layouts = new QActionGroup(this);
+    layouts->addAction(act("view.single"));
+    layouts->addAction(act("view.spread"));
+
+    // The layout ships inside the program, so a failure here is a mistake in
+    // ribbon.json: the loader names every unknown command, widget or menu.
+    QFile file(QStringLiteral(":/ribbon.json"));
+    if (!file.open(QIODevice::ReadOnly)) m_ribbonError = QStringLiteral("ribbon.json is missing from the program");
+    else if (!jp::buildRibbon(m_ribbon, file.readAll(), parts, this, &m_ribbonError) && m_ribbonError.isEmpty())
+        m_ribbonError = QStringLiteral("ribbon.json didn't build");
+    if (!m_ribbonError.isEmpty()) qCritical("JeffPub: the ribbon didn't build:\n%s", qPrintable(m_ribbonError));
+
+    m_ribbon->showTab(m_ribbon->tab(QStringLiteral("Home")));
+    connect(m_ribbon, &Ribbon::tabChanged, this, [this] { refreshUi(); });
+}
+
+// Text, color and measurement controls. Each factory makes a new control and
+// enrolls it where refreshUi() keeps it in step with the selection.
+void MainWindow::ribbonControlParts(RibbonParts &parts)
+{
+    parts.widgets[QStringLiteral("fontCombo")] = [this]() -> QWidget * {
         auto *font = new FontCombo();
-        auto *size = new SizeCombo();
         connect(font, &FontCombo::familyChosen, this, [this](const QString &f) { m_ed->setFontFamily(f); m_canvas->setFocus(); });
-        connect(size, &SizeCombo::sizeChosen, this, [this](double s) { m_ed->setFontSize(s); m_canvas->setFocus(); });
         m_fontCombos << font;
+        return font;
+    };
+    parts.widgets[QStringLiteral("sizeCombo")] = [this]() -> QWidget * {
+        auto *size = new SizeCombo();
+        connect(size, &SizeCombo::sizeChosen, this, [this](double s) { m_ed->setFontSize(s); m_canvas->setFocus(); });
         m_sizeCombos << size;
-        return QList<QWidget *>{font, size, ribbonButton(act("fmt.grow"), false, nullptr), ribbonButton(act("fmt.shrink"), false, nullptr)};
+        return size;
     };
-    auto iconOnly = [](QAction *a) {
-        QToolButton *b = ribbonButton(a, false, nullptr);
-        b->setToolButtonStyle(Qt::ToolButtonIconOnly);
-        return b;
-    };
-    auto withMenu = [](QToolButton *b, QMenu *m, bool split) {
-        b->setMenu(m);
-        b->setPopupMode(split ? QToolButton::MenuButtonPopup : QToolButton::InstantPopup);
-        return b;
-    };
+
     auto colorBtn = [this](const QString &iconName, const QString &tip, bool allowNone, const QString &noneLabel, std::function<void(const ColorRef &)> apply,
                            const ColorRef &initial) {
         auto *b = new ColorButton(iconName, tip, allowNone, noneLabel);
@@ -94,7 +115,7 @@ void MainWindow::buildRibbon()
         m_colorButtons << b;
         return b;
     };
-    auto textColorBtn = [this, colorBtn]() {
+    parts.widgets[QStringLiteral("textColor")] = [this, colorBtn]() -> QWidget * {
         auto *b = colorBtn("baseline", QStringLiteral("Font Color"), true, QStringLiteral("Automatic"), [this](const ColorRef &c) { m_ed->setTextColor(c); },
                            ColorRef::rgb(QColor(0xC0, 0, 0)));
         auto *tints = new QAction(QStringLiteral("Tints…"), b);
@@ -102,14 +123,14 @@ void MainWindow::buildRibbon()
         b->setExtraActions({tints});
         return b;
     };
-    auto fillBtn = [this, colorBtn]() {
+    parts.widgets[QStringLiteral("shapeFill")] = [this, colorBtn]() -> QWidget * {
         auto *b = colorBtn("paint-bucket", QStringLiteral("Shape Fill"), true, QStringLiteral("No Fill"),
                            [this](const ColorRef &c) { m_ed->forEachSelected(QStringLiteral("Fill"), [c](Item *it) { it->fill = c.isNone() ? Fill() : Fill::solid(c, it->fill.transparency); }); },
                            ColorRef::scheme(Accent1));
         b->setExtraActions({act("fill.picture"), act("fill.effects")});
         return b;
     };
-    auto lineBtn = [this, colorBtn]() {
+    parts.widgets[QStringLiteral("shapeOutline")] = [this, colorBtn]() -> QWidget * {
         auto *b = colorBtn("pen-line", QStringLiteral("Shape Outline"), true, QStringLiteral("No Outline"), [this](const ColorRef &c) {
             m_ed->forEachSelected(QStringLiteral("Outline"), [c](Item *it) {
                 if (it->stroke.width <= 0) it->stroke.width = 0.75;
@@ -119,38 +140,87 @@ void MainWindow::buildRibbon()
         b->setExtraActions({act("line.more")});
         return b;
     };
-    QList<QAction *> weights, dashes, arrows;
-    for (double w : {0.25, 0.5, 0.75, 1.0, 1.5, 2.25, 3.0, 4.5, 6.0}) weights << act(QStringLiteral("weight.%1").arg(w));
-    for (int d = 0; d < 8; ++d) dashes << act(QStringLiteral("dash.%1").arg(d));
-    for (int a = 0; a < 6; ++a) arrows << act(QStringLiteral("arrowEnd.%1").arg(a));
-    for (int a = 0; a < 6; ++a) arrows << act(QStringLiteral("arrowStart.%1").arg(a));
 
-    auto arrangeGroup = [&](RibbonTab *tab) {
-        RibbonGroup *g = tab->addGroup(QStringLiteral("Arrange"));
-        auto *wrapA = menuAction(this, QStringLiteral("Wrap Text"), "wrap-text");
-        g->addLarge(wrapA, menuOf(this, {act("wrap.none"), act("wrap.square"), act("wrap.tight"), act("wrap.through"), act("wrap.topBottom"), act("wrap.inline"), nullptr, act("wrap.edit"), act("wrap.more")}));
-        g->addSmall(act("arr.forward"), menuOf(this, {act("arr.forward"), act("arr.front")}), true);
-        g->addSmall(act("arr.backward"), menuOf(this, {act("arr.backward"), act("arr.back")}), true);
-        g->addSmall(act("arr.group"));
-        auto *alignA = menuAction(this, QStringLiteral("Align"), "align-horizontal-justify-center");
-        g->addSmall(alignA, menuOf(this, {act("arr.alignLeft"), act("arr.alignCenter"), act("arr.alignRight"), nullptr, act("arr.alignTop"), act("arr.alignMiddle"),
-                                          act("arr.alignBottom"), nullptr, act("arr.distH"), act("arr.distV"), nullptr, act("arr.relMargins")}));
-        g->addSmall(act("arr.ungroup"), menuOf(this, {act("arr.ungroup"), act("arr.regroup")}), true);
-        auto *rotA = menuAction(this, QStringLiteral("Rotate"), "rotate-cw");
-        g->addSmall(rotA, menuOf(this, {act("arr.rotR"), act("arr.rotL"), act("arr.flipV"), act("arr.flipH"), nullptr, act("arr.freeRotate")}));
-        return g;
+    // Text Box Tools: fill, outline and glow for the text itself.
+    parts.widgets[QStringLiteral("textFill")] = [this]() -> QWidget * {
+        auto *fill = new ColorButton("paint-bucket", QStringLiteral("Text Fill"), false, QString());
+        connect(fill, &ColorButton::colorPicked, this, [this](const ColorRef &c) { m_ed->setTextColor(c); });
+        auto *gradient = new QAction(icon("blend"), QStringLiteral("Gradient…"), this);
+        connect(gradient, &QAction::triggered, this, [this] { textGradientDialog(this, m_ed); });
+        fill->setExtraActions({gradient});
+        m_colorButtons << fill;
+        return fill;
     };
-    auto sizeGroup = [&](RibbonTab *tab) {
-        RibbonGroup *g = tab->addGroup(QStringLiteral("Size"));
+    parts.widgets[QStringLiteral("textOutline")] = [this]() -> QWidget * {
+        auto *outline = new ColorButton("pen-line", QStringLiteral("Text Outline"), true, QStringLiteral("No Outline"));
+        connect(outline, &ColorButton::colorPicked, this, [this](const ColorRef &c) {
+            if (c.isNone()) m_ed->clearCharProperty(tp::OutlineRef, QStringLiteral("Text Outline"));
+            else m_ed->setCharProperty(tp::OutlineRef, c.toString(), QStringLiteral("Text Outline"));
+        });
+        m_colorButtons << outline;
+        return outline;
+    };
+    parts.widgets[QStringLiteral("textGlow")] = [this]() -> QWidget * {
+        auto *glow = new ColorButton("sparkles", QStringLiteral("Text Glow"), true, QStringLiteral("No Glow"));
+        connect(glow, &ColorButton::colorPicked, this, [this](const ColorRef &c) {
+            if (c.isNone()) m_ed->clearCharProperty(tp::GlowRef, QStringLiteral("Text Glow"));
+            else m_ed->setCharProperty(tp::GlowRef, c.toString(), QStringLiteral("Text Glow"));
+        });
+        m_colorButtons << glow;
+        return glow;
+    };
+
+    parts.widgets[QStringLiteral("pictureBorder")] = [this]() -> QWidget * {
+        auto *border = new ColorButton("square", QStringLiteral("Picture Border"), true, QStringLiteral("No Outline"));
+        connect(border, &ColorButton::colorPicked, this, [this](const ColorRef &c) {
+            m_ed->forEachSelected(QStringLiteral("Picture Border"), [c](Item *it) { if (it->stroke.width <= 0) it->stroke.width = 1; it->stroke.color = c; });
+        });
+        m_colorButtons << border;
+        return border;
+    };
+    parts.widgets[QStringLiteral("cellFill")] = [this]() -> QWidget * {
+        auto *fill = new ColorButton("paint-bucket", QStringLiteral("Cell Fill"), true, QStringLiteral("No Fill"));
+        connect(fill, &ColorButton::colorPicked, this, [this](const ColorRef &c) {
+            TableItem *tb = selTableForUi(m_ed);
+            if (!tb) return;
+            const bool inCell = m_ed->isEditingText();
+            const auto tt = m_ed->textTarget();
+            m_ed->change(QStringLiteral("Fill"), [&] {
+                for (int rr = 0; rr < tb->rows; ++rr)
+                    for (int cc = 0; cc < tb->cols; ++cc)
+                        if (!inCell || (rr == tt.row && cc == tt.col)) tb->cell(rr, cc).fill = c.isNone() ? Fill() : Fill::solid(c);
+            });
+        });
+        m_colorButtons << fill;
+        return fill;
+    };
+    parts.widgets[QStringLiteral("borderColor")] = [this]() -> QWidget * {
+        auto *bc = new ColorButton("pen-line", QStringLiteral("Line Color"), false, QString());
+        connect(bc, &ColorButton::colorPicked, this, [](const ColorRef &c) { g_borderStroke.color = c; });
+        m_colorButtons << bc;
+        return bc;
+    };
+    parts.widgets[QStringLiteral("borderWeight")] = [this]() -> QWidget * {
+        auto *weightMenu = new QMenu(this);
+        for (double w : {0.25, 0.5, 0.75, 1.0, 1.5, 2.25, 3.0, 4.5}) {
+            QAction *a = weightMenu->addAction(QStringLiteral("%1 pt").arg(w));
+            connect(a, &QAction::triggered, this, [w] { g_borderStroke.width = w; });
+        }
+        auto *wb = new QToolButton();
+        wb->setText(QStringLiteral("Line Weight"));
+        wb->setIcon(icon("minus"));
+        wb->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        wb->setPopupMode(QToolButton::InstantPopup);
+        wb->setMenu(weightMenu);
+        wb->setAutoRaise(true);
+        return wb;
+    };
+
+    // Size boxes: the same pair in every tab that has a Size group.
+    parts.widgets[QStringLiteral("heightSpin")] = [this]() -> QWidget * {
         auto *h = new MeasureSpin();
-        auto *w = new MeasureSpin();
         h->setToolTip(QStringLiteral("Shape Height"));
-        w->setToolTip(QStringLiteral("Shape Width"));
-        auto *hl = new QLabel(QStringLiteral("Height")), *wl = new QLabel(QStringLiteral("Width"));
-        g->addRow({hl, h});
-        g->addRow({wl, w});
         m_heightSpins << h;
-        m_widthSpins << w;
         connect(h, &QDoubleSpinBox::valueChanged, this, [this](double v) {
             if (v <= 0) return;
             m_ed->forEachSelected(QStringLiteral("Size"), [v](Item *it) {
@@ -162,6 +232,12 @@ void MainWindow::buildRibbon()
                 else it->scaleInto(b, to);
             });
         });
+        return h;
+    };
+    parts.widgets[QStringLiteral("widthSpin")] = [this]() -> QWidget * {
+        auto *w = new MeasureSpin();
+        w->setToolTip(QStringLiteral("Shape Width"));
+        m_widthSpins << w;
         connect(w, &QDoubleSpinBox::valueChanged, this, [this](double v) {
             if (v <= 0) return;
             m_ed->forEachSelected(QStringLiteral("Size"), [v](Item *it) {
@@ -173,9 +249,55 @@ void MainWindow::buildRibbon()
                 else it->scaleInto(b, to);
             });
         });
-        g->setLauncher([this] { formatObjectDialog(this, m_ed, 1); }, QStringLiteral("Size and Position"));
-        return g;
+        return w;
     };
+
+    parts.widgets[QStringLiteral("zoomBox")] = [this]() -> QWidget * {
+        auto *zoomBox = new QComboBox();
+        zoomBox->setEditable(true);
+        for (const char *z : {"400%", "300%", "200%", "150%", "100%", "75%", "66%", "50%", "33%", "25%", "10%"}) zoomBox->addItem(QString::fromLatin1(z));
+        zoomBox->setFixedWidth(80);
+        zoomBox->setCurrentText(QStringLiteral("100%"));
+        connect(zoomBox, &QComboBox::textActivated, this, [this](const QString &s) {
+            const double z = QString(s).remove('%').toDouble() / 100.0;
+            if (z > 0) { m_canvas->zoomToFit(Canvas::Fit::None); m_canvas->setZoom(z); }
+        });
+        connect(m_canvas, &Canvas::zoomChanged, zoomBox, [zoomBox](double z) { if (!zoomBox->hasFocus()) zoomBox->setCurrentText(QStringLiteral("%1%").arg(std::lround(z * 100))); });
+        return zoomBox;
+    };
+
+    // Insert > Table: a hover grid, then the dialog (and, on Home, drawing).
+    auto tableButton = [this](bool withDraw) -> QWidget * {
+        auto *tableBtn = ribbonButton(new QAction(icon("table"), QStringLiteral("Table"), this), true, nullptr);
+        auto *m = new QMenu(tableBtn);
+        auto *grid = new TableGrid();
+        auto *wa = new QWidgetAction(m);
+        wa->setDefaultWidget(grid);
+        m->addAction(wa);
+        m->addAction(act("ins.tableDialog"));
+        if (withDraw) m->addAction(act("ins.drawTable"));
+        connect(grid, &TableGrid::picked, this, [this, m](int rows, int cols) {
+            m->close();
+            const QSizeF ps = m_ed->doc()->pageSize();
+            const double w = std::min(ps.width() * 0.7, 72.0 * cols), h = 22.0 * rows;
+            auto tb = m_ed->newTable(QRectF((ps.width() - w) / 2, (ps.height() - h) / 2, w, h), rows, cols);
+            m_ed->addItem(tb);
+        });
+        tableBtn->setMenu(m);
+        tableBtn->setPopupMode(QToolButton::InstantPopup);
+        tableBtn->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+        tableBtn->setIconSize(QSize(30, 30));
+        tableBtn->setAutoRaise(true);
+        tableBtn->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+        return tableBtn;
+    };
+    parts.widgets[QStringLiteral("tableButton")] = [tableButton] { return tableButton(true); };
+    parts.widgets[QStringLiteral("tableButtonPlain")] = [tableButton] { return tableButton(false); };
+}
+
+// Galleries: the inline ones that fill a group and the buttons that open a grid.
+void MainWindow::ribbonGalleryParts(RibbonParts &parts)
+{
     auto shapeItems = []() {
         QVector<GalleryItem> v;
         v << GalleryItem{"tool:line", "Line", icon("minus"), "Lines"} << GalleryItem{"tool:arrow", "Arrow", icon("move-right"), "Lines"}
@@ -191,8 +313,8 @@ void MainWindow::buildRibbon()
         for (const auto &s : shapeLibrary()) v << GalleryItem{s.id, s.name, shapeIcon(s.id), s.category};
         return v;
     };
-    auto shapesButton = [&](bool large) {
-        auto *b = new GalleryButton(icon("shapes"), QStringLiteral("Shapes"), QSize(24, 24), 12, large);
+    parts.widgets[QStringLiteral("shapesButton")] = [this, shapeItems]() -> QWidget * {
+        auto *b = new GalleryButton(icon("shapes"), QStringLiteral("Shapes"), QSize(24, 24), 12, true);
         b->setToolTip(QStringLiteral("Shapes"));
         b->setItemsProvider(shapeItems);
         connect(b, &GalleryButton::activated, this, [this](const QString &id) {
@@ -210,51 +332,39 @@ void MainWindow::buildRibbon()
         return b;
     };
 
-    // ================= Home =================
-    {
-        RibbonTab *t = r->addTab(QStringLiteral("Home"));
-        RibbonGroup *g = t->addGroup(QStringLiteral("Clipboard"));
-        g->addLarge(act("edit.paste"), menuOf(this, {act("edit.paste"), act("edit.pasteText"), act("edit.pasteSpecial")}), true);
-        g->addSmall(act("edit.cut"));
-        g->addSmall(act("edit.copy"));
-        g->addSmall(act("edit.formatPainter"));
+    // Picture Shape and Crop to Shape set the same thing: the closed shape a picture is trimmed to.
+    auto maskShapeButton = [this](const char *iconName, const QString &label) {
+        auto *b = new GalleryButton(icon(iconName), label, QSize(24, 24), 12, false);
+        b->setItemsProvider([] {
+            QVector<GalleryItem> v;
+            for (const auto &s : shapeLibrary()) if (!s.open) v << GalleryItem{s.id, s.name, shapeIcon(s.id), s.category};
+            return v;
+        });
+        connect(b, &GalleryButton::activated, this, [this, label](const QString &id) {
+            m_ed->forEachSelected(label, [id](Item *it) { if (auto *pic = dynamic_cast<PictureItem *>(it)) pic->maskShape = id; });
+        });
+        return b;
+    };
+    parts.widgets[QStringLiteral("pictureShapeButton")] = [maskShapeButton]() -> QWidget * { return maskShapeButton("shapes", QStringLiteral("Picture Shape")); };
+    parts.widgets[QStringLiteral("cropToShapeButton")] = [maskShapeButton]() -> QWidget * { return maskShapeButton("crop", QStringLiteral("Crop to Shape")); };
+    parts.widgets[QStringLiteral("changeShapeButton")] = [this]() -> QWidget * {
+        auto *change = new GalleryButton(icon("shapes"), QStringLiteral("Change Shape"), QSize(24, 24), 12, false);
+        change->setItemsProvider([] {
+            QVector<GalleryItem> v;
+            for (const auto &s : shapeLibrary()) v << GalleryItem{s.id, s.name, shapeIcon(s.id), s.category};
+            return v;
+        });
+        connect(change, &GalleryButton::activated, this, [this](const QString &id) {
+            m_ed->forEachSelected(QStringLiteral("Change Shape"), [id](Item *it) {
+                if (auto *s = dynamic_cast<ShapeItem *>(it)) { s->shape = id; s->adj.clear(); s->customPath = QPainterPath(); }
+                if (auto *pic = dynamic_cast<PictureItem *>(it)) pic->maskShape = id;
+            });
+        });
+        return change;
+    };
 
-        g = t->addGroup(QStringLiteral("Font"));
-        g->addRow(fontRow());
-        QToolButton *ub = iconOnly(act("fmt.underline"));
-        withMenu(ub, menuOf(this, {act("fmt.underline"), act("fmt.underlineDouble"), act("fmt.underlineDotted"), act("fmt.underlineDash"), act("fmt.underlineWave")}), true);
-        auto *caseA = menuAction(this, QStringLiteral("Change Case"), "case-sensitive");
-        QToolButton *cb = iconOnly(caseA);
-        withMenu(cb, menuOf(this, {act("case.0"), act("case.1"), act("case.2"), act("case.3"), act("case.4"), nullptr, act("fmt.smallCaps"), act("fmt.allCaps")}), false);
-        auto *spA = menuAction(this, QStringLiteral("Character Spacing"), "move-horizontal");
-        QToolButton *spb = iconOnly(spA);
-        withMenu(spb, menuOf(this, {act("spacing.Very Tight"), act("spacing.Tight"), act("spacing.Normal"), act("spacing.Loose"), act("spacing.Very Loose"), nullptr, act("fmt.spacingDialog")}), false);
-        g->addRow({iconOnly(act("fmt.bold")), iconOnly(act("fmt.italic")), ub, iconOnly(act("fmt.strike")), iconOnly(act("fmt.sub")), iconOnly(act("fmt.sup")), cb, spb,
-                   iconOnly(act("fmt.clear")), textColorBtn()});
-        g->setLauncher([this] { fontDialog(this, m_ed); }, QStringLiteral("Font"));
-
-        g = t->addGroup(QStringLiteral("Paragraph"));
-        QList<QAction *> bullets;
-        for (const char *id : {"bullet.disc", "bullet.circle", "bullet.square", "bullet.diamond", "bullet.arrow", "bullet.check", "bullet.star", "bullet.dash"}) bullets << act(id);
-        bullets << nullptr << act("para.listNone") << act("para.bulletsDialog");
-        QList<QAction *> numbers;
-        for (int i = 0; i < 7; ++i) numbers << act(QStringLiteral("number.%1").arg(i));
-        numbers << nullptr << act("para.listNone") << act("para.bulletsDialog");
-        QToolButton *bb = withMenu(iconOnly(act("para.bullets")), menuOf(this, bullets), true);
-        QToolButton *nb = withMenu(iconOnly(act("para.numbers")), menuOf(this, numbers), true);
-        g->addRow({bb, nb, iconOnly(act("para.indentDec")), iconOnly(act("para.indentInc")), iconOnly(act("para.special"))});
-        QList<QAction *> ls;
-        for (double s : {1.0, 1.15, 1.5, 2.0, 2.5, 3.0}) ls << act(QStringLiteral("ls.%1").arg(s));
-        ls << nullptr << act("para.dialog");
-        auto *lsA = menuAction(this, QStringLiteral("Line Spacing"), "list-chevrons-up-down");
-        auto *psA = menuAction(this, QStringLiteral("Paragraph Spacing"), "arrow-up-down");
-        g->addRow({iconOnly(act("para.left")), iconOnly(act("para.center")), iconOnly(act("para.right")), iconOnly(act("para.justify")), iconOnly(act("para.distribute")),
-                   iconOnly(act("para.ltr")), iconOnly(act("para.rtl")), withMenu(iconOnly(lsA), menuOf(this, ls), false),
-                   withMenu(iconOnly(psA), menuOf(this, {act("para.spaceBefore0"), act("para.spaceBefore6"), act("para.spaceBefore12"), nullptr, act("para.spaceAfter0"),
-                                                         act("para.spaceAfter6"), act("para.spaceAfter12"), nullptr, act("para.dialog")}), false)});
-        g->setLauncher([this] { paragraphDialog(this, m_ed, 0); }, QStringLiteral("Paragraph"));
-
-        g = t->addGroup(QStringLiteral("Styles"));
+    // Home > Styles.
+    parts.widgets[QStringLiteral("styleGallery")] = [this]() -> QWidget * {
         m_styleGallery = new Gallery(QSize(76, 46), 3);
         m_styleGallery->setItemsProvider([this] {
             QVector<GalleryItem> v;
@@ -289,353 +399,111 @@ void MainWindow::buildRibbon()
         });
         m_styleGallery->setFooterActions({act("style.new"), act("style.modify"), act("style.byExample"), act("style.import")});
         connect(m_styleGallery, &Gallery::activated, this, [this](const QString &id) { m_ed->applyStyle(id); m_canvas->setFocus(); });
-        g->addWidget(m_styleGallery);
+        return m_styleGallery;
+    };
 
-        g = t->addGroup(QStringLiteral("Objects"));
-        g->addLarge(act("ins.textbox"));
-        auto *tableBtn = ribbonButton(menuAction(this, QStringLiteral("Table"), "table"), true, nullptr);
-        {
-            auto *m = new QMenu(tableBtn);
-            auto *grid = new TableGrid();
-            auto *wa = new QWidgetAction(m);
-            wa->setDefaultWidget(grid);
-            m->addAction(wa);
-            m->addAction(act("ins.tableDialog"));
-            m->addAction(act("ins.drawTable"));
-            connect(grid, &TableGrid::picked, this, [this, m](int rows, int cols) {
-                m->close();
-                const QSizeF ps = m_ed->doc()->pageSize();
-                const double w = std::min(ps.width() * 0.7, 72.0 * cols), h = 22.0 * rows;
-                auto tb = m_ed->newTable(QRectF((ps.width() - w) / 2, (ps.height() - h) / 2, w, h), rows, cols);
-                m_ed->addItem(tb);
-            });
-            tableBtn->setMenu(m);
-        }
-        tableBtn->setPopupMode(QToolButton::InstantPopup);
-        tableBtn->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-        tableBtn->setIconSize(QSize(30, 30));
-        tableBtn->setAutoRaise(true);
-        tableBtn->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
-        g->addWidget(tableBtn);
-        g->addLarge(act("ins.picture"));
-        g->addWidget(shapesButton(true));
-
-        arrangeGroup(t);
-
-        g = t->addGroup(QStringLiteral("Editing"));
-        g->addSmall(act("edit.find"));
-        g->addSmall(act("edit.replace"));
-        auto *selA = menuAction(this, QStringLiteral("Select"), "mouse-pointer-2");
-        g->addSmall(selA, menuOf(this, {act("edit.selectText"), act("edit.selectAll"), act("edit.selectObjects"), nullptr, act("sel.text"), act("sel.pictures"),
-                                        act("sel.shapes"), act("sel.tables"), act("sel.textart")}));
-        t->finish();
-    }
-
-    // ================= Insert =================
-    {
-        RibbonTab *t = r->addTab(QStringLiteral("Insert"));
-        RibbonGroup *g = t->addGroup(QStringLiteral("Pages"));
-        g->addLarge(act("page.insert"), menuOf(this, {act("page.insert"), act("page.insertDup"), act("page.insertDialog")}), true);
-        auto *catA = menuAction(this, QStringLiteral("Catalog Pages"), "book-copy");
-        connect(catA, &QAction::triggered, this, [this] { showTaskPane("catalog"); });
-        g->addLarge(catA);
-
-        g = t->addGroup(QStringLiteral("Tables"));
-        {
-            auto *tableBtn = ribbonButton(menuAction(this, QStringLiteral("Table"), "table"), true, nullptr);
-            auto *m = new QMenu(tableBtn);
-            auto *grid = new TableGrid();
-            auto *wa = new QWidgetAction(m);
-            wa->setDefaultWidget(grid);
-            m->addAction(wa);
-            m->addAction(act("ins.tableDialog"));
-            connect(grid, &TableGrid::picked, this, [this, m](int rows, int cols) {
-                m->close();
-                const QSizeF ps = m_ed->doc()->pageSize();
-                const double w = std::min(ps.width() * 0.7, 72.0 * cols), h = 22.0 * rows;
-                m_ed->addItem(m_ed->newTable(QRectF((ps.width() - w) / 2, (ps.height() - h) / 2, w, h), rows, cols));
-            });
-            tableBtn->setMenu(m);
-            tableBtn->setPopupMode(QToolButton::InstantPopup);
-            tableBtn->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-            tableBtn->setIconSize(QSize(30, 30));
-            tableBtn->setAutoRaise(true);
-            tableBtn->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
-            g->addWidget(tableBtn);
-        }
-
-        g = t->addGroup(QStringLiteral("Illustrations"));
-        g->addLarge(act("ins.picture"));
-        g->addLarge(act("ins.onlinePicture"));
-        g->addWidget(shapesButton(true));
-        g->addLarge(act("ins.icons"));
-        g->addLarge(act("ins.placeholder"));
-        g->addLarge(act("ins.barcode"));
-
-        g = t->addGroup(QStringLiteral("Building Blocks"));
-        auto blockButton = [this](const QString &category, const QString &label, const QString &iconName) {
-            auto *b = new GalleryButton(icon(iconName), label, QSize(96, 72), 5, true);
-            b->setItemsProvider([this, category] {
-                QVector<GalleryItem> v;
-                for (const auto &bb : buildingBlocks()) {
-                    if (bb.category != category) continue;
-                    Editor *e = m_ed;
-                    const QString id = bb.id;
-                    v << GalleryItem{id, bb.name, drawnIcon([e, id](QPainter *p, const QRectF &rc) {
-                        // Live preview: build the block in a scratch document with the current schemes.
-                        Document tmp;
-                        tmp.colors = e->doc()->colors;
-                        tmp.fonts = e->doc()->fonts;
-                        tmp.biz = e->doc()->biz;
-                        tmp.setup.size = QSizeF(612, 792);
-                        tmp.pages.clear();
-                        tmp.addPage();
-                        const BuildingBlock *blk = findBlock(id);
-                        if (!blk) return;
-                        ItemList items = blk->build(tmp, QRectF(36, 36, 540, 720));
-                        const QRectF b = unionBounds(items);
-                        if (b.isEmpty()) return;
-                        LayoutCache cache;
-                        PaintContext ctx;
-                        ctx.doc = &tmp;
-                        ctx.cache = &cache;
-                        ctx.opt.output = true;
-                        const double s = std::min(rc.width() / b.width(), rc.height() / b.height()) * 0.92;
-                        p->save();
-                        p->translate(rc.center());
-                        p->scale(s, s);
-                        p->translate(-b.center());
-                        Renderer::paintItems(p, ctx, items);
-                        p->restore();
-                    }), bb.category};
-                }
-                return v;
-            });
-            connect(b, &GalleryButton::activated, this, [this](const QString &id) {
-                const BuildingBlock *blk = findBlock(id);
-                if (!blk) return;
-                m_ed->beginChange(QStringLiteral("Insert Building Block"));
-                const QRectF content = QRectF(QPointF(0, 0), m_ed->doc()->pageSize()).marginsRemoved(m_ed->doc()->setup.margins);
-                ItemList items = blk->build(*m_ed->doc(), content);
-                QStringList ids;
-                for (auto &it : items) { m_ed->surfaceItems().push_back(it); ids << it->id; }
-                m_ed->endChange();
-                m_ed->select(ids);
-            });
-            return b;
-        };
-        g->addWidget(blockButton(QStringLiteral("Page Parts"), QStringLiteral("Page Parts"), "layout-template"));
-        {
-            auto *cal = blockButton(QStringLiteral("Calendars"), QStringLiteral("Calendars"), "calendar-days");
-            auto *more = new QAction(QStringLiteral("More Calendars…"), cal);
-            connect(more, &QAction::triggered, this, [this] { calendarDialog(this, m_ed); });
-            cal->setFooterActions({more});
-            g->addWidget(cal);
-        }
-        g->addWidget(blockButton(QStringLiteral("Borders & Accents"), QStringLiteral("Borders & Accents"), "frame"));
-        g->addWidget(blockButton(QStringLiteral("Advertisements"), QStringLiteral("Advertisements"), "badge-percent"));
-
-        g = t->addGroup(QStringLiteral("Text"));
-        g->addLarge(act("ins.textbox"));
-        QList<QAction *> biz;
-        for (const QString &k : BusinessInfo::keys()) biz << act("biz." + k);
-        biz << act("biz.logo") << nullptr << act("ins.bizInfo");
-        auto *bizA = menuAction(this, QStringLiteral("Business Information"), "contact");
-        g->addLarge(bizA, menuOf(this, biz));
-        {
-            auto *wa = new GalleryButton(icon("type"), QStringLiteral("Text Art"), QSize(64, 40), 6, true);
-            wa->setItemsProvider([this] {
-                QVector<GalleryItem> v;
+    // Insert > Building Blocks.
+    auto blockButton = [this](const QString &category, const QString &label, const QString &iconName) {
+        auto *b = new GalleryButton(icon(iconName), label, QSize(96, 72), 5, true);
+        b->setItemsProvider([this, category] {
+            QVector<GalleryItem> v;
+            for (const auto &bb : buildingBlocks()) {
+                if (bb.category != category) continue;
                 Editor *e = m_ed;
-                for (const auto &s : textArtStyles()) {
-                    const QString sid = s.id;
-                    v << GalleryItem{sid, s.name, drawnIcon([e, sid](QPainter *p, const QRectF &rc) {
-                        TextArtItem w;
-                        for (const auto &st : textArtStyles()) if (st.id == sid) applyTextArtStyle(w, st);
-                        w.text = QStringLiteral("Aa");
-                        w.rect = QRectF(QPointF(0, 0), rc.size() * 0.8);
-                        const QPainterPath path = textArtPath(w, w.rect.size()).translated(rc.topLeft() + QPointF(rc.width() * 0.1, rc.height() * 0.1));
-                        p->fillPath(path, w.fill.brush(path.boundingRect(), e->doc()->colors));
-                        if (!w.stroke.isNone()) p->strokePath(path, QPen(w.stroke.color.resolve(e->doc()->colors), std::max(0.5, w.stroke.width / 2)));
-                    }), QString()};
-                }
-                return v;
-            });
-            connect(wa, &GalleryButton::activated, this, [this](const QString &sid) {
-                auto w = std::make_shared<TextArtItem>();
-                for (const auto &st : textArtStyles()) if (st.id == sid) applyTextArtStyle(*w, st);
-                const QSizeF ps = m_ed->doc()->pageSize();
-                w->rect = QRectF(ps.width() / 2 - 144, ps.height() / 3, 288, 72);
-                m_ed->addItem(w);
-                editTextArt(w->id);
-            });
-            g->addWidget(wa);
-        }
-        g->addSmall(act("ins.file"));
-        {
-            // Symbol: the recently used symbols to click, then More Symbols.
-            auto *sm = new QMenu(this);
-            connect(sm, &QMenu::aboutToShow, this, [this, sm] {
-                sm->clear();
-                const QStringList recents = recentSymbols();
-                if (!recents.isEmpty()) {
-                    auto *panel = new QWidget(sm);
-                    auto *gl = new QGridLayout(panel);
-                    gl->setContentsMargins(6, 6, 6, 6);
-                    gl->setSpacing(2);
-                    for (int i = 0; i < recents.size() && i < 20; ++i) {
-                        const QString ch = recents[i].section(QLatin1Char('\t'), 0, 0), fam = recents[i].section(QLatin1Char('\t'), 1);
-                        auto *b = new QToolButton(panel);
-                        b->setText(ch);
-                        QFont f = b->font();
-                        if (!fam.isEmpty()) f.setFamily(fam);
-                        f.setPointSize(13);
-                        b->setFont(f);
-                        b->setFixedSize(30, 30);
-                        b->setAutoRaise(true);
-                        connect(b, &QToolButton::clicked, this, [this, sm, ch, fam] {
-                            sm->close();
-                            insertSymbol(this, m_ed, ch, fam);
-                        });
-                        gl->addWidget(b, i / 5, i % 5);
-                    }
-                    auto *wa = new QWidgetAction(sm);
-                    wa->setDefaultWidget(panel);
-                    sm->addAction(wa);
-                    sm->addSeparator();
-                }
-                QAction *more = sm->addAction(icon("omega"), QStringLiteral("More Symbols…"));
-                connect(more, &QAction::triggered, this, [this] { symbolDialog(this, m_ed); });
-            });
-            g->addSmall(act("ins.symbol"), sm, true);
-        }
-        g->addSmall(act("ins.datetime"));
-        g->addSmall(act("ins.object"));
-
-        g = t->addGroup(QStringLiteral("Links"));
-        g->addLarge(act("ins.link"));
-        g->addLarge(act("ins.bookmark"));
-
-        g = t->addGroup(QStringLiteral("References"));
-        g->addLarge(act("ins.toc"));
-        g->addSmall(act("ins.updateToc"));
-        g->addSmall(act("ins.footnote"));
-        g->addSmall(act("ins.endnote"));
-
-        g = t->addGroup(QStringLiteral("Header & Footer"));
-        g->addLarge(act("ins.header"));
-        g->addLarge(act("ins.footer"));
-        g->addLarge(act("ins.pageNumber"), menuOf(this, {act("ins.pageNumber"), act("ins.pageCount"), act("ins.pageNumberFormat")}), true);
-        t->finish();
-    }
-
-    // ================= Page Design =================
-    {
-        RibbonTab *t = r->addTab(QStringLiteral("Page Design"));
-        RibbonGroup *g = t->addGroup(QStringLiteral("Template"));
-        g->addLarge(act("pd.changeTemplate"));
-
-        g = t->addGroup(QStringLiteral("Page Setup"));
-        QList<QAction *> margins;
-        for (const char *m : {"None", "Narrow", "Moderate", "Wide", "Extra Wide"}) margins << act(QStringLiteral("margins.%1").arg(QString::fromLatin1(m)));
-        margins << nullptr << act("pd.customMargins");
-        g->addLarge(menuAction(this, QStringLiteral("Margins"), "square-dashed-bottom"), menuOf(this, margins));
-        g->addLarge(menuAction(this, QStringLiteral("Orientation"), "rotate-3d"), menuOf(this, {act("pd.portrait"), act("pd.landscape")}));
-        {
-            // Built each time it opens: the preset sizes, then the user's own
-            // (Custom), then creating and editing custom sizes and Page Setup.
-            auto *sizeMenu = new QMenu(this);
-            connect(sizeMenu, &QMenu::aboutToShow, this, [this, sizeMenu] {
-                sizeMenu->clear();
-                auto applySize = [this](const QSizeF &s, const QString &name) {
-                    m_ed->change(QStringLiteral("Page Size"), [&] {
-                        // Keep the current orientation.
-                        QSizeF ns = s;
-                        const QSizeF cur = m_ed->doc()->setup.size;
-                        if ((cur.width() > cur.height()) != (ns.width() > ns.height()) && ns.width() != ns.height()) ns = ns.transposed();
-                        m_ed->doc()->setup.size = ns;
-                        m_ed->doc()->setup.sheet = ns;
-                        m_ed->doc()->setup.sizeName = name;
-                    });
-                };
-                QString group;
-                for (const auto &bs : blankSizes()) {
-                    if (bs.group != group) { group = bs.group; sizeMenu->addSection(group); }
-                    QAction *a = sizeMenu->addAction(QStringLiteral("%1 (%2 × %3)").arg(bs.name, Settings::get().format(bs.size.width()), Settings::get().format(bs.size.height())));
-                    a->setCheckable(true);
-                    a->setChecked(m_ed->doc()->setup.sizeName == bs.name);
-                    const QSizeF s = bs.size;
-                    const QString name = bs.name;
-                    connect(a, &QAction::triggered, this, [applySize, s, name] { applySize(s, name); });
-                }
-                const auto custom = customPageSizes();
-                if (!custom.isEmpty()) {
-                    sizeMenu->addSection(QStringLiteral("Custom"));
-                    for (const auto &c : custom) {
-                        QAction *a = sizeMenu->addAction(QStringLiteral("%1 (%2 × %3)").arg(c.first, Settings::get().format(c.second.size.width()), Settings::get().format(c.second.size.height())));
-                        a->setCheckable(true);
-                        a->setChecked(m_ed->doc()->setup.sizeName == c.first);
-                        const PageSetup setup = c.second;
-                        const QString name = c.first;
-                        connect(a, &QAction::triggered, this, [this, setup, name] { applyPageSetup(m_ed, setup, name, QStringLiteral("Page Size")); });
-                    }
-                }
-                sizeMenu->addSeparator();
-                sizeMenu->addAction(act("pd.newPageSize"));
-                if (!custom.isEmpty()) sizeMenu->addAction(act("pd.customSizes"));
-                sizeMenu->addAction(act("pd.pageSetup"));
-            });
-            g->addLarge(menuAction(this, QStringLiteral("Size"), "file-scan"), sizeMenu);
-        }
-        {
-            auto *gm = new QMenu(this);
-            const QVector<QPair<QString, QPair<int, int>>> presets = {{"No Grid", {1, 1}}, {"2 Columns", {2, 1}}, {"3 Columns", {3, 1}}, {"4 Columns", {4, 1}},
-                                                                     {"2 × 2 Grid", {2, 2}}, {"3 × 3 Grid", {3, 3}}, {"4 × 4 Grid", {4, 4}}};
-            gm->addSection(QStringLiteral("Built-In Guides"));
-            for (const auto &pr : presets) {
-                QAction *a = gm->addAction(pr.first);
-                const int c = pr.second.first, rr = pr.second.second;
-                connect(a, &QAction::triggered, this, [this, c, rr] {
-                    m_ed->change(QStringLiteral("Guides"), [&] {
-                        for (auto &m : m_ed->doc()->masters) { m->grid.cols = c; m->grid.rows = rr; }
-                    });
-                });
+                const QString id = bb.id;
+                v << GalleryItem{id, bb.name, drawnIcon([e, id](QPainter *p, const QRectF &rc) {
+                    // Live preview: build the block in a scratch document with the current schemes.
+                    Document tmp;
+                    tmp.colors = e->doc()->colors;
+                    tmp.fonts = e->doc()->fonts;
+                    tmp.biz = e->doc()->biz;
+                    tmp.setup.size = QSizeF(612, 792);
+                    tmp.pages.clear();
+                    tmp.addPage();
+                    const BuildingBlock *blk = findBlock(id);
+                    if (!blk) return;
+                    ItemList items = blk->build(tmp, QRectF(36, 36, 540, 720));
+                    const QRectF b = unionBounds(items);
+                    if (b.isEmpty()) return;
+                    LayoutCache cache;
+                    PaintContext ctx;
+                    ctx.doc = &tmp;
+                    ctx.cache = &cache;
+                    ctx.opt.output = true;
+                    const double s = std::min(rc.width() / b.width(), rc.height() / b.height()) * 0.92;
+                    p->save();
+                    p->translate(rc.center());
+                    p->scale(s, s);
+                    p->translate(-b.center());
+                    Renderer::paintItems(p, ctx, items);
+                    p->restore();
+                }), bb.category};
             }
-            gm->addSeparator();
-            gm->addAction(act("pd.guidesDialog"));
-            gm->addAction(act("pd.rulerGuides"));
-            gm->addAction(act("pd.addH"));
-            gm->addAction(act("pd.addV"));
-            gm->addAction(act("pd.clearGuides"));
-            g->addLarge(menuAction(this, QStringLiteral("Guides"), "layout-grid"), gm);
-        }
-        g->setLauncher([this] { pageSetupDialog(this, m_ed); }, QStringLiteral("Page Setup"));
-
-        g = t->addGroup(QStringLiteral("Layout"));
-        g->addSmall(act("pd.alignGuides"));
-        g->addSmall(act("pd.alignObjects"));
-
-        g = t->addGroup(QStringLiteral("Pages"));
-        g->addLarge(act("page.delete"));
-        g->addLarge(act("page.move"));
-        g->addLarge(act("page.rename"));
-        auto *mpMenu = new QMenu(this);
-        connect(mpMenu, &QMenu::aboutToShow, this, [this, mpMenu] {
-            mpMenu->clear();
-            for (const auto &m : m_ed->doc()->masters) {
-                QAction *a = mpMenu->addAction(QStringLiteral("(%1) %2").arg(m->abbr, m->name));
-                a->setCheckable(true);
-                a->setChecked(m_ed->doc()->pages[m_ed->currentPage()]->masterId == m->id);
-                const QString id = m->id;
-                connect(a, &QAction::triggered, this, [this, id] { m_ed->applyMaster(m_ed->currentPage(), id); });
-            }
-            mpMenu->addAction(act("mp.none"));
-            mpMenu->addSeparator();
-            mpMenu->addAction(act("view.master"));
+            return v;
         });
-        g->addLarge(menuAction(this, QStringLiteral("Master Pages"), "layout-panel-top"), mpMenu);
+        connect(b, &GalleryButton::activated, this, [this](const QString &id) {
+            const BuildingBlock *blk = findBlock(id);
+            if (!blk) return;
+            m_ed->beginChange(QStringLiteral("Insert Building Block"));
+            const QRectF content = QRectF(QPointF(0, 0), m_ed->doc()->pageSize()).marginsRemoved(m_ed->doc()->setup.margins);
+            ItemList items = blk->build(*m_ed->doc(), content);
+            QStringList ids;
+            for (auto &it : items) { m_ed->surfaceItems().push_back(it); ids << it->id; }
+            m_ed->endChange();
+            m_ed->select(ids);
+        });
+        return b;
+    };
+    parts.widgets[QStringLiteral("blockPageParts")] = [blockButton]() -> QWidget * {
+        return blockButton(QStringLiteral("Page Parts"), QStringLiteral("Page Parts"), QStringLiteral("layout-template"));
+    };
+    parts.widgets[QStringLiteral("blockCalendars")] = [this, blockButton]() -> QWidget * {
+        auto *cal = blockButton(QStringLiteral("Calendars"), QStringLiteral("Calendars"), QStringLiteral("calendar-days"));
+        auto *more = new QAction(QStringLiteral("More Calendars…"), cal);
+        connect(more, &QAction::triggered, this, [this] { calendarDialog(this, m_ed); });
+        cal->setFooterActions({more});
+        return cal;
+    };
+    parts.widgets[QStringLiteral("blockBorders")] = [blockButton]() -> QWidget * {
+        return blockButton(QStringLiteral("Borders & Accents"), QStringLiteral("Borders & Accents"), QStringLiteral("frame"));
+    };
+    parts.widgets[QStringLiteral("blockAdvertisements")] = [blockButton]() -> QWidget * {
+        return blockButton(QStringLiteral("Advertisements"), QStringLiteral("Advertisements"), QStringLiteral("badge-percent"));
+    };
 
-        g = t->addGroup(QStringLiteral("Schemes"));
+    // Insert > Text > Text Art.
+    parts.widgets[QStringLiteral("textArtButton")] = [this]() -> QWidget * {
+        auto *wa = new GalleryButton(icon("type"), QStringLiteral("Text Art"), QSize(64, 40), 6, true);
+        wa->setItemsProvider([this] {
+            QVector<GalleryItem> v;
+            Editor *e = m_ed;
+            for (const auto &s : textArtStyles()) {
+                const QString sid = s.id;
+                v << GalleryItem{sid, s.name, drawnIcon([e, sid](QPainter *p, const QRectF &rc) {
+                    TextArtItem w;
+                    for (const auto &st : textArtStyles()) if (st.id == sid) applyTextArtStyle(w, st);
+                    w.text = QStringLiteral("Aa");
+                    w.rect = QRectF(QPointF(0, 0), rc.size() * 0.8);
+                    const QPainterPath path = textArtPath(w, w.rect.size()).translated(rc.topLeft() + QPointF(rc.width() * 0.1, rc.height() * 0.1));
+                    p->fillPath(path, w.fill.brush(path.boundingRect(), e->doc()->colors));
+                    if (!w.stroke.isNone()) p->strokePath(path, QPen(w.stroke.color.resolve(e->doc()->colors), std::max(0.5, w.stroke.width / 2)));
+                }), QString()};
+            }
+            return v;
+        });
+        connect(wa, &GalleryButton::activated, this, [this](const QString &sid) {
+            auto w = std::make_shared<TextArtItem>();
+            for (const auto &st : textArtStyles()) if (st.id == sid) applyTextArtStyle(*w, st);
+            const QSizeF ps = m_ed->doc()->pageSize();
+            w->rect = QRectF(ps.width() / 2 - 144, ps.height() / 3, 288, 72);
+            m_ed->addItem(w);
+            editTextArt(w->id);
+        });
+        return wa;
+    };
+
+    // Page Design > Schemes and Page Background.
+    parts.widgets[QStringLiteral("schemeGallery")] = [this]() -> QWidget * {
         m_schemeGallery = new Gallery(QSize(64, 40), 4);
         auto schemeIcon = [](const ColorScheme &s) {
             return drawnIcon([s](QPainter *p, const QRectF &rc) {
@@ -652,152 +520,371 @@ void MainWindow::buildRibbon()
             const ColorScheme *s = findColorScheme(name);
             if (s) m_ed->change(QStringLiteral("Color Scheme"), [&] { m_ed->doc()->colors = *s; });
         });
-        g->addWidget(m_schemeGallery);
-        {
-            auto *fm = new QMenu(this);
-            for (const auto &fs : builtinFontSchemes()) {
-                QAction *a = fm->addAction(QStringLiteral("%1 — %2 / %3").arg(fs.name, fs.heading, fs.body));
-                const FontScheme scheme = fs;
-                connect(a, &QAction::triggered, this, [this, scheme] { m_ed->change(QStringLiteral("Font Scheme"), [&] { m_ed->doc()->fonts = scheme; }); });
-            }
-            fm->addSeparator();
-            fm->addAction(act("pd.newFontScheme"));
-            fm->addAction(act("pd.updateFonts"));
-            g->addLarge(menuAction(this, QStringLiteral("Fonts"), "type"), fm);
-        }
+        return m_schemeGallery;
+    };
+    parts.widgets[QStringLiteral("backgroundButton")] = [this]() -> QWidget * {
+        auto *bg = new GalleryButton(icon("paint-roller"), QStringLiteral("Background"), QSize(48, 48), 6, true);
+        bg->setItemsProvider([this] {
+            QVector<GalleryItem> v;
+            Editor *e = m_ed;
+            auto add = [&](const QString &id, const QString &tip, const QString &group) {
+                v << GalleryItem{id, tip, drawnIcon([e, id](QPainter *p, const QRectF &rc) {
+                    const Fill f = backgroundPreset(id);
+                    p->fillRect(rc, Qt::white);
+                    p->fillRect(rc, f.brush(rc, e->doc()->colors));
+                    p->setPen(QColor(0, 0, 0, 60));
+                    p->drawRect(rc.adjusted(0, 0, -1, -1));
+                }), group};
+            };
+            add("none", "No Background", "No Background");
+            for (int s = 1; s <= 5; ++s) for (int t : {0, 40, 80}) add(QStringLiteral("solid.%1.%2").arg(s).arg(t), QStringLiteral("%1 %2%").arg(slotName(s)).arg(100 - t), "Solid Background");
+            for (int s = 1; s <= 5; ++s) for (int k = 0; k < 3; ++k) add(QStringLiteral("grad.%1.%2").arg(s).arg(k), QStringLiteral("%1 Gradient").arg(slotName(s)), "Gradient Background");
+            return v;
+        });
+        bg->setFooterActions({act("pd.bgMore"), act("pd.bgAllPages")});
+        connect(bg, &GalleryButton::activated, this, [this](const QString &id) {
+            const Fill f = backgroundPreset(id);
+            m_ed->change(QStringLiteral("Background"), [&] { m_ed->surface()->background = f; });
+        });
+        return bg;
+    };
 
-        g = t->addGroup(QStringLiteral("Page Background"));
-        {
-            auto *bg = new GalleryButton(icon("paint-roller"), QStringLiteral("Background"), QSize(48, 48), 6, true);
-            bg->setItemsProvider([this] {
-                QVector<GalleryItem> v;
-                Editor *e = m_ed;
-                auto add = [&](const QString &id, const QString &tip, const QString &group) {
-                    v << GalleryItem{id, tip, drawnIcon([e, id](QPainter *p, const QRectF &rc) {
-                        const Fill f = backgroundPreset(id);
-                        p->fillRect(rc, Qt::white);
-                        p->fillRect(rc, f.brush(rc, e->doc()->colors));
-                        p->setPen(QColor(0, 0, 0, 60));
-                        p->drawRect(rc.adjusted(0, 0, -1, -1));
-                    }), group};
-                };
-                add("none", "No Background", "No Background");
-                for (int s = 1; s <= 5; ++s) for (int t : {0, 40, 80}) add(QStringLiteral("solid.%1.%2").arg(s).arg(t), QStringLiteral("%1 %2%").arg(slotName(s)).arg(100 - t), "Solid Background");
-                for (int s = 1; s <= 5; ++s) for (int k = 0; k < 3; ++k) add(QStringLiteral("grad.%1.%2").arg(s).arg(k), QStringLiteral("%1 Gradient").arg(slotName(s)), "Gradient Background");
-                return v;
-            });
-            bg->setFooterActions({act("pd.bgMore"), act("pd.bgAllPages")});
-            connect(bg, &GalleryButton::activated, this, [this](const QString &id) {
-                const Fill f = backgroundPreset(id);
-                m_ed->change(QStringLiteral("Background"), [&] { m_ed->surface()->background = f; });
-            });
-            g->addWidget(bg);
-        }
-        g->addLarge(act("pd.bgImage"));
-        t->finish();
-    }
-
-    // ================= Mailings =================
-    {
-        RibbonTab *t = r->addTab(QStringLiteral("Mailings"));
-        RibbonGroup *g = t->addGroup(QStringLiteral("Start"));
-        g->addLarge(menuAction(this, QStringLiteral("Mail Merge"), "mail"), menuOf(this, {act("mm.wizard"), act("mm.mergeEmail")}));
-        g->addLarge(menuAction(this, QStringLiteral("Select Recipients"), "users"), menuOf(this, {act("mm.typeNew"), act("mm.existing")}));
-        g->addLarge(act("mm.editList"));
-        g = t->addGroup(QStringLiteral("Write & Insert Fields"));
-        g->addSmall(act("mm.addressBlock"));
-        g->addSmall(act("mm.greeting"));
-        {
-            auto *fieldMenu = new QMenu(this);
-            connect(fieldMenu, &QMenu::aboutToShow, this, [this, fieldMenu] {
-                fieldMenu->clear();
-                const QStringList fields = m_ed->doc()->merge.fields;
-                if (fields.isEmpty()) fieldMenu->addAction(QStringLiteral("(Select recipients first)"))->setEnabled(false);
-                for (const QString &f : fields) {
-                    QAction *a = fieldMenu->addAction(f);
-                    connect(a, &QAction::triggered, this, [this, f] {
-                        if (m_ed->isEditingText()) { m_ed->insertField("merge:" + f); return; }
-                        const QSizeF ps = m_ed->doc()->pageSize();
-                        auto tb = std::static_pointer_cast<TextItem>(m_ed->newTextBox(QRectF(ps.width() / 2 - 108, ps.height() / 2 - 14, 216, 28)));
-                        QTextCursor c(m_ed->doc()->storyDoc(tb->storyId));
-                        QTextCharFormat cf;
-                        cf.setProperty(tp::Field, "merge:" + f);
-                        c.insertText(QString(QChar::ObjectReplacementCharacter), cf);
-                        m_ed->addItem(tb);
-                    });
+    // The contextual tabs' inline galleries. refreshUi() finds them by name.
+    parts.widgets[QStringLiteral("shapeStyles")] = [this]() -> QWidget * {
+        auto *gal = new Gallery(QSize(40, 28), 6);
+        Editor *e = m_ed;
+        gal->setItemsProvider([e] {
+            QVector<GalleryItem> v;
+            for (int row = 0; row < 6; ++row)
+                for (int slot = 0; slot < 6; ++slot) {
+                    const QString id = QStringLiteral("%1.%2").arg(row).arg(slot);
+                    v << GalleryItem{id, QStringLiteral("%1 style %2").arg(slotName(slot)).arg(row + 1), drawnIcon([e, row, slot](QPainter *p, const QRectF &rc) {
+                        Fill f; Stroke s; Effects fx;
+                        shapeStylePreset(row, slot, &f, &s, &fx);
+                        const QRectF b = rc.adjusted(4, 4, -4, -4);
+                        QPainterPath path;
+                        path.addRoundedRect(b, 3, 3);
+                        p->fillPath(path, f.brush(b, e->doc()->colors));
+                        if (!s.isNone()) p->strokePath(path, s.pen(e->doc()->colors));
+                    }), QString()};
                 }
+            return v;
+        });
+        connect(gal, &Gallery::activated, this, [this](const QString &id) {
+            const int row = id.section('.', 0, 0).toInt(), slot = id.section('.', 1).toInt();
+            m_ed->forEachSelected(QStringLiteral("Shape Style"), [row, slot](Item *it) { shapeStylePreset(row, slot, &it->fill, &it->stroke, &it->fx); });
+        });
+        gal->setObjectName("shapeStyles");
+        return gal;
+    };
+    parts.widgets[QStringLiteral("pictureStyles")] = [this]() -> QWidget * {
+        auto *gal = new Gallery(QSize(40, 40), 5);
+        Editor *e = m_ed;
+        gal->setItemsProvider([e] {
+            QVector<GalleryItem> v;
+            for (int k = 0; k < 20; ++k) {
+                v << GalleryItem{QString::number(k), QStringLiteral("Picture Style %1").arg(k + 1), drawnIcon([e, k](QPainter *p, const QRectF &rc) {
+                    PictureItem pic;
+                    pictureStylePreset(k, &pic);
+                    const QRectF b = rc.adjusted(5, 5, -5, -5);
+                    const QPainterPath path = shapePath(pic.maskShape, b.size()).translated(b.topLeft());
+                    QLinearGradient lg(b.topLeft(), b.bottomRight());
+                    lg.setColorAt(0, QColor(120, 170, 220));
+                    lg.setColorAt(1, QColor(60, 120, 80));
+                    if (pic.fx.shadow.on) p->fillPath(path.translated(2, 2), QColor(0, 0, 0, 70));
+                    p->fillPath(path, lg);
+                    if (!pic.stroke.isNone()) {
+                        QPen pen = pic.stroke.pen(e->doc()->colors);
+                        pen.setWidthF(std::clamp(pic.stroke.width / 2, 0.75, 4.0));
+                        p->strokePath(path, pen);
+                    }
+                }), QString()};
+            }
+            return v;
+        });
+        connect(gal, &Gallery::activated, this, [this](const QString &id) {
+            m_ed->forEachSelected(QStringLiteral("Picture Style"), [id](Item *it) {
+                if (auto *pic = dynamic_cast<PictureItem *>(it)) pictureStylePreset(id.toInt(), pic);
             });
-            g->addSmall(menuAction(this, QStringLiteral("Insert Merge Field"), "braces"), fieldMenu);
-        }
-        g->addSmall(act("mm.pictureField"));
-        g = t->addGroup(QStringLiteral("Preview Results"));
-        g->addLarge(act("mm.preview"));
-        g->addRow({iconOnly(act("mm.first")), iconOnly(act("mm.prev")), iconOnly(act("mm.next")), iconOnly(act("mm.last"))});
-        g->addSmall(act("mm.findRecipient"));
-        g = t->addGroup(QStringLiteral("Finish"));
-        g->addLarge(menuAction(this, QStringLiteral("Finish & Merge"), "send"),
-                    menuOf(this, {act("mm.mergePrint"), act("mm.mergeNew"), act("mm.mergePdf"), act("mm.mergeEmail"), nullptr, act("mm.exportList")}));
-        t->finish();
-    }
-
-    // ================= Review =================
-    {
-        RibbonTab *t = r->addTab(QStringLiteral("Review"));
-        RibbonGroup *g = t->addGroup(QStringLiteral("Proofing"));
-        g->addLarge(act("rev.spelling"), menuOf(this, {act("rev.spelling"), act("rev.checkAsType")}), true);
-        g->addLarge(act("rev.research"));
-        g->addLarge(act("rev.thesaurus"));
-        g = t->addGroup(QStringLiteral("Language"));
-        g->addLarge(act("rev.translate"));
-        g->addLarge(act("rev.language"));
-        g = t->addGroup(QStringLiteral("Check"));
-        g->addLarge(act("rev.designChecker"));
-        g->addLarge(act("rev.wordCount"));
-        g->addLarge(act("rev.hyphenation"));
-        t->finish();
-    }
-
-    // ================= View =================
-    {
-        RibbonTab *t = r->addTab(QStringLiteral("View"));
-        auto *views = new QActionGroup(this);
-        views->addAction(act("view.normal"));
-        views->addAction(act("view.master"));
-        RibbonGroup *g = t->addGroup(QStringLiteral("Views"));
-        g->addLarge(act("view.normal"));
-        g->addLarge(act("view.master"));
-        auto *layouts = new QActionGroup(this);
-        layouts->addAction(act("view.single"));
-        layouts->addAction(act("view.spread"));
-        g = t->addGroup(QStringLiteral("Layout"));
-        g->addLarge(act("view.single"));
-        g->addLarge(act("view.spread"));
-        g = t->addGroup(QStringLiteral("Show"));
-        for (const char *id : {"view.boundaries", "view.guides", "view.fields", "view.rulers", "view.pageNav", "view.scratch", "view.baselines", "view.graphics", "view.special"}) {
-            if (QString(id) == "view.special") g->addSmall(act("para.special"));
-            else g->addSmall(act(id));
-        }
-        g = t->addGroup(QStringLiteral("Zoom"));
-        {
-            auto *zoomBox = new QComboBox();
-            zoomBox->setEditable(true);
-            for (const char *z : {"400%", "300%", "200%", "150%", "100%", "75%", "66%", "50%", "33%", "25%", "10%"}) zoomBox->addItem(QString::fromLatin1(z));
-            zoomBox->setFixedWidth(80);
-            zoomBox->setCurrentText(QStringLiteral("100%"));
-            connect(zoomBox, &QComboBox::textActivated, this, [this](const QString &s) {
-                const double z = QString(s).remove('%').toDouble() / 100.0;
-                if (z > 0) { m_canvas->zoomToFit(Canvas::Fit::None); m_canvas->setZoom(z); }
+        });
+        gal->setObjectName("pictureStyles");
+        return gal;
+    };
+    parts.widgets[QStringLiteral("tableFormats")] = [this]() -> QWidget * {
+        auto *gal = new Gallery(QSize(48, 36), 5);
+        Editor *e = m_ed;
+        gal->setItemsProvider([e] {
+            QVector<GalleryItem> v;
+            QStringList names{"None"};
+            for (int i = 1; i <= 20; ++i) names << QStringLiteral("Table Style %1").arg(i);
+            names << "Basic 1" << "Basic 2" << "Basic 3" << "Checkbook Register" << "List 1" << "List 2" << "List 3" << "Numbers 1" << "Numbers 2";
+            for (const QString &n : names) {
+                v << GalleryItem{n, n, drawnIcon([e, n](QPainter *p, const QRectF &rc) {
+                    Document tmp;
+                    tmp.colors = e->doc()->colors;
+                    tmp.pages.clear();
+                    tmp.addPage();
+                    Editor ed2;
+                    Q_UNUSED(ed2);
+                    TableItem tb;
+                    tb.rows = 4; tb.cols = 3;
+                    tb.colW = {rc.width() / 3, rc.width() / 3, rc.width() / 3};
+                    tb.rowH = {rc.height() / 4, rc.height() / 4, rc.height() / 4, rc.height() / 4};
+                    tb.cells.resize(12);
+                    applyTableFormatCells(&tb, n, nullptr);
+                    for (int rr = 0; rr < 4; ++rr)
+                        for (int cc = 0; cc < 3; ++cc) {
+                            const QRectF cr = tb.cellRect(rr, cc).translated(rc.topLeft());
+                            const TableCell &cell = tb.cell(rr, cc);
+                            if (!cell.fill.isNone()) p->fillRect(cr, cell.fill.brush(cr, tmp.colors));
+                            QPen pen(QColor(0, 0, 0, 0));
+                            if (!cell.border.top.isNone()) { p->setPen(cell.border.top.pen(tmp.colors)); p->drawLine(cr.topLeft(), cr.topRight()); }
+                            if (!cell.border.bottom.isNone()) { p->setPen(cell.border.bottom.pen(tmp.colors)); p->drawLine(cr.bottomLeft(), cr.bottomRight()); }
+                            if (!cell.border.left.isNone()) { p->setPen(cell.border.left.pen(tmp.colors)); p->drawLine(cr.topLeft(), cr.bottomLeft()); }
+                            if (!cell.border.right.isNone()) { p->setPen(cell.border.right.pen(tmp.colors)); p->drawLine(cr.topRight(), cr.bottomRight()); }
+                        }
+                }), QString()};
+            }
+            return v;
+        });
+        connect(gal, &Gallery::activated, this, [this](const QString &n) {
+            TableItem *tb = selTableForUi(m_ed);
+            if (tb) m_ed->change(QStringLiteral("Table Format"), [&] { m_ed->applyTableFormat(tb, n); });
+        });
+        gal->setObjectName("tableFormats");
+        return gal;
+    };
+    parts.widgets[QStringLiteral("textArtStyles")] = [this]() -> QWidget * {
+        auto *gal = new Gallery(QSize(48, 30), 5);
+        Editor *e = m_ed;
+        gal->setItemsProvider([e] {
+            QVector<GalleryItem> v;
+            for (const auto &s : textArtStyles()) {
+                const QString sid = s.id;
+                v << GalleryItem{sid, s.name, drawnIcon([e, sid](QPainter *p, const QRectF &rc) {
+                    TextArtItem w;
+                    for (const auto &st : textArtStyles()) if (st.id == sid) applyTextArtStyle(w, st);
+                    w.text = QStringLiteral("Aa");
+                    w.rect = QRectF(QPointF(0, 0), rc.size() * 0.8);
+                    const QPainterPath path = textArtPath(w, w.rect.size()).translated(rc.topLeft() + QPointF(rc.width() * 0.1, rc.height() * 0.1));
+                    p->fillPath(path, w.fill.brush(path.boundingRect(), e->doc()->colors));
+                    if (!w.stroke.isNone()) p->strokePath(path, QPen(w.stroke.color.resolve(e->doc()->colors), 0.75));
+                }), QString()};
+            }
+            return v;
+        });
+        connect(gal, &Gallery::activated, this, [this](const QString &sid) {
+            m_ed->forEachSelected(QStringLiteral("Text Art Style"), [sid](Item *it) {
+                if (auto *w = dynamic_cast<TextArtItem *>(it))
+                    for (const auto &st : textArtStyles()) if (st.id == sid) { const QString text = w->text; applyTextArtStyle(*w, st); w->text = text; }
             });
-            connect(m_canvas, &Canvas::zoomChanged, zoomBox, [zoomBox](double z) { if (!zoomBox->hasFocus()) zoomBox->setCurrentText(QStringLiteral("%1%").arg(std::lround(z * 100))); });
-            g->addRow({new QLabel(QStringLiteral("Zoom")), zoomBox});
-            g->addRow({ribbonButton(act("zoom.100"), false, nullptr), ribbonButton(act("zoom.page"), false, nullptr)});
-            g->addRow({ribbonButton(act("zoom.width"), false, nullptr), ribbonButton(act("zoom.selection"), false, nullptr)});
+        });
+        gal->setObjectName("textartStyles");
+        return gal;
+    };
+    parts.widgets[QStringLiteral("textArtShapeButton")] = [this]() -> QWidget * {
+        auto *shape = new GalleryButton(icon("spline"), QStringLiteral("Change Shape"), QSize(56, 36), 6, false);
+        shape->setItemsProvider([this] {
+            QVector<GalleryItem> v;
+            Editor *e = m_ed;
+            for (const auto &tr : textArtTransforms()) {
+                const QString id = tr.id;
+                v << GalleryItem{id, tr.name, drawnIcon([e, id](QPainter *p, const QRectF &rc) {
+                    TextArtItem w;
+                    w.text = QStringLiteral("abcde");
+                    w.transform_ = id;
+                    w.rect = QRectF(QPointF(0, 0), rc.size() * 0.86);
+                    const QPainterPath path = textArtPath(w, w.rect.size()).translated(rc.topLeft() + QPointF(rc.width() * 0.07, rc.height() * 0.07));
+                    p->fillPath(path, uiText());
+                    Q_UNUSED(e);
+                }), QString()};
+            }
+            return v;
+        });
+        connect(shape, &GalleryButton::activated, this, [this](const QString &id) {
+            m_ed->forEachSelected(QStringLiteral("Text Art Shape"), [id](Item *it) { if (auto *w = dynamic_cast<TextArtItem *>(it)) w->transform_ = id; });
+        });
+        return shape;
+    };
+}
+
+// Menus the ribbon can't describe in data: ones that change each time they
+// open, or that hold more than commands.
+void MainWindow::ribbonMenuParts(RibbonParts &parts)
+{
+    parts.menus[QStringLiteral("businessInfoMenu")] = [this](QWidget *owner) {
+        auto *m = new QMenu(owner);
+        for (const QString &k : BusinessInfo::keys()) m->addAction(act("biz." + k));
+        m->addAction(act("biz.logo"));
+        m->addSeparator();
+        m->addAction(act("ins.bizInfo"));
+        return m;
+    };
+
+    // Symbol: the recently used symbols to click, then More Symbols.
+    parts.menus[QStringLiteral("symbolMenu")] = [this](QWidget *owner) {
+        auto *sm = new QMenu(owner);
+        connect(sm, &QMenu::aboutToShow, this, [this, sm] {
+            sm->clear();
+            const QStringList recents = recentSymbols();
+            if (!recents.isEmpty()) {
+                auto *panel = new QWidget(sm);
+                auto *gl = new QGridLayout(panel);
+                gl->setContentsMargins(6, 6, 6, 6);
+                gl->setSpacing(2);
+                for (int i = 0; i < recents.size() && i < 20; ++i) {
+                    const QString ch = recents[i].section(QLatin1Char('\t'), 0, 0), fam = recents[i].section(QLatin1Char('\t'), 1);
+                    auto *b = new QToolButton(panel);
+                    b->setText(ch);
+                    QFont f = b->font();
+                    if (!fam.isEmpty()) f.setFamily(fam);
+                    f.setPointSize(13);
+                    b->setFont(f);
+                    b->setFixedSize(30, 30);
+                    b->setAutoRaise(true);
+                    connect(b, &QToolButton::clicked, this, [this, sm, ch, fam] {
+                        sm->close();
+                        insertSymbol(this, m_ed, ch, fam);
+                    });
+                    gl->addWidget(b, i / 5, i % 5);
+                }
+                auto *wa = new QWidgetAction(sm);
+                wa->setDefaultWidget(panel);
+                sm->addAction(wa);
+                sm->addSeparator();
+            }
+            QAction *more = sm->addAction(icon("omega"), QStringLiteral("More Symbols…"));
+            connect(more, &QAction::triggered, this, [this] { symbolDialog(this, m_ed); });
+        });
+        return sm;
+    };
+
+    // Built each time it opens: the preset sizes, then the user's own
+    // (Custom), then creating and editing custom sizes and Page Setup.
+    parts.menus[QStringLiteral("pageSizeMenu")] = [this](QWidget *owner) {
+        auto *sizeMenu = new QMenu(owner);
+        connect(sizeMenu, &QMenu::aboutToShow, this, [this, sizeMenu] {
+            sizeMenu->clear();
+            auto applySize = [this](const QSizeF &s, const QString &name) {
+                m_ed->change(QStringLiteral("Page Size"), [&] {
+                    // Keep the current orientation.
+                    QSizeF ns = s;
+                    const QSizeF cur = m_ed->doc()->setup.size;
+                    if ((cur.width() > cur.height()) != (ns.width() > ns.height()) && ns.width() != ns.height()) ns = ns.transposed();
+                    m_ed->doc()->setup.size = ns;
+                    m_ed->doc()->setup.sheet = ns;
+                    m_ed->doc()->setup.sizeName = name;
+                });
+            };
+            QString group;
+            for (const auto &bs : blankSizes()) {
+                if (bs.group != group) { group = bs.group; sizeMenu->addSection(group); }
+                QAction *a = sizeMenu->addAction(QStringLiteral("%1 (%2 × %3)").arg(bs.name, Settings::get().format(bs.size.width()), Settings::get().format(bs.size.height())));
+                a->setCheckable(true);
+                a->setChecked(m_ed->doc()->setup.sizeName == bs.name);
+                const QSizeF s = bs.size;
+                const QString name = bs.name;
+                connect(a, &QAction::triggered, this, [applySize, s, name] { applySize(s, name); });
+            }
+            const auto custom = customPageSizes();
+            if (!custom.isEmpty()) {
+                sizeMenu->addSection(QStringLiteral("Custom"));
+                for (const auto &c : custom) {
+                    QAction *a = sizeMenu->addAction(QStringLiteral("%1 (%2 × %3)").arg(c.first, Settings::get().format(c.second.size.width()), Settings::get().format(c.second.size.height())));
+                    a->setCheckable(true);
+                    a->setChecked(m_ed->doc()->setup.sizeName == c.first);
+                    const PageSetup setup = c.second;
+                    const QString name = c.first;
+                    connect(a, &QAction::triggered, this, [this, setup, name] { applyPageSetup(m_ed, setup, name, QStringLiteral("Page Size")); });
+                }
+            }
+            sizeMenu->addSeparator();
+            sizeMenu->addAction(act("pd.newPageSize"));
+            if (!custom.isEmpty()) sizeMenu->addAction(act("pd.customSizes"));
+            sizeMenu->addAction(act("pd.pageSetup"));
+        });
+        return sizeMenu;
+    };
+
+    parts.menus[QStringLiteral("guidesMenu")] = [this](QWidget *owner) {
+        auto *gm = new QMenu(owner);
+        const QVector<QPair<QString, QPair<int, int>>> presets = {{"No Grid", {1, 1}}, {"2 Columns", {2, 1}}, {"3 Columns", {3, 1}}, {"4 Columns", {4, 1}},
+                                                                 {"2 × 2 Grid", {2, 2}}, {"3 × 3 Grid", {3, 3}}, {"4 × 4 Grid", {4, 4}}};
+        gm->addSection(QStringLiteral("Built-In Guides"));
+        for (const auto &pr : presets) {
+            QAction *a = gm->addAction(pr.first);
+            const int c = pr.second.first, rr = pr.second.second;
+            connect(a, &QAction::triggered, this, [this, c, rr] {
+                m_ed->change(QStringLiteral("Guides"), [&] {
+                    for (auto &m : m_ed->doc()->masters) { m->grid.cols = c; m->grid.rows = rr; }
+                });
+            });
         }
-        g = t->addGroup(QStringLiteral("Window"));
-        g->addLarge(act("win.new"));
-        g->addSmall(act("win.arrange"));
-        g->addSmall(act("win.cascade"));
-        auto *switchMenu = new QMenu(this);
+        gm->addSeparator();
+        gm->addAction(act("pd.guidesDialog"));
+        gm->addAction(act("pd.rulerGuides"));
+        gm->addAction(act("pd.addH"));
+        gm->addAction(act("pd.addV"));
+        gm->addAction(act("pd.clearGuides"));
+        return gm;
+    };
+
+    parts.menus[QStringLiteral("masterPagesMenu")] = [this](QWidget *owner) {
+        auto *mpMenu = new QMenu(owner);
+        connect(mpMenu, &QMenu::aboutToShow, this, [this, mpMenu] {
+            mpMenu->clear();
+            for (const auto &m : m_ed->doc()->masters) {
+                QAction *a = mpMenu->addAction(QStringLiteral("(%1) %2").arg(m->abbr, m->name));
+                a->setCheckable(true);
+                a->setChecked(m_ed->doc()->pages[m_ed->currentPage()]->masterId == m->id);
+                const QString id = m->id;
+                connect(a, &QAction::triggered, this, [this, id] { m_ed->applyMaster(m_ed->currentPage(), id); });
+            }
+            mpMenu->addAction(act("mp.none"));
+            mpMenu->addSeparator();
+            mpMenu->addAction(act("view.master"));
+        });
+        return mpMenu;
+    };
+
+    parts.menus[QStringLiteral("fontSchemesMenu")] = [this](QWidget *owner) {
+        auto *fm = new QMenu(owner);
+        for (const auto &fs : builtinFontSchemes()) {
+            QAction *a = fm->addAction(QStringLiteral("%1 — %2 / %3").arg(fs.name, fs.heading, fs.body));
+            const FontScheme scheme = fs;
+            connect(a, &QAction::triggered, this, [this, scheme] { m_ed->change(QStringLiteral("Font Scheme"), [&] { m_ed->doc()->fonts = scheme; }); });
+        }
+        fm->addSeparator();
+        fm->addAction(act("pd.newFontScheme"));
+        fm->addAction(act("pd.updateFonts"));
+        return fm;
+    };
+
+    parts.menus[QStringLiteral("mergeFieldMenu")] = [this](QWidget *owner) {
+        auto *fieldMenu = new QMenu(owner);
+        connect(fieldMenu, &QMenu::aboutToShow, this, [this, fieldMenu] {
+            fieldMenu->clear();
+            const QStringList fields = m_ed->doc()->merge.fields;
+            if (fields.isEmpty()) fieldMenu->addAction(QStringLiteral("(Select recipients first)"))->setEnabled(false);
+            for (const QString &f : fields) {
+                QAction *a = fieldMenu->addAction(f);
+                connect(a, &QAction::triggered, this, [this, f] {
+                    if (m_ed->isEditingText()) { m_ed->insertField("merge:" + f); return; }
+                    const QSizeF ps = m_ed->doc()->pageSize();
+                    auto tb = std::static_pointer_cast<TextItem>(m_ed->newTextBox(QRectF(ps.width() / 2 - 108, ps.height() / 2 - 14, 216, 28)));
+                    QTextCursor c(m_ed->doc()->storyDoc(tb->storyId));
+                    QTextCharFormat cf;
+                    cf.setProperty(tp::Field, "merge:" + f);
+                    c.insertText(QString(QChar::ObjectReplacementCharacter), cf);
+                    m_ed->addItem(tb);
+                });
+            }
+        });
+        return fieldMenu;
+    };
+
+    parts.menus[QStringLiteral("switchWindowsMenu")] = [this](QWidget *owner) {
+        auto *switchMenu = new QMenu(owner);
         connect(switchMenu, &QMenu::aboutToShow, this, [switchMenu] {
             switchMenu->clear();
             for (QWidget *w : QApplication::topLevelWidgets()) {
@@ -807,542 +894,8 @@ void MainWindow::buildRibbon()
                 connect(a, &QAction::triggered, mw, [mw] { mw->raise(); mw->activateWindow(); });
             }
         });
-        g->addSmall(menuAction(this, QStringLiteral("Switch Windows"), "app-window"), switchMenu);
-        g = t->addGroup(QStringLiteral("Tools"));
-        g->addLarge(act("view.measurement"));
-        t->finish();
-    }
-
-    // ================= Contextual: Master Page =================
-    {
-        const QColor c(0x7A, 0x5C, 0xA8);
-        RibbonTab *t = r->addTab(QStringLiteral("Master Page"), QStringLiteral("Master Page"), c);
-        RibbonGroup *g = t->addGroup(QStringLiteral("Master Page"));
-        g->addLarge(act("mp.add"));
-        g->addLarge(act("mp.dup"));
-        g->addLarge(act("mp.rename"));
-        g->addLarge(act("mp.delete"));
-        g = t->addGroup(QStringLiteral("Layout"));
-        g->addLarge(act("mp.twoPage"));
-        g->addLarge(menuAction(this, QStringLiteral("Apply To"), "copy-check"), menuOf(this, {act("mp.applyAll"), act("mp.applyCurrent")}));
-        g = t->addGroup(QStringLiteral("Header & Footer"));
-        g->addSmall(act("ins.header"));
-        g->addSmall(act("ins.footer"));
-        g->addSmall(act("ins.pageNumber"));
-        g = t->addGroup(QStringLiteral("Close"));
-        g->addLarge(act("mp.close"));
-        t->finish();
-    }
-
-    // ================= Contextual: Text Box =================
-    {
-        const QColor c(0x2C, 0x6E, 0x91);
-        RibbonTab *t = r->addTab(QStringLiteral("Text Box"), QStringLiteral("Text Box Tools"), c);
-        RibbonGroup *g = t->addGroup(QStringLiteral("Text"));
-        g->addLarge(act("tb.textFit"), menuOf(this, {act("fit.best"), act("fit.shrink"), act("fit.grow"), act("fit.none")}));
-        g->addLarge(act("tb.direction"));
-        g->addLarge(menuAction(this, QStringLiteral("Hyphenation"), "hyphenation"), menuOf(this, {act("rev.hyphenation")}));
-        g = t->addGroup(QStringLiteral("Alignment"));
-        g->addRow({iconOnly(act("valign.0")), iconOnly(act("para.left")), iconOnly(act("para.center")), iconOnly(act("para.right"))});
-        g->addRow({iconOnly(act("valign.1")), iconOnly(act("para.justify")), iconOnly(act("para.distribute"))});
-        g->addRow({iconOnly(act("valign.2"))});
-        g->addLarge(menuAction(this, QStringLiteral("Columns"), "columns-2"), menuOf(this, {act("cols.1"), act("cols.2"), act("cols.3"), act("cols.4"), nullptr, act("cols.more")}));
-        g->addLarge(menuAction(this, QStringLiteral("Margins"), "square-dashed"),
-                    menuOf(this, {act("tbmargin.None"), act("tbmargin.Narrow"), act("tbmargin.Moderate"), act("tbmargin.Wide"), nullptr, act("cols.more")}));
-        g = t->addGroup(QStringLiteral("Linking"));
-        g->addLarge(act("tb.link"));
-        g->addSmall(act("tb.break"));
-        g->addSmall(act("tb.prev"));
-        g->addSmall(act("tb.next"));
-        g = t->addGroup(QStringLiteral("Font"));
-        g->addRow(fontRow());
-        g->addRow({iconOnly(act("fmt.bold")), iconOnly(act("fmt.italic")), iconOnly(act("fmt.underline")), iconOnly(act("fmt.strike")), iconOnly(act("fmt.sub")),
-                   iconOnly(act("fmt.sup")), textColorBtn()});
-        g = t->addGroup(QStringLiteral("Effects"));
-        g->addSmall(act("tb.shadow"));
-        g->addSmall(act("tb.outline"));
-        g->addSmall(act("tb.emboss"));
-        g->addSmall(act("tb.engrave"));
-        {
-            auto *fill = new ColorButton("paint-bucket", QStringLiteral("Text Fill"), false, QString());
-            connect(fill, &ColorButton::colorPicked, this, [this](const ColorRef &c) { m_ed->setTextColor(c); });
-            auto *gradient = new QAction(icon("blend"), QStringLiteral("Gradient…"), this);
-            connect(gradient, &QAction::triggered, this, [this] { textGradientDialog(this, m_ed); });
-            fill->setExtraActions({gradient});
-            auto *outline = new ColorButton("pen-line", QStringLiteral("Text Outline"), true, QStringLiteral("No Outline"));
-            connect(outline, &ColorButton::colorPicked, this, [this](const ColorRef &c) {
-                if (c.isNone()) m_ed->clearCharProperty(tp::OutlineRef, QStringLiteral("Text Outline"));
-                else m_ed->setCharProperty(tp::OutlineRef, c.toString(), QStringLiteral("Text Outline"));
-            });
-            auto *glow = new ColorButton("sparkles", QStringLiteral("Text Glow"), true, QStringLiteral("No Glow"));
-            connect(glow, &ColorButton::colorPicked, this, [this](const ColorRef &c) {
-                if (c.isNone()) m_ed->clearCharProperty(tp::GlowRef, QStringLiteral("Text Glow"));
-                else m_ed->setCharProperty(tp::GlowRef, c.toString(), QStringLiteral("Text Glow"));
-            });
-            m_colorButtons << fill << outline << glow;
-            g->addRow({fill, outline, glow});
-        }
-        g = t->addGroup(QStringLiteral("Typography"));
-        QList<QAction *> dc;
-        for (int l : {0, 2, 3, 4, 5}) dc << act(QStringLiteral("dropcap.%1").arg(l));
-        dc << nullptr << act("dropcap.custom");
-        g->addLarge(menuAction(this, QStringLiteral("Drop Cap"), "a-large-small"), menuOf(this, dc));
-        QList<QAction *> ns;
-        for (int i = 0; i < 3; ++i) ns << act(QStringLiteral("numstyle.%1").arg(i));
-        ns << nullptr;
-        for (int i = 0; i < 3; ++i) ns << act(QStringLiteral("numspacing.%1").arg(i));
-        g->addSmall(menuAction(this, QStringLiteral("Number Style"), "hash"), menuOf(this, ns));
-        g->addSmall(menuAction(this, QStringLiteral("Ligatures"), "link"), menuOf(this, {act("lig.0"), act("lig.1"), act("lig.2")}));
-        QList<QAction *> sets;
-        for (int i = 0; i <= 20; ++i) sets << act(QStringLiteral("ss.%1").arg(i));
-        g->addSmall(menuAction(this, QStringLiteral("Stylistic Sets"), "spline"), menuOf(this, sets));
-        g->addSmall(act("tb.swash"));
-        g->addSmall(act("tb.alternates"));
-        g->addSmall(act("tb.trueSmallCaps"));
-        arrangeGroup(t);
-        sizeGroup(t);
-        t->finish();
-    }
-
-    // ================= Contextual: Shape Format =================
-    {
-        const QColor c(0xB5, 0x6A, 0x1E);
-        RibbonTab *t = r->addTab(QStringLiteral("Shape Format"), QStringLiteral("Drawing Tools"), c);
-        RibbonGroup *g = t->addGroup(QStringLiteral("Insert Shapes"));
-        g->addWidget(shapesButton(true));
-        {
-            auto *change = new GalleryButton(icon("shapes"), QStringLiteral("Change Shape"), QSize(24, 24), 12, false);
-            change->setItemsProvider([] {
-                QVector<GalleryItem> v;
-                for (const auto &s : shapeLibrary()) v << GalleryItem{s.id, s.name, shapeIcon(s.id), s.category};
-                return v;
-            });
-            connect(change, &GalleryButton::activated, this, [this](const QString &id) {
-                m_ed->forEachSelected(QStringLiteral("Change Shape"), [id](Item *it) {
-                    if (auto *s = dynamic_cast<ShapeItem *>(it)) { s->shape = id; s->adj.clear(); s->customPath = QPainterPath(); }
-                    if (auto *p = dynamic_cast<PictureItem *>(it)) p->maskShape = id;
-                });
-            });
-            g->addRow({change});
-        }
-        g->addSmall(act("shape.editPoints"));
-        g->addSmall(act("ins.textbox"));
-        g = t->addGroup(QStringLiteral("Shape Styles"));
-        {
-            auto *gal = new Gallery(QSize(40, 28), 6);
-            Editor *e = m_ed;
-            gal->setItemsProvider([e] {
-                QVector<GalleryItem> v;
-                for (int row = 0; row < 6; ++row)
-                    for (int slot = 0; slot < 6; ++slot) {
-                        const QString id = QStringLiteral("%1.%2").arg(row).arg(slot);
-                        v << GalleryItem{id, QStringLiteral("%1 style %2").arg(slotName(slot)).arg(row + 1), drawnIcon([e, row, slot](QPainter *p, const QRectF &rc) {
-                            Fill f; Stroke s; Effects fx;
-                            shapeStylePreset(row, slot, &f, &s, &fx);
-                            const QRectF b = rc.adjusted(4, 4, -4, -4);
-                            QPainterPath path;
-                            path.addRoundedRect(b, 3, 3);
-                            p->fillPath(path, f.brush(b, e->doc()->colors));
-                            if (!s.isNone()) p->strokePath(path, s.pen(e->doc()->colors));
-                        }), QString()};
-                    }
-                return v;
-            });
-            connect(gal, &Gallery::activated, this, [this](const QString &id) {
-                const int row = id.section('.', 0, 0).toInt(), slot = id.section('.', 1).toInt();
-                m_ed->forEachSelected(QStringLiteral("Shape Style"), [row, slot](Item *it) { shapeStylePreset(row, slot, &it->fill, &it->stroke, &it->fx); });
-            });
-            g->addWidget(gal);
-            gal->setObjectName("shapeStyles");
-        }
-        g->addRow({fillBtn()});
-        {
-            auto *lb = lineBtn();
-            QMenu *lm = new QMenu(lb);
-            lm->addSection(QStringLiteral("Weight"));
-            lm->addActions(weights);
-            lm->addSection(QStringLiteral("Dashes"));
-            lm->addActions(dashes);
-            lm->addSection(QStringLiteral("Arrows"));
-            lm->addActions(arrows);
-            auto *more = new QToolButton();
-            more->setIcon(icon("chevron-down"));
-            more->setAutoRaise(true);
-            more->setPopupMode(QToolButton::InstantPopup);
-            more->setMenu(lm);
-            more->setToolTip(QStringLiteral("Weight, dashes and arrows"));
-            g->addRow({lb, more});
-        }
-        {
-            auto *fx = new QMenu(this);
-            QMenu *sh = fx->addMenu(icon("square"), QStringLiteral("Shadow"));
-            for (int k = 0; k < 5; ++k) sh->addAction(act(QStringLiteral("shadow.%1").arg(k)));
-            sh->addSeparator();
-            sh->addAction(act("shadow.options"));
-            QMenu *rf = fx->addMenu(QStringLiteral("Reflection"));
-            for (int k = 0; k < 4; ++k) rf->addAction(act(QStringLiteral("refl.%1").arg(k)));
-            QMenu *gl = fx->addMenu(QStringLiteral("Glow"));
-            for (int k : {0, 5, 8, 11, 18}) gl->addAction(act(QStringLiteral("glow.%1").arg(k)));
-            QMenu *se = fx->addMenu(QStringLiteral("Soft Edges"));
-            for (int k : {0, 2, 5, 10, 25}) se->addAction(act(QStringLiteral("soft.%1").arg(k)));
-            QMenu *bv = fx->addMenu(QStringLiteral("Bevel"));
-            for (int k = 0; k < 7; ++k) bv->addAction(act(QStringLiteral("bevel.%1").arg(k)));
-            QMenu *r3 = fx->addMenu(QStringLiteral("3-D Rotation"));
-            for (const char *n : {"No Rotation", "Perspective Left", "Perspective Right", "Perspective Above", "Perspective Below", "Off Axis"})
-                r3->addAction(act(QStringLiteral("rot3d.%1").arg(QString::fromLatin1(n))));
-            g->addSmall(menuAction(this, QStringLiteral("Shape Effects"), "sparkles"), fx);
-        }
-        g->setLauncher([this] { formatObjectDialog(this, m_ed, 0); }, QStringLiteral("Format Shape"));
-        g = t->addGroup(QStringLiteral("Lines"));
-        g->addSmall(act("line.draw"));
-        g->addSmall(act("line.arrow"));
-        g->addSmall(act("line.double"));
-        arrangeGroup(t);
-        sizeGroup(t);
-        t->finish();
-    }
-
-    // ================= Contextual: Picture Format =================
-    {
-        const QColor c(0x2F, 0x7D, 0x4F);
-        RibbonTab *t = r->addTab(QStringLiteral("Picture Format"), QStringLiteral("Picture Tools"), c);
-        RibbonGroup *g = t->addGroup(QStringLiteral("Insert"));
-        g->addLarge(act("pic.change"), menuOf(this, {act("pic.change"), act("pic.remove")}), true);
-        g->addLarge(act("pic.swap"));
-        g->addLarge(act("pic.arrangeThumbs"));
-        g = t->addGroup(QStringLiteral("Adjust"));
-        QMenu *corr = new QMenu(this);
-        corr->addSection(QStringLiteral("Brightness / Contrast"));
-        for (int b : {-40, -20, 0, 20, 40}) {
-            QMenu *sub = corr->addMenu(QStringLiteral("Brightness %1%").arg(b > 0 ? "+" + QString::number(b) : QString::number(b)));
-            for (int cc : {-40, -20, 0, 20, 40}) sub->addAction(act(QStringLiteral("corr.%1.%2").arg(b).arg(cc)));
-        }
-        corr->addSeparator();
-        corr->addAction(act("obj.format"));
-        g->addLarge(menuAction(this, QStringLiteral("Corrections"), "sun-medium"), corr);
-        QList<QAction *> rec;
-        for (int k = 0; k < 5; ++k) rec << act(QStringLiteral("recolor.%1").arg(k));
-        rec << nullptr;
-        for (int s = 1; s <= 5; ++s) rec << act(QStringLiteral("recolor.slot%1").arg(s));
-        rec << nullptr << act("pic.transparent");
-        g->addLarge(menuAction(this, QStringLiteral("Recolor"), "palette"), menuOf(this, rec));
-        g->addSmall(act("pic.compress"));
-        g->addSmall(act("pic.reset"));
-        g->addSmall(act("pic.toShapes"));
-        g->addSmall(act("obj.transparency"));
-        g = t->addGroup(QStringLiteral("Picture Styles"));
-        {
-            auto *gal = new Gallery(QSize(40, 40), 5);
-            Editor *e = m_ed;
-            gal->setItemsProvider([e] {
-                QVector<GalleryItem> v;
-                for (int k = 0; k < 20; ++k) {
-                    v << GalleryItem{QString::number(k), QStringLiteral("Picture Style %1").arg(k + 1), drawnIcon([e, k](QPainter *p, const QRectF &rc) {
-                        PictureItem pic;
-                        pictureStylePreset(k, &pic);
-                        const QRectF b = rc.adjusted(5, 5, -5, -5);
-                        const QPainterPath path = shapePath(pic.maskShape, b.size()).translated(b.topLeft());
-                        QLinearGradient lg(b.topLeft(), b.bottomRight());
-                        lg.setColorAt(0, QColor(120, 170, 220));
-                        lg.setColorAt(1, QColor(60, 120, 80));
-                        if (pic.fx.shadow.on) p->fillPath(path.translated(2, 2), QColor(0, 0, 0, 70));
-                        p->fillPath(path, lg);
-                        if (!pic.stroke.isNone()) {
-                            QPen pen = pic.stroke.pen(e->doc()->colors);
-                            pen.setWidthF(std::clamp(pic.stroke.width / 2, 0.75, 4.0));
-                            p->strokePath(path, pen);
-                        }
-                    }), QString()};
-                }
-                return v;
-            });
-            connect(gal, &Gallery::activated, this, [this](const QString &id) {
-                m_ed->forEachSelected(QStringLiteral("Picture Style"), [id](Item *it) {
-                    if (auto *p = dynamic_cast<PictureItem *>(it)) pictureStylePreset(id.toInt(), p);
-                });
-            });
-            gal->setObjectName("pictureStyles");
-            g->addWidget(gal);
-        }
-        {
-            auto *border = new ColorButton("square", QStringLiteral("Picture Border"), true, QStringLiteral("No Outline"));
-            connect(border, &ColorButton::colorPicked, this, [this](const ColorRef &c) {
-                m_ed->forEachSelected(QStringLiteral("Picture Border"), [c](Item *it) { if (it->stroke.width <= 0) it->stroke.width = 1; it->stroke.color = c; });
-            });
-            m_colorButtons << border;
-            QMenu *bm = new QMenu(border);
-            bm->addActions(weights);
-            bm->addSeparator();
-            bm->addActions(dashes);
-            auto *more = new QToolButton();
-            more->setIcon(icon("chevron-down"));
-            more->setAutoRaise(true);
-            more->setPopupMode(QToolButton::InstantPopup);
-            more->setMenu(bm);
-            g->addRow({border, more});
-        }
-        {
-            auto *fx = new QMenu(this);
-            QMenu *sh = fx->addMenu(QStringLiteral("Shadow"));
-            for (int k = 0; k < 5; ++k) sh->addAction(act(QStringLiteral("shadow.%1").arg(k)));
-            QMenu *rf = fx->addMenu(QStringLiteral("Reflection"));
-            for (int k = 0; k < 4; ++k) rf->addAction(act(QStringLiteral("refl.%1").arg(k)));
-            QMenu *gl = fx->addMenu(QStringLiteral("Glow"));
-            for (int k : {0, 5, 8, 11, 18}) gl->addAction(act(QStringLiteral("glow.%1").arg(k)));
-            QMenu *se = fx->addMenu(QStringLiteral("Soft Edges"));
-            for (int k : {0, 2, 5, 10, 25}) se->addAction(act(QStringLiteral("soft.%1").arg(k)));
-            QMenu *bv = fx->addMenu(QStringLiteral("Bevel"));
-            for (int k = 0; k < 7; ++k) bv->addAction(act(QStringLiteral("bevel.%1").arg(k)));
-            QMenu *r3 = fx->addMenu(QStringLiteral("3-D Rotation"));
-            for (const char *n : {"No Rotation", "Perspective Left", "Perspective Right", "Perspective Above", "Perspective Below", "Off Axis"})
-                r3->addAction(act(QStringLiteral("rot3d.%1").arg(QString::fromLatin1(n))));
-            g->addSmall(menuAction(this, QStringLiteral("Picture Effects"), "sparkles"), fx);
-        }
-        g->addSmall(act("pic.caption"));
-        {
-            auto *ps = new GalleryButton(icon("shapes"), QStringLiteral("Picture Shape"), QSize(24, 24), 12, false);
-            ps->setItemsProvider([] {
-                QVector<GalleryItem> v;
-                for (const auto &s : shapeLibrary()) if (!s.open) v << GalleryItem{s.id, s.name, shapeIcon(s.id), s.category};
-                return v;
-            });
-            connect(ps, &GalleryButton::activated, this, [this](const QString &id) {
-                m_ed->forEachSelected(QStringLiteral("Picture Shape"), [id](Item *it) { if (auto *p = dynamic_cast<PictureItem *>(it)) p->maskShape = id; });
-            });
-            g->addRow({ps});
-        }
-        arrangeGroup(t);
-        g = t->addGroup(QStringLiteral("Crop"));
-        g->addLarge(act("pic.crop"));
-        g->addSmall(act("pic.fit"));
-        g->addSmall(act("pic.fill"));
-        {
-            // Crop to Shape: trim the picture to any closed shape (the same
-            // setting as Picture Shape).
-            auto *cs = new GalleryButton(icon("crop"), QStringLiteral("Crop to Shape"), QSize(24, 24), 12, false);
-            cs->setItemsProvider([] {
-                QVector<GalleryItem> v;
-                for (const auto &s : shapeLibrary()) if (!s.open) v << GalleryItem{s.id, s.name, shapeIcon(s.id), s.category};
-                return v;
-            });
-            connect(cs, &GalleryButton::activated, this, [this](const QString &id) {
-                m_ed->forEachSelected(QStringLiteral("Crop to Shape"), [id](Item *it) { if (auto *p = dynamic_cast<PictureItem *>(it)) p->maskShape = id; });
-            });
-            g->addRow({cs});
-        }
-        g->addSmall(act("pic.clearCrop"));
-        sizeGroup(t);
-        t->finish();
-    }
-
-    // ================= Contextual: Table Design / Layout =================
-    {
-        const QColor c(0x8E, 0x2A, 0x5E);
-        RibbonTab *t = r->addTab(QStringLiteral("Table Design"), QStringLiteral("Table Tools"), c);
-        RibbonGroup *g = t->addGroup(QStringLiteral("Table Formats"));
-        {
-            auto *gal = new Gallery(QSize(48, 36), 5);
-            Editor *e = m_ed;
-            gal->setItemsProvider([e] {
-                QVector<GalleryItem> v;
-                QStringList names{"None"};
-                for (int i = 1; i <= 20; ++i) names << QStringLiteral("Table Style %1").arg(i);
-                names << "Basic 1" << "Basic 2" << "Basic 3" << "Checkbook Register" << "List 1" << "List 2" << "List 3" << "Numbers 1" << "Numbers 2";
-                for (const QString &n : names) {
-                    v << GalleryItem{n, n, drawnIcon([e, n](QPainter *p, const QRectF &rc) {
-                        Document tmp;
-                        tmp.colors = e->doc()->colors;
-                        tmp.pages.clear();
-                        tmp.addPage();
-                        Editor ed2;
-                        Q_UNUSED(ed2);
-                        TableItem tb;
-                        tb.rows = 4; tb.cols = 3;
-                        tb.colW = {rc.width() / 3, rc.width() / 3, rc.width() / 3};
-                        tb.rowH = {rc.height() / 4, rc.height() / 4, rc.height() / 4, rc.height() / 4};
-                        tb.cells.resize(12);
-                        applyTableFormatCells(&tb, n, nullptr);
-                        for (int rr = 0; rr < 4; ++rr)
-                            for (int cc = 0; cc < 3; ++cc) {
-                                const QRectF cr = tb.cellRect(rr, cc).translated(rc.topLeft());
-                                const TableCell &cell = tb.cell(rr, cc);
-                                if (!cell.fill.isNone()) p->fillRect(cr, cell.fill.brush(cr, tmp.colors));
-                                QPen pen(QColor(0, 0, 0, 0));
-                                if (!cell.border.top.isNone()) { p->setPen(cell.border.top.pen(tmp.colors)); p->drawLine(cr.topLeft(), cr.topRight()); }
-                                if (!cell.border.bottom.isNone()) { p->setPen(cell.border.bottom.pen(tmp.colors)); p->drawLine(cr.bottomLeft(), cr.bottomRight()); }
-                                if (!cell.border.left.isNone()) { p->setPen(cell.border.left.pen(tmp.colors)); p->drawLine(cr.topLeft(), cr.bottomLeft()); }
-                                if (!cell.border.right.isNone()) { p->setPen(cell.border.right.pen(tmp.colors)); p->drawLine(cr.topRight(), cr.bottomRight()); }
-                            }
-                    }), QString()};
-                }
-                return v;
-            });
-            connect(gal, &Gallery::activated, this, [this](const QString &n) {
-                TableItem *tb = selTableForUi(m_ed);
-                if (tb) m_ed->change(QStringLiteral("Table Format"), [&] { m_ed->applyTableFormat(tb, n); });
-            });
-            gal->setObjectName("tableFormats");
-            g->addWidget(gal);
-        }
-        g = t->addGroup(QStringLiteral("Fill"));
-        {
-            auto *fill = new ColorButton("paint-bucket", QStringLiteral("Cell Fill"), true, QStringLiteral("No Fill"));
-            connect(fill, &ColorButton::colorPicked, this, [this](const ColorRef &c) {
-                TableItem *tb = selTableForUi(m_ed);
-                if (!tb) return;
-                const bool inCell = m_ed->isEditingText();
-                const auto tt = m_ed->textTarget();
-                m_ed->change(QStringLiteral("Fill"), [&] {
-                    for (int rr = 0; rr < tb->rows; ++rr)
-                        for (int cc = 0; cc < tb->cols; ++cc)
-                            if (!inCell || (rr == tt.row && cc == tt.col)) tb->cell(rr, cc).fill = c.isNone() ? Fill() : Fill::solid(c);
-                });
-            });
-            m_colorButtons << fill;
-            g->addRow({fill});
-        }
-        g = t->addGroup(QStringLiteral("Borders"));
-        {
-            auto *bc = new ColorButton("pen-line", QStringLiteral("Line Color"), false, QString());
-            connect(bc, &ColorButton::colorPicked, this, [](const ColorRef &c) { g_borderStroke.color = c; });
-            m_colorButtons << bc;
-            auto *weightMenu = new QMenu(this);
-            for (double w : {0.25, 0.5, 0.75, 1.0, 1.5, 2.25, 3.0, 4.5}) {
-                QAction *a = weightMenu->addAction(QStringLiteral("%1 pt").arg(w));
-                connect(a, &QAction::triggered, this, [w] { g_borderStroke.width = w; });
-            }
-            auto *wb = new QToolButton();
-            wb->setText(QStringLiteral("Line Weight"));
-            wb->setIcon(icon("minus"));
-            wb->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-            wb->setPopupMode(QToolButton::InstantPopup);
-            wb->setMenu(weightMenu);
-            wb->setAutoRaise(true);
-            g->addRow({bc});
-            g->addRow({wb});
-            QList<QAction *> borders;
-            for (const char *id : {"border.all", "border.outside", "border.inside", "border.none", "border.top", "border.bottom", "border.left", "border.right"}) borders << act(id);
-            g->addLarge(menuAction(this, QStringLiteral("Borders"), "border-all"), menuOf(this, borders));
-        }
-        g = t->addGroup(QStringLiteral("Alignment"));
-        g->addLarge(menuAction(this, QStringLiteral("Diagonals"), "slash"), menuOf(this, {act("tbl.diagDown"), act("tbl.diagUp"), act("tbl.diagNone")}));
-        t->finish();
-
-        RibbonTab *l = r->addTab(QStringLiteral("Table Layout"), QStringLiteral("Table Tools"), c);
-        g = l->addGroup(QStringLiteral("Table"));
-        g->addLarge(menuAction(this, QStringLiteral("Select"), "mouse-pointer-2"), menuOf(this, {act("tbl.selectCell"), act("tbl.selectTable")}));
-        g->addLarge(act("view.gridlines"));
-        g = l->addGroup(QStringLiteral("Rows & Columns"));
-        g->addLarge(menuAction(this, QStringLiteral("Delete"), "trash-2"), menuOf(this, {act("tbl.delRow"), act("tbl.delCol"), act("tbl.delTable")}));
-        g->addLarge(act("tbl.insAbove"));
-        g->addLarge(act("tbl.insBelow"));
-        g->addLarge(act("tbl.insLeft"));
-        g->addLarge(act("tbl.insRight"));
-        g = l->addGroup(QStringLiteral("Merge"));
-        g->addLarge(act("tbl.merge"));
-        g->addLarge(act("tbl.split"));
-        g = l->addGroup(QStringLiteral("Alignment"));
-        g->addRow({iconOnly(act("valign.0")), iconOnly(act("para.left")), iconOnly(act("para.center")), iconOnly(act("para.right"))});
-        g->addRow({iconOnly(act("valign.1")), iconOnly(act("para.justify"))});
-        g->addRow({iconOnly(act("valign.2"))});
-        g->addLarge(menuAction(this, QStringLiteral("Cell Margins"), "square-dashed"), menuOf(this, {act("tbmargin.None"), act("tbmargin.Narrow"), act("tbmargin.Moderate"), act("tbmargin.Wide")}));
-        g = l->addGroup(QStringLiteral("Size"));
-        g->addSmall(act("tbl.grow"));
-        g->addSmall(act("tbl.distributeRows"));
-        g->addSmall(act("tbl.distributeCols"));
-        arrangeGroup(l);
-        l->finish();
-    }
-
-    // ================= Contextual: TextArt Format =================
-    {
-        const QColor c(0x1D, 0x6F, 0x9E);
-        RibbonTab *t = r->addTab(QStringLiteral("Text Art Format"), QStringLiteral("Text Art Tools"), c);
-        RibbonGroup *g = t->addGroup(QStringLiteral("Text Art Text"));
-        g->addLarge(act("wa.edit"));
-        g->addSmall(menuAction(this, QStringLiteral("Spacing"), "move-horizontal"), menuOf(this, {act("waspace.vt"), act("waspace.t"), act("waspace.n"), act("waspace.l"), act("waspace.vl")}));
-        g->addSmall(act("wa.even"));
-        g->addSmall(act("wa.vertical"));
-        QList<QAction *> al;
-        for (int i = 0; i < 6; ++i) al << act(QStringLiteral("waalign.%1").arg(i));
-        g->addSmall(menuAction(this, QStringLiteral("Align Text"), "align-center"), menuOf(this, al));
-        g = t->addGroup(QStringLiteral("Text Art Styles"));
-        {
-            auto *gal = new Gallery(QSize(48, 30), 5);
-            Editor *e = m_ed;
-            gal->setItemsProvider([e] {
-                QVector<GalleryItem> v;
-                for (const auto &s : textArtStyles()) {
-                    const QString sid = s.id;
-                    v << GalleryItem{sid, s.name, drawnIcon([e, sid](QPainter *p, const QRectF &rc) {
-                        TextArtItem w;
-                        for (const auto &st : textArtStyles()) if (st.id == sid) applyTextArtStyle(w, st);
-                        w.text = QStringLiteral("Aa");
-                        w.rect = QRectF(QPointF(0, 0), rc.size() * 0.8);
-                        const QPainterPath path = textArtPath(w, w.rect.size()).translated(rc.topLeft() + QPointF(rc.width() * 0.1, rc.height() * 0.1));
-                        p->fillPath(path, w.fill.brush(path.boundingRect(), e->doc()->colors));
-                        if (!w.stroke.isNone()) p->strokePath(path, QPen(w.stroke.color.resolve(e->doc()->colors), 0.75));
-                    }), QString()};
-                }
-                return v;
-            });
-            connect(gal, &Gallery::activated, this, [this](const QString &sid) {
-                m_ed->forEachSelected(QStringLiteral("Text Art Style"), [sid](Item *it) {
-                    if (auto *w = dynamic_cast<TextArtItem *>(it))
-                        for (const auto &st : textArtStyles()) if (st.id == sid) { const QString text = w->text; applyTextArtStyle(*w, st); w->text = text; }
-                });
-            });
-            gal->setObjectName("textartStyles");
-            g->addWidget(gal);
-        }
-        g->addRow({fillBtn()});
-        g->addRow({lineBtn()});
-        {
-            auto *shape = new GalleryButton(icon("spline"), QStringLiteral("Change Shape"), QSize(56, 36), 6, false);
-            shape->setItemsProvider([this] {
-                QVector<GalleryItem> v;
-                Editor *e = m_ed;
-                for (const auto &tr : textArtTransforms()) {
-                    const QString id = tr.id;
-                    v << GalleryItem{id, tr.name, drawnIcon([e, id](QPainter *p, const QRectF &rc) {
-                        TextArtItem w;
-                        w.text = QStringLiteral("abcde");
-                        w.transform_ = id;
-                        w.rect = QRectF(QPointF(0, 0), rc.size() * 0.86);
-                        const QPainterPath path = textArtPath(w, w.rect.size()).translated(rc.topLeft() + QPointF(rc.width() * 0.07, rc.height() * 0.07));
-                        p->fillPath(path, uiText());
-                        Q_UNUSED(e);
-                    }), QString()};
-                }
-                return v;
-            });
-            connect(shape, &GalleryButton::activated, this, [this](const QString &id) {
-                m_ed->forEachSelected(QStringLiteral("Text Art Shape"), [id](Item *it) { if (auto *w = dynamic_cast<TextArtItem *>(it)) w->transform_ = id; });
-            });
-            g->addRow({shape});
-        }
-        g = t->addGroup(QStringLiteral("Effects"));
-        {
-            auto *sh = new QMenu(this);
-            for (int k = 0; k < 5; ++k) sh->addAction(act(QStringLiteral("shadow.%1").arg(k)));
-            sh->addSeparator();
-            sh->addAction(act("shadow.options"));
-            g->addLarge(menuAction(this, QStringLiteral("Shadow Effects"), "copy"), sh);
-            auto *r3 = new QMenu(this);
-            for (const char *n : {"No Rotation", "Perspective Left", "Perspective Right", "Perspective Above", "Perspective Below", "Off Axis"})
-                r3->addAction(act(QStringLiteral("rot3d.%1").arg(QString::fromLatin1(n))));
-            r3->addSeparator();
-            for (int k = 0; k < 7; ++k) r3->addAction(act(QStringLiteral("bevel.%1").arg(k)));
-            g->addLarge(menuAction(this, QStringLiteral("3-D Effects"), "box"), r3);
-        }
-        arrangeGroup(t);
-        sizeGroup(t);
-        t->finish();
-    }
-
-    r->showTab(r->tab(QStringLiteral("Home")));
-    connect(r, &Ribbon::tabChanged, this, [this] { refreshUi(); });
-    Q_UNUSED(ed);
+        return switchMenu;
+    };
 }
 
 void MainWindow::buildStatusBar()

@@ -33,12 +33,15 @@
 #include <QPrinter>
 #include "app/icons.h"
 #include <QTabBar>
+#include <QMenu>
+#include <QTranslator>
 #include <QTabWidget>
 #include "app/dialogs.h"
 #include "app/editor.h"
 #include "app/mainwindow.h"
 #include "app/recovery.h"
 #include "app/ribbon.h"
+#include "app/ribbonbuilder.h"
 #include "app/telemetry.h"
 #include "app/updater.h"
 #include "app/toc.h"
@@ -1286,22 +1289,229 @@ private Q_SLOTS:
         QVERIFY2(extraStrike > 100, qPrintable(QString::number(extraStrike)));   // a line through them
     }
 
-    // The ribbon as built, one control per line (JP_RIBBON_DUMP=file writes
-    // it, to compare a rebuilt ribbon with the one before).
+    // The ribbon as built, one control per line. JP_RIBBON_DUMP=file writes
+    // it, to compare a rebuilt ribbon with the one before; with
+    // JP_RIBBON_DUMP_KEYTIPS=file it carries the KeyTips as well.
     void ribbonDescription()
     {
         jp::MainWindow w;
         auto *r = w.findChild<jp::Ribbon *>();
         QVERIFY(r);
+        // ribbon.json is built into the program; every command, widget and menu it names must exist.
+        QVERIFY2(w.ribbonError().isEmpty(), qPrintable(w.ribbonError()));
         const QString d = r->describe();
+        QVERIFY2(!d.contains(QStringLiteral("(none)")), "a ribbon button has no command");
         for (const char *tab : {"Home", "Insert", "Page Design", "Mailings", "Review", "View", "Text Box", "Table Layout"})
             QVERIFY2(d.contains(QStringLiteral("\ntab %1").arg(QLatin1String(tab))), tab);
         QVERIFY(d.contains(QStringLiteral("QToolButton edit.paste")));
+        // Commands that only open a menu carry ids like every other command.
+        QVERIFY(d.contains(QStringLiteral("QToolButton ribbon.changeCase")));
+        // The only buttons without a command are the Table button, Line Weight and the bare drop-down arrows.
+        for (const QString &line : d.split(QLatin1Char('\n')))
+            if (line.trimmed().startsWith(QStringLiteral("QToolButton \"")))
+                QVERIFY2(line.contains(QStringLiteral("\"Table\"")) || line.contains(QStringLiteral("\"Line Weight\"")) || line.contains(QStringLiteral("QToolButton \"\"")), qPrintable(line));
+        const QString withKeytips = r->describe(true);
+        QVERIFY(withKeytips.contains(QStringLiteral("tab Home keytip=H")));
+        QVERIFY(withKeytips.contains(QStringLiteral("QToolButton edit.paste style=under icon=30 popup=split")));
+        QVERIFY(withKeytips.contains(QStringLiteral(" keytip=V\n")));
         if (const QByteArray out = qgetenv("JP_RIBBON_DUMP"); !out.isEmpty()) {
             QFile f(QString::fromLocal8Bit(out));
             QVERIFY(f.open(QIODevice::WriteOnly));
             f.write(d.toUtf8());
         }
+        if (const QByteArray out = qgetenv("JP_RIBBON_DUMP_KEYTIPS"); !out.isEmpty()) {
+            QFile f(QString::fromLocal8Bit(out));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(withKeytips.toUtf8());
+        }
+    }
+
+    // Every KeyTip on the ribbon is one or two of A-Z and 0-9; the keys that
+    // can be typed first (File, Quick Access, the tabs) are unique, and in each
+    // tab no KeyTip is another's beginning, so typing one never leaves doubt.
+    void ribbonKeytips()
+    {
+        jp::MainWindow w;
+        auto *r = w.findChild<jp::Ribbon *>();
+        QVERIFY(r);
+        QVERIFY2(w.ribbonError().isEmpty(), qPrintable(w.ribbonError()));
+        static const QRegularExpression valid(QStringLiteral("^[A-Z0-9]{1,2}$"));
+        auto check = [&](const QStringList &keys, const QString &where) {
+            for (int i = 0; i < keys.size(); ++i) {
+                QVERIFY2(valid.match(keys[i]).hasMatch(), qPrintable(QStringLiteral("%1: \"%2\" isn't a KeyTip").arg(where, keys[i])));
+                for (int j = 0; j < keys.size(); ++j)
+                    if (i != j) QVERIFY2(!keys[j].startsWith(keys[i]), qPrintable(QStringLiteral("%1: %2 and %3 can't both be KeyTips").arg(where, keys[i], keys[j])));
+            }
+        };
+
+        QStringList top{r->fileKeytip()};
+        QCOMPARE(r->fileKeytip(), QStringLiteral("F"));
+        for (const QToolButton *b : r->quickAccessButtons()) top << jp::keytip(b);
+        QCOMPARE(top.mid(1), (QStringList{"1", "2", "3", "4"}));
+        // The tabs always there have one letter; the contextual ones are J and another.
+        const QStringList contextual{"Master Page", "Text Box", "Shape Format", "Picture Format", "Table Design", "Table Layout", "Text Art Format"};
+        for (int i = 0; i < r->tabCount(); ++i) {
+            top << r->tabKeytip(i);
+            if (contextual.contains(r->tabName(i))) QVERIFY2(r->tabKeytip(i).size() == 2 && r->tabKeytip(i)[0] == QLatin1Char('J'), qPrintable(r->tabName(i)));
+            else QVERIFY2(r->tabKeytip(i).size() == 1, qPrintable(r->tabName(i)));
+        }
+        check(top, QStringLiteral("File, Quick Access and tabs"));
+        QCOMPARE(r->tabCount(), 6 + contextual.size());
+        QCOMPARE(r->tabKeytip(0), QStringLiteral("H"));
+        QCOMPARE(r->tabKeytip(1), QStringLiteral("N"));
+
+        int controls = 0;
+        for (int i = 0; i < r->tabCount(); ++i) {
+            QStringList keys;
+            const QString where = r->tabName(i);
+            const QString need = QStringLiteral("%1: %2 has no KeyTip");
+            for (jp::RibbonGroup *g : r->tabAt(i)->groups()) {
+                QVERIFY2(!jp::keytip(g).isEmpty(), qPrintable(need.arg(where, g->title())));
+                QVERIFY2(jp::keytip(g).startsWith(QLatin1Char('Z')), qPrintable(where + ": a collapsed group's KeyTip is Z and a letter"));
+                keys << jp::keytip(g);
+                if (g->launcher()) {
+                    QVERIFY2(!jp::keytip(g->launcher()).isEmpty(), qPrintable(need.arg(where, g->title() + " launcher")));
+                    keys << jp::keytip(g->launcher());
+                }
+                for (QWidget *c : g->controls()) {
+                    if (qobject_cast<QLabel *>(c)) continue;   // plain text
+                    ++controls;
+                    QVERIFY2(!jp::keytip(c).isEmpty(), qPrintable(need.arg(where, QString::fromLatin1(c->metaObject()->className()) + " in " + g->title())));
+                    keys << jp::keytip(c);
+                }
+            }
+            check(keys, where);
+            // Only a group's own KeyTip may start with Z, so a control's never hides one.
+            for (const QString &k : keys)
+                if (k.startsWith(QLatin1Char('Z'))) QVERIFY2(k.size() == 2, qPrintable(where + ": " + k));
+        }
+        QVERIFY2(controls > 250, qPrintable(QString::number(controls)));
+    }
+
+    // jp::buildRibbon reports every unknown name at once, with where it was used.
+    void ribbonBuilderReportsProblems()
+    {
+        jp::Ribbon r;
+        QAction known(QStringLiteral("Known"));
+        jp::RibbonParts parts;
+        parts.action = [&](const QString &id) { return id == QLatin1String("known") ? &known : nullptr; };
+        const QByteArray json = R"({"tabs": [{"name": "T", "keytip": "T", "groups": [
+            {"name": "G", "keytip": "ZG", "launcher": "noLauncher", "items": [
+              {"large": "missing.one"}, {"widget": "noWidget"}, {"large": "known", "menu": "@noMenu"},
+              {"small": "known", "typo": 1}, {"row": [{"icon": "missing.two"}]},
+              {"large": {"id": "ribbon.x", "text": "X", "icon": "no-such-icon"}}, {"large": "known", "keytip": "abc"}]},
+            {"use": "noTemplate"}]},
+            {"name": "C", "context": "Ctx", "color": "noColor", "keytip": "JC", "groups": []}]})";
+        QString err;
+        QVERIFY(!jp::buildRibbon(&r, json, parts, &r, &err));
+        for (const char *needle : {"missing.one", "missing.two", "noWidget", "noMenu", "noLauncher", "noTemplate", "typo", "no-such-icon", "abc", "noColor", "(in T / G)"})
+            QVERIFY2(err.contains(QLatin1String(needle)), qPrintable(QStringLiteral("%1 not reported in:\n%2").arg(QLatin1String(needle), err)));
+        QVERIFY(!jp::buildRibbon(&r, "{not json", parts, &r, &err));
+        QVERIFY(err.contains(QStringLiteral("JSON")));
+    }
+
+    // The loader's pieces together: a template used twice, a command that only
+    // opens a menu (made once, shared by its uses, doing what its trigger says),
+    // sections and submenus, a launcher, KeyTips, and translation.
+    void ribbonBuilderBuilds()
+    {
+        struct Upper : QTranslator {
+            bool isEmpty() const override { return false; }
+            QString translate(const char *context, const char *source, const char *, int) const override
+            {
+                return QLatin1String(context) == QLatin1String("Ribbon") ? QString::fromUtf8(source).toUpper() : QString();
+            }
+        };
+        QAction known(QStringLiteral("Known"));
+        known.setObjectName(QStringLiteral("known"));
+        int launched = 0, triggered = 0, boxes = 0;
+        jp::RibbonParts parts;
+        parts.action = [&](const QString &id) { return id == QLatin1String("known") ? &known : nullptr; };
+        parts.widgets[QStringLiteral("box")] = [&]() -> QWidget * { ++boxes; return new QComboBox(); };
+        parts.menus[QStringLiteral("dyn")] = [&](QWidget *owner) { auto *m = new QMenu(owner); m->addAction(&known); return m; };
+        parts.launchers[QStringLiteral("dlg")] = [&] { ++launched; };
+        parts.triggers[QStringLiteral("ribbon.menuOnly")] = [&] { ++triggered; };
+        parts.colors[QStringLiteral("blue")] = QColor(Qt::blue);
+        const QByteArray json = R"({
+          "fileKeytip": "F",
+          "quickAccess": [{"cmd": "known", "keytip": "1"}],
+          "templates": {"Shared": {"name": "Shared", "keytip": "ZS", "launcher": "dlg", "launcherTip": "Shared Settings", "launcherKeytip": "SS", "items": [
+            {"large": {"id": "ribbon.menuOnly", "text": "Menu Only", "icon": "table"}, "keytip": "MO", "menu": [
+              "known", "-", {"section": "Heading"}, {"submenu": "Sub", "icon": "square", "menu": ["known"]}]},
+            {"row": [{"label": "Label"}, {"widget": "box", "keytip": "BX"}, {"dropdown": {"icon": "chevron-down", "tip": "More"}, "menu": "@dyn", "keytip": "MR"}]}]}},
+          "tabs": [
+            {"name": "One", "keytip": "O", "groups": [{"use": "Shared"},
+              {"name": "Own", "keytip": "ZO", "items": [{"small": "ribbon.menuOnly", "keytip": "OM"}, {"small": "known", "split": false, "keytip": "KN"}]}]},
+            {"name": "Two", "keytip": "JT", "context": "Ctx", "color": "blue", "groups": [{"use": "Shared", "keytip": "ZX"}]}]})";
+        Upper upper;
+        QCoreApplication::installTranslator(&upper);
+        jp::Ribbon r;
+        QString err;
+        const bool ok = jp::buildRibbon(&r, json, parts, &r, &err);
+        QCoreApplication::removeTranslator(&upper);
+        QVERIFY2(ok, qPrintable(err));
+
+        QCOMPARE(r.tabCount(), 2);
+        QCOMPARE(r.tabName(0), QStringLiteral("One"));   // how code finds the tab doesn't change
+        QCOMPARE(r.tabTitle(0), QStringLiteral("ONE"));   // what the header shows does
+        QCOMPARE(r.tabKeytip(1), QStringLiteral("JT"));
+        QCOMPARE(r.fileKeytip(), QStringLiteral("F"));
+        QCOMPARE(jp::keytip(r.quickAccessButtons().value(0)), QStringLiteral("1"));
+        QCOMPARE(boxes, 2);   // the template's widget, once per use
+
+        const auto groups = r.tabAt(0)->groups();
+        QCOMPARE(groups.size(), 2);
+        QCOMPARE(groups[0]->title(), QStringLiteral("SHARED"));
+        QCOMPARE(jp::keytip(groups[0]), QStringLiteral("ZS"));
+        QCOMPARE(jp::keytip(r.tabAt(1)->groups().value(0)), QStringLiteral("ZX"));   // a use may rekey its template
+        QVERIFY(groups[0]->launcher());
+        QCOMPARE(groups[0]->launcher()->toolTip(), QStringLiteral("SHARED SETTINGS"));
+        QCOMPARE(jp::keytip(groups[0]->launcher()), QStringLiteral("SS"));
+        groups[0]->launcher()->click();
+        QCOMPARE(launched, 1);
+
+        const auto controls = groups[0]->controls();   // the big button, the label, the box, the dropdown
+        QCOMPARE(controls.size(), 4);
+        auto *big = qobject_cast<QToolButton *>(controls[0]);
+        QVERIFY(big);
+        QCOMPARE(jp::keytip(big), QStringLiteral("MO"));
+        QVERIFY(big->defaultAction());
+        QCOMPARE(big->defaultAction()->objectName(), QStringLiteral("ribbon.menuOnly"));
+        QCOMPARE(big->defaultAction()->text(), QStringLiteral("MENU ONLY"));
+        QVERIFY(!big->defaultAction()->icon().isNull());
+        QCOMPARE(big->popupMode(), QToolButton::InstantPopup);
+        QVERIFY(big->menu());
+        const QList<QAction *> items = big->menu()->actions();
+        QCOMPARE(items.size(), 4);
+        QCOMPARE(items[0], &known);
+        QVERIFY(items[1]->isSeparator());
+        QVERIFY(items[2]->isSeparator());   // a section is a separator with a heading
+        QCOMPARE(items[2]->text(), QStringLiteral("HEADING"));
+        QVERIFY(items[3]->menu());
+        QCOMPARE(items[3]->text(), QStringLiteral("SUB"));
+        QCOMPARE(items[3]->menu()->actions(), QList<QAction *>{&known});
+        QCOMPARE(qobject_cast<QLabel *>(controls[1])->text(), QStringLiteral("LABEL"));
+        QCOMPARE(jp::keytip(controls[2]), QStringLiteral("BX"));
+        QVERIFY(jp::keytip(controls[1]).isEmpty());
+        auto *more = qobject_cast<QToolButton *>(controls[3]);
+        QVERIFY(more && more->menu());
+        QCOMPARE(more->menu()->actions(), QList<QAction *>{&known});
+        QCOMPARE(more->toolTip(), QStringLiteral("MORE"));
+
+        // The command made for the first use is the one every later use shares.
+        const auto own = groups[1]->controls();
+        QCOMPARE(own.size(), 2);
+        QCOMPARE(qobject_cast<QToolButton *>(own[0])->defaultAction(), big->defaultAction());
+        QCOMPARE(qobject_cast<QToolButton *>(own[1])->defaultAction(), &known);
+        QCOMPARE(qobject_cast<QToolButton *>(r.tabAt(1)->groups()[0]->controls()[0])->defaultAction(), big->defaultAction());
+        big->defaultAction()->trigger();
+        QCOMPARE(triggered, 1);
+
+        // The contextual tab, and the plain description that tests compare.
+        const QString d = r.describe(true);
+        QVERIFY2(d.contains(QStringLiteral("tab Two (Ctx, #0000ff) keytip=JT")), qPrintable(d));
+        QVERIFY2(d.contains(QStringLiteral("group SHARED launcher=\"SHARED SETTINGS\" keytip=ZS launcher-keytip=SS")), qPrintable(d));
+        QVERIFY(!r.describe().contains(QStringLiteral("keytip")));
     }
 
     // AutoRecover keeps one copy per document and run: two "Cover.pub"

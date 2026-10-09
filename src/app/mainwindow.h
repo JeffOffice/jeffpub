@@ -1,7 +1,8 @@
 #pragma once
 // The JeffPub window: ribbon, pages pane, workspace, task panes, status
-// bar and the File backstage. Commands live in mainwindow_actions.cpp and the
-// ribbon layout in mainwindow_ribbon.cpp.
+// bar and the File backstage. Commands live in mainwindow_actions.cpp, the
+// ribbon's layout in resources/ribbon.json (see ribbonbuilder.h) and the
+// controls it names in mainwindow_ribbon.cpp.
 
 #include "app/editor.h"
 
@@ -31,6 +32,7 @@ class SizeCombo;
 class ColorButton;
 class MeasureSpin;
 class Gallery;
+struct RibbonParts;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -41,6 +43,8 @@ public:
     Editor *editor() const { return m_ed; }
     Canvas *canvas() const { return m_canvas; }
     QAction *act(const QString &id) const;
+    // What went wrong building the ribbon from ribbon.json (empty when nothing did).
+    QString ribbonError() const { return m_ribbonError; }
     QStringList actionIds() const { QStringList ids = m_actions.keys(); ids.sort(); return ids; }
 
     // File operations (used by the backstage too).
@@ -111,6 +115,10 @@ protected:
 private:
     void createActions();
     void buildRibbon();
+    // The controls and menus ribbon.json names (mainwindow_ribbon.cpp).
+    void ribbonControlParts(RibbonParts &parts);
+    void ribbonGalleryParts(RibbonParts &parts);
+    void ribbonMenuParts(RibbonParts &parts);
     void buildStatusBar();
     void updateTitle();
     void updateContextTabs();
@@ -127,6 +135,7 @@ private:
     Backstage *m_backstage;
     QSplitter *m_split;
     QHash<QString, QAction *> m_actions;
+    QString m_ribbonError;
 
     // Ribbon controls that mirror the selection.
     QVector<FontCombo *> m_fontCombos;
