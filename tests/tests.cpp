@@ -1117,6 +1117,60 @@ private Q_SLOTS:
         QVERIFY2(std::abs(width - want) < want * 0.01, qPrintable(QStringLiteral("%1 pt, not %2").arg(width).arg(want)));
     }
 
+    // A missing font's stand-in is drawn as high as the real font's letters
+    // (Libre Franklin's capitals stand 11% taller than Franklin Gothic
+    // Demi's), with its widths and line breaks unchanged.
+    void standInDrawnAtRealHeight()
+    {
+        if (QFontDatabase::hasFamily(QStringLiteral("Franklin Gothic Demi"))) QSKIP("Franklin Gothic Demi is installed");
+        jp::LayoutEnv env;
+        QTextCharFormat f;
+        f.setFontFamilies(QStringList{QStringLiteral("Franklin Gothic Demi")});
+        f.setFontPointSize(100);
+        const QTextCharFormat r = jp::resolveCharFormat(f, env);
+        if (QFontInfo(r.font()).family() != QLatin1String("Libre Franklin")) QSKIP("the stand-in isn't drawn here");
+        QVERIFY(r.hasProperty(jp::tp::GlyphScaleY));
+        const double scale = r.property(jp::tp::GlyphScaleY).toDouble();
+        QVERIFY2(scale > 0.85 && scale < 0.95, qPrintable(QString::number(scale)));
+
+        // Drawn: the H's ink is the stand-in's capital height times the scale.
+        auto doc = Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<TextItem>();
+        t->id = QStringLiteral("t");
+        t->rect = QRectF(36, 36, 500, 200);
+        t->insets = QMarginsF(0, 0, 0, 0);
+        t->storyId = doc->createStory(QStringLiteral("H"));
+        {
+            QTextCursor c(doc->storyDoc(t->storyId));
+            c.select(QTextCursor::Document);
+            c.mergeCharFormat(f);
+        }
+        doc->pages[0]->items.push_back(t);
+        LayoutCache cache;
+        PaintContext ctx;
+        ctx.doc = doc.get();
+        ctx.cache = &cache;
+        QImage img(612 * 2, 792 * 2, QImage::Format_ARGB32);
+        img.fill(Qt::white);
+        {
+            QPainter p(&img);
+            p.setRenderHint(QPainter::Antialiasing);
+            p.scale(2, 2);
+            jp::Renderer::paintPage(&p, ctx, 0);
+        }
+        int top = img.height(), bottom = -1;
+        for (int y = 0; y < img.height(); ++y)
+            for (int x = 0; x < img.width(); ++x)
+                if (qGray(img.pixel(x, y)) < 128) { top = std::min(top, y); bottom = std::max(bottom, y); }
+        QVERIFY(bottom > top);
+        const double ink = (bottom - top + 1) / 2.0;
+        QFont sf(QStringLiteral("Libre Franklin"));
+        sf.setWeight(QFont::Weight(r.fontWeight()));
+        sf.setPixelSize(1000);
+        const double cap = QFontMetricsF(sf).capHeight() / 1000 * 100;   // the stand-in's H at 100 pt
+        QVERIFY2(std::abs(ink - cap * scale) < cap * 0.03, qPrintable(QStringLiteral("ink %1, stand-in cap %2, scale %3").arg(ink).arg(cap).arg(scale)));
+    }
+
     // A run that states its character scaling, even 100%, still gets its
     // missing font's stand-in weight and narrowing (times its own scaling):
     // sign designs' phone numbers in Franklin Gothic Heavy came out thin.

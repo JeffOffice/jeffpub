@@ -462,6 +462,75 @@ double substituteSpaceEm(const QString &family, bool bold, bool italic)
     return 0;
 }
 
+// How much taller or shorter to draw a missing font's stand-in so its
+// letters stand as high as the real font's: the real font's capital H,
+// small x and ascender d (ink heights in the Windows fonts' outlines, read
+// in place) over the stand-in's, their geometric mean, where all three
+// differ the same way, within 10% of each other (one scale fits them all;
+// Perpetua's ascenders differ from its capitals, so its stand-in is left
+// alone), by 4% or more, kept within 0.8-1.25. Checked against
+// Publisher's PDFs (its screen pictures place text differently). Only the
+// drawing changes; widths, line breaks and spacing stay.
+double substituteHeightScale(const QString &family, bool bold)
+{
+    struct Heights { const char *standIn; double regular, bold; };
+    static const QHash<QString, Heights> t = {
+        {"Arial Rounded MT Bold", {"Nunito", 1.042, 0}},
+        {"Bell MT", {"Tinos", 0.95, 0}},
+        {"Blackadder ITC", {"Great Vibes", 0.848, 0}},
+        {"Bodoni MT Black", {"Abril Fatface", 0.892, 0}},
+        {"Britannic Bold", {"Lato", 0.93, 0}},
+        {"Californian FB", {"Crimson Text", 1.054, 1.045}},
+        {"Candara", {"Cabin", 0.925, 0.919}},
+        {"Candara Light", {"Cabin", 0.925, 0}},
+        {"Centaur", {"EB Garamond", 0.944, 0}},
+        {"Consolas", {"IBM Plex Mono", 0.932, 0.936}},
+        {"Copperplate Gothic Bold", {"Cinzel", 0.924, 0}},
+        {"Copperplate Gothic Light", {"Cinzel", 0.925, 0}},
+        {"Courier New", {"Cousine", 0.837, 0.87}},
+        {"Franklin Gothic Book", {"Libre Franklin", 0.909, 0}},
+        {"Franklin Gothic Demi", {"Libre Franklin", 0.909, 0}},
+        {"Franklin Gothic Demi Cond", {"Libre Franklin", 0.909, 0}},
+        {"Franklin Gothic Heavy", {"Libre Franklin", 0.911, 0}},
+        {"Franklin Gothic Medium", {"Libre Franklin", 0.909, 0}},
+        {"Franklin Gothic Medium Cond", {"Libre Franklin", 0.909, 0}},
+        {"Garamond", {"EB Garamond", 0.95, 0.94}},
+        {"Gill Sans MT", {"Cabin", 0.933, 0.935}},
+        {"Gill Sans Ultra Bold", {"Archivo Black", 1.074, 0}},
+        {"Gill Sans Ultra Bold Condensed", {"Anton", 0.844, 0}},
+        {"Gloucester MT Extra Condensed", {"EB Garamond", 1.119, 0}},
+        {"Haettenschweiler", {"Anton", 0.801, 0}},
+        {"Impact", {"Anton", 0.908, 0}},
+        {"Lucida Bright", {"Merriweather", 0.956, 0.959}},
+        {"Lucida Sans Typewriter", {"Cousine", 1.054, 1.054}},
+        {"Modern No. 20", {"Tinos", 0.952, 0}},
+        {"OCR A Extended", {"IBM Plex Mono", 0.906, 0}},
+        {"Perpetua", {"Crimson Text", 0, 0.895}},
+        {"Rockwell", {"Arvo", 0.915, 0.915}},
+        {"Rockwell Condensed", {"Roboto Slab", 0, 0.945}},
+        {"Rockwell Extra Bold", {"Alfa Slab One", 0.866, 0}},
+        {"Segoe Print", {"Comic Relief", 1.071, 0}},
+        {"Segoe UI Black", {"Libre Franklin", 0.961, 0}},
+        {"Sylfaen", {"Gelasio", 0.931, 0}},
+        {"Tw Cen MT", {"Jost", 0.858, 0.887}},
+        {"Tw Cen MT Condensed Extra Bold", {"Oswald", 0.81, 0}},
+        {"Wide Latin", {"Alfa Slab One", 0.872, 0}},
+    };
+    if (QFontDatabase::hasFamily(family)) return 1;
+    const auto h = t.constFind(family);
+    if (h == t.constEnd()) return 1;
+    static QHash<QString, bool> drawn;   // main thread only, like all layout
+    auto it = drawn.constFind(family);
+    if (it == drawn.constEnd()) {
+        QFont f(family);
+        f.setFamilies({family});
+        it = drawn.insert(family, QFontInfo(f).family().compare(QLatin1String(h->standIn), Qt::CaseInsensitive) == 0);
+    }
+    if (!*it) return 1;
+    const double s = bold && h->bold > 0 ? h->bold : h->regular;
+    return s > 0 ? s : 1;
+}
+
 int substituteWeight(const QString &family)
 {
     static QHash<QString, int> cache;

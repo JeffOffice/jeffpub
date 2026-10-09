@@ -22,6 +22,9 @@ int substituteWeight(const QString &family);
 // The width (ems) of a space in a missing font whose stand-in's spaces are
 // narrower or wider; 0 when the font is installed or the stand-in matches.
 double substituteSpaceEm(const QString &family, bool bold = false, bool italic = false);
+// How much taller (over 1) or shorter to draw a missing font's stand-in so
+// its letters stand as high as the real font's; 1 when installed or alike.
+double substituteHeightScale(const QString &family, bool bold = false);
 QStringList bundledFamilies();
 
 // Symbol fonts (Symbol, Wingdings) give their pictures their own character

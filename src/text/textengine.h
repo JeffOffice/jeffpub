@@ -111,6 +111,7 @@ public:
         QString dropText; QFont dropFont; QColor dropColor; int dropLines = 0; double dropWidth = 0;
         bool dropUp = false;   // a raised cap: on the first line, rising above it
         QVector<QTextLayout::FormatRange> effects;   // ranges with shadow/emboss/engrave/glow
+        bool directGlyphs = false;                   // drawn run by run (some letters drawn taller or shorter)
         QVector<QPair<int, int>> fieldRanges;        // display ranges of fields
         QString leaders;                             // a leader character per tab stop (space = none)
         QVector<QPair<int, int>> noteRefs;           // a note reference's display position, and its index in notes()

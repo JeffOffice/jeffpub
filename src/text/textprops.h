@@ -41,6 +41,7 @@ enum : int {
     Tracking,                                    // double: percent of normal letter spacing (100 when unset)
     LineSize,                                    // double: layout only, the (Qt) size a run's line spacing counts at
     InlineObject,                                // QString item JSON: an object set in the text, run text is U+FFFC
+    GlyphScaleY,                                 // double: layout only, letters drawn this much taller (a stand-in imitating a missing font's height)
 
     // block
     StyleName = QTextFormat::UserProperty + 100, // QString paragraph style

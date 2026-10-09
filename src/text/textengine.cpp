@@ -300,6 +300,9 @@ QTextCharFormat resolveCharFormat(const QTextCharFormat &f, const LayoutEnv &env
             const int wt = substituteWeight(fams.first());
             if (wt > 0 && !(f.hasProperty(QTextFormat::FontWeight) && f.fontWeight() >= QFont::Bold))
                 r.setFontWeight(wt);
+            // Letters as high as the missing font's (drawing only).
+            if (const double hs = substituteHeightScale(fams.first(), r.fontWeight() >= QFont::DemiBold); hs != 1)
+                r.setProperty(tp::GlyphScaleY, hs);
         }
     }
     // Sizes within the other program's range (to 1,638 pt): a file can claim
@@ -1105,6 +1108,7 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
                     er.format = cf;   // keep raw props for the effect pass
                     er.format.setForeground(rf.foreground());
                     er.format.setFontPointSize(rf.fontPointSize());
+                    if (rf.hasProperty(tp::GlyphScaleY)) er.format.setProperty(tp::GlyphScaleY, rf.property(tp::GlyphScaleY));
                     B->effects << er;
                 }
                 B->disp += shown;
@@ -1114,6 +1118,19 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
         const QFont base = baseFontFor(b, env);
         B->tl = std::make_unique<QTextLayout>(B->disp, fineFont(base));
         B->tl->setFormats(fineRanges(ranges));
+        // Letters drawn taller or shorter are drawn run by run, unless the
+        // paragraph has outlined or highlighted text (Qt's own drawing then)
+        // or text no run covers.
+        {
+            bool scaled = false, plain = true;
+            int covered = 0;
+            for (const auto &r : ranges) {
+                scaled |= r.format.hasProperty(tp::GlyphScaleY);
+                plain &= !r.format.hasProperty(QTextFormat::TextOutline) && !r.format.hasProperty(QTextFormat::BackgroundBrush);
+                covered += r.length;
+            }
+            B->directGlyphs = scaled && plain && covered == B->disp.size();
+        }
         QTextOption opt;
         Qt::Alignment al = bf.alignment() & Qt::AlignHorizontal_Mask;
         if (!al) al = Qt::AlignLeft;
@@ -1829,9 +1846,18 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
                 const int s = std::max(er.start, l.textStart()), e = std::min(er.start + er.length, l.textStart() + l.textLength());
                 if (s >= e) continue;
                 const auto runs = l.glyphRuns(s, e - s);
+                const double ys = er.format.hasProperty(tp::GlyphScaleY) ? er.format.property(tp::GlyphScaleY).toDouble() : 1;
+                const double base = l.y() + l.ascent();
                 auto drawRuns = [&](const QPointF &d, const QColor &c) {
                     p->setPen(c);
+                    p->save();
+                    if (ys != 1) {
+                        p->translate(0, off.y() + base);
+                        p->scale(1, ys);
+                        p->translate(0, -off.y() - base);
+                    }
                     drawFine(p, off + d, runs);
+                    p->restore();
                 };
                 const double k = std::max(0.6, sz / 18.0);
                 if (!glow.isEmpty()) {
@@ -1851,7 +1877,34 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
         p->save();
         p->translate(off);
         p->scale(1 / kFine, 1 / kFine);
-        B->tl->draw(p, QPointF(0, 0), {}, QRectF(clip.topLeft() * kFine, clip.size() * kFine));
+        if (!B->directGlyphs) {
+            B->tl->draw(p, QPointF(0, 0), {}, QRectF(clip.topLeft() * kFine, clip.size() * kFine));
+        } else {
+            // Run by run, each in its color; a run drawn taller or shorter
+            // is scaled from its baseline (its widths stay as laid out).
+            const QList<QTextLayout::FormatRange> fmts = B->tl->formats();
+            for (int i = 0; i < B->lines.size(); ++i) {
+                if (B->lines[i].frame != frame) continue;
+                const QTextLine line = B->tl->lineAt(i);
+                const int ls = line.textStart(), le = ls + line.textLength();
+                const double base = line.y() + line.ascent();
+                for (const auto &r : fmts) {
+                    const int s = std::max(r.start, ls), e = std::min(r.start + r.length, le);
+                    if (s >= e) continue;
+                    const QBrush br = r.format.hasProperty(QTextFormat::ForegroundBrush) ? r.format.foreground() : QBrush(Qt::black);
+                    const double ys = r.format.hasProperty(tp::GlyphScaleY) ? r.format.property(tp::GlyphScaleY).toDouble() : 1;
+                    p->save();
+                    p->setPen(QPen(br, 0));
+                    if (ys != 1) {
+                        p->translate(0, base);
+                        p->scale(1, ys);
+                        p->translate(0, -base);
+                    }
+                    for (const QGlyphRun &g : line.glyphRuns(s, e - s)) p->drawGlyphRun(QPointF(0, 0), g);
+                    p->restore();
+                }
+            }
+        }
         p->restore();
 
         // Tab leaders: the stop each tab goes to is the first one past where
