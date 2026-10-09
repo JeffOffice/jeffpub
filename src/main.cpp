@@ -23,6 +23,7 @@
 
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QCoreApplication>
 #include <QPalette>
 #include <QStyleFactory>
 #include <QStyleHints>
@@ -44,23 +45,23 @@ int main(int argc, char **argv)
     QApplication app(argc, argv);
     QApplication::setWindowIcon(QIcon(QStringLiteral(":/app.png")));
     jp::moveFromJeffPub79();   // settings and files kept under the old name
+    jp::installTranslations();   // before the command line and any window build their text
 
     QCommandLineParser cli;
-    cli.setApplicationDescription(QStringLiteral("JeffPub desktop publishing"));
+    cli.setApplicationDescription(QCoreApplication::translate("Main", "JeffPub desktop publishing"));
     cli.addHelpOption();
     cli.addVersionOption();
-    QCommandLineOption shotOpt(QStringLiteral("screenshot"), QStringLiteral("Save a screenshot of the window and quit."), QStringLiteral("png"));
-    QCommandLineOption sizeOpt(QStringLiteral("size"), QStringLiteral("Window size for --screenshot."), QStringLiteral("WxH"), QStringLiteral("1440x900"));
-    QCommandLineOption templOpt(QStringLiteral("template"), QStringLiteral("Start from a built-in template."), QStringLiteral("id"));
-    QCommandLineOption pdfOpt(QStringLiteral("export-pdf"), QStringLiteral("Export the opened publication to a PDF and quit."), QStringLiteral("pdf"));
-    QCommandLineOption pdfaOpt(QStringLiteral("pdfa"), QStringLiteral("With --export-pdf: write PDF/A-1b for archiving."));
-    QCommandLineOption tabOpt(QStringLiteral("tab"), QStringLiteral("Open on a ribbon tab (for screenshots)."), QStringLiteral("name"));
-    QCommandLineOption stageOpt(QStringLiteral("backstage"), QStringLiteral("Open on a File page."), QStringLiteral("page"));
+    QCommandLineOption shotOpt(QStringLiteral("screenshot"), QCoreApplication::translate("Main", "Save a screenshot of the window and quit."), QStringLiteral("png"));
+    QCommandLineOption sizeOpt(QStringLiteral("size"), QCoreApplication::translate("Main", "Window size for --screenshot."), QStringLiteral("WxH"), QStringLiteral("1440x900"));
+    QCommandLineOption templOpt(QStringLiteral("template"), QCoreApplication::translate("Main", "Start from a built-in template."), QStringLiteral("id"));
+    QCommandLineOption pdfOpt(QStringLiteral("export-pdf"), QCoreApplication::translate("Main", "Export the opened publication to a PDF and quit."), QStringLiteral("pdf"));
+    QCommandLineOption pdfaOpt(QStringLiteral("pdfa"), QCoreApplication::translate("Main", "With --export-pdf: write PDF/A-1b for archiving."));
+    QCommandLineOption tabOpt(QStringLiteral("tab"), QCoreApplication::translate("Main", "Open on a ribbon tab (for screenshots)."), QStringLiteral("name"));
+    QCommandLineOption stageOpt(QStringLiteral("backstage"), QCoreApplication::translate("Main", "Open on a File page."), QStringLiteral("page"));
     cli.addOptions({shotOpt, sizeOpt, templOpt, stageOpt, pdfOpt, pdfaOpt, tabOpt});
-    cli.addPositionalArgument(QStringLiteral("files"), QStringLiteral("Publications to open."), QStringLiteral("[files...]"));
+    cli.addPositionalArgument(QStringLiteral("files"), QCoreApplication::translate("Main", "Publications to open."), QStringLiteral("[files...]"));
     cli.process(app);
 
-    jp::installTranslations();   // before any window builds its text
     jp::initCore();
     app.setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
     jp::applyUiTheme(jp::Settings::get().value(QStringLiteral("ui/theme"), 0).toInt());

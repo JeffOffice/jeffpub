@@ -160,14 +160,14 @@ void Editor::toggleBold()
 {
     QTextCharFormat f;
     f.setFontWeight(currentCharFormat().fontWeight() >= QFont::DemiBold ? QFont::Normal : QFont::Bold);
-    mergeCharFormat(f, QStringLiteral("Bold"));
+    mergeCharFormat(f, tr("Bold"));
 }
 
 void Editor::toggleItalic()
 {
     QTextCharFormat f;
     f.setFontItalic(!currentCharFormat().fontItalic());
-    mergeCharFormat(f, QStringLiteral("Italic"));
+    mergeCharFormat(f, tr("Italic"));
 }
 
 void Editor::toggleUnderline(QTextCharFormat::UnderlineStyle style)
@@ -176,14 +176,14 @@ void Editor::toggleUnderline(QTextCharFormat::UnderlineStyle style)
     QTextCharFormat f;
     const bool on = cur.underlineStyle() != QTextCharFormat::NoUnderline && cur.underlineStyle() == style;
     f.setUnderlineStyle(on ? QTextCharFormat::NoUnderline : style);
-    mergeCharFormat(f, QStringLiteral("Underline"));
+    mergeCharFormat(f, tr("Underline"));
 }
 
 void Editor::toggleStrike()
 {
     QTextCharFormat f;
     f.setFontStrikeOut(!currentCharFormat().fontStrikeOut());
-    mergeCharFormat(f, QStringLiteral("Strikethrough"));
+    mergeCharFormat(f, tr("Strikethrough"));
 }
 
 void Editor::toggleScript(bool super)
@@ -191,7 +191,7 @@ void Editor::toggleScript(bool super)
     const auto want = super ? QTextCharFormat::AlignSuperScript : QTextCharFormat::AlignSubScript;
     QTextCharFormat f;
     f.setVerticalAlignment(currentCharFormat().verticalAlignment() == want ? QTextCharFormat::AlignNormal : want);
-    mergeCharFormat(f, super ? QStringLiteral("Superscript") : QStringLiteral("Subscript"));
+    mergeCharFormat(f, super ? tr("Superscript") : tr("Subscript"));
 }
 
 void Editor::setFontFamily(const QString &family)
@@ -200,12 +200,12 @@ void Editor::setFontFamily(const QString &family)
     if (family.startsWith(QLatin1String("+"))) {
         // "+Heading" / "+Body": follow the font scheme.
         f.setProperty(tp::ThemeFont, family == QLatin1String("+Heading") ? QStringLiteral("major") : QStringLiteral("minor"));
-        clearCharProperty(QTextFormat::FontFamilies, QStringLiteral("Font"));
-        mergeCharFormat(f, QStringLiteral("Font"));
+        clearCharProperty(QTextFormat::FontFamilies, tr("Font"));
+        mergeCharFormat(f, tr("Font"));
         return;
     }
     f.setFontFamilies(QStringList{family});
-    mergeCharFormat(f, QStringLiteral("Font"));
+    mergeCharFormat(f, tr("Font"));
 }
 
 void Editor::setFontSize(double pt)
@@ -213,7 +213,7 @@ void Editor::setFontSize(double pt)
     if (pt <= 0) return;
     QTextCharFormat f;
     f.setFontPointSize(std::clamp(pt, 0.5, 999.0));
-    mergeCharFormat(f, QStringLiteral("Font Size"));
+    mergeCharFormat(f, tr("Font Size"));
 }
 
 void Editor::growFont(int dir)
@@ -221,7 +221,7 @@ void Editor::growFont(int dir)
     static const double steps[] = {6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72, 96, 120, 144, 200, 288};
     auto targets = formatTargets();
     if (targets.isEmpty()) return;
-    beginChange(dir > 0 ? QStringLiteral("Grow Font") : QStringLiteral("Shrink Font"));
+    beginChange(dir > 0 ? tr("Grow Font") : tr("Shrink Font"));
     for (QTextCursor c : targets) {
         if (isEditingText()) selectWordIfCollapsed(c);
         const int s = c.selectionStart(), e = c.selectionEnd();
@@ -251,7 +251,7 @@ void Editor::clearFormatting()
 {
     auto targets = formatTargets();
     if (targets.isEmpty()) return;
-    beginChange(QStringLiteral("Clear All Formatting"));
+    beginChange(tr("Clear All Formatting"));
     for (QTextCursor c : targets) {
         if (isEditingText() && !c.hasSelection()) c.select(QTextCursor::BlockUnderCursor);
         const int s = c.selectionStart(), e = c.selectionEnd();
@@ -285,25 +285,25 @@ void Editor::clearFormatting()
 
 void Editor::setTextColor(const ColorRef &c)
 {
-    if (c.isNone()) { clearCharProperty(tp::ColorRefP, QStringLiteral("Font Color")); return; }
+    if (c.isNone()) { clearCharProperty(tp::ColorRefP, tr("Font Color")); return; }
     QTextCharFormat f;
     f.setProperty(tp::ColorRefP, c.toString());
     f.setProperty(tp::TextFill, QString());   // a solid color replaces a gradient fill
     f.clearForeground();
-    mergeCharFormat(f, QStringLiteral("Font Color"));
+    mergeCharFormat(f, tr("Font Color"));
 }
 
 void Editor::setHighlight(const ColorRef &c)
 {
-    if (c.isNone()) { clearCharProperty(tp::HighlightRefP, QStringLiteral("Highlight")); return; }
-    setCharProperty(tp::HighlightRefP, c.toString(), QStringLiteral("Highlight"));
+    if (c.isNone()) { clearCharProperty(tp::HighlightRefP, tr("Highlight")); return; }
+    setCharProperty(tp::HighlightRefP, c.toString(), tr("Highlight"));
 }
 
 void Editor::changeCase(int mode)
 {
     auto targets = formatTargets();
     if (targets.isEmpty()) return;
-    beginChange(QStringLiteral("Change Case"));
+    beginChange(tr("Change Case"));
     for (QTextCursor c : targets) {
         if (isEditingText()) selectWordIfCollapsed(c);
         const int s = c.selectionStart(), e = c.selectionEnd();
@@ -345,7 +345,7 @@ void Editor::setAlignment(Qt::Alignment a)
     QTextBlockFormat f;
     f.setAlignment(a);
     f.setProperty(tp::Distribute, false);
-    mergeBlockFormat(f, QStringLiteral("Alignment"));
+    mergeBlockFormat(f, tr("Alignment"));
 }
 
 void Editor::setDirection(Qt::LayoutDirection d)
@@ -355,14 +355,14 @@ void Editor::setDirection(Qt::LayoutDirection d)
     const Qt::Alignment al = currentBlockFormat().alignment() & Qt::AlignHorizontal_Mask;
     if (d == Qt::RightToLeft && (al == 0 || al == Qt::AlignLeft || al == Qt::AlignLeading)) f.setAlignment(Qt::AlignRight);
     if (d == Qt::LeftToRight && (al == Qt::AlignRight || al == Qt::AlignTrailing)) f.setAlignment(Qt::AlignLeft);
-    mergeBlockFormat(f, QStringLiteral("Text Direction"));
+    mergeBlockFormat(f, tr("Text Direction"));
 }
 
 void Editor::setLineSpacing(int type, double value)
 {
     QTextBlockFormat f;
     f.setLineHeight(value, type);
-    mergeBlockFormat(f, QStringLiteral("Line Spacing"));
+    mergeBlockFormat(f, tr("Line Spacing"));
 }
 
 void Editor::setParagraphSpacing(double before, double after)
@@ -370,14 +370,14 @@ void Editor::setParagraphSpacing(double before, double after)
     QTextBlockFormat f;
     if (before >= 0) f.setTopMargin(before);
     if (after >= 0) f.setBottomMargin(after);
-    mergeBlockFormat(f, QStringLiteral("Paragraph Spacing"));
+    mergeBlockFormat(f, tr("Paragraph Spacing"));
 }
 
 void Editor::changeIndent(int dir)
 {
     auto targets = formatTargets();
     if (targets.isEmpty()) return;
-    beginChange(dir > 0 ? QStringLiteral("Increase Indent") : QStringLiteral("Decrease Indent"));
+    beginChange(dir > 0 ? tr("Increase Indent") : tr("Decrease Indent"));
     for (QTextCursor c : targets) {
         QTextDocument *d = c.document();
         for (QTextBlock b = d->findBlock(c.selectionStart()); b.isValid() && b.position() <= c.selectionEnd(); b = b.next()) {
@@ -394,7 +394,7 @@ void Editor::setList(int kind, int format, const QString &bullet, int start)
 {
     auto targets = formatTargets();
     if (targets.isEmpty()) return;
-    beginChange(kind == 0 ? QStringLiteral("Remove List") : kind == 1 ? QStringLiteral("Bullets") : QStringLiteral("Numbering"));
+    beginChange(kind == 0 ? tr("Remove List") : kind == 1 ? tr("Bullets") : tr("Numbering"));
     for (QTextCursor c : targets) {
         QTextDocument *d = c.document();
         QTextBlock first = d->findBlock(c.selectionStart()), last = d->findBlock(c.selectionEnd());
@@ -449,7 +449,7 @@ void Editor::applyStyle(const QString &name)
     if (!s) return;
     auto targets = formatTargets();
     if (targets.isEmpty()) return;
-    beginChange(QStringLiteral("Apply Style"));
+    beginChange(tr("Apply Style"));
     for (QTextCursor c : targets) {
         if (s->charOnly) {
             if (isEditingText()) selectWordIfCollapsed(c);
@@ -495,7 +495,7 @@ void Editor::setDropCap(int lines, int chars, const QString &font)
     if (!font.isEmpty()) f.setProperty(tp::DropCapFont, font);
     // Drop caps apply to the first paragraph of the selection only.
     if (isEditingText()) {
-        beginChange(QStringLiteral("Drop Cap"));
+        beginChange(tr("Drop Cap"));
         m_cursor.mergeBlockFormat(f);
         endChange();
         Q_EMIT textCursorChanged();
@@ -503,7 +503,7 @@ void Editor::setDropCap(int lines, int chars, const QString &font)
     }
     auto targets = formatTargets();
     if (targets.isEmpty()) return;
-    beginChange(QStringLiteral("Drop Cap"));
+    beginChange(tr("Drop Cap"));
     for (QTextCursor c : targets) QTextCursor(c.document()->begin()).mergeBlockFormat(f);
     endChange();
 }
@@ -512,7 +512,7 @@ void Editor::insertText(const QString &t)
 {
     if (!isEditingText()) return;
     if (!m_typing) {
-        beginChange(QStringLiteral("Typing"));
+        beginChange(tr("Typing"));
         m_typing = true;
     }
     m_cursor.insertText(t);
@@ -584,7 +584,7 @@ void Editor::autoCorrectWord()
     if (fixed.isEmpty() || fixed == word) return;
     if (Settings::get().value("proof/smartQuotes", true).toBool()) fixed.replace(QLatin1Char('\''), QChar(0x2019));
     if (!m_typing) {
-        beginChange(QStringLiteral("Typing"));
+        beginChange(tr("Typing"));
         m_typing = true;
     }
     QTextCursor c = m_cursor;
@@ -605,7 +605,7 @@ void Editor::autoFormatWord()
     const QString text = b.text().left(m_cursor.position() - b.position());
     auto replace = [&](int from, int to, const QString &with, const QTextCharFormat *fmt = nullptr) {
         if (!m_typing) {
-            beginChange(QStringLiteral("Typing"));
+            beginChange(tr("Typing"));
             m_typing = true;
         }
         QTextCursor c = m_cursor;
@@ -657,7 +657,7 @@ void Editor::typeText(const QString &t)
         const auto m = numbered.match(before);
         if (before == QLatin1String("*") || before == QLatin1String("-") || m.hasMatch()) {
             flushTyping();
-            beginChange(QStringLiteral("AutoFormat List"));
+            beginChange(tr("AutoFormat List"));
             QTextCursor c = m_cursor;
             c.setPosition(b.position());
             c.setPosition(b.position() + int(before.size()), QTextCursor::KeepAnchor);
@@ -692,7 +692,7 @@ void Editor::editText(const std::function<void(QTextCursor &)> &fn)
 {
     if (!isEditingText()) return;
     if (!m_typing) {
-        beginChange(QStringLiteral("Typing"));
+        beginChange(tr("Typing"));
         m_typing = true;
     }
     fn(m_cursor);
@@ -710,7 +710,7 @@ void Editor::retargetText(const QString &itemId)
 void Editor::insertField(const QString &code)
 {
     if (!isEditingText()) return;
-    beginChange(QStringLiteral("Insert Field"));
+    beginChange(tr("Insert Field"));
     QTextCharFormat f = m_cursor.charFormat();
     f.setProperty(tp::Field, code);
     m_cursor.insertText(QString(QChar::ObjectReplacementCharacter), f);

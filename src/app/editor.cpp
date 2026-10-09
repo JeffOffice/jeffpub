@@ -99,7 +99,7 @@ void Editor::setFilePath(const QString &p)
 QString Editor::displayName() const
 {
     if (!m_path.isEmpty()) return QFileInfo(m_path).completeBaseName();
-    return m_doc->props.title.isEmpty() ? QStringLiteral("Publication1") : m_doc->props.title;
+    return m_doc->props.title.isEmpty() ? tr("Publication1") : m_doc->props.title;
 }
 
 // ---------- view ----------
@@ -307,7 +307,7 @@ void Editor::beginTextEdit(const QString &itemId, int pos, int row, int col)
     } else if (it->type() == ItemType::Shape) {
         auto *s = static_cast<ShapeItem *>(it);
         if (s->storyId.isEmpty()) {
-            change(QStringLiteral("Add Text"), [&] {
+            change(tr("Add Text"), [&] {
                 s->storyId = m_doc->createStory();
                 QTextCursor c(m_doc->storyDoc(s->storyId));
                 QTextBlockFormat bf;
@@ -415,7 +415,7 @@ void Editor::restore(const QByteArray &snap, const QStringList &sel, int page, c
 
 void Editor::beginChange(const QString &label)
 {
-    if (m_typing && label != QLatin1String("Typing")) flushTyping();
+    if (m_typing && label != tr("Typing")) flushTyping();
     if (m_changeDepth++ == 0) {
         m_before = snapshot();
         m_selBefore = m_sel;
@@ -479,7 +479,7 @@ void Editor::setTool(Tool t, const QString &shape)
 // ---------- items ----------
 QString Editor::addItem(const ItemPtr &it, bool selectIt)
 {
-    beginChange(QStringLiteral("Insert %1").arg(itemTypeName(it->type())));
+    beginChange(tr("Insert %1").arg(itemTypeName(it->type())));
     surfaceItems().push_back(it);
     endChange();
     if (selectIt) select(it->id);
@@ -527,7 +527,7 @@ void Editor::deleteItems(const QStringList &ids)
 {
     if (ids.isEmpty()) return;
     endTextEdit();
-    beginChange(QStringLiteral("Delete"));
+    beginChange(tr("Delete"));
     QStringList all;
     for (const auto &id : ids) {
         all << id;
@@ -600,7 +600,7 @@ bool Editor::moveIntoText()
     pos = std::clamp(pos, 0, sd->characterCount() - 1);
     const QString json = QString::fromUtf8(QJsonDocument(it->toJson()).toJson(QJsonDocument::Compact));
     const QString id = it->id;
-    beginChange(QStringLiteral("In Line with Text"));
+    beginChange(tr("In Line with Text"));
     QTextCursor c(sd);
     c.setPosition(pos);
     QTextCharFormat f = c.charFormat();
@@ -648,7 +648,7 @@ bool Editor::moveOutOfText(Wrap::Mode mode)
             if (ob.frame == fl.frame && ob.docPos == pos) at = t->transform().map(t->vertical ? QPointF(t->rect.width() - ob.rect.bottom(), ob.rect.left()) : ob.rect.topLeft());
     it->moveBy(at.x() - it->rect.x(), at.y() - it->rect.y());
     it->wrap.mode = mode;
-    beginChange(QStringLiteral("Wrap Text"));
+    beginChange(tr("Wrap Text"));
     QTextCursor del(m_cursor.document());
     del.setPosition(pos);
     del.setPosition(pos + 1, QTextCursor::KeepAnchor);
@@ -664,7 +664,7 @@ void Editor::duplicateSelection()
 {
     const QStringList ids = topLevelSelection();
     if (ids.isEmpty()) return;
-    beginChange(QStringLiteral("Duplicate"));
+    beginChange(tr("Duplicate"));
     QStringList made;
     ItemList originals;
     for (const auto &id : ids)
@@ -706,7 +706,7 @@ void Editor::groupSelection()
     const QStringList ids = topLevelSelection();
     if (ids.size() < 2) return;
     ItemList &list = surfaceItems();
-    beginChange(QStringLiteral("Group"));
+    beginChange(tr("Group"));
     auto g = std::make_shared<GroupItem>();
     int insertAt = -1;
     for (int i = 0; i < int(list.size());) {
@@ -736,7 +736,7 @@ void Editor::ungroupSelection()
     bool any = false;
     for (Item *it : items) any |= it->type() == ItemType::Group;
     if (!any) return;
-    beginChange(QStringLiteral("Ungroup"));
+    beginChange(tr("Ungroup"));
     QStringList newSel;
     for (Item *it : items) {
         if (it->type() != ItemType::Group) continue;
@@ -780,7 +780,7 @@ void Editor::arrange(Order o)
 {
     const QStringList ids = topLevelSelection();
     if (ids.isEmpty()) return;
-    beginChange(QStringLiteral("Arrange"));
+    beginChange(tr("Arrange"));
     for (const auto &id : ids) {
         const auto loc = m_doc->find(id);
         if (!loc.list) continue;
@@ -811,7 +811,7 @@ void Editor::align(Align a, bool toMargins)
     } else {
         for (const auto &id : ids) ref = ref.isNull() ? m_doc->item(id)->bounds() : ref.united(m_doc->item(id)->bounds());
     }
-    beginChange(QStringLiteral("Align"));
+    beginChange(tr("Align"));
     for (const auto &id : ids) {
         Item *it = m_doc->item(id);
         if (!it || it->locked) continue;
@@ -851,7 +851,7 @@ void Editor::distribute(bool horizontal, bool toMargins)
     double total = 0;
     for (Item *it : items) total += horizontal ? it->bounds().width() : it->bounds().height();
     const double gap = items.size() > 1 ? (end - start - total) / (items.size() - 1) : 0;
-    beginChange(QStringLiteral("Distribute"));
+    beginChange(tr("Distribute"));
     double pos = start;
     for (Item *it : items) {
         const QRectF b = it->bounds();
@@ -865,7 +865,7 @@ void Editor::rotateSelection(double deg)
 {
     const QStringList ids = topLevelSelection();
     if (ids.isEmpty()) return;
-    beginChange(QStringLiteral("Rotate"));
+    beginChange(tr("Rotate"));
     for (const auto &id : ids)
         if (Item *it = m_doc->item(id); it && !it->locked) {
             const QPointF c = it->bounds().center();
@@ -878,7 +878,7 @@ void Editor::flipSelection(bool horizontal)
 {
     const QStringList ids = topLevelSelection();
     if (ids.isEmpty()) return;
-    beginChange(horizontal ? QStringLiteral("Flip Horizontal") : QStringLiteral("Flip Vertical"));
+    beginChange(horizontal ? tr("Flip Horizontal") : tr("Flip Vertical"));
     for (const auto &id : ids) {
         Item *it = m_doc->item(id);
         if (!it) continue;
@@ -913,7 +913,7 @@ void Editor::arrangeThumbnails()
     const QSizeF ps = m_doc->pageSize();
     const double thumb = 108, gap = 12;
     double x = ps.width() + 36, y = 0, colW = 0;
-    beginChange(QStringLiteral("Arrange Thumbnails"));
+    beginChange(tr("Arrange Thumbnails"));
     for (const ItemPtr &it : m_doc->scratch) {
         auto *pic = dynamic_cast<PictureItem *>(it.get());
         if (!pic) continue;
@@ -960,18 +960,18 @@ void Editor::linkFrames(const QString &from, const QString &to)
     auto *a = dynamic_cast<TextItem *>(m_doc->item(from));
     auto *b = dynamic_cast<TextItem *>(m_doc->item(to));
     if (!a || !b || a == b || !a->nextId.isEmpty() || m_doc->prevFrame(b->id)) {
-        Q_EMIT status(QStringLiteral("You can link only to an empty text box that is not already linked."));
+        Q_EMIT status(tr("You can link only to an empty text box that is not already linked."));
         return;
     }
     QTextDocument *bd = m_doc->storyDoc(b->storyId);
     if (bd && !bd->toPlainText().trimmed().isEmpty()) {
-        Q_EMIT status(QStringLiteral("The text box you link to must be empty."));
+        Q_EMIT status(tr("The text box you link to must be empty."));
         return;
     }
     // b must not already be in a's chain.
     for (TextItem *f : m_doc->chainOf(a->id))
         if (f == b) return;
-    beginChange(QStringLiteral("Create Text Box Link"));
+    beginChange(tr("Create Text Box Link"));
     const QString head = m_doc->chainOf(a->id).first()->storyId;
     QString old = b->storyId;
     for (TextItem *f : m_doc->chainOf(b->id)) f->storyId = head;
@@ -984,7 +984,7 @@ void Editor::breakLink(const QString &from)
 {
     auto *a = dynamic_cast<TextItem *>(m_doc->item(from));
     if (!a || a->nextId.isEmpty()) return;
-    beginChange(QStringLiteral("Break Forward Link"));
+    beginChange(tr("Break Forward Link"));
     auto *b = dynamic_cast<TextItem *>(m_doc->item(a->nextId));
     a->nextId.clear();
     if (b) {
@@ -1145,7 +1145,7 @@ void Editor::cut()
     copy();
     if (isEditingText()) {
         if (!m_cursor.hasSelection()) return;
-        beginChange(QStringLiteral("Cut"));
+        beginChange(tr("Cut"));
         m_cursor.removeSelectedText();
         endChange();
         textEdited();
@@ -1165,7 +1165,7 @@ void Editor::paste(bool textOnly)
     const QMimeData *md = QApplication::clipboard()->mimeData();
     if (!md) return;
     if (isEditingText()) {
-        beginChange(QStringLiteral("Paste"));
+        beginChange(tr("Paste"));
         if (!textOnly && md->hasFormat("application/x-jeffpub-text")) {
             QTextDocument tmp;
             storyFromJson(&tmp, QJsonDocument::fromJson(md->data("application/x-jeffpub-text")).object());
@@ -1181,7 +1181,7 @@ void Editor::paste(bool textOnly)
     }
     if (md->hasFormat(kItemsMime) && !textOnly) {
         const QJsonObject o = QJsonDocument::fromJson(md->data(kItemsMime)).object();
-        beginChange(QStringLiteral("Paste"));
+        beginChange(tr("Paste"));
         QHash<QString, QString> storyMap, imageMap;
         const QJsonObject stories = o["stories"].toObject(), images = o["images"].toObject();
         for (auto it = images.begin(); it != images.end(); ++it) {
@@ -1240,7 +1240,7 @@ void Editor::paste(bool textOnly)
         QBuffer b(&png);
         b.open(QIODevice::WriteOnly);
         img.save(&b, "PNG");
-        beginChange(QStringLiteral("Paste Picture"));
+        beginChange(tr("Paste Picture"));
         auto pic = std::make_shared<PictureItem>();
         pic->imageId = m_doc->addImage(png, "png");
         QSizeF sz(img.width() * 0.75, img.height() * 0.75);
@@ -1255,7 +1255,7 @@ void Editor::paste(bool textOnly)
         return;
     }
     if (md->hasText() || md->hasHtml()) {
-        beginChange(QStringLiteral("Paste Text"));
+        beginChange(tr("Paste Text"));
         const QSizeF ps = m_doc->pageSize();
         auto t = std::static_pointer_cast<TextItem>(newTextBox(QRectF(ps.width() * 0.2, ps.height() * 0.3, ps.width() * 0.6, ps.height() * 0.25)));
         QTextCursor c(m_doc->storyDoc(t->storyId));
@@ -1272,7 +1272,7 @@ void Editor::paste(bool textOnly)
 int Editor::insertPages(int after, int count, bool duplicate, bool oneTextBox, const QString &masterId)
 {
     endTextEdit();
-    beginChange(count > 1 ? QStringLiteral("Insert Pages") : QStringLiteral("Insert Page"));
+    beginChange(count > 1 ? tr("Insert Pages") : tr("Insert Page"));
     int at = std::clamp(after + 1, 0, int(m_doc->pages.size()));
     const auto src = m_doc->pages.value(std::clamp(after, 0, int(m_doc->pages.size()) - 1));
     for (int i = 0; i < count; ++i) {
@@ -1298,11 +1298,11 @@ int Editor::insertPages(int after, int count, bool duplicate, bool oneTextBox, c
 void Editor::deletePage(int index)
 {
     if (m_doc->pages.size() <= 1 || index < 0 || index >= m_doc->pages.size()) {
-        Q_EMIT status(QStringLiteral("A publication must have at least one page."));
+        Q_EMIT status(tr("A publication must have at least one page."));
         return;
     }
     endTextEdit();
-    beginChange(QStringLiteral("Delete Page"));
+    beginChange(tr("Delete Page"));
     QStringList ids;
     for (const auto &it : m_doc->pages[index]->items) ids << it->id;
     removeFromChains(ids);
@@ -1318,7 +1318,7 @@ void Editor::movePage(int from, int to)
 {
     const int n = m_doc->pages.size();
     if (from < 0 || from >= n || to < 0 || to >= n || from == to) return;
-    beginChange(QStringLiteral("Move Page"));
+    beginChange(tr("Move Page"));
     m_doc->pages.move(from, to);
     m_page = to;
     endChange();
@@ -1328,18 +1328,18 @@ void Editor::movePage(int from, int to)
 void Editor::renamePage(int index, const QString &title)
 {
     if (index < 0 || index >= m_doc->pages.size()) return;
-    change(QStringLiteral("Rename Page"), [&] { m_doc->pages[index]->title = title; });
+    change(tr("Rename Page"), [&] { m_doc->pages[index]->title = title; });
 }
 
 void Editor::applyMaster(int index, const QString &masterId)
 {
     if (index < 0 || index >= m_doc->pages.size()) return;
-    change(QStringLiteral("Apply Master Page"), [&] { m_doc->pages[index]->masterId = masterId; });
+    change(tr("Apply Master Page"), [&] { m_doc->pages[index]->masterId = masterId; });
 }
 
 QString Editor::addMaster(bool duplicateCurrent)
 {
-    beginChange(duplicateCurrent ? QStringLiteral("Duplicate Master Page") : QStringLiteral("New Master Page"));
+    beginChange(duplicateCurrent ? tr("Duplicate Master Page") : tr("New Master Page"));
     auto m = std::make_shared<MasterPage>();
     QString abbr;
     for (char c = 'A'; c <= 'Z'; ++c)
@@ -1367,10 +1367,10 @@ QString Editor::addMaster(bool duplicateCurrent)
 void Editor::deleteMaster(const QString &id)
 {
     if (m_doc->masters.size() <= 1) {
-        Q_EMIT status(QStringLiteral("A publication needs at least one master page."));
+        Q_EMIT status(tr("A publication needs at least one master page."));
         return;
     }
-    beginChange(QStringLiteral("Delete Master Page"));
+    beginChange(tr("Delete Master Page"));
     for (int i = 0; i < m_doc->masters.size(); ++i)
         if (m_doc->masters[i]->id == id) { m_doc->masters.removeAt(i); break; }
     const QString fallback = m_doc->masters.first()->id;

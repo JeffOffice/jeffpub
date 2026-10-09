@@ -234,7 +234,7 @@ QAction *MainWindow::mk(const QString &id, const QString &text, const QString &i
     if (!key.isEmpty()) {
         a->setShortcut(key);
         a->setShortcutContext(Qt::WindowShortcut);
-        a->setToolTip(QStringLiteral("%1 (%2)").arg(QString(text).remove('&'), key.toString(QKeySequence::NativeText)));
+        a->setToolTip(tr("%1 (%2)").arg(QString(text).remove('&'), key.toString(QKeySequence::NativeText)));
     }
     a->setCheckable(checkable);
     // Each command counts by its id for the usage statistics (when they're on).
@@ -249,7 +249,7 @@ QAction *MainWindow::mk(const QString &id, const QString &text, const QString &i
 
 void MainWindow::updateTitle()
 {
-    setWindowTitle(QStringLiteral("%1%2 - JeffPub").arg(m_ed->displayName(), m_ed->isModified() ? QStringLiteral("*") : QString()));
+    setWindowTitle(tr("%1%2 - JeffPub").arg(m_ed->displayName(), m_ed->isModified() ? QStringLiteral("*") : QString()));
 }
 
 void MainWindow::resizeEvent(QResizeEvent *e)
@@ -309,7 +309,7 @@ bool MainWindow::openFile(const QString &path)
 {
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) {
-        QMessageBox::warning(this, QStringLiteral("Open"), QStringLiteral("JeffPub can't open \"%1\".\n%2").arg(QFileInfo(path).fileName(), f.errorString()));
+        QMessageBox::warning(this, tr("Open"), tr("JeffPub can't open \"%1\".\n%2").arg(QFileInfo(path).fileName(), f.errorString()));
         return false;
     }
     const QByteArray bytes = f.readAll();
@@ -326,7 +326,7 @@ bool MainWindow::openFile(const QString &path)
     }
     QApplication::restoreOverrideCursor();
     if (!doc) {
-        QMessageBox::warning(this, QStringLiteral("Open"), QStringLiteral("JeffPub can't open \"%1\".\n%2").arg(QFileInfo(path).fileName(), err));
+        QMessageBox::warning(this, tr("Open"), tr("JeffPub can't open \"%1\".\n%2").arg(QFileInfo(path).fileName(), err));
         return false;
     }
     if (doc->props.title.isEmpty()) doc->props.title = QFileInfo(path).completeBaseName();
@@ -335,7 +335,7 @@ bool MainWindow::openFile(const QString &path)
     telemetry::count(fromPub ? QStringLiteral("file.open.pub") : QStringLiteral("file.open.jpub"));
     hideBackstage();
     if (fromPub && !rep.warnings.isEmpty())
-        statusBar()->showMessage(QStringLiteral("Opened .pub file. %1").arg(rep.warnings.first()), 8000);
+        statusBar()->showMessage(tr("Opened .pub file. %1").arg(rep.warnings.first()), 8000);
     return true;
 }
 
@@ -362,20 +362,20 @@ bool MainWindow::saveTo(const QString &pathIn)
     }
     if (path.endsWith(QLatin1String(".pub"), Qt::CaseInsensitive)) {
         if (!exportPublisher(*m_ed->doc(), path, &err, pageThumbnail(0, 160))) {
-            QMessageBox::warning(this, QStringLiteral("Save"), err);
+            QMessageBox::warning(this, tr("Save"), err);
             return false;
         }
         // Saved, but some objects have no .pub form yet: say which.
         if (!err.isEmpty())
-            QMessageBox::information(this, QStringLiteral("Save as .pub File"),
-                                     QStringLiteral("\"%1\" was saved, but %2.\n\nThey're kept when you save as a JeffPub publication (.jpub).")
+            QMessageBox::information(this, tr("Save as .pub File"),
+                                     tr("\"%1\" was saved, but %2.\n\nThey're kept when you save as a JeffPub publication (.jpub).")
                                          .arg(QFileInfo(path).fileName(), err));
     } else {
         if (!path.endsWith(QLatin1String(".jpub"), Qt::CaseInsensitive)) path += QStringLiteral(".jpub");
         m_ed->doc()->props.modified = QDateTime::currentDateTime();
         if (m_ed->doc()->props.author.isEmpty()) m_ed->doc()->props.author = Settings::get().userName();
         if (!savePublication(*m_ed->doc(), path, thumb, &err)) {
-            QMessageBox::warning(this, QStringLiteral("Save"), QStringLiteral("JeffPub couldn't save \"%1\".\n%2%3").arg(QFileInfo(path).fileName(), err, saveFailureHint(err)));
+            QMessageBox::warning(this, tr("Save"), tr("JeffPub couldn't save \"%1\".\n%2%3").arg(QFileInfo(path).fileName(), err, saveFailureHint(err)));
             return false;
         }
     }
@@ -384,7 +384,7 @@ bool MainWindow::saveTo(const QString &pathIn)
     Settings::get().addRecentFile(path);
     telemetry::count(path.endsWith(QLatin1String(".pub"), Qt::CaseInsensitive) ? QStringLiteral("file.save.pub") : QStringLiteral("file.save.jpub"));
     updateTitle();
-    statusBar()->showMessage(QStringLiteral("Saved %1").arg(QFileInfo(path).fileName()), 4000);
+    statusBar()->showMessage(tr("Saved %1").arg(QFileInfo(path).fileName()), 4000);
     return true;
 }
 
@@ -393,23 +393,27 @@ bool MainWindow::saveAs(const QString &format)
     const QString from = m_ed->filePath().isEmpty() ? m_recoveredFrom : m_ed->filePath();
     QString dir = from.isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/" + m_ed->displayName()
                                  : QFileInfo(from).absolutePath() + "/" + QFileInfo(from).completeBaseName();
-    QString filters = QStringLiteral("JeffPub Publication (*.jpub);;.pub Publication Files (*.pub);;PDF (*.pdf);;JeffPub Template (*.jpub)");
-    QString selected = format == QLatin1String("pub") ? QStringLiteral(".pub Publication Files (*.pub)") : QStringLiteral("JeffPub Publication (*.jpub)");
-    QString path = askSavePath(this, QStringLiteral("Save As"), dir, filters, &selected);
+    // The dialog hands back the filter text it showed, so the choice is
+    // recognized by comparing with these same (translated) texts.
+    const QString jpubFilter = tr("JeffPub Publication (*.jpub)"), pubFilter = tr(".pub Publication Files (*.pub)");
+    const QString pdfFilter = tr("PDF (*.pdf)"), templateFilter = tr("JeffPub Template (*.jpub)");
+    QString filters = jpubFilter + QStringLiteral(";;") + pubFilter + QStringLiteral(";;") + pdfFilter + QStringLiteral(";;") + templateFilter;
+    QString selected = format == QLatin1String("pub") ? pubFilter : jpubFilter;
+    QString path = askSavePath(this, tr("Save As"), dir, filters, &selected);
     if (path.isEmpty()) return false;
-    if (selected.startsWith("PDF")) {
+    if (selected == pdfFilter) {
         if (!path.endsWith(".pdf", Qt::CaseInsensitive)) path += ".pdf";
         exportPdf(path);
         return true;
     }
-    if (selected.startsWith(".pub") && !path.endsWith(".pub", Qt::CaseInsensitive)) path += ".pub";
-    if (selected.startsWith("JeffPub Template")) {
+    if (selected == pubFilter && !path.endsWith(".pub", Qt::CaseInsensitive)) path += ".pub";
+    if (selected == templateFilter) {
         const QString tdir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/Templates";
         QDir().mkpath(tdir);
         QString err;
         if (!savePublication(*m_ed->doc(), tdir + "/" + QFileInfo(path).completeBaseName() + ".jpub", pageThumbnail(0, 256), &err))
-            QMessageBox::warning(this, QStringLiteral("Save as Template"), err);
-        else statusBar()->showMessage(QStringLiteral("Saved to My Templates."), 4000);
+            QMessageBox::warning(this, tr("Save as Template"), err);
+        else statusBar()->showMessage(tr("Saved to My Templates."), 4000);
         return true;
     }
     return saveTo(path);
@@ -419,7 +423,7 @@ bool MainWindow::maybeSave()
 {
     m_ed->flushTyping();
     if (!m_ed->isModified()) return true;
-    const auto r = QMessageBox::question(this, QStringLiteral("JeffPub"), QStringLiteral("Do you want to save changes to %1?").arg(m_ed->displayName()),
+    const auto r = QMessageBox::question(this, QStringLiteral("JeffPub"), tr("Do you want to save changes to %1?").arg(m_ed->displayName()),
                                          QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Save);
     if (r == QMessageBox::Cancel) return false;
     if (r == QMessageBox::Save) return save();
@@ -459,23 +463,23 @@ void MainWindow::offerRecovery(bool askIfNone)
 {
     const QVector<recovery::Recovered> found = recovery::orphans();
     if (found.isEmpty()) {
-        if (askIfNone) QMessageBox::information(this, QStringLiteral("Recover Unsaved Work"), QStringLiteral("There's no unsaved work to recover."));
+        if (askIfNone) QMessageBox::information(this, tr("Recover Unsaved Work"), tr("There's no unsaved work to recover."));
         return;
     }
     QDialog dlg(this);
-    dlg.setWindowTitle(QStringLiteral("Recover Unsaved Work"));
+    dlg.setWindowTitle(tr("Recover Unsaved Work"));
     auto *v = new QVBoxLayout(&dlg);
-    auto *intro = new QLabel(QStringLiteral("JeffPub didn't close normally, and saved copies of your unsaved work. "
-                                            "Choose which to open; you can save each one where you like."),
+    auto *intro = new QLabel(tr("JeffPub didn't close normally, and saved copies of your unsaved work. "
+                                "Choose which to open; you can save each one where you like."),
                              &dlg);
     intro->setWordWrap(true);
     v->addWidget(intro);
     auto *list = new QListWidget(&dlg);
-    list->setAccessibleName(QStringLiteral("Recovered publications"));
+    list->setAccessibleName(tr("Recovered publications"));
     const QLocale loc;
     for (const auto &r : found) {
-        const QString where = r.source.isEmpty() ? QStringLiteral("never saved") : QDir::toNativeSeparators(r.source);
-        auto *it = new QListWidgetItem(QStringLiteral("%1\n%2, saved %3").arg(r.title, where, loc.toString(r.saved, QLocale::ShortFormat)), list);
+        const QString where = r.source.isEmpty() ? tr("never saved") : QDir::toNativeSeparators(r.source);
+        auto *it = new QListWidgetItem(tr("%1\n%2, saved %3").arg(r.title, where, loc.toString(r.saved, QLocale::ShortFormat)), list);
         it->setFlags(it->flags() | Qt::ItemIsUserCheckable);
         it->setCheckState(Qt::Checked);
         it->setIcon(icon(QStringLiteral("life-buoy")));
@@ -483,15 +487,15 @@ void MainWindow::offerRecovery(bool askIfNone)
     list->setMinimumSize(480, 180);
     v->addWidget(list);
     auto *buttons = new QDialogButtonBox(&dlg);
-    QPushButton *open = buttons->addButton(QStringLiteral("Open"), QDialogButtonBox::AcceptRole);
-    QPushButton *del = buttons->addButton(QStringLiteral("Delete"), QDialogButtonBox::DestructiveRole);
-    buttons->addButton(QStringLiteral("Not Now"), QDialogButtonBox::RejectRole);
+    QPushButton *open = buttons->addButton(tr("Open"), QDialogButtonBox::AcceptRole);
+    QPushButton *del = buttons->addButton(tr("Delete"), QDialogButtonBox::DestructiveRole);
+    buttons->addButton(tr("Not Now"), QDialogButtonBox::RejectRole);
     v->addWidget(buttons);
     open->setDefault(true);
     int choice = 0;
     connect(open, &QPushButton::clicked, &dlg, [&] { choice = 1; dlg.accept(); });
     connect(del, &QPushButton::clicked, &dlg, [&] {
-        if (QMessageBox::question(&dlg, QStringLiteral("Delete"), QStringLiteral("Delete the checked copies? Their unsaved work can't be brought back.")) != QMessageBox::Yes)
+        if (QMessageBox::question(&dlg, tr("Delete"), tr("Delete the checked copies? Their unsaved work can't be brought back.")) != QMessageBox::Yes)
             return;
         choice = 2;
         dlg.accept();
@@ -508,7 +512,7 @@ void MainWindow::offerRecovery(bool askIfNone)
         QString err;
         auto doc = loadPublication(r.file, &err);
         if (!doc) {
-            QMessageBox::warning(this, QStringLiteral("Recover Unsaved Work"), QStringLiteral("JeffPub can't open the copy of \"%1\".\n%2").arg(r.title, err));
+            QMessageBox::warning(this, tr("Recover Unsaved Work"), tr("JeffPub can't open the copy of \"%1\".\n%2").arg(r.title, err));
             continue;
         }
         // Into this window while it holds nothing, else a new one.
@@ -548,10 +552,10 @@ void MainWindow::exportPdf(const QString &pathIn, bool merged, bool archival)
 {
     QString path = pathIn;
     if (path.isEmpty()) {
-        path = askSavePath(this, archival ? QStringLiteral("Export PDF/A") : QStringLiteral("Export PDF"),
+        path = askSavePath(this, archival ? tr("Export PDF/A") : tr("Export PDF"),
                                             (m_ed->filePath().isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/" + m_ed->displayName()
                                                                         : QFileInfo(m_ed->filePath()).absolutePath() + "/" + QFileInfo(m_ed->filePath()).completeBaseName()) + ".pdf",
-                                            QStringLiteral("PDF (*.pdf)"));
+                                            tr("PDF (*.pdf)"));
         if (path.isEmpty()) return;
     }
     PdfSettings s;
@@ -577,7 +581,7 @@ QStringList pressProblems(const Document &d)
                 if (px.isValid() && fmt != QLatin1String("svg") && fmt != QLatin1String("wmf") && fmt != QLatin1String("emf") && pic->imgRect.width() > 0 &&
                     pic->imgRect.height() > 0) {
                     const double ppi = std::min(px.width() / (pic->imgRect.width() / 72.0), px.height() / (pic->imgRect.height() / 72.0));
-                    if (ppi < 150) out << QStringLiteral("A picture on page %1 has low resolution (%2 ppi; printers ask for 300).").arg(p + 1).arg(int(ppi));
+                    if (ppi < 150) out << QCoreApplication::translate("MainWindow", "A picture on page %1 has low resolution (%2 ppi; printers ask for 300).").arg(p + 1).arg(int(ppi));
                 }
             }
             if (it->type() == ItemType::Text)
@@ -587,7 +591,7 @@ QStringList pressProblems(const Document &d)
                             const QStringList fams = f.fragment().charFormat().fontFamilies().toStringList();
                             if (!fams.isEmpty() && !QFontDatabase::hasFamily(fams.first()) && !fonts.contains(fams.first())) {
                                 fonts.insert(fams.first());
-                                out << QStringLiteral("The font \"%1\" isn't on this computer; another font stands in.").arg(fams.first());
+                                out << QCoreApplication::translate("MainWindow", "The font \"%1\" isn't on this computer; another font stands in.").arg(fams.first());
                             }
                         }
         });
@@ -599,16 +603,16 @@ void MainWindow::exportPdfWithOptions()
     m_ed->endTextEdit();
     const Document *d = m_ed->doc();
     QDialog dlg(this);
-    dlg.setWindowTitle(QStringLiteral("Create PDF"));
+    dlg.setWindowTitle(tr("Create PDF"));
     auto *v = new QVBoxLayout(&dlg);
     auto *form = new QFormLayout();
     auto *preset = new QComboBox(&dlg);
-    preset->addItems({"Minimum size (online viewing, pictures at 96 dpi)", "Standard (online distribution, pictures at 150 dpi)",
-                      "High quality printing (desktop printers, pictures at 300 dpi)", "Commercial press (full-resolution pictures, marks and bleeds)"});
+    preset->addItems({tr("Minimum size (online viewing, pictures at 96 dpi)"), tr("Standard (online distribution, pictures at 150 dpi)"),
+                      tr("High quality printing (desktop printers, pictures at 300 dpi)"), tr("Commercial press (full-resolution pictures, marks and bleeds)")});
     preset->setCurrentIndex(Settings::get().value(QStringLiteral("pdf/preset"), 2).toInt());
-    form->addRow(QStringLiteral("Optimize for:"), preset);
+    form->addRow(tr("Optimize for:"), preset);
     auto *range = new QComboBox(&dlg);
-    range->addItems({"All pages", "Current page", "Pages from:"});
+    range->addItems({tr("All pages"), tr("Current page"), tr("Pages from:")});
     auto *fromBox = new QSpinBox(&dlg), *toBox = new QSpinBox(&dlg);
     fromBox->setRange(1, d->pages.size());
     toBox->setRange(1, d->pages.size());
@@ -616,23 +620,23 @@ void MainWindow::exportPdfWithOptions()
     auto *rh = new QHBoxLayout();
     rh->addWidget(range, 1);
     rh->addWidget(fromBox);
-    rh->addWidget(new QLabel(QStringLiteral("to"), &dlg));
+    rh->addWidget(new QLabel(tr("to"), &dlg));
     rh->addWidget(toBox);
     auto syncRange = [=] { fromBox->setEnabled(range->currentIndex() == 2); toBox->setEnabled(range->currentIndex() == 2); };
     QObject::connect(range, &QComboBox::currentIndexChanged, &dlg, syncRange);
     syncRange();
-    form->addRow(QStringLiteral("Pages:"), rh);
-    auto *props = new QCheckBox(QStringLiteral("Include document properties (title, author, subject, keywords)"), &dlg);
+    form->addRow(tr("Pages:"), rh);
+    auto *props = new QCheckBox(tr("Include document properties (title, author, subject, keywords)"), &dlg);
     props->setChecked(true);
-    auto *pdfa = new QCheckBox(QStringLiteral("PDF/A for long-term archiving"), &dlg);
-    auto *pdfx = new QCheckBox(QStringLiteral("PDF/X for a commercial printer"), &dlg);
+    auto *pdfa = new QCheckBox(tr("PDF/A for long-term archiving"), &dlg);
+    auto *pdfx = new QCheckBox(tr("PDF/X for a commercial printer"), &dlg);
     auto *condition = new QComboBox(&dlg);
     // PDF/X-1a flattens transparency; PDF/X-4 keeps it and carries the
     // condition's color profile (ECI's, or the printer's own file).
     QString ownProfile = Settings::get().value(QStringLiteral("pdf/pdfxProfile")).toString();
     auto conditionText = [&ownProfile](const PdfXCondition &c) {
-        QString t = (c.x4 ? QStringLiteral("PDF/X-4: ") : QStringLiteral("PDF/X-1a: ")) + c.name;
-        if (c.ownProfile && QFileInfo::exists(ownProfile)) t = QStringLiteral("PDF/X-4: Your printer's color profile (%1)").arg(QFileInfo(ownProfile).fileName());
+        QString t = (c.x4 ? tr("PDF/X-4: %1") : tr("PDF/X-1a: %1")).arg(c.name);
+        if (c.ownProfile && QFileInfo::exists(ownProfile)) t = tr("PDF/X-4: Your printer's color profile (%1)").arg(QFileInfo(ownProfile).fileName());
         return t;
     };
     for (const PdfXCondition &c : pdfXConditions()) condition->addItem(conditionText(c));
@@ -646,13 +650,13 @@ void MainWindow::exportPdfWithOptions()
         }
         // The printer's own profile: chosen now, and checked to be one for
         // printing in CMYK.
-        const QString file = QFileDialog::getOpenFileName(&dlg, QStringLiteral("Your Printer's Color Profile"),
-                                                          QFileInfo(ownProfile).absolutePath(), QStringLiteral("Color profiles (*.icc *.icm);;All Files (*)"));
+        const QString file = QFileDialog::getOpenFileName(&dlg, tr("Your Printer's Color Profile"),
+                                                          QFileInfo(ownProfile).absolutePath(), tr("Color profiles (*.icc *.icm)") + QStringLiteral(";;") + tr("All Files (*)"));
         QFile f(file);
         const QColorSpace cs = !file.isEmpty() && f.open(QIODevice::ReadOnly) ? QColorSpace::fromIccProfile(f.read(64 << 20)) : QColorSpace();
         if (!cs.isValid() || cs.colorModel() != QColorSpace::ColorModel::Cmyk) {
             if (!file.isEmpty())
-                QMessageBox::warning(&dlg, QStringLiteral("Create PDF"), QStringLiteral("\"%1\" isn't a color profile for printing in CMYK.").arg(QFileInfo(file).fileName()));
+                QMessageBox::warning(&dlg, tr("Create PDF"), tr("\"%1\" isn't a color profile for printing in CMYK.").arg(QFileInfo(file).fileName()));
             condition->setCurrentIndex(*lastCondition);
             return;
         }
@@ -670,20 +674,20 @@ void MainWindow::exportPdfWithOptions()
     };
     QObject::connect(pdfx, &QCheckBox::toggled, &dlg, syncStandards);
     syncStandards();
-    auto *openAfter = new QCheckBox(QStringLiteral("Open the PDF after saving it"), &dlg);
+    auto *openAfter = new QCheckBox(tr("Open the PDF after saving it"), &dlg);
     openAfter->setChecked(openPdfAfterSaving());
-    auto *booklet = new QCheckBox(QStringLiteral("Booklet sheets (two pages to a side, in folding order)"), &dlg);
+    auto *booklet = new QCheckBox(tr("Booklet sheets (two pages to a side, in folding order)"), &dlg);
     booklet->setChecked(true);
     booklet->setVisible(d->setup.layout == PageSetup::Booklet);
     form->addRow(booklet);
     form->addRow(props);
     form->addRow(pdfa);
     form->addRow(pdfx);
-    form->addRow(QStringLiteral("Printing condition:"), condition);
+    form->addRow(tr("Printing condition:"), condition);
     form->addRow(openAfter);
     v->addLayout(form);
     auto *bb = new QDialogButtonBox(QDialogButtonBox::Cancel, &dlg);
-    bb->addButton(QStringLiteral("Save PDF…"), QDialogButtonBox::AcceptRole);
+    bb->addButton(tr("Save PDF…"), QDialogButtonBox::AcceptRole);
     QObject::connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
     QObject::connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
     v->addWidget(bb);
@@ -706,22 +710,22 @@ void MainWindow::exportPdfWithOptions()
     if (s.pdfx) {
         const QStringList problems = pressProblems(*d);
         if (!problems.isEmpty()) {
-            QMessageBox box(QMessageBox::Warning, QStringLiteral("Create PDF"),
-                            QStringLiteral("Before you send this to a printer:"), QMessageBox::NoButton, this);
+            QMessageBox box(QMessageBox::Warning, tr("Create PDF"),
+                            tr("Before you send this to a printer:"), QMessageBox::NoButton, this);
             box.setInformativeText(QStringLiteral("• ") + problems.mid(0, 8).join(QStringLiteral("\n• ")) +
-                                   (problems.size() > 8 ? QStringLiteral("\n• …and %1 more").arg(problems.size() - 8) : QString()));
-            QPushButton *anyway = box.addButton(QStringLiteral("Create PDF Anyway"), QMessageBox::AcceptRole);
-            QPushButton *check = box.addButton(QStringLiteral("Open Design Checker"), QMessageBox::ActionRole);
+                                   (problems.size() > 8 ? QStringLiteral("\n• ") + tr("…and %1 more").arg(problems.size() - 8) : QString()));
+            QPushButton *anyway = box.addButton(tr("Create PDF Anyway"), QMessageBox::AcceptRole);
+            QPushButton *check = box.addButton(tr("Open Design Checker"), QMessageBox::ActionRole);
             box.addButton(QMessageBox::Cancel);
             box.exec();
             if (box.clickedButton() == check) showTaskPane(QStringLiteral("designchecker"));
             if (box.clickedButton() != anyway) return;
         }
     }
-    const QString path = askSavePath(this, QStringLiteral("Create PDF"),
+    const QString path = askSavePath(this, tr("Create PDF"),
                                      (m_ed->filePath().isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/" + m_ed->displayName()
                                                                  : QFileInfo(m_ed->filePath()).absolutePath() + "/" + QFileInfo(m_ed->filePath()).completeBaseName()) + ".pdf",
-                                     QStringLiteral("PDF (*.pdf)"));
+                                     tr("PDF (*.pdf)"));
     if (!path.isEmpty()) exportPdfTo(path, s);
 }
 
@@ -734,7 +738,7 @@ static QByteArray pdfX4Profile(QWidget *parent, const PdfXCondition &c, const QS
     if (c.ownProfile) {
         QFile f(ownProfile);
         if (ownProfile.isEmpty() || !f.open(QIODevice::ReadOnly)) {
-            *error = QStringLiteral("choose your printer's color profile (an .icc file) first");
+            *error = QCoreApplication::translate("MainWindow", "choose your printer's color profile (an .icc file) first");
             return {};
         }
         return f.read(64 << 20);
@@ -746,24 +750,24 @@ static QByteArray pdfX4Profile(QWidget *parent, const PdfXCondition &c, const QS
         if (QCryptographicHash::hash(icc, QCryptographicHash::Sha256).toHex() == c.profileSha256) return icc;
     }
     if (!parent || QGuiApplication::platformName() == QLatin1String("offscreen")) {
-        *error = QStringLiteral("its color profile, %1, hasn't been downloaded yet").arg(c.info);
+        *error = QCoreApplication::translate("MainWindow", "its color profile, %1, hasn't been downloaded yet").arg(c.info);
         return {};
     }
     const QUrl url(c.profileUrl);
-    if (QMessageBox::question(parent, QStringLiteral("Create PDF"),
-                              QStringLiteral("A PDF/X-4 file carries the color profile of its printing condition, \"%1\". The European Color Initiative, "
-                                             "which makes it, lets anyone use it and put it in PDFs but not pass it on, so it doesn't come with JeffPub.\n\n"
-                                             "Download it from %2 now? (%3, once.)")
+    if (QMessageBox::question(parent, QCoreApplication::translate("MainWindow", "Create PDF"),
+                              QCoreApplication::translate("MainWindow", "A PDF/X-4 file carries the color profile of its printing condition, \"%1\". The European Color Initiative, "
+                                                                        "which makes it, lets anyone use it and put it in PDFs but not pass it on, so it doesn't come with JeffPub.\n\n"
+                                                                        "Download it from %2 now? (%3, once.)")
                                   .arg(c.info, url.host(), c.profileSize),
                               QMessageBox::Yes | QMessageBox::Cancel) != QMessageBox::Yes) {
-        *error = QStringLiteral("its color profile wasn't downloaded");
+        *error = QCoreApplication::translate("MainWindow", "its color profile wasn't downloaded");
         return {};
     }
     QNetworkAccessManager net;
     QNetworkRequest req(url);
     req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("JeffPub/%1").arg(QStringLiteral(JP_VERSION)));
     QNetworkReply *r = net.get(req);
-    QProgressDialog progress(QStringLiteral("Downloading %1…").arg(c.info), QStringLiteral("Cancel"), 0, 0, parent);
+    QProgressDialog progress(QCoreApplication::translate("MainWindow", "Downloading %1…").arg(c.info), QCoreApplication::translate("MainWindow", "Cancel"), 0, 0, parent);
     progress.setWindowModality(Qt::WindowModal);
     progress.setMinimumDuration(400);
     QObject::connect(r, &QNetworkReply::downloadProgress, &progress, [&progress](qint64 got, qint64 total) {
@@ -778,7 +782,7 @@ static QByteArray pdfX4Profile(QWidget *parent, const PdfXCondition &c, const QS
     progress.close();
     const QByteArray zip = r->error() == QNetworkReply::NoError ? r->read(32 << 20) : QByteArray();
     if (zip.isEmpty()) {
-        *error = QStringLiteral("the download didn't finish (%1)").arg(r->errorString());
+        *error = QCoreApplication::translate("MainWindow", "the download didn't finish (%1)").arg(r->errorString());
         return {};
     }
     const QByteArray icc = pdfXProfileFromZip(c, zip, error);
@@ -832,10 +836,10 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
         const QByteArray icc = pdfX4Profile(isVisible() ? this : nullptr, xcond, s.pdfxProfile, &why);
         if (!icc.isEmpty()) {
             x4Profile = QColorSpace::fromIccProfile(icc);
-            if (!x4Profile.isValid() || x4Profile.colorModel() != QColorSpace::ColorModel::Cmyk) why = QStringLiteral("the color profile isn't one for printing in CMYK");
+            if (!x4Profile.isValid() || x4Profile.colorModel() != QColorSpace::ColorModel::Cmyk) why = tr("the color profile isn't one for printing in CMYK");
         }
         if (!why.isEmpty()) {
-            if (isVisible()) QMessageBox::warning(this, QStringLiteral("Create PDF"), QStringLiteral("JeffPub couldn't make the PDF/X-4: %1.").arg(why));
+            if (isVisible()) QMessageBox::warning(this, tr("Create PDF"), tr("JeffPub couldn't make the PDF/X-4: %1.").arg(why));
             else qWarning("Create PDF: no PDF/X-4: %s", qPrintable(why));
             return false;
         }
@@ -879,7 +883,7 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
     pdf.setResolution(1200);
     QPainter p;
     if (!p.begin(&pdf)) {
-        QMessageBox::warning(this, QStringLiteral("Create PDF"), QStringLiteral("JeffPub couldn't write \"%1\".%2").arg(path, saveFailureHint(QStringLiteral("access denied"))));
+        QMessageBox::warning(this, tr("Create PDF"), tr("JeffPub couldn't write \"%1\".%2").arg(path, saveFailureHint(QStringLiteral("access denied"))));
         return false;
     }
     QApplication::setOverrideCursor(Qt::WaitCursor);
@@ -941,7 +945,7 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
         for (int k2 = 0; k2 < d->print.spotColors.size(); ++k2) names << d->print.spotName(k2);
         QString spotErr;
         if (!addPdfSpotColors(path, d->print.spotColors, names, &spotErr))
-            QMessageBox::warning(this, QStringLiteral("Create PDF"), QStringLiteral("The PDF was made, but its spot colors are process colors: %1").arg(spotErr));
+            QMessageBox::warning(this, tr("Create PDF"), tr("The PDF was made, but its spot colors are process colors: %1").arg(spotErr));
     }
     // PDF/X: pictures in CMYK, the page's trim and bleed, and (PDF/X-1a)
     // the printing condition.
@@ -957,12 +961,12 @@ bool MainWindow::exportPdfTo(const QString &path, const PdfSettings &sIn)
         QString xErr;
         if (!(x4 ? makePdfX4(path, xo, &xErr) : makePdfX1a(path, xo, &xErr))) {
             QApplication::restoreOverrideCursor();
-            QMessageBox::warning(this, QStringLiteral("Create PDF"), QStringLiteral("The PDF was made, but it isn't PDF/X: %1.").arg(xErr));
+            QMessageBox::warning(this, tr("Create PDF"), tr("The PDF was made, but it isn't PDF/X: %1.").arg(xErr));
             return false;
         }
     }
     QApplication::restoreOverrideCursor();
-    statusBar()->showMessage(QStringLiteral("Exported %1%2").arg(QFileInfo(path).fileName(), s.pdfx ? (x4 ? QStringLiteral(" (PDF/X-4)") : QStringLiteral(" (PDF/X-1a)")) : s.archival ? QStringLiteral(" (PDF/A)") : QString()), 5000);
+    statusBar()->showMessage(tr("Exported %1%2").arg(QFileInfo(path).fileName(), s.pdfx ? (x4 ? QStringLiteral(" (PDF/X-4)") : QStringLiteral(" (PDF/X-1a)")) : s.archival ? QStringLiteral(" (PDF/A)") : QString()), 5000);
     // Not for exports from the command line, which show no window.
     if (openPdfAfterSaving() && isVisible() && openFileHook) openFileHook(path);
     return true;
@@ -980,18 +984,19 @@ void MainWindow::exportImages()
     const QString base = m_ed->filePath().isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::PicturesLocation) + "/" + m_ed->displayName()
                                                     : QFileInfo(m_ed->filePath()).absolutePath() + "/" + QFileInfo(m_ed->filePath()).completeBaseName();
     QString selected;
-    const QString path = askSavePath(this, QStringLiteral("Save as Picture"), base + ".png",
-                                                      QStringLiteral("PNG (*.png);;JPEG (*.jpg);;GIF (*.gif);;TIFF (*.tif);;Bitmap (*.bmp);;SVG vector drawing (*.svg)"), &selected);
+    const QString path = askSavePath(this, tr("Save as Picture"), base + ".png",
+                                                      tr("PNG (*.png)") + QStringLiteral(";;") + tr("JPEG (*.jpg)") + QStringLiteral(";;") + tr("GIF (*.gif)") + QStringLiteral(";;") +
+                                                      tr("TIFF (*.tif)") + QStringLiteral(";;") + tr("Bitmap (*.bmp)") + QStringLiteral(";;") + tr("SVG vector drawing (*.svg)"), &selected);
     if (path.isEmpty()) return;
     // A vector drawing has no resolution to ask for.
     if (QFileInfo(path).suffix().compare(QLatin1String("svg"), Qt::CaseInsensitive) == 0) {
         QString error;
-        if (exportSvgTo(path, &error)) statusBar()->showMessage(QStringLiteral("Saved %1 drawing(s).").arg(m_ed->doc()->pages.size()), 5000);
-        else QMessageBox::warning(this, QStringLiteral("Save as Picture"), QStringLiteral("The drawing couldn't be saved: %1").arg(error));
+        if (exportSvgTo(path, &error)) statusBar()->showMessage(tr("Saved %1 drawing(s).").arg(m_ed->doc()->pages.size()), 5000);
+        else QMessageBox::warning(this, tr("Save as Picture"), tr("The drawing couldn't be saved: %1").arg(error));
         return;
     }
     bool ok = false;
-    const int dpi = QInputDialog::getItem(this, QStringLiteral("Save as Picture"), QStringLiteral("Resolution (dots per inch):"),
+    const int dpi = QInputDialog::getItem(this, tr("Save as Picture"), tr("Resolution (dots per inch):"),
                                           {"96", "150", "300", "600"}, 2, false, &ok).toInt();
     if (!ok) return;
     const QFileInfo fi(path);
@@ -1009,7 +1014,7 @@ void MainWindow::exportImages()
         const QString out = n == 1 ? path : fi.absolutePath() + "/" + fi.completeBaseName() + QStringLiteral("-%1.").arg(i + 1) + fi.suffix();
         img.save(out);
     }
-    statusBar()->showMessage(QStringLiteral("Saved %1 picture(s).").arg(n), 5000);
+    statusBar()->showMessage(tr("Saved %1 picture(s).").arg(n), 5000);
 }
 
 bool MainWindow::exportSvgTo(const QString &path, QString *error)
@@ -1033,19 +1038,19 @@ void MainWindow::exportEpub()
 {
     Document *d = m_ed->doc();
     QDialog dlg(this);
-    dlg.setWindowTitle(QStringLiteral("Save as E-book"));
+    dlg.setWindowTitle(tr("Save as E-book"));
     auto *v = new QVBoxLayout(&dlg);
-    auto *about = new QLabel(QStringLiteral("An EPUB e-book whose text flows to fit each reader's screen. Chapters start at each "
-                                            "Heading 1 paragraph, and the Heading 1-3 paragraphs make its table of contents."), &dlg);
+    auto *about = new QLabel(tr("An EPUB e-book whose text flows to fit each reader's screen. Chapters start at each "
+                                "Heading 1 paragraph, and the Heading 1-3 paragraphs make its table of contents."), &dlg);
     about->setWordWrap(true);
     v->addWidget(about);
     auto *form = new QFormLayout();
     auto *title = new QLineEdit(d->props.title.isEmpty() ? QFileInfo(m_ed->displayName()).completeBaseName() : d->props.title, &dlg);
     auto *author = new QLineEdit(d->props.author, &dlg);
-    form->addRow(QStringLiteral("Title:"), title);
-    form->addRow(QStringLiteral("Author:"), author);
+    form->addRow(tr("Title:"), title);
+    form->addRow(tr("Author:"), author);
     v->addLayout(form);
-    auto *cover = new QCheckBox(QStringLiteral("Use the first page as the cover"), &dlg);
+    auto *cover = new QCheckBox(tr("Use the first page as the cover"), &dlg);
     cover->setChecked(true);
     v->addWidget(cover);
     auto *bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
@@ -1056,14 +1061,14 @@ void MainWindow::exportEpub()
     if (dlg.exec() != QDialog::Accepted) return;
     const QString base = m_ed->filePath().isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/" + m_ed->displayName()
                                                     : QFileInfo(m_ed->filePath()).absolutePath() + "/" + QFileInfo(m_ed->filePath()).completeBaseName();
-    const QString path = askSavePath(this, QStringLiteral("Save as E-book"), QFileInfo(base).absolutePath() + "/" + QFileInfo(base).completeBaseName() + ".epub",
-                                     QStringLiteral("EPUB e-book (*.epub)"));
+    const QString path = askSavePath(this, tr("Save as E-book"), QFileInfo(base).absolutePath() + "/" + QFileInfo(base).completeBaseName() + ".epub",
+                                     tr("EPUB e-book (*.epub)"));
     if (path.isEmpty()) return;
     QString error;
     if (exportEpubTo(path, title->text().trimmed(), author->text().trimmed(), cover->isChecked(), &error))
-        statusBar()->showMessage(QStringLiteral("Saved the e-book."), 5000);
+        statusBar()->showMessage(tr("Saved the e-book."), 5000);
     else
-        QMessageBox::warning(this, QStringLiteral("Save as E-book"), QStringLiteral("The e-book couldn't be saved: %1").arg(error));
+        QMessageBox::warning(this, tr("Save as E-book"), tr("The e-book couldn't be saved: %1").arg(error));
 }
 
 bool MainWindow::exportEpubTo(const QString &path, const QString &title, const QString &author, bool cover, QString *error)
@@ -1084,9 +1089,9 @@ bool MainWindow::exportEpubTo(const QString &path, const QString &title, const Q
 
 void MainWindow::exportHtml()
 {
-    const QString path = askSavePath(this, QStringLiteral("Save as Web Page"),
+    const QString path = askSavePath(this, tr("Save as Web Page"),
                                                       QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/" + m_ed->displayName() + ".html",
-                                                      QStringLiteral("Web Page (*.html)"));
+                                                      tr("Web Page (*.html)"));
     if (path.isEmpty()) return;
     exportHtmlTo(path);
 }
@@ -1145,7 +1150,7 @@ bool MainWindow::exportHtmlTo(const QString &path)
     QSaveFile f(path);
     const QByteArray out = html.toUtf8();
     if (!f.open(QIODevice::WriteOnly) || f.write(out) != out.size() || !f.commit()) return false;
-    statusBar()->showMessage(QStringLiteral("Saved %1").arg(QFileInfo(path).fileName()), 5000);
+    statusBar()->showMessage(tr("Saved %1").arg(QFileInfo(path).fileName()), 5000);
     return true;
 }
 
@@ -1167,7 +1172,8 @@ void MainWindow::printPublication()
 // ---------------- pictures ----------------
 static QString imageFilter()
 {
-    return QStringLiteral("All Pictures (*.png *.jpg *.jpeg *.gif *.bmp *.tif *.tiff *.webp *.svg *.wmf *.emf *.ico *.pdf);;All Files (*)");
+    return QCoreApplication::translate("MainWindow", "All Pictures (*.png *.jpg *.jpeg *.gif *.bmp *.tif *.tiff *.webp *.svg *.wmf *.emf *.ico *.pdf)") + QStringLiteral(";;") +
+           QCoreApplication::translate("MainWindow", "All Files (*)");
 }
 
 // Which page of a PDF to place: the only one, or the one chosen from
@@ -1177,9 +1183,9 @@ static int choosePdfPage(QWidget *parent, const PdfDocument &pdf, const QString 
     const int pages = pdf.pageCount();
     if (pages <= 1) return pages == 1 ? 0 : -1;
     QDialog dlg(parent);
-    dlg.setWindowTitle(QStringLiteral("Insert PDF Page"));
+    dlg.setWindowTitle(QCoreApplication::translate("MainWindow", "Insert PDF Page"));
     auto *lay = new QVBoxLayout(&dlg);
-    lay->addWidget(new QLabel(QStringLiteral("%1 has %2 pages. Choose the page to insert:").arg(name).arg(pages)));
+    lay->addWidget(new QLabel(QCoreApplication::translate("MainWindow", "%1 has %2 pages. Choose the page to insert:").arg(name).arg(pages)));
     auto *list = new QListWidget;
     list->setViewMode(QListView::IconMode);
     list->setIconSize(QSize(120, 120));
@@ -1201,7 +1207,7 @@ static int choosePdfPage(QWidget *parent, const PdfDocument &pdf, const QString 
             p.end();
             icon = QIcon(QPixmap::fromImage(img));
         }
-        auto *item = new QListWidgetItem(icon, QStringLiteral("Page %1").arg(i + 1));
+        auto *item = new QListWidgetItem(icon, QCoreApplication::translate("MainWindow", "Page %1").arg(i + 1));
         item->setData(Qt::UserRole, i);
         list->addItem(item);
     }
@@ -1249,7 +1255,7 @@ static bool readPicture(QWidget *parent, const QString &path, QByteArray *bytes,
 
 void MainWindow::insertPictureFromFile(const QString &replaceItemId, const QPointF &at)
 {
-    const QStringList paths = QFileDialog::getOpenFileNames(this, replaceItemId.isEmpty() ? QStringLiteral("Insert Picture") : QStringLiteral("Change Picture"),
+    const QStringList paths = QFileDialog::getOpenFileNames(this, replaceItemId.isEmpty() ? tr("Insert Picture") : tr("Change Picture"),
                                                             Settings::get().value("dirs/pictures", QStandardPaths::writableLocation(QStandardPaths::PicturesLocation)).toString(),
                                                             imageFilter());
     if (paths.isEmpty()) return;
@@ -1260,7 +1266,7 @@ void MainWindow::insertPictureFromFile(const QString &replaceItemId, const QPoin
         QString fmt;
         QSize px;
         if (!pic || !readPicture(this, paths.first(), &bytes, &fmt, &px)) return;
-        m_ed->change(QStringLiteral("Change Picture"), [&] {
+        m_ed->change(tr("Change Picture"), [&] {
             pic->imageId = m_ed->doc()->addImage(bytes, fmt, paths.first());
             pic->fitImage(m_ed->doc()->imageSize(pic->imageId), true);
         });
@@ -1274,7 +1280,7 @@ void MainWindow::insertFiles(const QStringList &paths, const QPointF &atIn)
     Document *d = m_ed->doc();
     const QSizeF ps = d->pageSize();
     QPointF at = atIn;
-    m_ed->beginChange(QStringLiteral("Insert Picture"));
+    m_ed->beginChange(tr("Insert Picture"));
     QStringList made;
     // Several pictures at once go to the picture tray on the scratch area.
     int pictures = 0;
@@ -1321,7 +1327,7 @@ void MainWindow::insertFiles(const QStringList &paths, const QPointF &atIn)
     m_ed->endChange();
     if (toTray) {
         m_ed->arrangeThumbnails();
-        Q_EMIT m_ed->status(QStringLiteral("%1 pictures are on the scratch area beside the page. Drag them onto the page, or onto a picture to swap.").arg(pictures));
+        Q_EMIT m_ed->status(tr("%1 pictures are on the scratch area beside the page. Drag them onto the page, or onto a picture to swap.").arg(pictures));
     }
     m_ed->select(made);
 }
@@ -1358,9 +1364,9 @@ void MainWindow::contextMenu(const QPoint &global)
                 });
                 a->setFont(bold);
             }
-            if (sugg.isEmpty()) menu.addAction(QStringLiteral("(No spelling suggestions)"))->setEnabled(false);
-            menu.addAction(QStringLiteral("Ignore All"), this, [this, word] { spellingIgnore(word); m_ed->invalidateSpelling(); });
-            menu.addAction(QStringLiteral("Add to Dictionary"), this, [this, word] { spellingAdd(word); m_ed->invalidateSpelling(); });
+            if (sugg.isEmpty()) menu.addAction(tr("(No spelling suggestions)"))->setEnabled(false);
+            menu.addAction(tr("Ignore All"), this, [this, word] { spellingIgnore(word); m_ed->invalidateSpelling(); });
+            menu.addAction(tr("Add to Dictionary"), this, [this, word] { spellingAdd(word); m_ed->invalidateSpelling(); });
             menu.addSeparator();
             break;
         }
@@ -1375,7 +1381,7 @@ void MainWindow::contextMenu(const QPoint &global)
         menu.addSeparator();
         menu.addAction(act("ins.link"));
         menu.addAction(act("rev.thesaurus"));
-        QMenu *fit = menu.addMenu(act("tb.textFit")->icon(), QStringLiteral("Text Fit"));
+        QMenu *fit = menu.addMenu(act("tb.textFit")->icon(), tr("Text Fit"));
         for (const char *id : {"fit.best", "fit.shrink", "fit.grow", "fit.none"}) fit->addAction(act(id));
         menu.addSeparator();
         menu.addAction(act("obj.format"));
@@ -1389,12 +1395,12 @@ void MainWindow::contextMenu(const QPoint &global)
         if (kind == "multi") menu.addAction(act("arr.group"));
         if (kind == "group") menu.addAction(act("arr.ungroup"));
         if (m_ed->canRegroup()) menu.addAction(act("arr.regroup"));
-        QMenu *order = menu.addMenu(icon("layers"), QStringLiteral("Order"));
+        QMenu *order = menu.addMenu(icon("layers"), tr("Order"));
         order->addAction(act("arr.front"));
         order->addAction(act("arr.forward"));
         order->addAction(act("arr.backward"));
         order->addAction(act("arr.back"));
-        QMenu *wrap = menu.addMenu(icon("wrap-text"), QStringLiteral("Wrap Text"));
+        QMenu *wrap = menu.addMenu(icon("wrap-text"), tr("Wrap Text"));
         for (const char *id : {"wrap.none", "wrap.square", "wrap.tight", "wrap.through", "wrap.topBottom", "wrap.inline"}) wrap->addAction(act(id));
         if (kind == "picture") {
             menu.addSeparator();
@@ -1408,7 +1414,7 @@ void MainWindow::contextMenu(const QPoint &global)
             menu.addSeparator();
             menu.addAction(act("tb.link"));
             menu.addAction(act("tb.break"));
-            QMenu *fit = menu.addMenu(act("tb.textFit")->icon(), QStringLiteral("Text Fit"));
+            QMenu *fit = menu.addMenu(act("tb.textFit")->icon(), tr("Text Fit"));
             for (const char *id : {"fit.best", "fit.shrink", "fit.grow", "fit.none"}) fit->addAction(act(id));
         }
         if (kind == "shape") menu.addAction(act("shape.addText"));
@@ -1427,7 +1433,7 @@ void MainWindow::contextMenu(const QPoint &global)
         menu.addSeparator();
         menu.addAction(act("pd.pageSetup"));
         menu.addAction(act("pd.guidesDialog"));
-        QMenu *zoom = menu.addMenu(icon("zoom-in"), QStringLiteral("Zoom"));
+        QMenu *zoom = menu.addMenu(icon("zoom-in"), tr("Zoom"));
         zoom->addAction(act("zoom.page"));
         zoom->addAction(act("zoom.width"));
         zoom->addAction(act("zoom.100"));
