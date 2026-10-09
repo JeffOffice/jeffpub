@@ -83,17 +83,19 @@ set_target_properties(jeffpub PROPERTIES OUTPUT_NAME "JeffPub")
 # translator starts from; each translations/jeffpub_<language>.ts is built
 # into the program under :/i18n/. Without Qt's Linguist tools the program
 # builds the same, in English.
+# English needs one too, for plurals only: jeffpub_en.ts gives "%n page(s)"
+# its singular and plural forms (lupdate adds new ones; fill in their forms).
 find_package(Qt6 QUIET COMPONENTS LinguistTools)
 if(Qt6LinguistTools_FOUND)
   file(GLOB JP_TRANSLATIONS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/translations/jeffpub_*.ts)
+  list(REMOVE_ITEM JP_TRANSLATIONS ${CMAKE_SOURCE_DIR}/translations/jeffpub_en.ts)
   qt_add_lupdate(TS_FILES ${CMAKE_SOURCE_DIR}/translations/jeffpub.ts ${JP_TRANSLATIONS}
+                 PLURALS_TS_FILE ${CMAKE_SOURCE_DIR}/translations/jeffpub_en.ts
                  SOURCE_TARGETS jpcore jeffpub
                  LUPDATE_TARGET jeffpub_lupdate
                  OPTIONS -no-obsolete -locations relative)
-  if(JP_TRANSLATIONS)
-    qt_add_lrelease(TS_FILES ${JP_TRANSLATIONS} QM_FILES_OUTPUT_VARIABLE JP_QM_FILES)
-    qt_add_resources(jeffpub "translations" PREFIX "/i18n" BASE ${CMAKE_CURRENT_BINARY_DIR} FILES ${JP_QM_FILES})
-  endif()
+  qt_add_lrelease(TS_FILES ${JP_TRANSLATIONS} ${CMAKE_SOURCE_DIR}/translations/jeffpub_en.ts QM_FILES_OUTPUT_VARIABLE JP_QM_FILES)
+  qt_add_resources(jpcore "translations" PREFIX "/i18n" BASE ${CMAKE_CURRENT_BINARY_DIR} FILES ${JP_QM_FILES})
 endif()
 
 enable_testing()

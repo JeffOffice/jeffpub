@@ -40,6 +40,7 @@
 #include "app/editor.h"
 #include "app/mainwindow.h"
 #include "app/recovery.h"
+#include "app/i18n.h"
 #include "app/keytips.h"
 #include "app/focusring.h"
 #include "app/keyboardnav.h"
@@ -1807,6 +1808,25 @@ private Q_SLOTS:
         jp::setUiDark(wasDark);
         qApp->setPalette(pal);
         qApp->setStyleSheet(sheet);
+    }
+
+    // English plurals come from a small translation of their own: without
+    // it, "Added %n page(s)" reads "page(s)". Every plural in it has its
+    // forms filled in (lupdate adds new ones empty).
+    void englishPlurals()
+    {
+        QTranslator en;
+        QVERIFY(en.load(QStringLiteral(":/i18n/jeffpub_en.qm")));
+        QCoreApplication::installTranslator(&en);
+        QCOMPARE(QCoreApplication::translate("Dialogs", "Added %n page(s) for the rest of the text.", "", 1), QStringLiteral("Added 1 page for the rest of the text."));
+        QCOMPARE(QCoreApplication::translate("Dialogs", "Added %n page(s) for the rest of the text.", "", 3), QStringLiteral("Added 3 pages for the rest of the text."));
+        QCoreApplication::removeTranslator(&en);
+        QVERIFY(!jp::availableUiLanguages().contains(QStringLiteral("en")));
+        QFile ts(QStringLiteral(JP_TEST_DATA "/../../translations/jeffpub_en.ts"));
+        QVERIFY(ts.open(QIODevice::ReadOnly));
+        const QByteArray xml = ts.readAll();
+        QVERIFY2(!xml.contains("type=\"unfinished\"") && !xml.contains("<numerusform></numerusform>"),
+                 "translations/jeffpub_en.ts has a plural without its English forms");
     }
 
     // The ribbon's text, in resources/ribbon.json where lupdate can't see

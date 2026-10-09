@@ -14,7 +14,7 @@ QStringList availableUiLanguages()
 {
     QStringList out;
     for (const QString &f : QDir(QStringLiteral(":/i18n")).entryList({QStringLiteral("jeffpub_*.qm")}, QDir::Files))
-        out << f.mid(8, f.size() - 11);   // jeffpub_<language>.qm
+        if (f != QLatin1String("jeffpub_en.qm")) out << f.mid(8, f.size() - 11);   // jeffpub_<language>.qm; English is the text itself
     return out;
 }
 
@@ -33,7 +33,12 @@ QString installTranslations()
         const QString base = w.section(QLatin1Char('_'), 0, 0);
         if (have.contains(base)) { lang = base; break; }
     }
-    if (lang.isEmpty()) return QStringLiteral("en");
+    if (lang.isEmpty()) {
+        // English: only its plural forms ("1 page", "2 pages") need a file.
+        auto *plurals = new QTranslator(QCoreApplication::instance());
+        if (plurals->load(QStringLiteral(":/i18n/jeffpub_en.qm"))) QCoreApplication::installTranslator(plurals);
+        return QStringLiteral("en");
+    }
     auto *own = new QTranslator(QCoreApplication::instance());
     if (own->load(QStringLiteral(":/i18n/jeffpub_%1.qm").arg(lang))) QCoreApplication::installTranslator(own);
     // Qt's own text (standard buttons such as Cancel, file dialogs): beside
