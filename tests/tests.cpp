@@ -1880,6 +1880,46 @@ private Q_SLOTS:
     // AutoRecover keeps one copy per document and run: two "Cover.pub"
     // files in different folders overwrote each other's copy, copies were
     // never offered after a crash, and never removed.
+    // A page fitted to the window at the size where a scroll bar is just
+    // needed: the bar came, the page area shrank, the page refitted smaller,
+    // the bar went, and so on, a whole processor busy while JeffPub sat idle
+    // (Windows' usual window size hit it). Each window size must settle.
+    void fittedPageSettles()
+    {
+        QString err;
+        auto doc = importPublisherFile(QStringLiteral(JP_TEST_DATA "/pub/poi-Sample2.pub"), &err);
+        QVERIFY2(doc, qPrintable(err));
+        jp::MainWindow w;
+        w.editor()->setDocument(std::move(doc));
+        w.show();
+        auto *canvas = w.findChild<jp::Canvas *>();
+        QVERIFY(canvas);
+        struct Resizes : QObject {
+            jp::Canvas *canvas = nullptr;
+            int n = 0;
+            bool runaway = false;
+            bool eventFilter(QObject *, QEvent *e) override
+            {
+                if (e->type() == QEvent::Resize && ++n > 50 && !runaway) {
+                    runaway = true;
+                    canvas->zoomToFit(jp::Canvas::Fit::None);   // ends the loop, so the test fails rather than hangs
+                }
+                return false;
+            }
+        } resizes;
+        resizes.canvas = canvas;
+        canvas->viewport()->installEventFilter(&resizes);
+        // Heights on both sides of where a bar is just needed, whatever the
+        // system's ribbon and font sizes.
+        for (int h = 560; h <= 800; ++h) {
+            canvas->zoomToFit(jp::Canvas::Fit::WholePage);
+            resizes.n = 0;
+            w.resize(1000, h);
+            for (int i = 0; i < 3; ++i) QCoreApplication::processEvents();
+            QVERIFY2(!resizes.runaway, qPrintable(QStringLiteral("the page area kept resizing at 1000x%1").arg(h)));
+        }
+    }
+
     void autoRecoverCopies()
     {
         QTemporaryDir dir;

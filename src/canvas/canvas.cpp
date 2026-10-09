@@ -95,6 +95,13 @@ static QCursor painterCursor()
 Canvas::Canvas(Editor *ed, QWidget *parent) : QAbstractScrollArea(parent), m_ed(ed)
 {
     setFrameShape(QFrame::NoFrame);
+    // Scroll bars always show, so the page area's size doesn't depend on the
+    // zoom: with bars that come and go, fitting the page near the size where
+    // one is just needed brought the bar in, which shrank the area, refitted
+    // the page smaller, took the bar away again, and so on endlessly (a
+    // whole processor busy while JeffPub sat idle).
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     viewport()->setMouseTracking(true);
     viewport()->setAttribute(Qt::WA_OpaquePaintEvent);
     setFocusPolicy(Qt::StrongFocus);
