@@ -12,6 +12,7 @@
 #include "app/mainwindow.h"
 #include "app/recovery.h"
 #include "app/theme.h"
+#include "app/i18n.h"
 #include "app/ribbon.h"
 #include "app/updater.h"
 #include "app/settings.h"
@@ -58,6 +59,7 @@ int main(int argc, char **argv)
     cli.addPositionalArgument(QStringLiteral("files"), QStringLiteral("Publications to open."), QStringLiteral("[files...]"));
     cli.process(app);
 
+    jp::installTranslations();   // before any window builds its text
     jp::initCore();
     app.setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
     jp::applyUiTheme(jp::Settings::get().value(QStringLiteral("ui/theme"), 0).toInt());

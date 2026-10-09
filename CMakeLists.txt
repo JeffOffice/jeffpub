@@ -77,6 +77,25 @@ endif()
 target_link_libraries(jeffpub PRIVATE jpcore)
 set_target_properties(jeffpub PROPERTIES OUTPUT_NAME "JeffPub")
 
+# Translations of JeffPub's own text. `cmake --build build --target
+# jeffpub_lupdate` gathers every string marked for translation (tr(),
+# QCoreApplication::translate()) into translations/jeffpub.ts, the list a
+# translator starts from; each translations/jeffpub_<language>.ts is built
+# into the program under :/i18n/. Without Qt's Linguist tools the program
+# builds the same, in English.
+find_package(Qt6 QUIET COMPONENTS LinguistTools)
+if(Qt6LinguistTools_FOUND)
+  file(GLOB JP_TRANSLATIONS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/translations/jeffpub_*.ts)
+  qt_add_lupdate(TS_FILES ${CMAKE_SOURCE_DIR}/translations/jeffpub.ts ${JP_TRANSLATIONS}
+                 SOURCE_TARGETS jpcore jeffpub
+                 LUPDATE_TARGET jeffpub_lupdate
+                 OPTIONS -no-obsolete -locations relative)
+  if(JP_TRANSLATIONS)
+    qt_add_lrelease(TS_FILES ${JP_TRANSLATIONS} QM_FILES_OUTPUT_VARIABLE JP_QM_FILES)
+    qt_add_resources(jeffpub "translations" PREFIX "/i18n" BASE ${CMAKE_CURRENT_BINARY_DIR} FILES ${JP_QM_FILES})
+  endif()
+endif()
+
 enable_testing()
 qt_add_executable(jptests tests/tests.cpp)
 target_link_libraries(jptests PRIVATE jpcore Qt6::Test)

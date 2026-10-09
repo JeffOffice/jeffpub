@@ -1,5 +1,6 @@
 #include "app/dialogs.h"
 #include "app/theme.h"
+#include "app/i18n.h"
 
 #include "app/appfuncs.h"
 #include "app/editor.h"
@@ -2089,6 +2090,14 @@ void optionsDialog(QWidget *p, Editor *ed)
     gf->addRow(QStringLiteral("User name:"), name);
     gf->addRow(QStringLiteral("Initials:"), initials);
     gf->addRow(QStringLiteral("Theme:"), theme);
+    // The language of JeffPub's own text; it takes effect at the next start.
+    auto *uiLang = new QComboBox(gen);
+    uiLang->addItem(QStringLiteral("Use system language"), QString());
+    uiLang->addItem(QStringLiteral("English"), QStringLiteral("en"));
+    for (const QString &l : availableUiLanguages()) uiLang->addItem(QLocale(l).nativeLanguageName(), l);
+    const QString oldLang = st.value("ui/language").toString();
+    uiLang->setCurrentIndex(std::max(0, uiLang->findData(oldLang)));
+    gf->addRow(QStringLiteral("Display language:"), uiLang);
     tabs->addTab(gen, QStringLiteral("General"));
     auto *proof = new QWidget();
     auto *pf = new QFormLayout(proof);
@@ -2150,6 +2159,10 @@ void optionsDialog(QWidget *p, Editor *ed)
     st.setValue("user/initials", initials->text());
     st.setValue("ui/theme", theme->currentIndex());
     if (theme->currentIndex() != oldTheme) applyUiTheme(theme->currentIndex());   // the whole program changes now
+    if (const QString lang = uiLang->currentData().toString(); lang != oldLang) {
+        st.setValue("ui/language", lang);
+        QMessageBox::information(p, QStringLiteral("Display Language"), QStringLiteral("JeffPub shows its text in the new language the next time it starts."));
+    }
     st.setValue("proof/ignoreUpper", ignoreUpper->isChecked());
     st.setValue("proof/ignoreNumbers", ignoreNum->isChecked());
     st.setValue("proof/autocorrect", autocorrect->isChecked());
