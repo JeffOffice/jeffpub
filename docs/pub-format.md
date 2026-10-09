@@ -48,7 +48,7 @@ A block is `id (u8)`, `type (u8)`, then data whose size the type decides:
 | 0x80, 0x82, 0x88, 0x8A, 0x90, 0x98, 0xA0 | u32 length (counting itself), then nested blocks |
 | 0xC0 | u32 length, then a NUL-terminated UTF-16 string |
 
-0x88 is a record of fields; 0xA0, 0x90 and 0x98 are lists whose items are
+0x88 is a record of fields; 0xA0, 0x90, and 0x98 are lists whose items are
 blocks with id 0.
 
 ### Header and chunk directory
@@ -140,7 +140,7 @@ Chunk 0x65 lists the stories: each record has `01` = the text id, `02` =
 the number of boxes in a linked chain, `03` = 0 for a table, `04` (a flag
 of type 0x00) when the story isn't hyphenated automatically, `05` (u16,
 type 0x10) for AutoFit Text, `07` = its entry in the frame layout section
-(MCLD), `08`/`09` (floats, -9999996 when unset) and a `0c` flag (type 0x08)
+(MCLD), `08`/`09` (floats, -9999996 when unset), and a `0c` flag (type 0x08)
 for Grow Text Box to Fit.
 
 `05` is 1 for Best Fit and 3 for Shrink Text On Overflow; older files set
@@ -158,16 +158,16 @@ box set to grow opened 204 points tall instead of 60).
 The document chunk lists every master page first, then the pages, then
 the four special pages; its `2d` is the number of master pages. A master
 page is a page chunk (0x43) with `03` = its margin guides (0x4C), `0e` =
-its letter and `0f` = its description ("Master Page A"); a page names its
+its letter, and `0f` = its description ("Master Page A"); a page names its
 master in `0d`. Older files show a two-page master as two master chunks
 with the same letter, and Publisher 2002 files use L and R.
 
 ### Fills, transparency and shadows
 
-These are OPT props on any shape, text box or Text Art. A solid fill is
+These are OPT props on any shape, text box, or Text Art. A solid fill is
 0x0181 (color) with 0x01BF = 0x00100010; 0x0182 is its opacity
 (0x10000 = opaque). A gradient adds 0x0180 = 7 (linear), 5 (from the
-center, with 0x018D-0x0190 = 0x8000) or 6 (along the outline); 0x0181 and
+center, with 0x018D-0x0190 = 0x8000), or 6 (along the outline); 0x0181 and
 0x0183 are the end colors, 0x0182 and 0x0184 their opacities, and 0x018B
 is the angle (16.16 degrees). Readers turn a stored angle *a* into a
 direction of 90 + *a* degrees, so a top-to-bottom gradient stores 0. More
@@ -176,7 +176,7 @@ and its position (16.16). A picture fill is 0x0180 = 3 (stretched) or 2
 (tiled) with 0x4186 = the store entry. Patterns are saved as a tiled 8 x 8
 picture of the pattern in its colors. Line opacity is 0x01C1. A shadow is
 0x0200 = 0 (offset), 0x0201 color, 0x0204 opacity, 0x0205/0x0206 offsets
-(EMU) and 0x023F = 0x00020002.
+(EMU), and 0x023F = 0x00020002.
 
 ### Picture settings and picture shapes
 
@@ -223,7 +223,7 @@ match the values read as no ink. Publisher shows the
 ## Text (Quill/QuillSub/CONTENTS)
 
 Starts with a `CHNKINK` index of sections, each with a 4-letter name, an id,
-an offset and a length:
+an offset, and a length:
 
 | Section | What |
 |---|---|
@@ -238,12 +238,12 @@ an offset and a length:
 | SGP, INK, PL | Small fixed sections; PL is the text color list (below) |
 | TCD | Table cell text ends (tables only) |
 
-A blank file has no TEXT, FDPC, FDPP, BTEC, BTEP, STRS or MCLD sections.
+A blank file has no TEXT, FDPC, FDPP, BTEC, BTEP, STRS, or MCLD sections.
 
 **The index's blocks.** The header gives the total number of sections at
-0x0C, the total size of the index's blocks at 0x10 (512 per block) and the
+0x0C, the total size of the index's blocks at 0x10 (512 per block), and the
 stream's size at 0x14. The index itself is a chain of blocks: each starts
-with `0x01F8`, its count of entries (u16) and the next block's offset (u32,
+with `0x01F8`, its count of entries (u16), and the next block's offset (u32,
 `FFFFFFFF` on the last), then 24-byte entries. The first block is at 0x18
 and holds 19 entries, ending before the text at 512; the others are 512-byte
 blocks of 20 entries at the end of the stream (Publisher's 93-section
@@ -258,7 +258,7 @@ count (u16), 1 (u16), and where its text starts (u32): the last end on the
 page before it, 0 on the first page. Then the runs' end offsets (u32, in
 the stream), their property offsets in the page (u16), and the property
 blocks packed from the page's end. BTEC/BTEP hold the page count, 4, 0, 0,
-each page's last end and each page's offset.
+each page's last end, and each page's offset.
 
 ### Style sheets
 
@@ -325,7 +325,7 @@ ClientAnchor names the table (`02:68`):
 ### Frame layout (MCLD)
 
 Publisher won't open a file with a table unless this section is present.
-It starts with the last entry number, the entry count and the entry
+It starts with the last entry number, the entry count, and the entry
 numbers (1, 2, ...); each story's `0x65` record names its entry in field
 `07`. Then, per story in order: a length-prefixed `{00:0a, 01:22 =
 228600}`, a u32 frame count, and a length-prefixed record per frame (a
@@ -432,7 +432,7 @@ followed it.
 ### Linked text boxes
 
 A chain of linked boxes is one story. Every box has its own shape chunk
-and drawing shape, all naming the same text id (`27`, OPT 0x0080 and the
+and drawing shape, all naming the same text id (`27`, OPT 0x0080, and the
 ClientTextbox). The `0x61` map has a record per box in chain order, with
 `02` = its place in the chain (left out for the first); the story's `0x65`
 record has `02:18` = the number of boxes; its MCLD entry lists a frame per
@@ -450,7 +450,7 @@ preset as Publisher's own shape only where the two look the same at every
 proportion (`src/io/pubshapes.cpp`; `jpubtool shapecheck` measures it);
 anything else is a freeform: `Sp` instance 0 with OPT 0x0142/0x0143 = the
 coordinate space (the frame in EMU), 0x0144 = 4, 0xC145 = the points
-(count, count, 8, then 32-bit x/y pairs) and 0xC146 = the segments (count,
+(count, count, 8, then 32-bit x/y pairs), and 0xC146 = the segments (count,
 count, 2, then: 0x4000 move, n lines, 0x2000 + n curves, 0x6001 close,
 0x8000 end). The .pub reader takes a segment's count from its low byte, so
 runs stay under 256. A freeform whose outline reaches past its frame gets
@@ -509,7 +509,7 @@ last showed, in plain runs.
 Each story with fields or hyperlinks has a TOKN section (kind "PLC "),
 worked out from Publisher's own files (Oct 7):
 
-- a count n, 0x0C, 0x0001FFFF, n character positions and the story's end;
+- a count n, 0x0C, 0x0001FFFF, n character positions, and the story's end;
 - n property lists (each a length, then blocks), each holding only what
   differs from the entry before: `00:22` flags (0x8C0 for a hyperlink in
   2021, 0xC0 in 2006, else 0), `01:22` the length in characters, `02:22`
@@ -541,14 +541,14 @@ story with such objects has an EOBJ section in the text stream (kind
 the story's length (twice it in a 2006 file), then each object's number.
 The objects themselves sit on the last special page (seq 279 in 2021
 files), which Publisher lists but never shows; each object's chunk has
-`03:08`, `0f:20` = its number and `34:20` = 0. A 0x70 chunk, field `05:70`
+`03:08`, `0f:20` = its number, and `34:20` = 0. A 0x70 chunk, field `05:70`
 of the text index (0x5b), lists each number with its story's text id and
 its object (`00:88 {01:20 number, 02:20 text id, 03:68 object}`). In the
 drawing, an object in text is locked against grouping (`007f` =
 0x00010001) and, in the tertiary properties, against ungrouping (0x02000200),
 and its anchor is in its own box, from its left and top wrap distances.
 
-Layout (Publisher 2021, Oct 7: boxes 6, 18, 36 and 72 pt tall in 12 and 24
+Layout (Publisher 2021, Oct 7: boxes 6, 18, 36, and 72 pt tall in 12 and 24
 pt Times New Roman and 12 pt Arial, measured at 300 dpi): the object sits
 on the baseline inside its wrap distances, as a character as wide as the
 object and its side distances; one taller than the text's ascent lowers
@@ -582,7 +582,7 @@ Character runs (FDPC): `12:22` and `3e:22` the language as a Windows LCID
 (1033 for US English in every run of the 56 reference files with
 character pages; JeffPub writes the run's language in both, such as 2058
 for Spanish (Mexico), from the table libmspub reads; Publisher showed
-English (United States), Spanish (Mexico), French (France) and German
+English (United States), Spanish (Mexico), French (France), and German
 (Germany) for the four lines of test35, Oct 6),
 `1e:12 = 1` underline, `10:0a` strikethrough,
 `13:0a` small caps, `14:0a` all caps, `0f:12` 1 superscript, 2 subscript,

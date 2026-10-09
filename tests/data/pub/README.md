@@ -11,7 +11,7 @@ hash).
 
 | Files | Source | License |
 |---|---|---|
-| `poi-*.pub` (21 files), `poi-*.txt` (4) and `fuzz/poi-clusterfuzz-testcase-minimized-*.pub` (3 files) | Apache POI's test data, [`test-data/publisher`](https://github.com/apache/poi/tree/trunk/test-data/publisher) (the `poi-` prefix is added here) | Apache License 2.0 |
+| `poi-*.pub` (21 files), `poi-*.txt` (4), and `fuzz/poi-clusterfuzz-testcase-minimized-*.pub` (3 files) | Apache POI's test data, [`test-data/publisher`](https://github.com/apache/poi/tree/trunk/test-data/publisher) (the `poi-` prefix is added here) | Apache License 2.0 |
 | `tika-testPUBLISHER.pub` | Apache Tika's test documents, [`testPUBLISHER.pub`](https://github.com/apache/tika/blob/main/tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-microsoft-module/src/test/resources/test-documents/testPUBLISHER.pub) | Apache License 2.0 |
 | `lo-fdo59355-1.pub` | LibreOffice's libmspub tests, [`writerperfect/qa/unit/data/draw/libmspub/pass/fdo59355-1.pub`](https://github.com/LibreOffice/core/blob/master/writerperfect/qa/unit/data/draw/libmspub/pass/fdo59355-1.pub) | Mozilla Public License 2.0 |
 | `jp-damaged-style-names.pub` | Made by JeffPub from its own styles sample, then damaged on purpose (style names pointing outside their section) | GPL-3.0, as the rest of JeffPub |

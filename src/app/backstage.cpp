@@ -1489,7 +1489,7 @@ QWidget *Backstage::buildAbout()
     name->setFont(nf);
     iv->addWidget(name);
     iv->addWidget(mutedLabel(QStringLiteral("Version %1 · Built with Qt %2").arg(QStringLiteral(JP_VERSION), QString::fromLatin1(qVersion())), id));
-    auto *tag = new QLabel(QStringLiteral("Free, open-source desktop publishing for Windows, macOS and Linux."), id);
+    auto *tag = new QLabel(QStringLiteral("Free, open-source desktop publishing for Windows, macOS, and Linux."), id);
     tag->setWordWrap(true);
     fitHeight(tag);
     iv->addWidget(tag);

@@ -12,7 +12,7 @@ A `.jpub` file is a ZIP archive holding:
 | Entry | What it is |
 |---|---|
 | `mimetype` | The text `application/x-jeffpub`, always the first entry, uncompressed |
-| `document.json` | The whole publication: pages, objects, text, styles, colors and settings |
+| `document.json` | The whole publication: pages, objects, text, styles, colors, and settings |
 | `images/<id>.<ext>` | Each picture the publication uses, as the original file (`.png`, `.jpg`, `.svg`, ...) |
 | `thumbnail.png` | Optional: a small picture of the first page, for file browsers |
 
@@ -65,10 +65,10 @@ The root object:
 | `masters` | array | Master pages ([Pages](#pages-and-master-pages)) |
 | `pages` | array | The pages, in order |
 | `scratch` | array | Objects on the scratch area beside the pages ([Objects](#objects)) |
-| `stories` | array | The text of every text box, shape, table cell and note ([Stories](#stories)) |
+| `stories` | array | The text of every text box, shape, table cell, and note ([Stories](#stories)) |
 | `styles` | array | Named paragraph and character styles ([Styles](#styles)) |
 | `colorScheme` | object | `name` and `colors`: 8 color strings, in the slot order above |
-| `fontScheme` | object | `name`, `heading` and `body` font families |
+| `fontScheme` | object | `name`, `heading`, and `body` font families |
 | `images` | array | One entry per picture ([Pictures](#pictures)) |
 | `business` | array | Business information sets ([Business information](#business-information)) |
 | `businessCurrent` | number | Index of the set in use |
@@ -120,7 +120,7 @@ abbreviation), `twoPage` (a two-page master), and `grid`, its layout guides:
 ### Objects
 
 Every object is a JSON object with a `type`: `text`, `picture`, `shape`,
-`line`, `table`, `textart` or `group`. All of them have:
+`line`, `table`, `textart`, or `group`. All of them have:
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
@@ -135,7 +135,7 @@ Every object is a JSON object with a `type`: `text`, `picture`, `shape`,
 | `locked` | boolean | false | Can't be moved or resized |
 | `fill` | object | none | What fills it ([Fills](#fills)) |
 | `stroke` | object | none | Its outline ([Lines](#lines)) |
-| `fx` | object | none | Shadow, glow and other effects ([Effects](#effects)) |
+| `fx` | object | none | Shadow, glow, and other effects ([Effects](#effects)) |
 | `wrap` | object | | How text flows around it ([Text wrapping](#text-wrapping)) |
 
 Objects that hold text point to a story by its id. Positions inside an
@@ -231,7 +231,7 @@ way), `valign`, and `border`, with a [line](#lines) for each side present:
 | `transform`, `adj` | The text shape (such as an arch) and its adjustment |
 | `style` | The Text Art style it was made with |
 
-Its fill, outline and effects are the object's own `fill`, `stroke` and `fx`.
+Its fill, outline, and effects are the object's own `fill`, `stroke`, and `fx`.
 
 #### group
 
@@ -243,13 +243,13 @@ object holding the settings it was made with, so it can be edited.
 
 | Key | Meaning |
 |---|---|
-| `type` | `none`, `solid`, `gradient`, `picture`, `texture` or `pattern` |
+| `type` | `none`, `solid`, `gradient`, `picture`, `texture`, or `pattern` |
 | `color` | The color (the first color of a gradient, the foreground of a pattern) |
 | `transparency` | 0 opaque to 1 clear (default 0) |
-| `gradType` | Gradients: `linear`, `radial`, `rectangular` or `path` |
+| `gradType` | Gradients: `linear`, `radial`, `rectangular`, or `path` |
 | `angle` | Linear gradients: the direction, 90 = top to bottom |
 | `color2` | Gradients without stops: the second color. Patterns: the background |
-| `stops` | Gradients: `pos` (0-1), `color` and `t` (transparency) for each stop |
+| `stops` | Gradients: `pos` (0-1), `color`, and `t` (transparency) for each stop |
 | `image`, `tile`, `tileScale` | Picture and texture fills: the picture's id, whether it repeats, and at what scale |
 | `pattern` | Pattern fills: which pattern, by number |
 
@@ -278,7 +278,7 @@ Each effect is present only when it is on.
 | `softEdge` | A number: how far the edges fade |
 | `reflection` | `t`, `size` (percent of the object), `dist`, `blur` |
 | `bevel` | `type` (a bevel style, by number), `w`, `h` |
-| `rot3d` | `x`, `y` (rotation about each axis) and `p` (perspective) |
+| `rot3d` | `x`, `y` (rotation about each axis), and `p` (perspective) |
 
 ### Text wrapping
 
@@ -291,7 +291,7 @@ Each effect is present only when it is on.
 
 ## Stories
 
-Each story is an object with `id`, `blocks` (its paragraphs, in order) and,
+Each story is an object with `id`, `blocks` (its paragraphs, in order), and,
 when it has lists, `lists`.
 
 A block has:
@@ -389,7 +389,7 @@ Properties from 1048577 (0x100001) up are JeffPub's own:
 | 1048685 | start in the next text box | `b` |
 | 1048686 | align to the baseline guides | `b` |
 | 1048687 | distributed alignment | `b` |
-| 1048688, 1048689, 1048690 | bullet character, its font and its color (color string) | `s` |
+| 1048688, 1048689, 1048690 | bullet character, its font, and its color (color string) | `s` |
 | 1048691 | list level | `i` |
 | 1048692 | numbering: 0 bullet, 1 "1.", 2 "a.", 3 "A.", 4 "i.", 5 "I.", 6 "1)", 7 "(1)" | `i` |
 | 1048693 | first number | `i` |
@@ -427,24 +427,24 @@ the paragraph, as [formatting objects](#formatting).
 
 Each entry in `images` has `id`, `format` (the file's type: `png`, `jpg`,
 `gif`, `svg`, `webp`, `bmp`, `tif`, `wmf`, `emf`), `w` and `h` (its size in
-pixels), `source` (the file it was inserted from) and `linked` (it is shown
+pixels), `source` (the file it was inserted from), and `linked` (it is shown
 from that file instead of the copy). The picture itself is the ZIP entry
 `images/<id>.<format>`. Pictures no object uses are not saved.
 
 ## Business information
 
 Each set has `setName`, the fields `name`, `tagline`, `person`, `title`,
-`address`, `phone`, `fax`, `email` and `web`, and optionally `logo` (a
+`address`, `phone`, `fax`, `email`, and `web`, and optionally `logo` (a
 picture's id).
 
 ## Mail merge
 
 `path` (the data file it came from), `fields` (column names), `rows` (each
-an array of values, in field order), `include` (whether each row is used)
+an array of values, in field order), `include` (whether each row is used),
 and `pictureField` (the column naming each record's picture, for catalogs).
 
 A catalog's `catalog` object has `page` (the id of the page holding the
-merge area), `x`, `y`, `w`, `h` (the area) and `rows`, `cols` (records
+merge area), `x`, `y`, `w`, `h` (the area), and `rows`, `cols` (records
 across and down).
 
 ## Properties
