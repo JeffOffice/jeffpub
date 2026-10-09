@@ -397,27 +397,27 @@ Backstage::Backstage(MainWindow *win) : QWidget(win), m_win(win)
     sv->addWidget(brand);
     sv->addSpacing(14);
 
-    auto *back = new NavItem(QStringLiteral("arrow-left"), QStringLiteral("Back to publication"), side);
+    auto *back = new NavItem(QStringLiteral("arrow-left"), tr("Back to publication"), side);
     back->setCheckable(false);
-    back->setToolTip(QStringLiteral("Return to your publication (Esc)"));
+    back->setToolTip(tr("Return to your publication (Esc)"));
     connect(back, &QAbstractButton::clicked, this, &Backstage::closeRequested);
     sv->addWidget(back);
 
     auto *group = new QButtonGroup(this);
     group->setExclusive(true);
-    struct Entry { const char *key, *icon, *label; };
+    struct Entry { const char *key, *icon; QString label; };
     const QList<QPair<QString, QList<Entry>>> sections = {
-        {QStringLiteral("Start"), {{"new", "file-plus", "New"}, {"open", "folder-open", "Open"}}},
-        {QStringLiteral("This publication"),
-         {{"save", "save", "Save"}, {"saveas", "copy", "Save a Copy"}, {"print", "printer", "Print"}, {"export", "file-output", "Export"},
-          {"share", "share-2", "Share"}, {"info", "file-text", "Properties"}, {"close", "circle-x", "Close"}}},
-        {QStringLiteral("JeffPub"), {{"options", "settings", "Settings"}, {"about", "info", "About"}}},
+        {tr("Start"), {{"new", "file-plus", tr("New")}, {"open", "folder-open", tr("Open")}}},
+        {tr("This publication"),
+         {{"save", "save", tr("Save")}, {"saveas", "copy", tr("Save a Copy")}, {"print", "printer", tr("Print")}, {"export", "file-output", tr("Export")},
+          {"share", "share-2", tr("Share")}, {"info", "file-text", tr("Properties")}, {"close", "circle-x", tr("Close")}}},
+        {QStringLiteral("JeffPub"), {{"options", "settings", tr("Settings")}, {"about", "info", tr("About")}}},
     };
     for (const auto &sec : sections) {
         sv->addWidget(sectionLabel(sec.first, side));
         for (const Entry &e : sec.second) {
             const QString key = QString::fromLatin1(e.key);
-            auto *item = new NavItem(QString::fromLatin1(e.icon), QString::fromLatin1(e.label), side);
+            auto *item = new NavItem(QString::fromLatin1(e.icon), e.label, side);
             const bool command = key == "save" || key == "saveas" || key == "close" || key == "options";
             if (command) item->setCheckable(false);
             else group->addButton(item);
@@ -433,7 +433,7 @@ Backstage::Backstage(MainWindow *win) : QWidget(win), m_win(win)
         }
     }
     sv->addStretch(1);
-    auto *ver = new QLabel(QStringLiteral("Version %1").arg(QStringLiteral(JP_VERSION)), side);
+    auto *ver = new QLabel(tr("Version %1").arg(QStringLiteral(JP_VERSION)), side);
     m_version = ver;
     ver->setContentsMargins(24, 0, 12, 0);
     sv->addWidget(ver);
@@ -511,7 +511,7 @@ QWidget *Backstage::buildInfo()
     auto *w = new QWidget();
     auto *v = new QVBoxLayout(w);
     v->setContentsMargins(40, 30, 40, 30);
-    v->addWidget(heading(QStringLiteral("Properties"), w));
+    v->addWidget(heading(tr("Properties"), w));
 
     // Where the publication lives.
     auto *where = new QHBoxLayout();
@@ -520,12 +520,12 @@ QWidget *Backstage::buildInfo()
     auto *pathIcon = new QLabel(w);
     pathIcon->setPixmap(icon(path.isEmpty() ? "file" : "folder").pixmap(QSize(16, 16), devicePixelRatioF()));
     where->addWidget(pathIcon);
-    auto *pathLabel = mutedLabel(path.isEmpty() ? QStringLiteral("This publication hasn't been saved yet.") : QDir::toNativeSeparators(path), w, 0.7);
+    auto *pathLabel = mutedLabel(path.isEmpty() ? tr("This publication hasn't been saved yet.") : QDir::toNativeSeparators(path), w, 0.7);
     pathLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     pathLabel->setWordWrap(true);
     where->addWidget(pathLabel, 1);
     if (!path.isEmpty()) {
-        auto *showBtn = new QPushButton(QStringLiteral("Show in Folder"), w);
+        auto *showBtn = new QPushButton(tr("Show in Folder"), w);
         showBtn->setCursor(Qt::PointingHandCursor);
         connect(showBtn, &QPushButton::clicked, this, [path] { QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(path).absolutePath())); });
         where->addWidget(showBtn);
@@ -542,11 +542,11 @@ QWidget *Backstage::buildInfo()
         connect(b, &QAbstractButton::clicked, this, [fn] { fn(); });
         left->addWidget(b);
     };
-    card("contact", QStringLiteral("Business Information"), QStringLiteral("Edit the contact details that templates and Business Information fields use."),
+    card("contact", tr("Business Information"), tr("Edit the contact details that templates and Business Information fields use."),
          [this] { businessInfoDialog(this, m_win->editor()); });
-    card("printer", QStringLiteral("Commercial Print Settings"), QStringLiteral("Choose the color model (RGB, process CMYK, spot colors) and font embedding for a print shop."),
+    card("printer", tr("Commercial Print Settings"), tr("Choose the color model (RGB, process CMYK, spot colors) and font embedding for a print shop."),
          [this] { documentPropertiesDialog(this, m_win->editor(), 1); });
-    card("shield-check", QStringLiteral("Run Design Checker"), QStringLiteral("Find problems such as text that doesn't fit, empty frames and low-resolution pictures."),
+    card("shield-check", tr("Run Design Checker"), tr("Find problems such as text that doesn't fit, empty frames and low-resolution pictures."),
          [this] { m_win->showTaskPane("designchecker"); Q_EMIT closeRequested(); });
     left->addStretch(1);
     body->addLayout(left, 1);
@@ -573,7 +573,7 @@ QWidget *Backstage::buildInfo()
         thumb->setPixmap(paperPixmap(img.convertToFormat(QImage::Format_ARGB32_Premultiplied), thumb->size(), dpr));
     }
     dv->addWidget(thumb, 0, Qt::AlignHCenter);
-    auto *dh = new QLabel(QStringLiteral("Details"), details);
+    auto *dh = new QLabel(tr("Details"), details);
     QFont df = dh->font();
     df.setWeight(QFont::DemiBold);
     df.setPointSizeF(df.pointSizeF() * 1.1);
@@ -583,13 +583,13 @@ QWidget *Backstage::buildInfo()
     grid->setHorizontalSpacing(16);
     grid->setVerticalSpacing(7);
     const QList<QPair<QString, QString>> facts = {
-        {QStringLiteral("Pages"), QString::number(d->pages.size())},
-        {QStringLiteral("Page size"), QStringLiteral("%1 × %2").arg(Settings::get().format(d->pageSize().width()), Settings::get().format(d->pageSize().height()))},
-        {QStringLiteral("Pictures"), QString::number(pics)},
-        {QStringLiteral("Words"), QLocale().toString(words)},
-        {QStringLiteral("Author"), d->props.author.isEmpty() ? Settings::get().userName() : d->props.author},
-        {QStringLiteral("Created"), QLocale().toString(d->props.created, QStringLiteral("MMM d, yyyy h:mm AP"))},
-        {QStringLiteral("Modified"), QLocale().toString(d->props.modified, QStringLiteral("MMM d, yyyy h:mm AP"))},
+        {tr("Pages"), QString::number(d->pages.size())},
+        {tr("Page size"), QStringLiteral("%1 × %2").arg(Settings::get().format(d->pageSize().width()), Settings::get().format(d->pageSize().height()))},
+        {tr("Pictures"), QString::number(pics)},
+        {tr("Words"), QLocale().toString(words)},
+        {tr("Author"), d->props.author.isEmpty() ? Settings::get().userName() : d->props.author},
+        {tr("Created"), QLocale().toString(d->props.created, QStringLiteral("MMM d, yyyy h:mm AP"))},
+        {tr("Modified"), QLocale().toString(d->props.modified, QStringLiteral("MMM d, yyyy h:mm AP"))},
     };
     for (int i = 0; i < facts.size(); ++i) {
         grid->addWidget(mutedLabel(facts[i].first, details), i, 0, Qt::AlignLeft | Qt::AlignTop);
@@ -601,7 +601,7 @@ QWidget *Backstage::buildInfo()
     grid->setColumnStretch(1, 1);
     dv->addLayout(grid);
     dv->addSpacing(4);
-    auto *more = new QPushButton(QStringLiteral("Edit Properties…"), details);
+    auto *more = new QPushButton(tr("Edit Properties…"), details);
     more->setCursor(Qt::PointingHandCursor);
     more->setMinimumHeight(34);
     connect(more, &QPushButton::clicked, this, [this] { documentPropertiesDialog(this, m_win->editor()); });
@@ -617,9 +617,9 @@ QWidget *Backstage::buildNew()
     auto *w = new QWidget();
     auto *v = new QVBoxLayout(w);
     v->setContentsMargins(40, 30, 40, 30);
-    v->addWidget(heading(QStringLiteral("New Publication"), w));
+    v->addWidget(heading(tr("New Publication"), w));
     auto *search = new QLineEdit(w);
-    search->setPlaceholderText(QStringLiteral("Search templates"));
+    search->setPlaceholderText(tr("Search templates"));
     search->setClearButtonEnabled(true);
     search->addAction(icon("search"), QLineEdit::LeadingPosition);
     search->setMinimumHeight(34);
@@ -643,14 +643,14 @@ QWidget *Backstage::buildNew()
             auto *it = new QListWidgetItem(text, cats);
             it->setData(Qt::UserRole, key);
         };
-        add(QStringLiteral("Featured"), QStringLiteral("Featured"));
+        add(QStringLiteral("Featured"), tr("Featured"));
         for (const QString &c : templateCategories()) {
             int n = 0;
             for (const auto &t : templates()) n += t.category == c;
             add(c, QStringLiteral("%1  (%2)").arg(c).arg(n));
         }
-        add(QStringLiteral("Blank Sizes"), QStringLiteral("Blank Sizes"));
-        add(QStringLiteral("My Templates"), QStringLiteral("My Templates"));
+        add(QStringLiteral("Blank Sizes"), tr("Blank Sizes"));
+        add(QStringLiteral("My Templates"), tr("My Templates"));
         QFont cf = cats->font();
         cf.setPointSizeF(cf.pointSizeF() * 1.05);
         cats->setFont(cf);
@@ -666,7 +666,7 @@ QWidget *Backstage::buildNew()
     {
         auto *catCol = new QVBoxLayout();
         catCol->setSpacing(6);
-        auto *catTitle = new QLabel(QStringLiteral("Categories"), w);
+        auto *catTitle = new QLabel(tr("Categories"), w);
         QFont ct = catTitle->font();
         ct.setBold(true);
         catTitle->setFont(ct);
@@ -723,27 +723,27 @@ QWidget *Backstage::buildNew()
     form->setRowWrapPolicy(QFormLayout::WrapAllRows);
     form->setVerticalSpacing(6);
     auto *scheme = new QComboBox(panel);
-    scheme->addItem(QStringLiteral("(template default)"));
+    scheme->addItem(tr("(template default)"));
     for (const auto &s : builtinColorSchemes()) scheme->addItem(s.name);
     auto *fonts = new QComboBox(panel);
-    fonts->addItem(QStringLiteral("(template default)"));
+    fonts->addItem(tr("(template default)"));
     for (const auto &s : builtinFontSchemes()) fonts->addItem(s.name);
     auto *bizBox = new QComboBox(panel);
     for (const auto &b : m_win->editor()->doc()->biz) bizBox->addItem(b.setName);
-    auto *editBiz = new QPushButton(QStringLiteral("Edit…"), panel);
+    auto *editBiz = new QPushButton(tr("Edit…"), panel);
     auto *bizRow = new QHBoxLayout();
     bizRow->addWidget(bizBox, 1);
     bizRow->addWidget(editBiz);
     connect(editBiz, &QPushButton::clicked, this, [this] { businessInfoDialog(this, m_win->editor()); });
-    form->addRow(QStringLiteral("Color scheme:"), scheme);
-    form->addRow(QStringLiteral("Font scheme:"), fonts);
-    form->addRow(QStringLiteral("Business information:"), bizRow);
-    auto *optLogo = new QCheckBox(QStringLiteral("Include logo"), panel);
-    auto *optAddr = new QCheckBox(QStringLiteral("Include mailing address"), panel);
+    form->addRow(tr("Color scheme:"), scheme);
+    form->addRow(tr("Font scheme:"), fonts);
+    form->addRow(tr("Business information:"), bizRow);
+    auto *optLogo = new QCheckBox(tr("Include logo"), panel);
+    auto *optAddr = new QCheckBox(tr("Include mailing address"), panel);
     optAddr->setChecked(true);
     form->addRow(optLogo);
     form->addRow(optAddr);
-    auto *create = new QPushButton(QStringLiteral("Create"), panel);
+    auto *create = new QPushButton(tr("Create"), panel);
     create->setProperty("primary", true);
     create->setDefault(true);
     create->setMinimumHeight(38);
@@ -844,7 +844,7 @@ QWidget *Backstage::buildNew()
                 it->setData(Qt::UserRole, QStringLiteral("customsize:%1").arg(i));
                 list->addItem(it);
             }
-            auto *custom = new QListWidgetItem(icon("ruler"), QStringLiteral("Create New Page Size…"));
+            auto *custom = new QListWidgetItem(icon("ruler"), tr("Create New Page Size…"));
             custom->setData(Qt::UserRole, "custom");
             list->addItem(custom);
             return;
@@ -860,11 +860,11 @@ QWidget *Backstage::buildNew()
             return;
         }
         if (cat == "Featured" && q.isEmpty()) {
-            auto *it = new QListWidgetItem(placeholder, QStringLiteral("Blank 8.5 × 11\""));
+            auto *it = new QListWidgetItem(placeholder, tr("Blank 8.5 × 11\""));
             it->setData(Qt::UserRole, "blank:Letter");
             list->addItem(it);
             auto blankL = Document::blank(QSizeF(792, 612));
-            it = new QListWidgetItem(QIcon(thumbFor(*blankL)), QStringLiteral("Blank 11 × 8.5\""));
+            it = new QListWidgetItem(QIcon(thumbFor(*blankL)), tr("Blank 11 × 8.5\""));
             it->setData(Qt::UserRole, "blank:Letter Landscape");
             list->addItem(it);
         }
@@ -992,12 +992,12 @@ QWidget *Backstage::buildOpen()
     auto *w = new QWidget();
     auto *v = new QVBoxLayout(w);
     v->setContentsMargins(40, 30, 40, 30);
-    v->addWidget(heading(QStringLiteral("Open"), w));
+    v->addWidget(heading(tr("Open"), w));
     auto *cards = new QHBoxLayout();
     cards->setSpacing(12);
-    auto *browse = new ActionCard(QStringLiteral("folder-open"), QStringLiteral("Browse"), QStringLiteral("Open a JeffPub publication or a .pub file."), w);
+    auto *browse = new ActionCard(QStringLiteral("folder-open"), tr("Browse"), tr("Open a JeffPub publication or a .pub file."), w);
     connect(browse, &QAbstractButton::clicked, this, [this] { m_win->act("file.open")->trigger(); });
-    auto *recover = new ActionCard(QStringLiteral("life-buoy"), QStringLiteral("Recover Unsaved Work"), QStringLiteral("Open copies of unsaved work JeffPub kept when it closed unexpectedly."), w);
+    auto *recover = new ActionCard(QStringLiteral("life-buoy"), tr("Recover Unsaved Work"), tr("Open copies of unsaved work JeffPub kept when it closed unexpectedly."), w);
     connect(recover, &QAbstractButton::clicked, this, [this] { m_win->offerRecovery(true); });
     cards->addWidget(browse, 1);
     cards->addWidget(recover, 1);
@@ -1037,7 +1037,7 @@ QWidget *Backstage::buildOpen()
         }
         if (list->count() == 0) {
             delete list;
-            auto *empty = new QLabel(QStringLiteral("Publications you open or save will appear here."), w);
+            auto *empty = new QLabel(tr("Publications you open or save will appear here."), w);
             QPalette ep = empty->palette();
             QColor c = uiText();
             c.setAlphaF(0.6f);
@@ -1059,20 +1059,20 @@ QWidget *Backstage::buildOpen()
             if (!it) return;
             const QString f = it->data(Qt::UserRole).toString();
             QMenu m;
-            m.addAction(isPinned ? QStringLiteral("Unpin from list") : QStringLiteral("Pin to list"), [this, f, isPinned] {
+            m.addAction(isPinned ? tr("Unpin from list") : tr("Pin to list"), [this, f, isPinned] {
                 Settings::get().setPinned(f, !isPinned);
                 showPage("open");
             });
-            m.addAction(QStringLiteral("Remove from list"), [this, f] { Settings::get().removeRecentFile(f); showPage("open"); });
+            m.addAction(tr("Remove from list"), [this, f] { Settings::get().removeRecentFile(f); showPage("open"); });
             m.exec(list->viewport()->mapToGlobal(pos));
         });
         v->addWidget(list);
     };
     if (!pinned.isEmpty()) {
-        section(QStringLiteral("Pinned"));
+        section(tr("Pinned"));
         addList(pinned, true);
     }
-    section(QStringLiteral("Recent Publications"));
+    section(tr("Recent Publications"));
     addList(Settings::get().recentFiles(), false);
     v->addStretch(1);
     return w;
@@ -1087,53 +1087,54 @@ QWidget *Backstage::buildPrint()
     auto *h = new QHBoxLayout(w);
     h->setContentsMargins(40, 30, 40, 30);
     auto *left = new QVBoxLayout();
-    left->addWidget(heading(QStringLiteral("Print"), w));
+    left->addWidget(heading(tr("Print"), w));
     auto *copies = new QSpinBox(w);
     copies->setRange(1, 999);
-    auto *printBtn = new QPushButton(QStringLiteral("Print"), w);
+    auto *printBtn = new QPushButton(tr("Print"), w);
     printBtn->setProperty("primary", true);
     printBtn->setMinimumHeight(40);
     printBtn->setMinimumWidth(120);
     printBtn->setCursor(Qt::PointingHandCursor);
     auto *top = new QHBoxLayout();
     top->addWidget(printBtn);
-    top->addWidget(new QLabel(QStringLiteral("Copies:"), w));
+    top->addWidget(new QLabel(tr("Copies:"), w));
     top->addWidget(copies);
     left->addLayout(top);
     auto *form = new QFormLayout();
     auto *printer = new QComboBox(w);
     for (const QPrinterInfo &pi : QPrinterInfo::availablePrinters()) printer->addItem(pi.printerName());
-    printer->addItem(QStringLiteral("Save as PDF"));
+    printer->addItem(tr("Save as PDF"), QStringLiteral("pdf"));
     if (!QPrinterInfo::defaultPrinter().isNull()) printer->setCurrentText(QPrinterInfo::defaultPrinter().printerName());
     auto *range = new QComboBox(w);
-    range->addItems({"Print All Pages", "Print Current Page", "Custom Print"});
+    range->addItems({tr("Print All Pages"), tr("Print Current Page"), tr("Custom Print")});
     auto *pages = new QLineEdit(w);
-    pages->setPlaceholderText(QStringLiteral("e.g. 1-3, 5"));
+    pages->setPlaceholderText(tr("e.g. 1-3, 5"));
     auto *layout = new QComboBox(w);
-    layout->addItems({"One page per sheet", "Multiple pages per sheet", "Multiple copies per sheet", "Booklet, side-fold", "Booklet, top-fold", "Tiled (posters and banners)"});
+    layout->addItems({tr("One page per sheet"), tr("Multiple pages per sheet"), tr("Multiple copies per sheet"), tr("Booklet, side-fold"), tr("Booklet, top-fold"),
+                      tr("Tiled (posters and banners)")});
     if (d->setup.layout == PageSetup::Booklet) layout->setCurrentIndex(3);
     // Business cards and labels: copies of the page across the sheet.
     else if (d->setup.layout == PageSetup::MultiplePerSheet || d->setup.layout == PageSetup::Labels) layout->setCurrentIndex(2);
     auto *paper = new QComboBox(w);
-    paper->addItems({"Letter", "Legal", "Tabloid", "A4", "A3", "Same as publication"});
+    paper->addItems({"Letter", "Legal", "Tabloid", "A4", "A3", tr("Same as publication")});
     auto *sides = new QComboBox(w);
-    sides->addItems({"One-sided", "Two-sided, flip on long edge", "Two-sided, flip on short edge"});
+    sides->addItems({tr("One-sided"), tr("Two-sided, flip on long edge"), tr("Two-sided, flip on short edge")});
     auto *color = new QComboBox(w);
-    color->addItems({"Composite RGB", "Composite grayscale", "Separations (CMYK plates)"});
+    color->addItems({tr("Composite RGB"), tr("Composite grayscale"), tr("Separations (CMYK plates)")});
     // Printer's marks: they print outside the page, so they need paper larger
     // than the publication.
     auto *marksBox = new QWidget(w);
     auto *mg = new QGridLayout(marksBox);
     mg->setContentsMargins(0, 0, 0, 0);
     mg->setHorizontalSpacing(16);
-    auto *marks = new QCheckBox(QStringLiteral("Crop marks"), w);
-    auto *bleedMarks = new QCheckBox(QStringLiteral("Bleed marks"), w);
-    auto *registration = new QCheckBox(QStringLiteral("Registration marks"), w);
-    auto *density = new QCheckBox(QStringLiteral("Density bars"), w);
-    auto *colorBars = new QCheckBox(QStringLiteral("Color bars"), w);
-    auto *jobInfo = new QCheckBox(QStringLiteral("Job information"), w);
-    auto *allowBleeds = new QCheckBox(QStringLiteral("Allow bleeds"), w);
-    allowBleeds->setToolTip(QStringLiteral("Print objects that run off the page up to the bleed edge, so the page can be trimmed without white edges."));
+    auto *marks = new QCheckBox(tr("Crop marks"), w);
+    auto *bleedMarks = new QCheckBox(tr("Bleed marks"), w);
+    auto *registration = new QCheckBox(tr("Registration marks"), w);
+    auto *density = new QCheckBox(tr("Density bars"), w);
+    auto *colorBars = new QCheckBox(tr("Color bars"), w);
+    auto *jobInfo = new QCheckBox(tr("Job information"), w);
+    auto *allowBleeds = new QCheckBox(tr("Allow bleeds"), w);
+    allowBleeds->setToolTip(tr("Print objects that run off the page up to the bleed edge, so the page can be trimmed without white edges."));
     mg->addWidget(marks, 0, 0);
     mg->addWidget(bleedMarks, 0, 1);
     mg->addWidget(registration, 1, 0);
@@ -1145,7 +1146,7 @@ QWidget *Backstage::buildPrint()
     auto *pl = new QHBoxLayout(plates);
     pl->setContentsMargins(0, 0, 0, 0);
     QList<QCheckBox *> plateBoxes;
-    for (const QString &n : {QStringLiteral("Cyan"), QStringLiteral("Magenta"), QStringLiteral("Yellow"), QStringLiteral("Black")}) {
+    for (const QString &n : {tr("Cyan"), tr("Magenta"), tr("Yellow"), tr("Black")}) {
         auto *b = new QCheckBox(n, plates);
         b->setChecked(true);
         pl->addWidget(b);
@@ -1161,20 +1162,20 @@ QWidget *Backstage::buildPrint()
         }
     pl->addStretch(1);
     plates->setVisible(false);
-    auto *merged = new QCheckBox(QStringLiteral("Print all mail merge records"), w);
+    auto *merged = new QCheckBox(tr("Print all mail merge records"), w);
     merged->setEnabled(!d->merge.isEmpty());
-    form->addRow(QStringLiteral("Printer:"), printer);
-    form->addRow(QStringLiteral("Settings:"), range);
-    form->addRow(QStringLiteral("Pages:"), pages);
-    form->addRow(QStringLiteral("Layout:"), layout);
-    form->addRow(QStringLiteral("Paper:"), paper);
-    form->addRow(QStringLiteral("Sides:"), sides);
-    form->addRow(QStringLiteral("Color:"), color);
-    form->addRow(QStringLiteral("Plates:"), plates);
-    form->addRow(QStringLiteral("Marks:"), marksBox);
+    form->addRow(tr("Printer:"), printer);
+    form->addRow(tr("Settings:"), range);
+    form->addRow(tr("Pages:"), pages);
+    form->addRow(tr("Layout:"), layout);
+    form->addRow(tr("Paper:"), paper);
+    form->addRow(tr("Sides:"), sides);
+    form->addRow(tr("Color:"), color);
+    form->addRow(tr("Plates:"), plates);
+    form->addRow(tr("Marks:"), marksBox);
     form->addRow(merged);
     left->addLayout(form);
-    auto *props = new QPushButton(QStringLiteral("Printer Properties…"), w);
+    auto *props = new QPushButton(tr("Printer Properties…"), w);
     left->addWidget(props, 0, Qt::AlignLeft);
     left->addStretch(1);
     h->addLayout(left, 1);
@@ -1197,8 +1198,8 @@ QWidget *Backstage::buildPrint()
     nav->addStretch(1);
     right->addWidget(preview, 1);
     right->addLayout(nav);
-    auto *showRulers = new QCheckBox(QStringLiteral("Show rulers"), w);
-    auto *showNumbers = new QCheckBox(QStringLiteral("Show page numbers"), w);
+    auto *showRulers = new QCheckBox(tr("Show rulers"), w);
+    auto *showNumbers = new QCheckBox(tr("Show page numbers"), w);
     auto *viewRow = new QHBoxLayout();
     viewRow->addStretch(1);
     viewRow->addWidget(showRulers);
@@ -1240,7 +1241,7 @@ QWidget *Backstage::buildPrint()
             p.setPen(QPen(QColor(150, 150, 150), 1, Qt::DashLine));
             if (topFold) p.drawLine(0, img.height() / 2, img.width(), img.height() / 2);
             else p.drawLine(img.width() / 2, 0, img.width() / 2, img.height());
-            pageLabel->setText(QStringLiteral("Sheet %1 %2 of %3").arg(*state / 2 + 1).arg(*state % 2 ? "(back)" : "(front)").arg(order.size() / 2));
+            pageLabel->setText(tr("Sheet %1 %2 of %3").arg(*state / 2 + 1).arg(*state % 2 ? tr("(back)") : tr("(front)")).arg(order.size() / 2));
         } else {
             *state = std::clamp(*state, 0, int(d->pages.size()) - 1);
             scale = 500.0 / std::max(ps.width(), ps.height());
@@ -1248,10 +1249,10 @@ QWidget *Backstage::buildPrint()
             numbered << qMakePair(QRectF(QPointF(0, 0), ps * scale), *state + 1);
             // Two-sided printing: say which side of which sheet this page lands on.
             if (sides->currentIndex() > 0 && layout->currentIndex() == 0)
-                pageLabel->setText(QStringLiteral("%1 of %2 (sheet %3, %4)").arg(*state + 1).arg(d->pages.size()).arg(*state / 2 + 1)
-                                       .arg(*state % 2 ? QStringLiteral("back") : QStringLiteral("front")));
+                pageLabel->setText(tr("%1 of %2 (sheet %3, %4)").arg(*state + 1).arg(d->pages.size()).arg(*state / 2 + 1)
+                                       .arg(*state % 2 ? tr("back") : tr("front")));
             else
-                pageLabel->setText(QStringLiteral("%1 of %2").arg(*state + 1).arg(d->pages.size()));
+                pageLabel->setText(tr("%1 of %2").arg(*state + 1).arg(d->pages.size()));
         }
         if (color->currentIndex() == 1) img = img.convertToFormat(QImage::Format_Grayscale8);
         if (color->currentIndex() == 2) {
@@ -1323,8 +1324,8 @@ QWidget *Backstage::buildPrint()
     for (QCheckBox *b : plateBoxes) connect(b, &QCheckBox::toggled, w, [=] { render(); });
     QTimer::singleShot(0, w, render);
     auto setup = [=](QPrinter &p) {
-        if (printer->currentText() == QLatin1String("Save as PDF")) {
-            const QString f = askSavePath(this, QStringLiteral("Save as PDF"), m_win->editor()->displayName() + ".pdf", QStringLiteral("PDF (*.pdf)"));
+        if (printer->currentData().toString() == QLatin1String("pdf")) {
+            const QString f = askSavePath(this, tr("Save as PDF"), m_win->editor()->displayName() + ".pdf", tr("PDF (*.pdf)"));
             if (f.isEmpty()) return false;
             p.setOutputFormat(QPrinter::PdfFormat);
             p.setOutputFileName(f);
@@ -1332,9 +1333,9 @@ QWidget *Backstage::buildPrint()
             p.setPrinterName(printer->currentText());
         }
         p.setCopyCount(copies->value());
-        const QString pp = paper->currentText();
-        if (pp == "Same as publication") p.setPageSize(QPageSize(d->pageSize(), QPageSize::Point));
-        else p.setPageSize(QPageSize(pp == "Letter" ? QPageSize::Letter : pp == "Legal" ? QPageSize::Legal : pp == "Tabloid" ? QPageSize::Tabloid : pp == "A4" ? QPageSize::A4 : QPageSize::A3));
+        const int pp = paper->currentIndex();   // Letter, Legal, Tabloid, A4, A3, Same as publication
+        if (pp == 5) p.setPageSize(QPageSize(d->pageSize(), QPageSize::Point));
+        else p.setPageSize(QPageSize(pp == 0 ? QPageSize::Letter : pp == 1 ? QPageSize::Legal : pp == 2 ? QPageSize::Tabloid : pp == 3 ? QPageSize::A4 : QPageSize::A3));
         const bool wide = d->pageSize().width() > d->pageSize().height();
         p.setPageOrientation(layout->currentIndex() == 3 ? QPageLayout::Landscape : layout->currentIndex() == 4 ? QPageLayout::Portrait
                              : wide ? QPageLayout::Landscape : QPageLayout::Portrait);
@@ -1390,20 +1391,20 @@ QWidget *Backstage::buildShare()
     auto *w = new QWidget();
     auto *v = new QVBoxLayout(w);
     v->setContentsMargins(40, 30, 40, 30);
-    v->addWidget(heading(QStringLiteral("Share"), w));
+    v->addWidget(heading(tr("Share"), w));
     v->setSpacing(10);
     auto row = [&](const QString &ic, const QString &title, const QString &text, const std::function<void()> &fn) {
         auto *b = new ActionCard(ic, title, text, w);
         connect(b, &QAbstractButton::clicked, this, [fn] { fn(); });
         v->addWidget(b);
     };
-    row("mail", QStringLiteral("Email Current Page"), QStringLiteral("Creates an email (.eml) with the current page as the message body. Open it in your email program to send."), [this] {
+    row("mail", tr("Email Current Page"), tr("Creates an email (.eml) with the current page as the message body. Open it in your email program to send."), [this] {
         emailCurrentPage(this, m_win->editor());
     });
-    row("paperclip", QStringLiteral("Send as Attachment"), QStringLiteral("Creates an email (.eml) with this publication attached."), [this] {
+    row("paperclip", tr("Send as Attachment"), tr("Creates an email (.eml) with this publication attached."), [this] {
         emailAsAttachment(this, m_win->editor(), "jpub");
     });
-    row("file-text", QStringLiteral("Send as PDF"), QStringLiteral("Creates an email (.eml) with a PDF of this publication attached."), [this] {
+    row("file-text", tr("Send as PDF"), tr("Creates an email (.eml) with a PDF of this publication attached."), [this] {
         emailAsAttachment(this, m_win->editor(), "pdf");
     });
     v->addStretch(1);
@@ -1415,41 +1416,41 @@ QWidget *Backstage::buildExport()
     auto *w = new QWidget();
     auto *v = new QVBoxLayout(w);
     v->setContentsMargins(40, 30, 40, 30);
-    v->addWidget(heading(QStringLiteral("Export"), w));
+    v->addWidget(heading(tr("Export"), w));
     v->setSpacing(10);
     auto row = [&](const QString &ic, const QString &title, const QString &text, const std::function<void()> &fn) {
         auto *b = new ActionCard(ic, title, text, w);
         connect(b, &QAbstractButton::clicked, this, [fn] { fn(); });
         v->addWidget(b);
     };
-    row("file-text", QStringLiteral("Create PDF"), QStringLiteral("Preserves layout and fonts; text stays selectable. Choose the quality, from small files for email to commercial press."), [this] { m_win->exportPdfWithOptions(); });
-    row("archive", QStringLiteral("Create PDF/A for Archiving"), QStringLiteral("An ISO 19005 (PDF/A-1b) file for long-term storage and court or records filing: every font embedded, standard sRGB color, no transparency."),
+    row("file-text", tr("Create PDF"), tr("Preserves layout and fonts; text stays selectable. Choose the quality, from small files for email to commercial press."), [this] { m_win->exportPdfWithOptions(); });
+    row("archive", tr("Create PDF/A for Archiving"), tr("An ISO 19005 (PDF/A-1b) file for long-term storage and court or records filing: every font embedded, standard sRGB color, no transparency."),
         [this] { m_win->exportPdf(QString(), false, true); });
-    row("printer-check", QStringLiteral("Create PDF/X for a Commercial Printer"),
-        QStringLiteral("An ISO 15930 file (PDF/X-1a or PDF/X-4), the kind printers and print-on-demand services ask for: every color in ink, fonts embedded, trim and bleed marked. PDF/X-4 keeps transparency and carries the printing condition's color profile."),
+    row("printer-check", tr("Create PDF/X for a Commercial Printer"),
+        tr("An ISO 15930 file (PDF/X-1a or PDF/X-4), the kind printers and print-on-demand services ask for: every color in ink, fonts embedded, trim and bleed marked. PDF/X-4 keeps transparency and carries the printing condition's color profile."),
         [this] {
             Settings::get().setValue(QStringLiteral("pdf/pdfx"), true);
             m_win->exportPdfWithOptions();
         });
-    auto *openAfter = new QCheckBox(QStringLiteral("Open PDFs after saving them"), w);
+    auto *openAfter = new QCheckBox(tr("Open PDFs after saving them"), w);
     openAfter->setObjectName(QStringLiteral("openPdfAfter"));
     openAfter->setChecked(MainWindow::openPdfAfterSaving());
     connect(openAfter, &QCheckBox::toggled, this, [](bool on) { MainWindow::setOpenPdfAfterSaving(on); });
     v->addWidget(openAfter);
-    row("image-down", QStringLiteral("Save as Picture"), QStringLiteral("PNG, JPEG, GIF, TIFF or BMP at the resolution you choose, or SVG vector drawings, one file per page."), [this] { m_win->exportImages(); });
-    row("globe", QStringLiteral("Save as Web Page"), QStringLiteral("A single HTML file you can open in any browser."), [this] { m_win->exportHtml(); });
-    row("book-open", QStringLiteral("Save as E-book (EPUB)"), QStringLiteral("Text that flows to fit any e-reader, with chapters, contents, notes and a cover."), [this] { m_win->exportEpub(); });
-    row("file-output", QStringLiteral("Save as .pub File"), QStringLiteral("Saves a .pub file for people who work with .pub publications."), [this] { m_win->saveAs("pub"); });
-    row("package", QStringLiteral("Pack and Go: Save for a Commercial Printer"), QStringLiteral("A high-quality PDF with crop marks plus the publication file in one folder."), [this] {
+    row("image-down", tr("Save as Picture"), tr("PNG, JPEG, GIF, TIFF or BMP at the resolution you choose, or SVG vector drawings, one file per page."), [this] { m_win->exportImages(); });
+    row("globe", tr("Save as Web Page"), tr("A single HTML file you can open in any browser."), [this] { m_win->exportHtml(); });
+    row("book-open", tr("Save as E-book (EPUB)"), tr("Text that flows to fit any e-reader, with chapters, contents, notes and a cover."), [this] { m_win->exportEpub(); });
+    row("file-output", tr("Save as .pub File"), tr("Saves a .pub file for people who work with .pub publications."), [this] { m_win->saveAs("pub"); });
+    row("package", tr("Pack and Go: Save for a Commercial Printer"), tr("A high-quality PDF with crop marks plus the publication file in one folder."), [this] {
         packAndGo(this, m_win, true);
     });
-    row("hard-drive", QStringLiteral("Pack and Go: Save for Another Computer"), QStringLiteral("The publication, its pictures and the fonts it uses, bundled in one ZIP file."), [this] {
+    row("hard-drive", tr("Pack and Go: Save for Another Computer"), tr("The publication, its pictures and the fonts it uses, bundled in one ZIP file."), [this] {
         packAndGo(this, m_win, false);
     });
-    row("camera", QStringLiteral("Save for a Photo Printer"), QStringLiteral("Saves each page as a 300 dpi JPEG for photo printing services."), [this] {
+    row("camera", tr("Save for a Photo Printer"), tr("Saves each page as a 300 dpi JPEG for photo printing services."), [this] {
         saveForPhotoPrinter(this, m_win);
     });
-    row("layout-template", QStringLiteral("Save as Template"), QStringLiteral("Adds this publication to My Templates in File > New."), [this] {
+    row("layout-template", tr("Save as Template"), tr("Adds this publication to My Templates in File > New."), [this] {
         saveAsTemplate(this, m_win);
     });
     v->addStretch(1);
@@ -1462,7 +1463,7 @@ QWidget *Backstage::buildAbout()
     auto *v = new QVBoxLayout(w);
     v->setContentsMargins(40, 30, 40, 30);
     v->setSpacing(14);
-    v->addWidget(heading(QStringLiteral("About"), w));
+    v->addWidget(heading(tr("About"), w));
 
     // Identity card: badge, name, version and the one-line description.
     auto *id = cardFrame(w);
@@ -1499,27 +1500,28 @@ QWidget *Backstage::buildAbout()
     nf.setPointSizeF(nf.pointSizeF() * 1.35);
     name->setFont(nf);
     iv->addWidget(name);
-    iv->addWidget(mutedLabel(QStringLiteral("Version %1 · Built with Qt %2").arg(QStringLiteral(JP_VERSION), QString::fromLatin1(qVersion())), id));
-    auto *tag = new QLabel(QStringLiteral("Free, open-source desktop publishing for Windows, macOS, and Linux."), id);
+    iv->addWidget(mutedLabel(tr("Version %1 · Built with Qt %2").arg(QStringLiteral(JP_VERSION), QString::fromLatin1(qVersion())), id));
+    auto *tag = new QLabel(tr("Free, open-source desktop publishing for Windows, macOS, and Linux."), id);
     tag->setWordWrap(true);
     fitHeight(tag);
     iv->addWidget(tag);
-    auto *links = new QLabel(QStringLiteral("<a href=\"https://github.com/JeffOffice/jeffpub\">Source code</a> &nbsp;·&nbsp; "
-                                            "<a href=\"https://github.com/JeffOffice/jeffpub/releases\">Downloads</a> &nbsp;·&nbsp; "
-                                            "<a href=\"https://github.com/JeffOffice/jeffpub/issues\">Report a problem</a>"),
+    auto *links = new QLabel(QStringLiteral("<a href=\"https://github.com/JeffOffice/jeffpub\">%1</a> &nbsp;·&nbsp; "
+                                            "<a href=\"https://github.com/JeffOffice/jeffpub/releases\">%2</a> &nbsp;·&nbsp; "
+                                            "<a href=\"https://github.com/JeffOffice/jeffpub/issues\">%3</a>")
+                                 .arg(tr("Source code"), tr("Downloads"), tr("Report a problem")),
                              id);
     links->setOpenExternalLinks(true);
     iv->addWidget(links);
     // Updates.
     auto *uh = new QHBoxLayout();
     uh->setSpacing(10);
-    auto *checkBtn = new QPushButton(QStringLiteral("Check for Updates"), id);
+    auto *checkBtn = new QPushButton(tr("Check for Updates"), id);
     checkBtn->setCursor(Qt::PointingHandCursor);
     connect(checkBtn, &QPushButton::clicked, this, [this] {
         if (!updater()) setUpdater(new Updater(m_win));
         updater()->check(true);
     });
-    auto *autoBox = new QCheckBox(QStringLiteral("Check for updates automatically"), id);
+    auto *autoBox = new QCheckBox(tr("Check for updates automatically"), id);
     autoBox->setChecked(Settings::get().value(QStringLiteral("updates/auto"), true).toBool());
     connect(autoBox, &QCheckBox::toggled, this, [](bool on) { Settings::get().setValue(QStringLiteral("updates/auto"), on); });
     uh->addWidget(checkBtn);
@@ -1528,12 +1530,12 @@ QWidget *Backstage::buildAbout()
     iv->addSpacing(6);
     iv->addLayout(uh);
     // Anonymous usage statistics.
-    auto *statsBox = new QCheckBox(QStringLiteral("Send anonymous usage statistics"), id);
-    statsBox->setToolTip(QStringLiteral("Once a day, and the day it's updated: JeffPub's version, your operating system and language, and how often each command is used. "
-                                        "Never your files, their names, or anything in them."));
+    auto *statsBox = new QCheckBox(tr("Send anonymous usage statistics"), id);
+    statsBox->setToolTip(tr("Once a day, and the day it's updated: JeffPub's version, your operating system and language, and how often each command is used. "
+                            "Never your files, their names, or anything in them."));
     statsBox->setChecked(telemetry::enabled());
     connect(statsBox, &QCheckBox::toggled, this, [](bool on) { telemetry::setEnabled(on); });
-    auto *statsLink = new QLabel(QStringLiteral("<a href=\"https://telemetry-production-9964.up.railway.app/\">What's sent</a>"), id);
+    auto *statsLink = new QLabel(QStringLiteral("<a href=\"https://telemetry-production-9964.up.railway.app/\">%1</a>").arg(tr("What's sent")), id);
     statsLink->setOpenExternalLinks(true);
     auto *sh = new QHBoxLayout();
     sh->setSpacing(10);
@@ -1550,12 +1552,12 @@ QWidget *Backstage::buildAbout()
     auto *yv = new QVBoxLayout(you);
     yv->setContentsMargins(20, 16, 20, 16);
     yv->setSpacing(6);
-    auto *yh = new QLabel(QStringLiteral("Your name"), you);
+    auto *yh = new QLabel(tr("Your name"), you);
     QFont yf = yh->font();
     yf.setWeight(QFont::DemiBold);
     yh->setFont(yf);
     yv->addWidget(yh);
-    yv->addWidget(mutedLabel(QStringLiteral("Saved as the author of new publications and shown in comments."), you));
+    yv->addWidget(mutedLabel(tr("Saved as the author of new publications and shown in comments."), you));
     auto *nameEdit = new QLineEdit(Settings::get().userName(), you);
     nameEdit->setMinimumHeight(32);
     nameEdit->setMaximumWidth(360);
@@ -1569,17 +1571,17 @@ QWidget *Backstage::buildAbout()
     auto *lv = new QVBoxLayout(legal);
     lv->setContentsMargins(20, 16, 20, 16);
     lv->setSpacing(8);
-    auto *lh = new QLabel(QStringLiteral("License and notices"), legal);
+    auto *lh = new QLabel(tr("License and notices"), legal);
     lh->setFont(yf);
     lv->addWidget(lh);
-    auto *lt = mutedLabel(QStringLiteral(
-                              "Copyright © 2026 JeffOffice LLC.<br><br>"
-                              "JeffPub is free software under the "
-                              "<a href=\"https://github.com/JeffOffice/jeffpub/blob/main/LICENSE\">GNU General Public License v3.0</a>. "
-                              "It comes with ABSOLUTELY NO WARRANTY; see the license for details. "
-                              "<a href=\"https://www.gnu.org/licenses/gpl-3.0.html\">Read the license on gnu.org</a>.<br><br>"
-                              "JeffPub is an independent open-source project. It is not affiliated with, endorsed by or supported by any other "
-                              "software company. Product names are trademarks of their owners."),
+    auto *lt = mutedLabel(tr("Copyright © 2026 JeffOffice LLC.<br><br>"
+                             "JeffPub is free software under the "
+                             "<a href=\"%1\">GNU General Public License v3.0</a>. "
+                             "It comes with ABSOLUTELY NO WARRANTY; see the license for details. "
+                             "<a href=\"%2\">Read the license on gnu.org</a>.<br><br>"
+                             "JeffPub is an independent open-source project. It is not affiliated with, endorsed by or supported by any other "
+                             "software company. Product names are trademarks of their owners.")
+                              .arg(QStringLiteral("https://github.com/JeffOffice/jeffpub/blob/main/LICENSE"), QStringLiteral("https://www.gnu.org/licenses/gpl-3.0.html")),
                           legal, 0.75);
     lt->setWordWrap(true);
     fitHeight(lt);
@@ -1587,70 +1589,70 @@ QWidget *Backstage::buildAbout()
     lt->setOpenExternalLinks(true);
     lv->addWidget(lt);
     // Every bundled component, linked to its project and its license.
-    struct Part { const char *name, *url, *use, *license, *licenseUrl; };
-    static const Part parts[] = {
-        {"Qt 6", "https://www.qt.io/", "Interface, text layout, PDF and printing", "LGPL-3.0", "https://www.gnu.org/licenses/lgpl-3.0.html"},
-        {"libmspub (modified)", "https://git.libreoffice.org/libmspub", "Reading .pub files", "MPL-2.0", "https://www.mozilla.org/MPL/2.0/"},
-        {"librevenge (modified)", "https://sourceforge.net/p/libwpd/librevenge/", "Document interfaces", "MPL-2.0 or LGPL-2.1+", "https://www.mozilla.org/MPL/2.0/"},
-        {"Hunspell", "https://hunspell.github.io/", "Spelling checker", "MPL-1.1, GPL-2.0+ or LGPL-2.1+", "https://www.mozilla.org/MPL/1.1/"},
+    struct Part { const char *name, *url; QString use; const char *license, *licenseUrl; };
+    const Part parts[] = {
+        {"Qt 6", "https://www.qt.io/", tr("Interface, text layout, PDF and printing"), "LGPL-3.0", "https://www.gnu.org/licenses/lgpl-3.0.html"},
+        {"libmspub (modified)", "https://git.libreoffice.org/libmspub", tr("Reading .pub files"), "MPL-2.0", "https://www.mozilla.org/MPL/2.0/"},
+        {"librevenge (modified)", "https://sourceforge.net/p/libwpd/librevenge/", tr("Document interfaces"), "MPL-2.0 or LGPL-2.1+", "https://www.mozilla.org/MPL/2.0/"},
+        {"Hunspell", "https://hunspell.github.io/", tr("Spelling checker"), "MPL-1.1, GPL-2.0+ or LGPL-2.1+", "https://www.mozilla.org/MPL/1.1/"},
         // The dictionaries, from LibreOffice's (resources/dict/README.md).
-        {"English dictionaries (SCOWL; UK)", "http://wordlist.aspell.net/", "Spelling", "SCOWL license; LGPL (UK)",
+        {"English dictionaries (SCOWL; UK)", "http://wordlist.aspell.net/", tr("Spelling"), "SCOWL license; LGPL (UK)",
          "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/en/README_en_US.txt"},
-        {"English hyphenation patterns", "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/en/README_hyph_en_US.txt", "Hyphenation", "BSD-style",
+        {"English hyphenation patterns", "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/en/README_hyph_en_US.txt", tr("Hyphenation"), "BSD-style",
          "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/en/README_hyph_en_US.txt"},
-        {"WordNet", "https://wordnet.princeton.edu/", "Thesaurus", "WordNet license",
+        {"WordNet", "https://wordnet.princeton.edu/", tr("Thesaurus"), "WordNet license",
          "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/en/WordNet_license.txt"},
-        {"Spanish dictionaries", "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/es/README_hunspell_es.txt", "Spelling and hyphenation", "GPL-3.0+, LGPL-3.0+ or MPL-1.1+",
+        {"Spanish dictionaries", "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/es/README_hunspell_es.txt", tr("Spelling and hyphenation"), "GPL-3.0+, LGPL-3.0+ or MPL-1.1+",
          "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/es/LICENSE.md"},
-        {"French dictionary (Grammalecte)", "https://grammalecte.net/", "Spelling and hyphenation", "MPL-2.0; patterns LGPL",
+        {"French dictionary (Grammalecte)", "https://grammalecte.net/", tr("Spelling and hyphenation"), "MPL-2.0; patterns LGPL",
          "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/fr_FR/README_dict_fr.txt"},
-        {"German dictionary (igerman98)", "https://www.j3e.de/ispell/igerman98/", "Spelling and hyphenation", "GPL-2.0 or GPL-3.0; patterns LGPL-2.0+",
+        {"German dictionary (igerman98)", "https://www.j3e.de/ispell/igerman98/", tr("Spelling and hyphenation"), "GPL-2.0 or GPL-3.0; patterns LGPL-2.0+",
          "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/de/README_de_DE_frami.txt"},
-        {"Italian dictionary", "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/it_IT/README_it_IT.txt", "Spelling and hyphenation", "GPL-3.0; patterns LGPL",
+        {"Italian dictionary", "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/it_IT/README_it_IT.txt", tr("Spelling and hyphenation"), "GPL-3.0; patterns LGPL",
          "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/it_IT/README_it_IT.txt"},
-        {"Dutch dictionary (OpenTaal)", "https://www.opentaal.org/", "Spelling and hyphenation", "BSD or CC BY 3.0",
+        {"Dutch dictionary (OpenTaal)", "https://www.opentaal.org/", tr("Spelling and hyphenation"), "BSD or CC BY 3.0",
          "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/nl_NL/LICENSE.txt"},
-        {"Brazilian Portuguese dictionary (VERO)", "http://pt-br.libreoffice.org/projetos/projeto-vero-verificador-ortografico/", "Spelling and hyphenation",
+        {"Brazilian Portuguese dictionary (VERO)", "http://pt-br.libreoffice.org/projetos/projeto-vero-verificador-ortografico/", tr("Spelling and hyphenation"),
          "LGPL-3.0 or MPL", "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/pt_BR/README_en.txt"},
-        {"European Portuguese dictionary", "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/pt_PT/README_pt_PT.txt", "Spelling and hyphenation", "GPL-2.0+",
+        {"European Portuguese dictionary", "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/pt_PT/README_pt_PT.txt", tr("Spelling and hyphenation"), "GPL-2.0+",
          "https://github.com/JeffOffice/jeffpub/blob/main/resources/dict/pt_PT/LICENSES.txt"},
-        {"Lucide icons", "https://lucide.dev/", "Interface icons, Insert > Icons", "ISC", "https://lucide.dev/license"},
-        {"Open fonts", "https://github.com/JeffOffice/jeffpub/blob/main/resources/fonts/README.md", "Fonts and substitutes",
+        {"Lucide icons", "https://lucide.dev/", tr("Interface icons, Insert > Icons"), "ISC", "https://lucide.dev/license"},
+        {"Open fonts", "https://github.com/JeffOffice/jeffpub/blob/main/resources/fonts/README.md", tr("Fonts and substitutes"),
          "SIL OFL 1.1, GUST, Bitstream Vera, GPL v2 + font exceptions", "https://github.com/JeffOffice/jeffpub/blob/main/resources/fonts/README.md"},
-        {"zlib", "https://zlib.net/", "Compression (also in PDFium)", "zlib license", "https://zlib.net/zlib_license.html"},
+        {"zlib", "https://zlib.net/", tr("Compression (also in PDFium)"), "zlib license", "https://zlib.net/zlib_license.html"},
         // PDFium and what's built into it; the texts ship with the program
         // (third_party/pdfium/licenses).
-        {"PDFium", "https://pdfium.googlesource.com/pdfium/", "Placing PDF pages", "BSD-3-Clause; parts Apache-2.0", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/pdfium.txt"},
-        {"pdfium-binaries", "https://github.com/bblanchon/pdfium-binaries", "PDFium, built", "MIT", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/pdfium-binaries.txt"},
-        {"FreeType (in PDFium)", "https://freetype.org/", "Fonts in PDF pages", "FreeType License", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/freetype.txt"},
-        {"HarfBuzz (in PDFium)", "https://harfbuzz.github.io/", "Text in PDF pages", "Old MIT", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/harfbuzz.txt"},
-        {"Little CMS (in PDFium)", "https://www.littlecms.com/", "Color in PDF pages", "MIT", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/lcms.txt"},
-        {"libjpeg-turbo (in PDFium)", "https://libjpeg-turbo.org/", "JPEG pictures in PDF pages", "IJG and BSD-3-Clause", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/libjpeg_turbo.md"},
-        {"OpenJPEG (in PDFium)", "https://www.openjpeg.org/", "JPEG 2000 in PDF pages", "BSD-2-Clause", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/libopenjpeg.txt"},
-        {"libpng (in PDFium)", "http://www.libpng.org/pub/png/libpng.html", "PNG pictures in PDF pages", "libpng License v2", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/libpng.txt"},
-        {"Abseil (in PDFium)", "https://abseil.io/", "Support code", "Apache-2.0", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/abseil.txt"},
-        {"Anti-Grain Geometry 2.3 (in PDFium)", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/agg23.txt", "Drawing", "AGG 2.3 license", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/agg23.txt"},
-        {"dragonbox (in PDFium)", "https://github.com/jk-jeon/dragonbox", "Numbers", "Apache-2.0 (LLVM) or BSL-1.0", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/dragonbox-Boost.txt"},
-        {"fast_float (in PDFium)", "https://github.com/fastfloat/fast_float", "Numbers", "MIT", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/fast_float.txt"},
-        {"simdutf (in PDFium)", "https://github.com/simdutf/simdutf", "Unicode text", "MIT", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/simdutf.txt"},
-        {"LLVM libc (in PDFium)", "https://libc.llvm.org/", "Support code", "Apache-2.0 (LLVM)", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/llvm-libc.txt"},
-        {"ICU", "https://icu.unicode.org/", "Unicode text (in PDFium; with Qt on Linux)", "Unicode License v3", "https://www.unicode.org/license.txt"},
+        {"PDFium", "https://pdfium.googlesource.com/pdfium/", tr("Placing PDF pages"), "BSD-3-Clause; parts Apache-2.0", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/pdfium.txt"},
+        {"pdfium-binaries", "https://github.com/bblanchon/pdfium-binaries", tr("PDFium, built"), "MIT", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/pdfium-binaries.txt"},
+        {"FreeType (in PDFium)", "https://freetype.org/", tr("Fonts in PDF pages"), "FreeType License", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/freetype.txt"},
+        {"HarfBuzz (in PDFium)", "https://harfbuzz.github.io/", tr("Text in PDF pages"), "Old MIT", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/harfbuzz.txt"},
+        {"Little CMS (in PDFium)", "https://www.littlecms.com/", tr("Color in PDF pages"), "MIT", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/lcms.txt"},
+        {"libjpeg-turbo (in PDFium)", "https://libjpeg-turbo.org/", tr("JPEG pictures in PDF pages"), "IJG and BSD-3-Clause", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/libjpeg_turbo.md"},
+        {"OpenJPEG (in PDFium)", "https://www.openjpeg.org/", tr("JPEG 2000 in PDF pages"), "BSD-2-Clause", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/libopenjpeg.txt"},
+        {"libpng (in PDFium)", "http://www.libpng.org/pub/png/libpng.html", tr("PNG pictures in PDF pages"), "libpng License v2", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/libpng.txt"},
+        {"Abseil (in PDFium)", "https://abseil.io/", tr("Support code"), "Apache-2.0", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/abseil.txt"},
+        {"Anti-Grain Geometry 2.3 (in PDFium)", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/agg23.txt", tr("Drawing"), "AGG 2.3 license", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/agg23.txt"},
+        {"dragonbox (in PDFium)", "https://github.com/jk-jeon/dragonbox", tr("Numbers"), "Apache-2.0 (LLVM) or BSL-1.0", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/dragonbox-Boost.txt"},
+        {"fast_float (in PDFium)", "https://github.com/fastfloat/fast_float", tr("Numbers"), "MIT", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/fast_float.txt"},
+        {"simdutf (in PDFium)", "https://github.com/simdutf/simdutf", tr("Unicode text"), "MIT", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/simdutf.txt"},
+        {"LLVM libc (in PDFium)", "https://libc.llvm.org/", tr("Support code"), "Apache-2.0 (LLVM)", "https://github.com/JeffOffice/jeffpub/blob/main/third_party/pdfium/licenses/llvm-libc.txt"},
+        {"ICU", "https://icu.unicode.org/", tr("Unicode text (in PDFium; with Qt on Linux)"), "Unicode License v3", "https://www.unicode.org/license.txt"},
 #ifdef Q_OS_WIN
-        {"MinGW-w64 runtime", "https://www.mingw-w64.org/", "C++ runtime", "GPL-3.0 with GCC Runtime Library Exception; MIT",
+        {"MinGW-w64 runtime", "https://www.mingw-w64.org/", tr("C++ runtime"), "GPL-3.0 with GCC Runtime Library Exception; MIT",
          "https://www.gnu.org/licenses/gcc-exception-3.1.html"},
-        {"NSIS", "https://nsis.sourceforge.io/", "Installer", "zlib/libpng license", "https://nsis.sourceforge.io/License"},
+        {"NSIS", "https://nsis.sourceforge.io/", tr("Installer"), "zlib/libpng license", "https://nsis.sourceforge.io/License"},
 #endif
-        {"LibreTranslate", "https://libretranslate.com/", "Translate (opens in your browser)", "AGPL-3.0", "https://www.gnu.org/licenses/agpl-3.0.html"},
-        {"PSO Coated v3 color profile", "https://www.eci.org/", "PDF/X-4 (downloaded from the European Color Initiative)", "ECI's terms", "https://www.eci.org/"},
-        {"ISBN range table", "https://www.isbn-international.org/", "ISBN hyphens (downloaded from the International ISBN Agency)", "The agency's terms",
+        {"LibreTranslate", "https://libretranslate.com/", tr("Translate (opens in your browser)"), "AGPL-3.0", "https://www.gnu.org/licenses/agpl-3.0.html"},
+        {"PSO Coated v3 color profile", "https://www.eci.org/", tr("PDF/X-4 (downloaded from the European Color Initiative)"), "ECI's terms", "https://www.eci.org/"},
+        {"ISBN range table", "https://www.isbn-international.org/", tr("ISBN hyphens (downloaded from the International ISBN Agency)"), "The agency's terms",
          "https://www.isbn-international.org/range_file_generation"},
     };
     QString rows;
     for (const Part &pt : parts)
         rows += QStringLiteral("<tr><td style=\"padding:3px 14px 3px 0\"><a href=\"%1\">%2</a></td><td style=\"padding:3px 14px 3px 0\">%3</td>"
                                "<td style=\"padding:3px 0\"><a href=\"%4\">%5</a></td></tr>")
-                    .arg(QLatin1String(pt.url), QLatin1String(pt.name), QLatin1String(pt.use), QLatin1String(pt.licenseUrl), QLatin1String(pt.license));
-    auto *th = new QLabel(QStringLiteral("Third-party software"), legal);
+                    .arg(QLatin1String(pt.url), QLatin1String(pt.name), pt.use, QLatin1String(pt.licenseUrl), QLatin1String(pt.license));
+    auto *th = new QLabel(tr("Third-party software"), legal);
     th->setFont(yf);
     lv->addSpacing(6);
     lv->addWidget(th);

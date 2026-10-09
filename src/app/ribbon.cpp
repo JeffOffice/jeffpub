@@ -10,6 +10,7 @@
 #include <QLabel>
 #include <QKeyEvent>
 #include <QApplication>
+#include <QCoreApplication>
 #include <QWidgetAction>
 #include <QMenu>
 #include <QMouseEvent>
@@ -253,9 +254,9 @@ void RibbonGroup::setLauncher(const std::function<void()> &fn, const QString &ti
         m_launcher->setIconSize(QSize(13, 13));
         m_launcher->setFixedSize(18, 15);
     }
-    m_launcher->setToolTip(tip.isEmpty() ? QStringLiteral("%1 Settings").arg(m_title) : tip);
+    m_launcher->setToolTip(tip.isEmpty() ? tr("%1 Settings").arg(m_title) : tip);
     m_launcher->setAccessibleName(m_launcher->toolTip() + QStringLiteral("…"));
-    m_launcher->setAccessibleDescription(QStringLiteral("Opens the %1 dialog").arg(m_launcher->toolTip()));
+    m_launcher->setAccessibleDescription(tr("Opens the %1 dialog").arg(m_launcher->toolTip()));
     QObject::disconnect(m_launcher, nullptr, nullptr, nullptr);
     connect(m_launcher, &QToolButton::clicked, this, [fn] { fn(); });
 }
@@ -427,8 +428,8 @@ public:
         setObjectName(k == File ? QStringLiteral("jpRibbonFile") : k == Tab ? QStringLiteral("jpRibbonTab") : QStringLiteral("jpRibbonCollapse"));
         if (k == Tab) setProperty("jpOwnArrows", true);   // they move along the tabs
         if (k == File) {
-            setText(QStringLiteral("File"));
-            setAccessibleDescription(QStringLiteral("Opens the File page: new, open, save, print, share, export, and options."));
+            setText(QCoreApplication::translate("Ribbon", "File"));
+            setAccessibleDescription(QCoreApplication::translate("Ribbon", "Opens the File page: new, open, save, print, share, export, and options."));
         }
         connect(this, &QAbstractButton::clicked, this, [this] {
             if (m_kind == File) Q_EMIT m_r->fileClicked();
@@ -579,7 +580,7 @@ public:
     explicit RibbonHeader(Ribbon *r) : QWidget(r), m_r(r)
     {
         setObjectName(QStringLiteral("jpRibbonTabs"));
-        setAccessibleName(QStringLiteral("Ribbon tabs"));
+        setAccessibleName(QCoreApplication::translate("Ribbon", "Ribbon tabs"));
         setFixedHeight(50);   // room for a small gap under the tab pills
         m_file = new HeaderButton(HeaderButton::File, r, -1, this);
         m_collapse = new HeaderButton(HeaderButton::Collapse, r, -1, this);
@@ -630,12 +631,12 @@ public:
             x += w + 4;
             b->setText(t.title);
             b->setAccessibleName(t.title);
-            b->setAccessibleDescription(t.group.isEmpty() ? QStringLiteral("Ribbon tab") : QStringLiteral("Ribbon tab, %1").arg(t.group));
+            b->setAccessibleDescription(t.group.isEmpty() ? QCoreApplication::translate("Ribbon", "Ribbon tab") : QCoreApplication::translate("Ribbon", "Ribbon tab, %1").arg(t.group));
             b->setFocusPolicy(b->tab() == m_r->m_current ? Qt::TabFocus : Qt::NoFocus);
             b->update();
         }
         m_collapse->setGeometry(width() - 30, 18, 28, 26);
-        m_collapse->setAccessibleName(m_r->m_minimized ? QStringLiteral("Expand the Ribbon") : QStringLiteral("Collapse the Ribbon"));
+        m_collapse->setAccessibleName(m_r->m_minimized ? QCoreApplication::translate("Ribbon", "Expand the Ribbon") : QCoreApplication::translate("Ribbon", "Collapse the Ribbon"));
         m_collapse->update();
         m_file->update();
     }
@@ -698,7 +699,7 @@ Ribbon::Ribbon(QWidget *parent) : QWidget(parent)
     setPalette(pal);
     m_stack->setAutoFillBackground(true);
     m_stack->setPalette(pal);
-    setAccessibleName(QStringLiteral("Ribbon"));
+    setAccessibleName(tr("Ribbon"));
     installArrowNavigation(this);
     connect(UiTheme::instance(), &UiTheme::changed, this, &Ribbon::restyle);   // the look switched in Options
 }

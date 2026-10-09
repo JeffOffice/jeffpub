@@ -9,6 +9,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -114,7 +115,7 @@ ColorPopup::ColorPopup(const ColorScheme &s, bool allowNone, const QString &none
         l->setFont(f);
         v->addWidget(l);
     };
-    label(QStringLiteral("Scheme Colors"));
+    label(tr("Scheme Colors"));
     auto *grid = new QGridLayout();
     grid->setSpacing(0);
     for (int slot = 0; slot < SlotCount; ++slot) {
@@ -133,7 +134,7 @@ ColorPopup::ColorPopup(const ColorScheme &s, bool allowNone, const QString &none
     // Spot colors, each with its tints.
     const auto spots = spotColorSource() ? spotColorSource()() : QVector<QPair<QString, QColor>>{};
     if (!spots.isEmpty()) {
-        label(QStringLiteral("Spot Colors"));
+        label(tr("Spot Colors"));
         auto *sg = new QGridLayout();
         sg->setSpacing(0);
         for (int i = 0; i < spots.size(); ++i) {
@@ -141,7 +142,7 @@ ColorPopup::ColorPopup(const ColorScheme &s, bool allowNone, const QString &none
             const int tints[] = {20, 40, 60, 80};
             for (int k = 0; k < 4; ++k) {
                 const QColor t = mix(spots[i].second, Qt::white, tints[k] / 100.0);
-                sg->addWidget(swatch(ColorRef::rgb(t), t, QStringLiteral("%1, tint %2%").arg(spots[i].first).arg(100 - tints[k])), k + 1, i);
+                sg->addWidget(swatch(ColorRef::rgb(t), t, tr("%1, tint %2%").arg(spots[i].first).arg(100 - tints[k])), k + 1, i);
             }
         }
         auto *sw = new QHBoxLayout();
@@ -149,7 +150,7 @@ ColorPopup::ColorPopup(const ColorScheme &s, bool allowNone, const QString &none
         sw->addStretch(1);
         v->addLayout(sw);
     }
-    label(QStringLiteral("Standard Colors"));
+    label(tr("Standard Colors"));
     auto *std = new QHBoxLayout();
     std->setSpacing(0);
     const char *stdColors[] = {"#C00000", "#FF0000", "#FFC000", "#FFFF00", "#92D050", "#00B050", "#00B0F0", "#0070C0", "#002060", "#7030A0", "#000000", "#FFFFFF"};
@@ -157,14 +158,14 @@ ColorPopup::ColorPopup(const ColorScheme &s, bool allowNone, const QString &none
     std->addStretch(1);
     v->addLayout(std);
     if (!recentColors().isEmpty()) {
-        label(QStringLiteral("Recent Colors"));
+        label(tr("Recent Colors"));
         auto *rec = new QHBoxLayout();
         rec->setSpacing(0);
         for (const QColor &c : recentColors()) rec->addWidget(swatch(ColorRef::rgb(c), c, c.name().toUpper()));
         rec->addStretch(1);
         v->addLayout(rec);
     }
-    auto *more = new QPushButton(icon("palette"), QStringLiteral("More Colors…"), this);
+    auto *more = new QPushButton(icon("palette"), tr("More Colors…"), this);
     more->setFlat(true);
     connect(more, &QPushButton::clicked, this, [this] {
         const QColor c = colorsDialog(parentWidget(), Qt::black);
@@ -175,9 +176,9 @@ ColorPopup::ColorPopup(const ColorScheme &s, bool allowNone, const QString &none
         close();
     });
     v->addWidget(more);
-    auto *drop = new QPushButton(icon("pipette"), QStringLiteral("Eyedropper"), this);
+    auto *drop = new QPushButton(icon("pipette"), tr("Eyedropper"), this);
     drop->setFlat(true);
-    drop->setToolTip(QStringLiteral("Pick a color from anywhere on the page"));
+    drop->setToolTip(tr("Pick a color from anywhere on the page"));
     connect(drop, &QPushButton::clicked, this, [this] {
         Q_EMIT eyedropper();
         close();
@@ -222,7 +223,7 @@ ColorButton::ColorButton(const QString &iconName, const QString &text, bool allo
 {
     setToolTip(text);
     setAccessibleName(text);
-    setAccessibleDescription(QStringLiteral("Applies the color shown; Down arrow or F4 opens more colors."));
+    setAccessibleDescription(tr("Applies the color shown; Down arrow or F4 opens more colors."));
     setPopupMode(QToolButton::MenuButtonPopup);
     setAutoRaise(true);
     setFocusPolicy(Qt::TabFocus);   // the keyboard reaches it; a click leaves the focus in the text
@@ -298,13 +299,13 @@ void ColorButton::paintEvent(QPaintEvent *e)
     }
     // Name.
     QString name;
-    if (m_current.isNone()) name = m_noneLabel.isEmpty() ? QStringLiteral("No Color") : m_noneLabel;
+    if (m_current.isNone()) name = m_noneLabel.isEmpty() ? tr("No Color") : m_noneLabel;
     else if (m_current.kind() == ColorRef::Scheme) name = slotName(m_current.slot());
     else name = m_current.resolve(m_scheme).name(QColor::HexRgb).toUpper();
     p.setPen(isEnabled() ? uiText() : QColor(0x9C, 0xA3, 0xAF));
     p.setFont(font());
-    const QRectF tr(sw.right() + 8, r.top(), r.right() - 26 - sw.right() - 8, r.height());
-    p.drawText(tr, Qt::AlignVCenter | Qt::AlignLeft, fontMetrics().elidedText(name, Qt::ElideRight, int(tr.width())));
+    const QRectF nameRect(sw.right() + 8, r.top(), r.right() - 26 - sw.right() - 8, r.height());
+    p.drawText(nameRect, Qt::AlignVCenter | Qt::AlignLeft, fontMetrics().elidedText(name, Qt::ElideRight, int(nameRect.width())));
     // Chevron.
     const QPointF c(r.right() - 14, r.center().y());
     p.setPen(QPen(uiText(), 1.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
@@ -457,7 +458,7 @@ Gallery::Gallery(const QSize &itemSize, int visibleColumns, QWidget *parent) : Q
     m_list->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_list->setFrameShape(QFrame::NoFrame);
     m_list->setFocusPolicy(Qt::TabFocus);   // the keyboard reaches it; a click leaves the focus in the text
-    m_list->setAccessibleName(QStringLiteral("Gallery"));
+    m_list->setAccessibleName(tr("Gallery"));
     m_list->installEventFilter(this);
     m_list->setMouseTracking(true);
     m_list->setStyleSheet(QStringLiteral("QListWidget{background:transparent; border:none;}"));
@@ -483,9 +484,9 @@ Gallery::Gallery(const QSize &itemSize, int visibleColumns, QWidget *parent) : Q
         connect(b, &QToolButton::clicked, this, fn);
         side->addWidget(b);
     };
-    mk("chevron-up", "Previous row", [this] { scroll(-1); });
-    mk("chevron-down", "Next row", [this] { scroll(1); });
-    mk("layout-grid", "Show all", [this] { openMore(); });
+    mk("chevron-up", tr("Previous row"), [this] { scroll(-1); });
+    mk("chevron-down", tr("Next row"), [this] { scroll(1); });
+    mk("layout-grid", tr("Show all"), [this] { openMore(); });
     h->addLayout(side);
     connect(m_list, &QListWidget::itemClicked, this, [this](QListWidgetItem *it) { Q_EMIT activated(it->data(Qt::UserRole).toString()); });
 }
@@ -829,7 +830,7 @@ public:
 
 FontCombo::FontCombo(QWidget *parent) : QComboBox(parent)
 {
-    setAccessibleName(QStringLiteral("Font"));
+    setAccessibleName(tr("Font"));
     setEditable(true);
     setInsertPolicy(QComboBox::NoInsert);
     setMinimumWidth(150);
@@ -860,10 +861,10 @@ void FontCombo::populate()
         setItemData(count() - 1, header, Qt::UserRole + 2);
         if (header) setItemData(count() - 1, 0, Qt::UserRole - 1);   // disabled
     };
-    add(QStringLiteral("Scheme Fonts"), QString(), QString(), true);
+    add(tr("Scheme Fonts"), QString(), QString(), true);
     add(m_heading.isEmpty() ? QStringLiteral("+Headings") : m_heading + QStringLiteral(" (Headings)"), QStringLiteral("+Heading"), m_heading);
     add(m_body.isEmpty() ? QStringLiteral("+Body") : m_body + QStringLiteral(" (Body)"), QStringLiteral("+Body"), m_body);
-    add(QStringLiteral("All Fonts"), QString(), QString(), true);
+    add(tr("All Fonts"), QString(), QString(), true);
     QStringList fams = QFontDatabase::families();
     fams.removeDuplicates();
     for (const QString &f : fams) {
@@ -896,7 +897,7 @@ void FontCombo::setCurrentFamily(const QString &family)
 // ---------------- SizeCombo ----------------
 SizeCombo::SizeCombo(QWidget *parent) : QComboBox(parent)
 {
-    setAccessibleName(QStringLiteral("Font Size"));
+    setAccessibleName(tr("Font Size"));
     setEditable(true);
     setInsertPolicy(QComboBox::NoInsert);
     setFixedWidth(70);
@@ -973,8 +974,8 @@ TableGrid::TableGrid(QWidget *parent) : QFrame(parent)
 {
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
-    setAccessibleName(QStringLiteral("Table size"));
-    setAccessibleDescription(QStringLiteral("Arrow keys choose rows and columns; Enter inserts the table."));
+    setAccessibleName(tr("Table size"));
+    setAccessibleDescription(tr("Arrow keys choose rows and columns; Enter inserts the table."));
 }
 
 void TableGrid::keyPressEvent(QKeyEvent *e)
@@ -994,7 +995,7 @@ void TableGrid::keyPressEvent(QKeyEvent *e)
         QFrame::keyPressEvent(e);
         return;
     }
-    setAccessibleName(QStringLiteral("Table size: %1 by %2").arg(m_rows).arg(m_cols));
+    setAccessibleName(tr("Table size: %1 by %2").arg(m_rows).arg(m_cols));
     update();
 }
 
@@ -1005,7 +1006,7 @@ void TableGrid::paintEvent(QPaintEvent *)
     QPainter p(this);
     p.setPen(palette().text().color());
     p.drawText(QRect(4, 0, width(), 20), Qt::AlignVCenter,
-               m_rows ? QStringLiteral("%1 × %2 Table").arg(m_cols).arg(m_rows) : QStringLiteral("Insert Table"));
+               m_rows ? tr("%1 × %2 Table").arg(m_cols).arg(m_rows) : tr("Insert Table"));
     for (int r = 0; r < 8; ++r)
         for (int c = 0; c < 10; ++c) {
             const QRect cell(2 + c * 20, 22 + r * 20, 17, 17);
@@ -1059,14 +1060,14 @@ QColor colorsDialog(QWidget *parent, const QColor &current, const QString &title
     for (int h = 0; h < 12; ++h)
         for (int l = 0; l < 7; ++l) addSwatch(QColor::fromHslF(h / 12.0f, 0.85f, 0.88f - l * 0.11f), l + 1, h);
     grid->setRowStretch(8, 1);
-    tabs->addTab(stdPage, QStringLiteral("Standard"));
+    tabs->addTab(stdPage, QCoreApplication::translate("Widgets", "Standard"));
 
     // Custom.
     auto *custom = new QWidget();
     auto *cf = new QFormLayout(custom);
     auto *model = new QComboBox(custom);
     model->addItems({QStringLiteral("RGB"), QStringLiteral("HSL"), QStringLiteral("CMYK")});
-    cf->addRow(QStringLiteral("Color model:"), model);
+    cf->addRow(QCoreApplication::translate("Widgets", "Color model:"), model);
     auto *stack = new QStackedWidget(custom);
     auto spinRow = [](QFormLayout *f, const QString &label, int max) {
         auto *s = new QSpinBox();
@@ -1077,11 +1078,11 @@ QColor colorsDialog(QWidget *parent, const QColor &current, const QString &title
     auto *rgbPage = new QWidget();
     auto *rf = new QFormLayout(rgbPage);
     rf->setContentsMargins(0, 0, 0, 0);
-    QSpinBox *red = spinRow(rf, QStringLiteral("Red:"), 255), *green = spinRow(rf, QStringLiteral("Green:"), 255), *blue = spinRow(rf, QStringLiteral("Blue:"), 255);
+    QSpinBox *red = spinRow(rf, QCoreApplication::translate("Widgets", "Red:"), 255), *green = spinRow(rf, QCoreApplication::translate("Widgets", "Green:"), 255), *blue = spinRow(rf, QCoreApplication::translate("Widgets", "Blue:"), 255);
     auto *hslPage = new QWidget();
     auto *hf = new QFormLayout(hslPage);
     hf->setContentsMargins(0, 0, 0, 0);
-    QSpinBox *hue = spinRow(hf, QStringLiteral("Hue:"), 359), *sat = spinRow(hf, QStringLiteral("Saturation:"), 255), *lum = spinRow(hf, QStringLiteral("Luminance:"), 255);
+    QSpinBox *hue = spinRow(hf, QCoreApplication::translate("Widgets", "Hue:"), 359), *sat = spinRow(hf, QCoreApplication::translate("Widgets", "Saturation:"), 255), *lum = spinRow(hf, QCoreApplication::translate("Widgets", "Luminance:"), 255);
     auto *cmykPage = new QWidget();
     auto *kf = new QFormLayout(cmykPage);
     kf->setContentsMargins(0, 0, 0, 0);
@@ -1093,20 +1094,20 @@ QColor colorsDialog(QWidget *parent, const QColor &current, const QString &title
         kf->addRow(label, s);
         return s;
     };
-    DecimalSpin *cyan = inkRow(QStringLiteral("Cyan:")), *magenta = inkRow(QStringLiteral("Magenta:")), *yellow = inkRow(QStringLiteral("Yellow:")),
-                *black = inkRow(QStringLiteral("Black:"));
+    DecimalSpin *cyan = inkRow(QCoreApplication::translate("Widgets", "Cyan:")), *magenta = inkRow(QCoreApplication::translate("Widgets", "Magenta:")), *yellow = inkRow(QCoreApplication::translate("Widgets", "Yellow:")),
+                *black = inkRow(QCoreApplication::translate("Widgets", "Black:"));
     stack->addWidget(rgbPage);
     stack->addWidget(hslPage);
     stack->addWidget(cmykPage);
     cf->addRow(stack);
     auto *hex = new QLineEdit(custom);
     hex->setMaxLength(7);
-    cf->addRow(QStringLiteral("Hex:"), hex);
-    tabs->addTab(custom, QStringLiteral("Custom"));
+    cf->addRow(QCoreApplication::translate("Widgets", "Hex:"), hex);
+    tabs->addTab(custom, QCoreApplication::translate("Widgets", "Custom"));
 
     // Transparency, and the new color beside the current one.
     auto *bottom = new QHBoxLayout();
-    bottom->addWidget(new QLabel(QStringLiteral("Transparency:")));
+    bottom->addWidget(new QLabel(QCoreApplication::translate("Widgets", "Transparency:")));
     auto *clear = new QSpinBox(&dlg);
     clear->setRange(0, 100);
     clear->setSuffix(QStringLiteral("%"));
@@ -1158,7 +1159,7 @@ QColor colorsDialog(QWidget *parent, const QColor &current, const QString &title
             p.drawRect(pm.rect().adjusted(0, 0, -1, -1));
         }
         preview->setPixmap(pm);
-        preview->setToolTip(QStringLiteral("New (top) and current (bottom)"));
+        preview->setToolTip(QCoreApplication::translate("Widgets", "New (top) and current (bottom)"));
         syncing = false;
     };
     auto alpha = [&] { return 255 - int(std::lround(clear->value() * 255 / 100.0)); };

@@ -3,6 +3,7 @@
 #include "app/settings.h"
 
 #include <QCheckBox>
+#include <QCoreApplication>
 #include <QDate>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -83,9 +84,9 @@ void send(QNetworkAccessManager *net)
 void ask(QWidget *window)
 {
     QDialog d(window);
-    d.setWindowTitle(QStringLiteral("Help improve JeffPub"));
+    d.setWindowTitle(QCoreApplication::translate("Telemetry", "Help improve JeffPub"));
     auto *v = new QVBoxLayout(&d);
-    auto *text = new QLabel(QStringLiteral(
+    auto *text = new QLabel(QCoreApplication::translate("Telemetry",
         "JeffPub can send anonymous usage statistics once a day (and when it's updated): its version, your operating system and language, "
         "and how often each of its commands is used. That shows how many people use it and which parts matter most.<br><br>"
         "It never sends your files, their names, or anything in them. <a href=\"%1\">What's sent</a><br><br>"
@@ -93,7 +94,7 @@ void ask(QWidget *window)
     text->setWordWrap(true);
     text->setOpenExternalLinks(true);
     text->setMinimumWidth(420);
-    auto *box = new QCheckBox(QStringLiteral("Send anonymous usage statistics"), &d);
+    auto *box = new QCheckBox(QCoreApplication::translate("Telemetry", "Send anonymous usage statistics"), &d);
     box->setChecked(true);
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok, &d);
     QObject::connect(buttons, &QDialogButtonBox::accepted, &d, &QDialog::accept);

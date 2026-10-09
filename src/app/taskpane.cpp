@@ -64,10 +64,15 @@ void TaskPane::open(const QString &nameIn)
     }
     m_current = name;
     m_stack->setCurrentWidget(m_panes[name]);
-    static const QHash<QString, QString> titles{{"designchecker", "Design Checker"}, {"mailmerge", "Mail Merge"}, {"find", "Find and Replace"},
-                                                {"graphics", "Graphics Manager"}, {"research", "Research"}, {"online", "Online Pictures"},
-                                                {"catalog", "Catalog Merge"}};
-    m_title->setText(titles.value(name, name));
+    QString title = name;
+    if (name == "designchecker") title = tr("Design Checker");
+    else if (name == "mailmerge") title = tr("Mail Merge");
+    else if (name == "find") title = tr("Find and Replace");
+    else if (name == "graphics") title = tr("Graphics Manager");
+    else if (name == "research") title = tr("Research");
+    else if (name == "online") title = tr("Online Pictures");
+    else if (name == "catalog") title = tr("Catalog Merge");
+    m_title->setText(title);
     if (nameIn == "replace") if (auto *e = m_panes[name]->findChild<QLineEdit *>("replace")) e->setFocus();
     refresh();
 }
@@ -87,17 +92,17 @@ public:
     {
         auto *v = new QVBoxLayout(this);
         v->setContentsMargins(0, 0, 0, 0);
-        m_all = new QCheckBox(QStringLiteral("Run general design checks"), this);
+        m_all = new QCheckBox(tr("Run general design checks"), this);
         m_all->setChecked(true);
-        m_print = new QCheckBox(QStringLiteral("Run final publishing checks"), this);
+        m_print = new QCheckBox(tr("Run final publishing checks"), this);
         m_print->setChecked(true);
         v->addWidget(m_all);
         v->addWidget(m_print);
-        v->addWidget(new QLabel(QStringLiteral("Select an item to fix:"), this));
+        v->addWidget(new QLabel(tr("Select an item to fix:"), this));
         m_list = new QListWidget(this);
         m_list->setWordWrap(true);
         v->addWidget(m_list, 1);
-        auto *fix = new QPushButton(QStringLiteral("Go to Item"), this);
+        auto *fix = new QPushButton(tr("Go to Item"), this);
         v->addWidget(fix);
         connect(m_all, &QCheckBox::toggled, this, &DesignChecker::refresh);
         connect(m_print, &QCheckBox::toggled, this, &DesignChecker::refresh);
@@ -111,58 +116,58 @@ public:
         m_list->clear();
         const QRectF pageRect(QPointF(0, 0), d->pageSize());
         auto add = [&](const QString &msg, const QString &id, int page, const QString &iconName) {
-            auto *it = new QListWidgetItem(icon(iconName), page >= 0 ? QStringLiteral("%1 (Page %2)").arg(msg).arg(page + 1) : msg);
+            auto *it = new QListWidgetItem(icon(iconName), page >= 0 ? tr("%1 (Page %2)").arg(msg).arg(page + 1) : msg);
             it->setData(Qt::UserRole, id);
             it->setData(Qt::UserRole + 1, page);
             m_list->addItem(it);
         };
         for (int p = 0; p < d->pages.size(); ++p) {
             const auto &pg = d->pages[p];
-            if (m_all->isChecked() && pg->items.empty()) add(QStringLiteral("Page has no content"), QString(), p, "file");
+            if (m_all->isChecked() && pg->items.empty()) add(tr("Page has no content"), QString(), p, "file");
             walkItems(pg->items, [&](const ItemPtr &it) {
                 if (it->type() == ItemType::Group) return;
                 const QRectF b = it->bounds();
                 if (m_all->isChecked()) {
-                    if (!pageRect.contains(b) && b.intersects(pageRect)) add(QStringLiteral("Object is partially off the page"), it->id, p, "triangle-alert");
+                    if (!pageRect.contains(b) && b.intersects(pageRect)) add(tr("Object is partially off the page"), it->id, p, "triangle-alert");
                     if (it->type() == ItemType::Text) {
                         auto *t = static_cast<TextItem *>(it.get());
                         const auto chain = d->chainOf(t->id);
                         QTextDocument *sd = d->storyDoc(t->storyId);
-                        if (chain.size() == 1 && sd && sd->toPlainText().trimmed().isEmpty()) add(QStringLiteral("Text box is empty"), t->id, p, "square-dashed");
+                        if (chain.size() == 1 && sd && sd->toPlainText().trimmed().isEmpty()) add(tr("Text box is empty"), t->id, p, "square-dashed");
                         if (!chain.isEmpty() && chain.last() == t) {
                             const auto fl = ed->cache().textFrame(*d, *t, p + 1, RenderOptions());
-                            if (fl.layout && fl.layout->overflow()) add(QStringLiteral("Story with text in overflow area"), t->id, p, "circle-alert");
+                            if (fl.layout && fl.layout->overflow()) add(tr("Story with text in overflow area"), t->id, p, "circle-alert");
                         }
                         if (t->autofit == TextItem::BestFit || t->autofit == TextItem::ShrinkOnOverflow) {
                             const auto fl = ed->cache().textFrame(*d, *t, p + 1, RenderOptions());
-                            if (fl.fitScale < 0.5) add(QStringLiteral("Text is shrunk a great deal to fit"), t->id, p, "a-arrow-down");
+                            if (fl.fitScale < 0.5) add(tr("Text is shrunk a great deal to fit"), t->id, p, "a-arrow-down");
                         }
                     }
                     if (it->type() == ItemType::Picture) {
                         auto *pic = static_cast<PictureItem *>(it.get());
-                        if (pic->imageId.isEmpty()) add(QStringLiteral("Picture placeholder is empty"), pic->id, p, "image");
+                        if (pic->imageId.isEmpty()) add(tr("Picture placeholder is empty"), pic->id, p, "image");
                         else {
                             const QSize px = d->imageSize(pic->imageId);
                             const ImageData data = d->images.value(pic->imageId);
                             if (px.isValid() && data.format != "svg" && data.format != "wmf" && data.format != "emf") {
                                 const double ppiX = px.width() / (pic->imgRect.width() / 72.0), ppiY = px.height() / (pic->imgRect.height() / 72.0);
-                                if (std::abs(ppiX - ppiY) / std::max(ppiX, ppiY) > 0.04) add(QStringLiteral("Picture is not scaled proportionally"), pic->id, p, "scaling");
+                                if (std::abs(ppiX - ppiY) / std::max(ppiX, ppiY) > 0.04) add(tr("Picture is not scaled proportionally"), pic->id, p, "scaling");
                                 if (m_print->isChecked() && std::min(ppiX, ppiY) < 150)
-                                    add(QStringLiteral("Picture has low resolution (%1 ppi)").arg(int(std::min(ppiX, ppiY))), pic->id, p, "image-off");
+                                    add(tr("Picture has low resolution (%1 ppi)").arg(int(std::min(ppiX, ppiY))), pic->id, p, "image-off");
                             }
-                            if (data.linked) add(QStringLiteral("Picture is linked, not embedded"), pic->id, p, "link");
+                            if (data.linked) add(tr("Picture is linked, not embedded"), pic->id, p, "link");
                         }
                     }
                 }
                 if (m_print->isChecked()) {
-                    if (it->fill.transparency > 0 || it->fx.any()) add(QStringLiteral("Object has transparency or effects (may print differently)"), it->id, p, "blend");
+                    if (it->fill.transparency > 0 || it->fx.any()) add(tr("Object has transparency or effects (may print differently)"), it->id, p, "blend");
                     if (it->type() == ItemType::Text) {
                         QTextDocument *sd = d->storyDoc(static_cast<TextItem *>(it.get())->storyId);
                         if (sd) for (QTextBlock b = sd->begin(); b.isValid(); b = b.next())
                             for (auto f = b.begin(); !f.atEnd(); ++f) {
                                 const QStringList fams = f.fragment().charFormat().fontFamilies().toStringList();
                                 if (!fams.isEmpty() && !QFontDatabase::hasFamily(fams.first())) {
-                                    add(QStringLiteral("Font \"%1\" is not installed").arg(fams.first()), it->id, p, "type");
+                                    add(tr("Font \"%1\" is not installed").arg(fams.first()), it->id, p, "type");
                                     return;
                                 }
                             }
@@ -170,7 +175,7 @@ public:
                 }
             });
         }
-        if (m_list->count() == 0) m_list->addItem(new QListWidgetItem(icon("circle-check"), QStringLiteral("No problems found.")));
+        if (m_list->count() == 0) m_list->addItem(new QListWidgetItem(icon("circle-check"), tr("No problems found.")));
     }
 
 private:
@@ -198,23 +203,23 @@ public:
     {
         auto *v = new QVBoxLayout(this);
         v->setContentsMargins(0, 0, 0, 0);
-        v->addWidget(new QLabel(QStringLiteral("Find what:"), this));
+        v->addWidget(new QLabel(tr("Find what:"), this));
         m_find = new QLineEdit(this);
         v->addWidget(m_find);
-        v->addWidget(new QLabel(QStringLiteral("Replace with:"), this));
+        v->addWidget(new QLabel(tr("Replace with:"), this));
         m_replace = new QLineEdit(this);
         m_replace->setObjectName("replace");
         v->addWidget(m_replace);
-        m_case = new QCheckBox(QStringLiteral("Match case"), this);
-        m_whole = new QCheckBox(QStringLiteral("Find whole words only"), this);
-        m_up = new QCheckBox(QStringLiteral("Search up"), this);
+        m_case = new QCheckBox(tr("Match case"), this);
+        m_whole = new QCheckBox(tr("Find whole words only"), this);
+        m_up = new QCheckBox(tr("Search up"), this);
         v->addWidget(m_case);
         v->addWidget(m_whole);
         v->addWidget(m_up);
         auto *row = new QHBoxLayout();
-        auto *next = new QPushButton(QStringLiteral("Find Next"), this);
-        auto *rep = new QPushButton(QStringLiteral("Replace"), this);
-        auto *all = new QPushButton(QStringLiteral("Replace All"), this);
+        auto *next = new QPushButton(tr("Find Next"), this);
+        auto *rep = new QPushButton(tr("Replace"), this);
+        auto *all = new QPushButton(tr("Replace All"), this);
         row->addWidget(next);
         row->addWidget(rep);
         row->addWidget(all);
@@ -301,7 +306,7 @@ private:
             m_status->clear();
             return true;
         }
-        m_status->setText(QStringLiteral("JeffPub finished searching the publication. \"%1\" was not found.").arg(q));
+        m_status->setText(tr("JeffPub finished searching the publication. \"%1\" was not found.").arg(q));
         return false;
     }
     void replaceOne()
@@ -309,7 +314,7 @@ private:
         Editor *ed = m_win->editor();
         if (ed->isEditingText() && ed->cursor().hasSelection() &&
             ed->cursor().selectedText().compare(m_find->text(), m_case->isChecked() ? Qt::CaseSensitive : Qt::CaseInsensitive) == 0) {
-            ed->change(QStringLiteral("Replace"), [&] { ed->cursor().insertText(m_replace->text()); });
+            ed->change(tr("Replace"), [&] { ed->cursor().insertText(m_replace->text()); });
             ed->textEdited();
         }
         findNext();
@@ -321,7 +326,7 @@ private:
         if (q.isEmpty()) return;
         ed->endTextEdit();
         int n = 0;
-        ed->change(QStringLiteral("Replace All"), [&] {
+        ed->change(tr("Replace All"), [&] {
             for (const Hit &h : stories()) {
                 QTextDocument *doc = ed->doc()->storyDoc(h.storyId);
                 if (!doc) continue;
@@ -333,7 +338,7 @@ private:
                 }
             }
         });
-        m_status->setText(QStringLiteral("JeffPub made %1 replacement(s).").arg(n));
+        m_status->setText(tr("JeffPub made %1 replacement(s).").arg(n));
     }
     MainWindow *m_win;
     QLineEdit *m_find, *m_replace;
@@ -350,15 +355,15 @@ public:
         auto *v = new QVBoxLayout(this);
         v->setContentsMargins(0, 0, 0, 0);
         m_sort = new QComboBox(this);
-        m_sort->addItems({"Sort by page", "Sort by name", "Sort by size", "Sort by type"});
+        m_sort->addItems({tr("Sort by page"), tr("Sort by name"), tr("Sort by size"), tr("Sort by type")});
         v->addWidget(m_sort);
         m_list = new QListWidget(this);
         m_list->setIconSize(QSize(56, 56));
         v->addWidget(m_list, 1);
         auto *row = new QHBoxLayout();
-        auto *go = new QPushButton(QStringLiteral("Go to"), this);
-        auto *save = new QPushButton(QStringLiteral("Save As…"), this);
-        auto *replace = new QPushButton(QStringLiteral("Replace…"), this);
+        auto *go = new QPushButton(tr("Go to"), this);
+        auto *save = new QPushButton(tr("Save As…"), this);
+        auto *replace = new QPushButton(tr("Replace…"), this);
         row->addWidget(go);
         row->addWidget(save);
         row->addWidget(replace);
@@ -375,7 +380,7 @@ public:
             if (!it) return;
             const QString iid = it->data(Qt::UserRole + 2).toString();
             const ImageData data = m_win->editor()->doc()->images.value(iid);
-            const QString p = askSavePath(this, QStringLiteral("Save Picture"), QStringLiteral("picture.") + data.format);
+            const QString p = askSavePath(this, tr("Save Picture"), QStringLiteral("picture.") + data.format);
             if (p.isEmpty()) return;
             QFile f(p);
             if (f.open(QIODevice::WriteOnly)) f.write(data.bytes);
@@ -408,7 +413,7 @@ public:
         for (const Row &r : rows) {
             const QImage thumb = d->image(r.iid).scaled(56, 56, Qt::KeepAspectRatio, Qt::SmoothTransformation);
             auto *it = new QListWidgetItem(QIcon(QPixmap::fromImage(thumb)),
-                                           QStringLiteral("%1\nPage %2 · %3 · %4 KB").arg(r.name).arg(r.page >= 0 ? QString::number(r.page + 1) : QStringLiteral("master")).arg(r.fmt.toUpper()).arg(r.size / 1024));
+                                           tr("%1\nPage %2 · %3 · %4 KB").arg(r.name).arg(r.page >= 0 ? QString::number(r.page + 1) : tr("master")).arg(r.fmt.toUpper()).arg(r.size / 1024));
             it->setData(Qt::UserRole, r.id);
             it->setData(Qt::UserRole + 1, r.page);
             it->setData(Qt::UserRole + 2, r.iid);
@@ -426,8 +431,8 @@ private:
         const ImageData data = d->images.value(p->imageId);
         const QSize px = d->imageSize(p->imageId);
         const double ppi = p->imgRect.width() > 0 ? px.width() / (p->imgRect.width() / 72.0) : 0;
-        m_details->setText(QStringLiteral("Status: Embedded\nOriginal file: %1\nPixels: %2 × %3\nEffective resolution: %4 ppi")
-                               .arg(data.sourcePath.isEmpty() ? QStringLiteral("(not available)") : data.sourcePath)
+        m_details->setText(tr("Status: Embedded\nOriginal file: %1\nPixels: %2 × %3\nEffective resolution: %4 ppi")
+                               .arg(data.sourcePath.isEmpty() ? tr("(not available)") : data.sourcePath)
                                .arg(px.width()).arg(px.height()).arg(int(ppi)));
     }
     void goTo(QListWidgetItem *it)
@@ -463,7 +468,7 @@ public:
         {
             auto *w = new QWidget();
             auto *l = new QVBoxLayout(w);
-            l->addWidget(new QLabel(QStringLiteral("Create recipient list"), w));
+            l->addWidget(new QLabel(tr("Create recipient list"), w));
             for (const char *id : {"mm.existing", "mm.typeNew", "mm.editList"}) {
                 auto *b = new QPushButton(win->act(id)->icon(), win->act(id)->text(), w);
                 QAction *a = win->act(id);
@@ -480,7 +485,7 @@ public:
         {
             auto *w = new QWidget();
             auto *l = new QVBoxLayout(w);
-            l->addWidget(new QLabel(QStringLiteral("Click in a text box, then click a field to insert it:"), w));
+            l->addWidget(new QLabel(tr("Click in a text box, then click a field to insert it:"), w));
             m_fields = new QListWidget(w);
             l->addWidget(m_fields, 1);
             connect(m_fields, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *it) {
@@ -489,7 +494,7 @@ public:
                 if (code == "addr") { mergeFieldDialog(this, ed, 0); return; }
                 if (code == "greet") { mergeFieldDialog(this, ed, 1); return; }
                 if (ed->isEditingText()) ed->insertField("merge:" + code);
-                else QMessageBox::information(this, QStringLiteral("Mail Merge"), QStringLiteral("Click in a text box first."));
+                else QMessageBox::information(this, tr("Mail Merge"), tr("Click in a text box first."));
             });
             m_body->addWidget(w);
         }
@@ -497,7 +502,7 @@ public:
         {
             auto *w = new QWidget();
             auto *l = new QVBoxLayout(w);
-            l->addWidget(new QLabel(QStringLiteral("Preview your publications and finish the merge."), w));
+            l->addWidget(new QLabel(tr("Preview your publications and finish the merge."), w));
             auto *nav = new QHBoxLayout();
             for (const char *id : {"mm.first", "mm.prev", "mm.next", "mm.last"}) {
                 auto *b = new QToolButton(w);
@@ -515,8 +520,8 @@ public:
             m_body->addWidget(w);
         }
         auto *row = new QHBoxLayout();
-        auto *prev = new QPushButton(QStringLiteral("Previous"), this);
-        auto *next = new QPushButton(QStringLiteral("Next"), this);
+        auto *prev = new QPushButton(tr("Previous"), this);
+        auto *next = new QPushButton(tr("Next"), this);
         row->addWidget(prev);
         row->addWidget(next);
         v->addLayout(row);
@@ -530,13 +535,13 @@ public:
     Q_INVOKABLE void refresh()
     {
         const MergeSource &m = m_win->editor()->doc()->merge;
-        m_step->setText(QStringLiteral("Step %1 of 3").arg(m_body->currentIndex() + 1));
-        m_summary->setText(m.isEmpty() ? QStringLiteral("No recipient list yet.") : QStringLiteral("%1 recipients, %2 fields.\nSource: %3").arg(m.includedRows().size()).arg(m.fields.size()).arg(m.path.isEmpty() ? QStringLiteral("typed list") : m.path));
+        m_step->setText(tr("Step %1 of 3").arg(m_body->currentIndex() + 1));
+        m_summary->setText(m.isEmpty() ? tr("No recipient list yet.") : tr("%1 recipients, %2 fields.\nSource: %3").arg(m.includedRows().size()).arg(m.fields.size()).arg(m.path.isEmpty() ? tr("typed list") : m.path));
         m_fields->clear();
-        auto *a = new QListWidgetItem(icon("mail-open"), QStringLiteral("Address block"));
+        auto *a = new QListWidgetItem(icon("mail-open"), tr("Address block"));
         a->setData(Qt::UserRole, "addr");
         m_fields->addItem(a);
-        auto *g = new QListWidgetItem(icon("hand"), QStringLiteral("Greeting line"));
+        auto *g = new QListWidgetItem(icon("hand"), tr("Greeting line"));
         g->setData(Qt::UserRole, "greet");
         m_fields->addItem(g);
         for (const QString &f : m.fields) {
@@ -573,7 +578,7 @@ public:
         {
             auto *w = new QWidget();
             auto *l = new QVBoxLayout(w);
-            auto *intro = new QLabel(QStringLiteral("Choose the list of products or items (a spreadsheet, a CSV file or a list you type)."), w);
+            auto *intro = new QLabel(tr("Choose the list of products or items (a spreadsheet, a CSV file or a list you type)."), w);
             intro->setWordWrap(true);
             l->addWidget(intro);
             for (const char *id : {"mm.existing", "mm.typeNew", "mm.editList"}) {
@@ -592,7 +597,7 @@ public:
         {
             auto *w = new QWidget();
             auto *l = new QVBoxLayout(w);
-            m_insert = new QPushButton(icon("layout-grid"), QStringLiteral("Insert Catalog Area"), w);
+            m_insert = new QPushButton(icon("layout-grid"), tr("Insert Catalog Area"), w);
             connect(m_insert, &QPushButton::clicked, this, &CatalogPane::insertArea);
             l->addWidget(m_insert);
             m_areaBox = new QWidget(w);
@@ -601,28 +606,28 @@ public:
             m_rows = new QSpinBox(m_areaBox);
             m_cols = new QSpinBox(m_areaBox);
             for (QSpinBox *sb : {m_rows, m_cols}) sb->setRange(1, 20);
-            form->addRow(QStringLiteral("Rows:"), m_rows);
-            form->addRow(QStringLiteral("Columns:"), m_cols);
+            form->addRow(tr("Rows:"), m_rows);
+            form->addRow(tr("Columns:"), m_cols);
             for (MeasureSpin **ms : {&m_x, &m_y, &m_w, &m_h}) {
                 *ms = new MeasureSpin(m_areaBox);
                 (*ms)->setRange(0, 10000);
             }
-            form->addRow(QStringLiteral("Left:"), m_x);
-            form->addRow(QStringLiteral("Top:"), m_y);
-            form->addRow(QStringLiteral("Width:"), m_w);
-            form->addRow(QStringLiteral("Height:"), m_h);
+            form->addRow(tr("Left:"), m_x);
+            form->addRow(tr("Top:"), m_y);
+            form->addRow(tr("Width:"), m_w);
+            form->addRow(tr("Height:"), m_h);
             for (QSpinBox *sb : {m_rows, m_cols}) connect(sb, &QSpinBox::valueChanged, this, &CatalogPane::areaEdited);
             for (MeasureSpin *ms : {m_x, m_y, m_w, m_h}) connect(ms, &QDoubleSpinBox::valueChanged, this, &CatalogPane::areaEdited);
-            auto *hint = new QLabel(QStringLiteral("Put the fields for one item in the first cell. Double-click a field to add it there (or into the text box you're typing in)."), m_areaBox);
+            auto *hint = new QLabel(tr("Put the fields for one item in the first cell. Double-click a field to add it there (or into the text box you're typing in)."), m_areaBox);
             hint->setWordWrap(true);
             form->addRow(hint);
             m_fields = new QListWidget(m_areaBox);
             form->addRow(m_fields);
             connect(m_fields, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *it) { addField(it->data(Qt::UserRole).toString(), it->data(Qt::UserRole + 1).toBool()); });
-            auto *remove = new QPushButton(icon("trash-2"), QStringLiteral("Remove Catalog Area"), m_areaBox);
+            auto *remove = new QPushButton(icon("trash-2"), tr("Remove Catalog Area"), m_areaBox);
             connect(remove, &QPushButton::clicked, this, [this] {
                 Editor *ed = m_win->editor();
-                ed->change(QStringLiteral("Remove Catalog Area"), [ed] { ed->doc()->catalog = CatalogArea(); });
+                ed->change(tr("Remove Catalog Area"), [ed] { ed->doc()->catalog = CatalogArea(); });
                 refresh();
             });
             form->addRow(remove);
@@ -633,7 +638,7 @@ public:
         {
             auto *w = new QWidget();
             auto *l = new QVBoxLayout(w);
-            auto *intro = new QLabel(QStringLiteral("Preview the pages, then make them: each page shows as many items as the area has cells."), w);
+            auto *intro = new QLabel(tr("Preview the pages, then make them: each page shows as many items as the area has cells."), w);
             intro->setWordWrap(true);
             l->addWidget(intro);
             auto *nav = new QHBoxLayout();
@@ -653,8 +658,8 @@ public:
             m_body->addWidget(w);
         }
         auto *row = new QHBoxLayout();
-        auto *prev = new QPushButton(QStringLiteral("Previous"), this);
-        auto *next = new QPushButton(QStringLiteral("Next"), this);
+        auto *prev = new QPushButton(tr("Previous"), this);
+        auto *next = new QPushButton(tr("Next"), this);
         row->addWidget(prev);
         row->addWidget(next);
         v->addLayout(row);
@@ -671,10 +676,10 @@ public:
         const Document *d = m_win->editor()->doc();
         const MergeSource &m = d->merge;
         const CatalogArea &cat = d->catalog;
-        m_step->setText(QStringLiteral("Step %1 of 3").arg(m_body->currentIndex() + 1));
-        m_summary->setText(m.isEmpty() ? QStringLiteral("No product list yet.")
-                                       : QStringLiteral("%1 items, %2 fields.\nSource: %3").arg(m.includedRows().size()).arg(m.fields.size())
-                                             .arg(m.path.isEmpty() ? QStringLiteral("typed list") : m.path));
+        m_step->setText(tr("Step %1 of 3").arg(m_body->currentIndex() + 1));
+        m_summary->setText(m.isEmpty() ? tr("No product list yet.")
+                                       : tr("%1 items, %2 fields.\nSource: %3").arg(m.includedRows().size()).arg(m.fields.size())
+                                             .arg(m.path.isEmpty() ? tr("typed list") : m.path));
         m_insert->setVisible(!cat.isActive());
         m_areaBox->setVisible(cat.isActive());
         m_syncing = true;
@@ -692,7 +697,7 @@ public:
             auto *it = new QListWidgetItem(icon("braces"), f);
             it->setData(Qt::UserRole, f);
             m_fields->addItem(it);
-            auto *pic = new QListWidgetItem(icon("image"), QStringLiteral("%1 (picture)").arg(f));
+            auto *pic = new QListWidgetItem(icon("image"), tr("%1 (picture)").arg(f));
             pic->setData(Qt::UserRole, f);
             pic->setData(Qt::UserRole + 1, true);
             m_fields->addItem(pic);
@@ -705,7 +710,7 @@ private:
         Editor *ed = m_win->editor();
         Document *d = ed->doc();
         const int pi = std::clamp(ed->currentPage(), 0, int(d->pages.size()) - 1);
-        ed->change(QStringLiteral("Insert Catalog Area"), [&] {
+        ed->change(tr("Insert Catalog Area"), [&] {
             d->catalog = CatalogArea();
             d->catalog.pageId = d->pages[pi]->id;
             d->catalog.rect = QRectF(QPointF(0, 0), d->pageSize()).marginsRemoved(d->setup.margins);
@@ -723,7 +728,7 @@ private:
         a.rows = m_rows->value();
         a.cols = m_cols->value();
         a.rect = QRectF(m_x->value(), m_y->value(), std::max(2.0, m_w->value()), std::max(2.0, m_h->value()));
-        ed->change(QStringLiteral("Catalog Area"), [&] { ed->doc()->catalog = a; });
+        ed->change(tr("Catalog Area"), [&] { ed->doc()->catalog = a; });
     }
     // A field goes into the text box being typed in, or into a new text box
     // (or picture frame) in the first cell.
@@ -744,7 +749,7 @@ private:
             for (const auto &it : d->pages[pi]->items)
                 if (d->catalog.inTemplate(it->bounds())) y = std::max(y, it->bounds().bottom() + 4);
         if (picture) {
-            ed->change(QStringLiteral("Picture Field"), [&] { if (d->merge.pictureField.isEmpty()) d->merge.pictureField = field; });
+            ed->change(tr("Picture Field"), [&] { if (d->merge.pictureField.isEmpty()) d->merge.pictureField = field; });
             auto pic = std::make_shared<PictureItem>();
             pic->name = "merge:" + field;
             const double side = std::min({cell.width() - 12, cell.bottom() - y - 6, 144.0});
@@ -780,15 +785,15 @@ public:
     {
         auto *v = new QVBoxLayout(this);
         v->setContentsMargins(0, 0, 0, 0);
-        v->addWidget(new QLabel(QStringLiteral("Search for:"), this));
+        v->addWidget(new QLabel(tr("Search for:"), this));
         m_q = new QLineEdit(this);
         v->addWidget(m_q);
-        auto *go = new QPushButton(QStringLiteral("Look Up"), this);
+        auto *go = new QPushButton(tr("Look Up"), this);
         v->addWidget(go);
         m_out = new QListWidget(this);
         m_out->setWordWrap(true);
         v->addWidget(m_out, 1);
-        auto *note = new QLabel(QStringLiteral("JeffPub looks up words in its offline thesaurus. It does not send your text to online services."), this);
+        auto *note = new QLabel(tr("JeffPub looks up words in its offline thesaurus. It does not send your text to online services."), this);
         note->setWordWrap(true);
         v->addWidget(note);
         connect(go, &QPushButton::clicked, this, &ResearchPane::lookUp);
@@ -809,7 +814,7 @@ private:
     {
         m_out->clear();
         const QStringList syn = thesaurusLookup(m_q->text().trimmed());
-        if (syn.isEmpty()) m_out->addItem(QStringLiteral("No results for \"%1\".").arg(m_q->text().trimmed()));
+        if (syn.isEmpty()) m_out->addItem(tr("No results for \"%1\".").arg(m_q->text().trimmed()));
         for (const QString &s : syn) m_out->addItem(s);
     }
     MainWindow *m_win;
@@ -828,13 +833,17 @@ QWidget *TaskPane::create(const QString &name)
     if (name == "online") {
         auto *w = new QWidget();
         auto *v = new QVBoxLayout(w);
-        auto *l = new QLabel(QStringLiteral("Find free, openly licensed pictures in these libraries. Check each picture's license, download it, "
-                                            "then use Insert > Pictures or drag the file onto the page."), w);
+        auto *l = new QLabel(tr("Find free, openly licensed pictures in these libraries. Check each picture's license, download it, "
+                                "then use Insert > Pictures or drag the file onto the page."), w);
         l->setWordWrap(true);
         v->addWidget(l);
-        for (const auto &[name, url] : {std::pair{"Openverse (Creative Commons search)", "https://openverse.org"}, {"Wikimedia Commons", "https://commons.wikimedia.org"},
-                                         {"Unsplash", "https://unsplash.com"}, {"Pexels", "https://www.pexels.com"}, {"Openclipart", "https://openclipart.org"}}) {
-            auto *b = new QLabel(QStringLiteral("<a href=\"%1\">%2</a>").arg(QString::fromLatin1(url), QString::fromLatin1(name)), w);
+        const QList<std::pair<QString, QString>> libraries{{tr("Openverse (Creative Commons search)"), QStringLiteral("https://openverse.org")},
+                                                           {QStringLiteral("Wikimedia Commons"), QStringLiteral("https://commons.wikimedia.org")},
+                                                           {QStringLiteral("Unsplash"), QStringLiteral("https://unsplash.com")},
+                                                           {QStringLiteral("Pexels"), QStringLiteral("https://www.pexels.com")},
+                                                           {QStringLiteral("Openclipart"), QStringLiteral("https://openclipart.org")}};
+        for (const auto &[label, url] : libraries) {
+            auto *b = new QLabel(QStringLiteral("<a href=\"%1\">%2</a>").arg(url, label), w);
             b->setOpenExternalLinks(true);
             v->addWidget(b);
         }

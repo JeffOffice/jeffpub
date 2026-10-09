@@ -94,8 +94,8 @@ void Updater::check(bool interactive)
         m_busy = false;
         if (r->error() != QNetworkReply::NoError) {
             if (interactive)
-                QMessageBox::warning(m_win, QStringLiteral("Check for Updates"),
-                                     QStringLiteral("JeffPub couldn't reach the update server. Check your internet connection and try again.\n\n%1").arg(r->errorString()));
+                QMessageBox::warning(m_win, tr("Check for Updates"),
+                                     tr("JeffPub couldn't reach the update server. Check your internet connection and try again.\n\n%1").arg(r->errorString()));
             return;
         }
         Settings::get().setValue(QStringLiteral("updates/lastCheck"), QDate::currentDate());
@@ -124,8 +124,8 @@ void Updater::check(bool interactive)
             return;
         }
         if (interactive)
-            QMessageBox::information(m_win, QStringLiteral("Check for Updates"),
-                                     QStringLiteral("You have the latest version of JeffPub (%1).").arg(QStringLiteral(JP_VERSION)));
+            QMessageBox::information(m_win, tr("Check for Updates"),
+                                     tr("You have the latest version of JeffPub (%1).").arg(QStringLiteral(JP_VERSION)));
     });
 }
 
@@ -164,19 +164,19 @@ QString Updater::releaseHighlights(const QString &notes)
 QDialog *Updater::offerDialog(QWidget *parent, const QString &version, const QString &notes, bool canInstall, const QString &pageUrl)
 {
     auto *d = new QDialog(parent);
-    d->setWindowTitle(QStringLiteral("Update Available"));
+    d->setWindowTitle(tr("Update Available"));
     d->resize(560, 0);
     auto *icon = new QLabel(d);
     icon->setPixmap(QApplication::windowIcon().pixmap(QSize(56, 56)));
     icon->setAlignment(Qt::AlignTop);
     icon->setVisible(!icon->pixmap().isNull());
-    auto *title = new QLabel(QStringLiteral("JeffPub %1 is available").arg(version.toHtmlEscaped()), d);
+    auto *title = new QLabel(tr("JeffPub %1 is available").arg(version.toHtmlEscaped()), d);
     QFont tf = title->font();
     tf.setPointSizeF(tf.pointSizeF() * 1.4);
     tf.setBold(true);
     title->setFont(tf);
-    auto *sub = new QLabel(canInstall ? QStringLiteral("You have version %1. Update Now downloads the installer and asks you to save your work first.").arg(QStringLiteral(JP_VERSION))
-                                      : QStringLiteral("You have version %1. The new version can be downloaded from its release page.").arg(QStringLiteral(JP_VERSION)),
+    auto *sub = new QLabel(canInstall ? tr("You have version %1. Update Now downloads the installer and asks you to save your work first.").arg(QStringLiteral(JP_VERSION))
+                                      : tr("You have version %1. The new version can be downloaded from its release page.").arg(QStringLiteral(JP_VERSION)),
                            d);
     sub->setWordWrap(true);
     QPalette dim = sub->palette();
@@ -193,7 +193,7 @@ QDialog *Updater::offerDialog(QWidget *parent, const QString &version, const QSt
 
     auto *news = new QTextBrowser(d);
     news->setOpenExternalLinks(true);
-    news->setMarkdown(notes.isEmpty() ? QStringLiteral("This version has no notes.") : notes);
+    news->setMarkdown(notes.isEmpty() ? tr("This version has no notes.") : notes);
     news->document()->setDocumentMargin(12);
     news->document()->setIndentWidth(18);
     // As tall as the notes need, within reason (longer notes scroll). The
@@ -205,12 +205,12 @@ QDialog *Updater::offerDialog(QWidget *parent, const QString &version, const QSt
     news->setFixedHeight(std::clamp(int(probe->size().height()) + 4, 110, 300));
     news->setStyleSheet(uiDark() ? QStringLiteral("QTextBrowser{background:#22262d; border:1px solid #2f343d; border-radius:10px;}")
                                  : QStringLiteral("QTextBrowser{background:#ffffff; border:1px solid #dcdfe4; border-radius:10px;}"));
-    auto *page = new QLabel(QStringLiteral("<a href=\"%1\">Release page</a>").arg(pageUrl.toHtmlEscaped()), d);
+    auto *page = new QLabel(QStringLiteral("<a href=\"%1\">%2</a>").arg(pageUrl.toHtmlEscaped(), tr("Release page")), d);
     page->setOpenExternalLinks(true);
 
-    auto *skip = new QPushButton(QStringLiteral("Skip This Version"), d);
-    auto *later = new QPushButton(QStringLiteral("Later"), d);
-    auto *go = new QPushButton(canInstall ? QStringLiteral("Update Now") : QStringLiteral("Open Download Page"), d);
+    auto *skip = new QPushButton(tr("Skip This Version"), d);
+    auto *later = new QPushButton(tr("Later"), d);
+    auto *go = new QPushButton(canInstall ? tr("Update Now") : tr("Open Download Page"), d);
     go->setProperty("primary", true);
     go->setDefault(true);
     QObject::connect(skip, &QPushButton::clicked, d, [d] { d->done(Skip); });
@@ -257,8 +257,8 @@ void Updater::downloadAndRun(const QString &url, const QString &tag, const QStri
     req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("JeffPub/%1").arg(QStringLiteral(JP_VERSION)));
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     QNetworkReply *r = m_net.get(req);
-    auto *progress = new QProgressDialog(QStringLiteral("Downloading JeffPub %1…").arg(tag), QStringLiteral("Cancel"), 0, 100, m_win);
-    progress->setWindowTitle(QStringLiteral("Update"));
+    auto *progress = new QProgressDialog(tr("Downloading JeffPub %1…").arg(tag), tr("Cancel"), 0, 100, m_win);
+    progress->setWindowTitle(tr("Update"));
     progress->setMinimumDuration(0);
     progress->setAutoClose(false);
     connect(progress, &QProgressDialog::canceled, r, &QNetworkReply::abort);
@@ -270,29 +270,29 @@ void Updater::downloadAndRun(const QString &url, const QString &tag, const QStri
         progress->deleteLater();
         if (r->error() != QNetworkReply::NoError) {
             if (r->error() != QNetworkReply::OperationCanceledError)
-                QMessageBox::warning(m_win, QStringLiteral("Update"), QStringLiteral("The download didn't finish: %1").arg(r->errorString()));
+                QMessageBox::warning(m_win, tr("Update"), tr("The download didn't finish: %1").arg(r->errorString()));
             return;
         }
         const QByteArray bytes = r->readAll();
         // Run only the installer GitHub lists for this release, byte for byte.
         const QByteArray got = QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex();
         if (bytes.isEmpty() || got != digest.mid(7).toLatin1().toLower()) {
-            QMessageBox::warning(m_win, QStringLiteral("Update"),
-                                 QStringLiteral("The downloaded installer didn't match the one published for this release, so it wasn't run. "
-                                                "You can download it from the release page instead."));
+            QMessageBox::warning(m_win, tr("Update"),
+                                 tr("The downloaded installer didn't match the one published for this release, so it wasn't run. "
+                                    "You can download it from the release page instead."));
             QDesktopServices::openUrl(QUrl(pageUrl));
             return;
         }
         QSaveFile f(dest);
         if (!f.open(QIODevice::WriteOnly) || f.write(bytes) != bytes.size() || !f.commit()) {
-            QMessageBox::warning(m_win, QStringLiteral("Update"), QStringLiteral("JeffPub couldn't save the installer to %1.").arg(QDir::toNativeSeparators(dest)));
+            QMessageBox::warning(m_win, tr("Update"), tr("JeffPub couldn't save the installer to %1.").arg(QDir::toNativeSeparators(dest)));
             return;
         }
         // Give every window a chance to save, then hand over to the installer.
         for (QWidget *w : QApplication::topLevelWidgets())
             if (w->inherits("jp::MainWindow") && w->isVisible() && !w->close()) return;
         if (!QProcess::startDetached(dest, {})) {
-            QMessageBox::warning(m_win, QStringLiteral("Update"), QStringLiteral("JeffPub couldn't start the installer. You can run it yourself from %1.").arg(QDir::toNativeSeparators(dest)));
+            QMessageBox::warning(m_win, tr("Update"), tr("JeffPub couldn't start the installer. You can run it yourself from %1.").arg(QDir::toNativeSeparators(dest)));
             return;
         }
         QApplication::quit();
