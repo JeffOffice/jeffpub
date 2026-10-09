@@ -254,6 +254,8 @@ void MainWindow::ribbonControlParts(RibbonParts &parts)
 
     parts.widgets[QStringLiteral("zoomBox")] = [this]() -> QWidget * {
         auto *zoomBox = new QComboBox();
+        zoomBox->setAccessibleName(QStringLiteral("Zoom"));
+        zoomBox->setToolTip(QStringLiteral("Zoom"));
         zoomBox->setEditable(true);
         for (const char *z : {"400%", "300%", "200%", "150%", "100%", "75%", "66%", "50%", "33%", "25%", "10%"}) zoomBox->addItem(QString::fromLatin1(z));
         zoomBox->setFixedWidth(80);

@@ -1538,7 +1538,8 @@ private Q_SLOTS:
         for (QWidget *c : r->findChildren<QWidget *>()) {
             const bool control = qobject_cast<QAbstractButton *>(c) || qobject_cast<QComboBox *>(c) || qobject_cast<QAbstractSpinBox *>(c)
                                  || qobject_cast<QAbstractItemView *>(c) || qobject_cast<QSlider *>(c);
-            if (!control || qobject_cast<QAbstractItemView *>(c->parentWidget()) || c->parentWidget()->inherits("QComboBoxPrivateContainer")) continue;   // a combo's own list
+            QWidget *pw = c->parentWidget();
+            if (!control || !pw || qobject_cast<QAbstractItemView *>(pw) || pw->inherits("QComboBoxPrivateContainer")) continue;   // a combo's own list
             if (c->inherits("QLineEdit") && c->parentWidget() && (c->parentWidget()->inherits("QComboBox") || c->parentWidget()->inherits("QAbstractSpinBox"))) continue;
             ++checked;
             QAccessibleInterface *iface = QAccessible::queryAccessibleInterface(c);
@@ -1547,7 +1548,9 @@ private Q_SLOTS:
             const auto *group = qobject_cast<jp::RibbonGroup *>(c->parentWidget());
             const QString where = QStringLiteral("%1 \"%2\" in %3").arg(QString::fromLatin1(c->metaObject()->className()), c->toolTip(),
                                                                           group ? group->title() : c->parentWidget() ? QString::fromLatin1(c->parentWidget()->metaObject()->className()) : QString());
-            if (name.isEmpty()) unnamed << where;
+            // Boxes, spin boxes and lists need a name of their own: some
+            // systems read their current text instead, others nothing.
+            if (name.isEmpty() || (!qobject_cast<QAbstractButton *>(c) && c->accessibleName().isEmpty())) unnamed << where;
             if (!(c->focusPolicy() & Qt::TabFocus) && c->objectName() != QLatin1String("jpRibbonTab")) unreachable << where + QStringLiteral(" [") + name + QLatin1Char(']');
         }
         QVERIFY2(checked > 300, qPrintable(QString::number(checked)));
