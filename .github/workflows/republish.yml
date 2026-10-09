@@ -1,0 +1,57 @@
+name: republish
+
+# Publishes existing releases again with GitHub's own token, so they're
+# listed as made by github-actions rather than by a person's account. Each
+# keeps its downloads, title, notes, and pre-release mark; download counts
+# start over. Releases are made again oldest version first: the update check
+# reads them newest first, in the order they were made.
+on:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: "Tags to republish (space-separated), or 'all'"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  republish:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Republish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAGS: ${{ inputs.tags }}
+        run: |
+          set -euo pipefail
+          if [ "$TAGS" = all ]; then
+            list=$(gh release list -R "$REPO" --limit 200 --json tagName --jq '.[].tagName' | sort -V)
+          else
+            list=$(printf '%s\n' $TAGS | sort -V)
+          fi
+          mkdir -p kept
+          for t in $list; do
+            echo "== $t"
+            d="kept/$t"
+            mkdir -p "$d/files"
+            gh release view "$t" -R "$REPO" --json name,body,isPrerelease > "$d/meta.json"
+            gh release download "$t" -R "$REPO" -D "$d/files" --clobber
+            jq -r .body "$d/meta.json" > "$d/notes.md"
+            name=$(jq -r .name "$d/meta.json")
+            args=(--verify-tag --title "$name" --notes-file "$d/notes.md")
+            if [ "$(jq -r .isPrerelease "$d/meta.json")" = true ]; then args+=(--prerelease); fi
+            gh release delete "$t" -R "$REPO" --yes
+            shopt -s nullglob
+            files=("$d"/files/*)
+            gh release create "$t" -R "$REPO" "${args[@]}" "${files[@]}"
+            # Done with this one: free the runner's disk for the next.
+            rm -rf "$d"
+          done
+      - name: Keep the downloads of a release that didn't finish
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: republish-kept
+          path: kept
