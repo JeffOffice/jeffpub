@@ -1543,6 +1543,9 @@ private Q_SLOTS:
             if (!control || !pw || qobject_cast<QAbstractItemView *>(pw) || pw->inherits("QComboBoxPrivateContainer")) continue;   // a combo's own list
             if (c->inherits("QLineEdit") && c->parentWidget() && (c->parentWidget()->inherits("QComboBox") || c->parentWidget()->inherits("QAbstractSpinBox"))) continue;
             ++checked;
+            // Which control is asked (the test crashed on some runners only).
+            fprintf(stderr, "a11y %d %s %s\n", checked, c->metaObject()->className(), qPrintable(c->objectName()));
+            fflush(stderr);
             QAccessibleInterface *iface = QAccessible::queryAccessibleInterface(c);
             QVERIFY(iface);
             const QString name = iface->text(QAccessible::Name).trimmed();
