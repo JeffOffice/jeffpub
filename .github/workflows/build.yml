@@ -96,11 +96,17 @@ jobs:
           code=$?
           echo "--- test-results.txt"; cat test-results.txt 2>/dev/null || echo "(no results file: the program did not start)"
           echo "jptests exit code: $code"
-          # A crash on Linux: the tests again under the debugger, for the
+          # A crash: the tests again under the system's debugger, for the
           # stack (a crash can depend on the tests before it).
-          if [ "$code" -ge 128 ] && [ "$RUNNER_OS" = "Linux" ] && command -v gdb >/dev/null; then
+          if [ "$code" -ge 128 ]; then
             echo "--- stack of the crash"
-            gdb -q -batch -ex run -ex "thread apply all bt 30" --args "$T" -silent 2>&1 | grep -v '^\[' | tail -90
+            if [ "$RUNNER_OS" = "macOS" ]; then
+              lldb --batch -o run -k "thread backtrace all -c 30" -- "$T" -silent 2>&1 | tail -120
+            else
+              G=gdb
+              if [ "$RUNNER_OS" = "Windows" ]; then G="$(cygpath -u "$IQTA_TOOLS")/mingw1310_64/bin/gdb.exe"; fi
+              "$G" -q -batch -ex run -ex "thread apply all bt 30" --args "$T" -silent 2>&1 | grep -v '^\[' | tail -120
+            fi
           fi
           exit $code
         env:
