@@ -1,4 +1,5 @@
 #include "app/mainwindow.h"
+#include "app/recovery.h"
 #include <QComboBox>
 #include <QLineEdit>
 #include <QLocale>
@@ -54,6 +55,7 @@
 #include <QListWidget>
 #include <QMenu>
 #include <QMessageBox>
+#include <QDialog>
 #include <QPainter>
 #include <QPdfWriter>
 #include <QPrintDialog>
@@ -153,9 +155,20 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         m_zoomSlider->setValue(int(std::lround(std::log(z) / std::log(1.05))));
     });
 
+    static quint64 s_windows = 0;
+    m_serial = ++s_windows;
     m_recoverTimer.setInterval(std::max(1, Settings::get().autoRecoverMinutes()) * 60 * 1000);
     connect(&m_recoverTimer, &QTimer::timeout, this, &MainWindow::autoRecover);
     m_recoverTimer.start();
+    // A copy is only for work that isn't saved: it goes once the document
+    // is saved, replaced, or closed.
+    connect(m_ed, &Editor::documentReplaced, this, [this] {
+        dropRecoveryCopy();
+        m_recoveredFrom.clear();
+    });
+    connect(m_ed, &Editor::modifiedChanged, this, [this](bool modified) {
+        if (!modified) dropRecoveryCopy();
+    });
 
     // The size, place and state (maximized...) the last window had when it
     // closed; a window opened while another shows sits a little lower right.
@@ -357,8 +370,9 @@ bool MainWindow::saveTo(const QString &pathIn)
 
 bool MainWindow::saveAs(const QString &format)
 {
-    QString dir = m_ed->filePath().isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/" + m_ed->displayName()
-                                             : QFileInfo(m_ed->filePath()).absolutePath() + "/" + QFileInfo(m_ed->filePath()).completeBaseName();
+    const QString from = m_ed->filePath().isEmpty() ? m_recoveredFrom : m_ed->filePath();
+    QString dir = from.isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/" + m_ed->displayName()
+                                 : QFileInfo(from).absolutePath() + "/" + QFileInfo(from).completeBaseName();
     QString filters = QStringLiteral("JeffPub Publication (*.jpub);;.pub Publication Files (*.pub);;PDF (*.pdf);;JeffPub Template (*.jpub)");
     QString selected = format == QLatin1String("pub") ? QStringLiteral(".pub Publication Files (*.pub)") : QStringLiteral("JeffPub Publication (*.jpub)");
     QString path = askSavePath(this, QStringLiteral("Save As"), dir, filters, &selected);
@@ -399,16 +413,101 @@ void MainWindow::closeEvent(QCloseEvent *e)
         return;
     }
     Settings::get().setValue(QStringLiteral("ui/windowGeometry"), saveGeometry());
+    dropRecoveryCopy();
     e->accept();
 }
 
 void MainWindow::autoRecover()
 {
+    m_ed->flushTyping();
     if (!m_ed->isModified()) return;
-    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/AutoRecover";
-    QDir().mkpath(dir);
+    // Named for the document as it is now (Save As moves it).
+    const QString copy = recovery::copyPath(m_ed->filePath(), m_ed->displayName(), m_serial);
+    if (copy != m_recoveryCopy) dropRecoveryCopy();
     QString err;
-    savePublication(*m_ed->doc(), dir + "/" + m_ed->displayName() + ".autorecover.jpub", QImage(), &err);
+    if (recovery::write(*m_ed->doc(), copy, m_ed->filePath().isEmpty() ? m_recoveredFrom : m_ed->filePath(), m_ed->displayName(), &err))
+        m_recoveryCopy = copy;
+}
+
+void MainWindow::dropRecoveryCopy()
+{
+    recovery::remove(m_recoveryCopy);
+    m_recoveryCopy.clear();
+}
+
+void MainWindow::offerRecovery(bool askIfNone)
+{
+    const QVector<recovery::Recovered> found = recovery::orphans();
+    if (found.isEmpty()) {
+        if (askIfNone) QMessageBox::information(this, QStringLiteral("Recover Unsaved Work"), QStringLiteral("There's no unsaved work to recover."));
+        return;
+    }
+    QDialog dlg(this);
+    dlg.setWindowTitle(QStringLiteral("Recover Unsaved Work"));
+    auto *v = new QVBoxLayout(&dlg);
+    auto *intro = new QLabel(QStringLiteral("JeffPub didn't close normally, and saved copies of your unsaved work. "
+                                            "Choose which to open; you can save each one where you like."),
+                             &dlg);
+    intro->setWordWrap(true);
+    v->addWidget(intro);
+    auto *list = new QListWidget(&dlg);
+    list->setAccessibleName(QStringLiteral("Recovered publications"));
+    const QLocale loc;
+    for (const auto &r : found) {
+        const QString where = r.source.isEmpty() ? QStringLiteral("never saved") : QDir::toNativeSeparators(r.source);
+        auto *it = new QListWidgetItem(QStringLiteral("%1\n%2, saved %3").arg(r.title, where, loc.toString(r.saved, QLocale::ShortFormat)), list);
+        it->setFlags(it->flags() | Qt::ItemIsUserCheckable);
+        it->setCheckState(Qt::Checked);
+        it->setIcon(icon(QStringLiteral("life-buoy")));
+    }
+    list->setMinimumSize(480, 180);
+    v->addWidget(list);
+    auto *buttons = new QDialogButtonBox(&dlg);
+    QPushButton *open = buttons->addButton(QStringLiteral("Open"), QDialogButtonBox::AcceptRole);
+    QPushButton *del = buttons->addButton(QStringLiteral("Delete"), QDialogButtonBox::DestructiveRole);
+    buttons->addButton(QStringLiteral("Not Now"), QDialogButtonBox::RejectRole);
+    v->addWidget(buttons);
+    open->setDefault(true);
+    int choice = 0;
+    connect(open, &QPushButton::clicked, &dlg, [&] { choice = 1; dlg.accept(); });
+    connect(del, &QPushButton::clicked, &dlg, [&] {
+        if (QMessageBox::question(&dlg, QStringLiteral("Delete"), QStringLiteral("Delete the checked copies? Their unsaved work can't be brought back.")) != QMessageBox::Yes)
+            return;
+        choice = 2;
+        dlg.accept();
+    });
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    if (dlg.exec() != QDialog::Accepted) return;
+    for (int i = 0; i < found.size(); ++i) {
+        if (list->item(i)->checkState() != Qt::Checked) continue;
+        const recovery::Recovered &r = found[i];
+        if (choice == 2) {
+            recovery::discard(r);
+            continue;
+        }
+        QString err;
+        auto doc = loadPublication(r.file, &err);
+        if (!doc) {
+            QMessageBox::warning(this, QStringLiteral("Recover Unsaved Work"), QStringLiteral("JeffPub can't open the copy of \"%1\".\n%2").arg(r.title, err));
+            continue;
+        }
+        // Into this window while it holds nothing, else a new one.
+        MainWindow *target = this;
+        if (!m_ed->filePath().isEmpty() || m_ed->isModified()) {
+            target = new MainWindow();
+            target->setAttribute(Qt::WA_DeleteOnClose);
+            target->show();
+        }
+        doc->props.title = r.title + QStringLiteral(" (Recovered)");
+        target->m_ed->setDocument(std::move(doc));
+        target->m_recoveredFrom = r.source;
+        target->m_ed->markUnsaved();
+        target->hideBackstage();
+        target->updateTitle();
+        // This run keeps its own copy before the old one goes.
+        target->autoRecover();
+        if (!target->m_recoveryCopy.isEmpty()) recovery::discard(r);
+    }
 }
 
 QImage MainWindow::pageThumbnail(int page, int maxSide)

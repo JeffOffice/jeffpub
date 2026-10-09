@@ -37,6 +37,7 @@
 #include "app/dialogs.h"
 #include "app/editor.h"
 #include "app/mainwindow.h"
+#include "app/recovery.h"
 #include "app/ribbon.h"
 #include "app/telemetry.h"
 #include "app/updater.h"
@@ -78,6 +79,7 @@
 #include <QRadioButton>
 #include <QGroupBox>
 #include <QtEndian>
+#include <QLockFile>
 #include <clocale>
 
 using namespace jp;
@@ -1282,6 +1284,78 @@ private Q_SLOTS:
         QVERIFY2(belowUnder > 100, qPrintable(QString::number(belowUnder)));   // a line under the letters
         QCOMPARE(belowPlain, 0);
         QVERIFY2(extraStrike > 100, qPrintable(QString::number(extraStrike)));   // a line through them
+    }
+
+    // AutoRecover keeps one copy per document and run: two "Cover.pub"
+    // files in different folders overwrote each other's copy, copies were
+    // never offered after a crash, and never removed.
+    void autoRecoverCopies()
+    {
+        QTemporaryDir dir;
+        jp::recovery::setRoot(dir.filePath(QStringLiteral("AutoRecover")));
+        // Named for the document and its full path.
+        const QString a = jp::recovery::copyPath(QStringLiteral("/one/Cover.pub"), QStringLiteral("Cover"), 1);
+        const QString b = jp::recovery::copyPath(QStringLiteral("/two/Cover.pub"), QStringLiteral("Cover"), 2);
+        QVERIFY(!a.isEmpty() && a != b);
+        QCOMPARE(jp::recovery::copyPath(QStringLiteral("/one/Cover.pub"), QStringLiteral("Cover"), 7), a);
+        QVERIFY(QFileInfo(a).fileName().startsWith(QLatin1String("Cover ")));
+        QVERIFY(jp::recovery::copyPath(QString(), QStringLiteral("Publication1"), 1) != jp::recovery::copyPath(QString(), QStringLiteral("Publication1"), 2));
+
+        // A run that crashed left a folder whose lock nobody holds; one
+        // that's still going holds its lock; an older version left a copy
+        // loose in the folder. This run's own copies aren't offered.
+        const auto doc = jp::Document::blank(QSizeF(612, 792));
+        QVERIFY(jp::recovery::write(*doc, a, QStringLiteral("/one/Cover.pub"), QStringLiteral("Cover")));
+        const QString crashed = dir.filePath(QStringLiteral("AutoRecover/crashed"));
+        QDir().mkpath(crashed);
+        QVERIFY(jp::recovery::write(*doc, crashed + QStringLiteral("/Flyer 0123abcd.jpub"), QStringLiteral("/docs/Flyer.jpub"), QStringLiteral("Flyer")));
+        const QString live = dir.filePath(QStringLiteral("AutoRecover/live"));
+        QDir().mkpath(live);
+        QLockFile liveLock(live + QStringLiteral("/session.lock"));
+        QVERIFY(liveLock.tryLock(0));
+        QVERIFY(jp::recovery::write(*doc, live + QStringLiteral("/Card 0123abcd.jpub"), QString(), QStringLiteral("Card")));
+        QVERIFY(QFile::copy(a, dir.filePath(QStringLiteral("AutoRecover/Publication1.autorecover.jpub"))));
+        const QVector<jp::recovery::Recovered> found = jp::recovery::orphans();
+        QStringList titles;
+        for (const auto &r : found) titles << r.title;
+        titles.sort();
+        QCOMPARE(titles, (QStringList{QStringLiteral("Flyer"), QStringLiteral("Publication1")}));
+        for (const auto &r : found)
+            if (r.title == QLatin1String("Flyer")) {
+                QCOMPARE(r.source, QStringLiteral("/docs/Flyer.jpub"));
+                jp::recovery::discard(r);
+            }
+        QVERIFY(!QDir(crashed).exists());   // the crashed run's folder goes with its last copy
+
+        // A normal exit removes this run's folder.
+        const QString session = jp::recovery::sessionDir();
+        QVERIFY(QDir(session).exists());
+        jp::recovery::endSession();
+        QVERIFY(!QDir(session).exists());
+
+        // A window keeps a copy while its work is unsaved, and drops it
+        // once the work is saved or the window closes.
+        {
+            jp::MainWindow w;
+            w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+            jp::Editor *ed = w.editor();
+            ed->addItem(ed->newTextBox(QRectF(72, 72, 200, 100)));
+            QVERIFY(ed->isModified());
+            w.autoRecover();
+            const QString copy = w.recoveryCopy();
+            QVERIFY(QFile::exists(copy));
+            QVERIFY(w.saveTo(dir.filePath(QStringLiteral("Saved.jpub"))));
+            QVERIFY(!QFile::exists(copy));
+            ed->addItem(ed->newTextBox(QRectF(72, 300, 200, 100)));
+            w.autoRecover();
+            QVERIFY(QFile::exists(w.recoveryCopy()));
+            QVERIFY(w.recoveryCopy() != copy);   // named for Saved.jpub now
+            const QString second = w.recoveryCopy();
+            ed->setDocument(jp::Document::blank(QSizeF(612, 792)));   // File > New in this window
+            QVERIFY(!QFile::exists(second));
+        }
+        jp::recovery::endSession();
+        jp::recovery::setRoot(QString());
     }
 
     // A run that states its character scaling, even 100%, still gets its

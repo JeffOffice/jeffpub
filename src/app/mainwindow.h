@@ -46,6 +46,13 @@ public:
     // File operations (used by the backstage too).
     void newPublication(std::unique_ptr<Document> doc);
     bool openFile(const QString &path);
+    // Copies of unsaved work left by a run of JeffPub that didn't close
+    // normally: offered for opening or deleting (askIfNone: say so when
+    // there are none, from File > Open).
+    void offerRecovery(bool askIfNone = false);
+    // The AutoRecover copy this window keeps of its document, if any.
+    QString recoveryCopy() const { return m_recoveryCopy; }
+    void autoRecover();
     bool save();
     bool saveAs(const QString &format = QString());
     bool saveTo(const QString &path);
@@ -108,7 +115,7 @@ private:
     void updateTitle();
     void updateContextTabs();
     void contextMenu(const QPoint &global);
-    void autoRecover();
+    void dropRecoveryCopy();
     QAction *mk(const QString &id, const QString &text, const QString &iconName, const QKeySequence &key, const std::function<void()> &fn,
                 bool checkable = false);
 
@@ -133,6 +140,9 @@ private:
     QLabel *m_pageLabel, *m_posLabel, *m_sizeLabel, *m_zoomLabel;
     QSlider *m_zoomSlider;
     QTimer m_refreshTimer, m_recoverTimer;
+    quint64 m_serial;               // this window, among this run's (names an unsaved document's copy)
+    QString m_recoveryCopy;         // this window's AutoRecover copy, if written
+    QString m_recoveredFrom;        // a recovered document's original file, for Save As
     QPointer<QWidget> m_measurement;
 };
 

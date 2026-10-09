@@ -10,6 +10,7 @@
 #include "app/telemetry.h"
 #include "app/editor.h"
 #include "app/mainwindow.h"
+#include "app/recovery.h"
 #include "app/ribbon.h"
 #include "app/updater.h"
 #include "app/settings.h"
@@ -146,6 +147,10 @@ int main(int argc, char **argv)
     CreateMutexW(nullptr, FALSE, L"JeffPubRunning");
 #endif
     w->show();
+    // A normal exit takes this run's AutoRecover copies with it; copies a
+    // crashed run left are offered once the window is up.
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, [] { jp::recovery::endSession(); });
+    QTimer::singleShot(0, w, [w] { w->offerRecovery(); });
     auto *up = new jp::Updater(w);
     jp::setUpdater(up);
     up->checkOnStartup();

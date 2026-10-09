@@ -982,12 +982,8 @@ QWidget *Backstage::buildOpen()
     cards->setSpacing(12);
     auto *browse = new ActionCard(QStringLiteral("folder-open"), QStringLiteral("Browse"), QStringLiteral("Open a JeffPub publication or a .pub file."), w);
     connect(browse, &QAbstractButton::clicked, this, [this] { m_win->act("file.open")->trigger(); });
-    auto *recover = new ActionCard(QStringLiteral("life-buoy"), QStringLiteral("Recover Unsaved Work"), QStringLiteral("Open a copy JeffPub saved automatically before a crash or a close without saving."), w);
-    connect(recover, &QAbstractButton::clicked, this, [this] {
-        const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/AutoRecover";
-        const QString p = QFileDialog::getOpenFileName(this, QStringLiteral("Recover"), dir, QStringLiteral("JeffPub Publications (*.jpub)"));
-        if (!p.isEmpty() && m_win->maybeSave()) m_win->openFile(p);
-    });
+    auto *recover = new ActionCard(QStringLiteral("life-buoy"), QStringLiteral("Recover Unsaved Work"), QStringLiteral("Open copies of unsaved work JeffPub kept when it closed unexpectedly."), w);
+    connect(recover, &QAbstractButton::clicked, this, [this] { m_win->offerRecovery(true); });
     cards->addWidget(browse, 1);
     cards->addWidget(recover, 1);
     v->addLayout(cards);

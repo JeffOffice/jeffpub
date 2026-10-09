@@ -49,6 +49,7 @@ public:
     QString displayName() const;
     bool isModified() const { return !m_undo.isClean(); }
     void markSaved() { m_undo.setClean(); }
+    void markUnsaved() { m_undo.resetClean(); }   // a recovered copy: unsaved until saved
 
     // ---- view ----
     int currentPage() const { return m_page; }
