@@ -42,6 +42,15 @@ QColor uiAccent()
     return uiDark() ? QColor(0xE0, 0x6A, 0xA5) : QColor(0x9E, 0x1F, 0x63);
 }
 
+// Surfaces of the program's own panels; in high contrast, the system's.
+static QColor role(QPalette::ColorRole r) { return QGuiApplication::palette().color(r); }
+QColor uiWindow() { return g_highContrast ? role(QPalette::Window) : uiDark() ? QColor(0x1E, 0x22, 0x29) : QColor(0xFB, 0xFB, 0xFC); }
+QColor uiPanel() { return g_highContrast ? role(QPalette::Window) : uiDark() ? QColor(0x17, 0x1A, 0x1F) : QColor(0xF1, 0xF2, 0xF5); }
+QColor uiCard() { return g_highContrast ? role(QPalette::Base) : uiDark() ? QColor(0x22, 0x26, 0x2D) : QColor(Qt::white); }
+QColor uiCardPressed() { return g_highContrast ? role(QPalette::Base) : uiDark() ? QColor(0x2C, 0x31, 0x3A) : QColor(0xF3, 0xF4, 0xF6); }
+// Borders; in high contrast as strong as the text, so they show.
+QColor uiLine() { return g_highContrast ? role(QPalette::WindowText) : uiDark() ? QColor(0x2F, 0x34, 0x3D) : QColor(0xE3, 0xE5, 0xEA); }
+
 QColor focusRingColor()
 {
     if (g_highContrast) return QGuiApplication::palette().color(QPalette::Highlight);

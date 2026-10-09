@@ -56,6 +56,10 @@
 namespace jp {
 
 static bool dark() { return uiDark(); }
+static QString cardStyle()
+{
+    return QStringLiteral("#jpCard{background:%1; border:1px solid %2; border-radius:12px;}").arg(uiCard().name(), uiLine().name());
+}
 
 static QLabel *heading(const QString &t, QWidget *parent, double scale = 1.75)
 {
@@ -98,8 +102,7 @@ static QFrame *cardFrame(QWidget *parent)
 {
     auto *f = new QFrame(parent);
     f->setObjectName(QStringLiteral("jpCard"));
-    f->setStyleSheet(dark() ? QStringLiteral("#jpCard{background:#22262d; border:1px solid #2f343d; border-radius:12px;}")
-                            : QStringLiteral("#jpCard{background:#ffffff; border:1px solid #e3e5ea; border-radius:12px;}"));
+    f->setStyleSheet(cardStyle());
     return f;
 }
 
@@ -278,9 +281,8 @@ protected:
         const QRectF r = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
         const bool hover = underMouse(), down = isDown();
         const QColor accent = uiAccent();
-        QColor bg = dark() ? QColor(0x22, 0x26, 0x2d) : QColor(Qt::white);
-        if (down) bg = dark() ? QColor(0x2c, 0x31, 0x3a) : QColor(0xf3, 0xf4, 0xf6);
-        QColor border = dark() ? QColor(0x2f, 0x34, 0x3d) : QColor(0xe3, 0xe5, 0xea);
+        QColor bg = down ? uiCardPressed() : uiCard();
+        QColor border = uiLine();
         if (hover || hasFocus()) border = accent;
         p.setPen(QPen(border, hover ? 1.4 : 1));
         p.setBrush(bg);
@@ -455,10 +457,9 @@ Backstage::Backstage(MainWindow *win) : QWidget(win), m_win(win)
 void Backstage::restyle()
 {
     QPalette pal = palette();
-    pal.setColor(QPalette::Window, dark() ? QColor(0x1E, 0x22, 0x29) : QColor(0xFB, 0xFB, 0xFC));
+    pal.setColor(QPalette::Window, uiWindow());
     setPalette(pal);
-    m_side->setStyleSheet(dark() ? QStringLiteral("#jpSide{background:#171a1f; border-right:1px solid #2b3038;}")
-                                 : QStringLiteral("#jpSide{background:#f1f2f5; border-right:1px solid #dfe1e6;}"));
+    m_side->setStyleSheet(QStringLiteral("#jpSide{background:%1; border-right:1px solid %2;}").arg(uiPanel().name(), uiLine().name()));
     QPalette vp = m_version->palette();
     QColor vc = uiText();
     vc.setAlphaF(0.5f);
@@ -634,7 +635,7 @@ QWidget *Backstage::buildNew()
                                            "QListWidget::item{padding:5px 10px; border-radius:8px; color:%4;}"
                                            "QListWidget::item:hover{background:%3;}"
                                            "QListWidget::item:selected{background:rgba(%5,%6,%7,48); color:%4; font-weight:bold;}")
-                                .arg(dark() ? "#22262d" : "#ffffff", dark() ? "#2f343d" : "#e3e5ea", dark() ? "#2c313a" : "#f3f4f6", uiText().name())
+                                .arg(uiCard().name(), uiLine().name(), uiCardPressed().name(), uiText().name())
                                 .arg(a.red())
                                 .arg(a.green())
                                 .arg(a.blue()));
@@ -695,8 +696,7 @@ QWidget *Backstage::buildNew()
     // Customize panel, drawn as a card.
     auto *panel = new QFrame(w);
     panel->setObjectName(QStringLiteral("jpCard"));
-    panel->setStyleSheet(dark() ? QStringLiteral("#jpCard{background:#22262d; border:1px solid #2f343d; border-radius:12px;}")
-                                : QStringLiteral("#jpCard{background:#ffffff; border:1px solid #e3e5ea; border-radius:12px;}"));
+    panel->setStyleSheet(cardStyle());
     panel->setFixedWidth(320);
     auto *pv = new QVBoxLayout(panel);
     pv->setContentsMargins(18, 18, 18, 18);
@@ -1019,7 +1019,7 @@ QWidget *Backstage::buildOpen()
                                            "QListWidget::item{padding:6px 8px; border-radius:7px; color:%4;}"
                                            "QListWidget::item:hover{background:%3;}"
                                            "QListWidget::item:selected{background:%3; color:%4;}")
-                                .arg(dark() ? "#22262d" : "#ffffff", dark() ? "#2f343d" : "#e3e5ea", dark() ? "#2c313a" : "#f3f4f6", uiText().name()));
+                                .arg(uiCard().name(), uiLine().name(), uiCardPressed().name(), uiText().name()));
         for (const QString &f : files) {
             if (!isPinned && pinned.contains(f)) continue;
             const QFileInfo fi(f);

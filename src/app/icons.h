@@ -29,6 +29,11 @@ void setUiHighContrast(bool on);
 QColor uiText();
 QColor uiAccent();
 QColor focusRingColor();   // the ring around the control with the keyboard focus
+QColor uiWindow();         // behind cards (File pages)
+QColor uiPanel();          // side panels (File sidebar, page thumbnails)
+QColor uiCard();           // cards and lists on them
+QColor uiCardPressed();
+QColor uiLine();           // borders of cards and panels
 // App-wide widget tweaks the style sheet can't express (tab bars that never scroll).
 void installUiPolish();
 // Application-wide style sheet: rounded fields and buttons, accent focus

@@ -90,8 +90,7 @@ PagesPane::PagesPane(Editor *ed, MainWindow *win) : QListWidget(win), m_ed(ed), 
     setMouseTracking(true);
     setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     auto restyle = [this] {
-        setStyleSheet(darkUi() ? QStringLiteral("QListWidget{background:#171a1f; border:none; border-right:1px solid #2b3038; outline:0; padding-top:6px;}")
-                               : QStringLiteral("QListWidget{background:#f1f2f5; border:none; border-right:1px solid #dfe1e6; outline:0; padding-top:6px;}"));
+        setStyleSheet(QStringLiteral("QListWidget{background:%1; border:none; border-right:1px solid %2; outline:0; padding-top:6px;}").arg(uiPanel().name(), uiLine().name()));
     };
     restyle();
     connect(UiTheme::instance(), &UiTheme::changed, this, restyle);   // the look switched in Options
