@@ -1086,6 +1086,7 @@ private:
         st.width = m_style["svg:stroke-width"] ? toPt(m_style["svg:stroke-width"]) : 0.75;
         if (st.width <= 0) st.width = 0.25;
         if (m_style["svg:stroke-opacity"]) st.transparency = 1 - percent(m_style["svg:stroke-opacity"]);
+        st.inset = m_style["jp:line-inset"] != nullptr;
         const bool roundEnds = str(m_style["svg:stroke-linecap"]) == "round";
         if (s == "dash") {
             // Publisher's dashing as the reader describes it: a dot has no

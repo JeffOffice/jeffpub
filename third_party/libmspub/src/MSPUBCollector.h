@@ -124,6 +124,7 @@ public:
   void setShapeBeginArrow(unsigned seqNum, const Arrow &arrow);
   void setShapeEndArrow(unsigned seqNum, const Arrow &arrow);
   void setShapeLineOpacity(unsigned seqNum, double opacity);
+  void setShapeLineInset(unsigned seqNum);
   void setShapeCrop(unsigned seqNum, const std::vector<double> &crop) { m_shapeInfosBySeqNum[seqNum].m_crop = crop; }
   void setShapePictureFillOpacity(unsigned seqNum, double opacity) { m_shapeInfosBySeqNum[seqNum].m_pictureFillOpacity = opacity; }
   void setShapeFillInks(unsigned seqNum, unsigned shownColor, double c, double m, double y, double k)

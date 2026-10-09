@@ -69,6 +69,7 @@ struct Stroke {
     double transparency = 0;
     Qt::PenJoinStyle join = Qt::MiterJoin;
     Qt::PenCapStyle cap = Qt::FlatCap;
+    bool inset = false;            // a closed outline drawn inside the edge (.pub text box borders)
     Arrow startArrow = Arrow::None, endArrow = Arrow::None;
     int startSize = 1, endSize = 1; // 0 small, 1 medium, 2 large
 

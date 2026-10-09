@@ -72,6 +72,23 @@ void Renderer::strokePath(QPainter *p, const QPainterPath &path, const Stroke &s
 {
     if (s.isNone()) return;
     const QPen pen = s.pen(cs);
+    // Inside a closed outline's edge: the outline twice as wide, clipped to
+    // the shape, so its inner half shows (dashes keep their lengths).
+    if (s.inset && s.compound == Stroke::Single && path.elementCount() > 2 &&
+        QLineF(QPointF(path.elementAt(0)), path.currentPosition()).length() < 0.01) {
+        QPen wide = pen;
+        wide.setWidthF(pen.widthF() * 2);
+        if (wide.style() == Qt::CustomDashLine) {
+            QList<qreal> d = wide.dashPattern();
+            for (qreal &x : d) x /= 2;
+            wide.setDashPattern(d);
+        }
+        p->save();
+        p->setClipPath(path, Qt::IntersectClip);
+        p->strokePath(path, wide);
+        p->restore();
+        return;
+    }
     if (s.compound == Stroke::Single) {
         p->strokePath(path, pen);
         return;

@@ -189,6 +189,7 @@ QJsonObject Stroke::toJson() const
     if (transparency) o["transparency"] = transparency;
     if (join != Qt::MiterJoin) o["join"] = int(join);
     if (cap != Qt::FlatCap) o["cap"] = int(cap);
+    if (inset) o["inset"] = true;
     if (startArrow != Arrow::None) { o["startArrow"] = int(startArrow); o["startSize"] = startSize; }
     if (endArrow != Arrow::None) { o["endArrow"] = int(endArrow); o["endSize"] = endSize; }
     return o;
@@ -205,6 +206,7 @@ Stroke Stroke::fromJson(const QJsonObject &o)
     s.transparency = o["transparency"].toDouble();
     s.join = Qt::PenJoinStyle(o["join"].toInt(Qt::MiterJoin));
     s.cap = Qt::PenCapStyle(o["cap"].toInt(Qt::FlatCap));
+    s.inset = o["inset"].toBool();
     s.startArrow = Arrow(o["startArrow"].toInt());
     s.endArrow = Arrow(o["endArrow"].toInt());
     s.startSize = o["startSize"].toInt(1);

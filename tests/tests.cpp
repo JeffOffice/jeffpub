@@ -7524,6 +7524,47 @@ private Q_SLOTS:
         QVERIFY(!firstLine(w).contains(QLatin1String("3456")));
     }
 
+    // An outline set inside its shape (Publisher's text box borders and many
+    // design frames, the inset-pen flag in a .pub) draws nothing outside the
+    // shape's edge, and keeps the setting through a .pub.
+    void insetOutlineStaysInside()
+    {
+        auto doc = Document::blank(QSizeF(200, 200));
+        auto box = std::make_shared<ShapeItem>();
+        box->shape = QStringLiteral("rect");
+        box->rect = QRectF(40, 40, 120, 120);
+        box->fill = Fill::none();
+        box->stroke = Stroke::line(ColorRef::rgb(Qt::black), 16);
+        box->stroke.inset = true;
+        doc->pages[0]->items.push_back(box);
+        auto draw = [&](Document &d) {
+            PaintContext ctx;
+            ctx.doc = &d;
+            ctx.opt.output = true;
+            return Renderer::renderToImage(ctx, 0, 1.0).convertToFormat(QImage::Format_RGB32);
+        };
+        auto dark = [](const QImage &img, int x, int y) { return qGray(img.pixel(x, y)) < 128; };
+        QImage img = draw(*doc);
+        QVERIFY(!dark(img, 36, 100) && !dark(img, 100, 36));   // nothing outside the edge
+        QVERIFY(dark(img, 42, 100) && dark(img, 54, 100));      // the full width inside it
+        QVERIFY(!dark(img, 60, 100));
+        // Through a .pub: Publisher's inset-pen flag.
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("inset.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        auto back = importPublisher(f.readAll(), nullptr);
+        QVERIFY(back);
+        const ShapeItem *got = nullptr;
+        for (const auto &it : back->pages[0]->items)
+            if (auto *s = dynamic_cast<const ShapeItem *>(it.get()); s && !s->stroke.isNone()) got = s;
+        QVERIFY(got);
+        QVERIFY(got->stroke.inset);
+        QVERIFY(!dark(draw(*back), 36, 100));
+    }
+
     // A text box that only touches another pushes none of its text aside
     // (Publisher's designs butt boxes together, their wrap distances
     // reaching past each other's insets): a name in a short box lost its

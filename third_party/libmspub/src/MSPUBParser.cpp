@@ -2405,6 +2405,17 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
                                       foptValues.m_scalarValues, FIELDID_GEOM_BOOL_PROPS);
           bool useLine = lineExistsByFlagPointer(
                            ptr_lineFlags, ptr_geomFlags);
+          // JeffPub: fInsetPen (0x40, with its use bit 0x400000), in either
+          // property table: the line is drawn inside the shape's edge, as
+          // Publisher draws text box borders and many design frames.
+          {
+            auto inset = [](const unsigned *f) { return f && ((*f) & 0x400000) && ((*f) & 0x40); };
+            bool in = inset(ptr_lineFlags);
+            if (!in && bool(maybe_tertiaryFoptValues))
+              in = inset(getIfExists(maybe_tertiaryFoptValues.get(), FIELDID_LINE_STYLE_BOOL_PROPS));
+            if (in)
+              m_collector->setShapeLineInset(*shapeSeqNum);
+          }
           // JeffPub: a box can have a border on some sides only (a rule
           // above a caption) while its overall line is off; read those sides.
           if (!useLine && bool(maybe_tertiaryFoptValues))

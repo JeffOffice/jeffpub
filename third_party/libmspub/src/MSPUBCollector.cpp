@@ -406,6 +406,12 @@ void MSPUBCollector::setShapePictureTransparent(unsigned seqNum, ColorReference 
   m_shapeInfosBySeqNum[seqNum].m_pictureTransparent = color;
 }
 
+// JeffPub: the line is drawn inside the shape's edge (fInsetPen).
+void MSPUBCollector::setShapeLineInset(unsigned seqNum)
+{
+  m_shapeInfosBySeqNum[seqNum].m_lineInset = true;
+}
+
 void MSPUBCollector::setShapeLineOpacity(unsigned seqNum, double opacity)
 {
   m_shapeInfosBySeqNum[seqNum].m_lineOpacity = opacity;
@@ -1266,6 +1272,8 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
       // JeffPub patch: the line's transparency.
       if (bool(info.m_lineOpacity) && info.m_lineOpacity.get() < 1)
         graphicsProps.insert("svg:stroke-opacity", info.m_lineOpacity.get(), librevenge::RVNG_PERCENT);
+      if (info.m_lineInset)
+        graphicsProps.insert("jp:line-inset", true);   // JeffPub
       // JeffPub patch: pass arrowheads on (style 1-5 as stored, size 0-2).
       if (bool(info.m_beginArrow) && info.m_beginArrow.get().m_style != NO_ARROW)
       {

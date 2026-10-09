@@ -1722,7 +1722,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 strokeProps(opt, t->stroke);
                 shadowProps(opt, t->fx.shadow);
                 rotationProp(opt, t);
-                QVector<Prop> topt = {{0x008d, 73152}, {0x017f, 0x00400040}, {0x01ff, 0x00400000}, {0x057f, 0x00080000},
+                QVector<Prop> topt = {{0x008d, 73152}, {0x017f, 0x00400040}, {0x01ff, t->stroke.inset ? 0x00400040u : 0x00400000u}, {0x057f, 0x00080000},
                                       {0x05bf, 0x00080000}, {0x05ff, 0x00080000}, {0x063f, 0x00080000}, {0x06ff, 0x00020002}};
                 topt << kSideLines << kShadowFlags;
                 inkProps(topt, t->fill);
@@ -1816,7 +1816,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                     m_frames[stx->second][0] = Frame{frame, m, false};
                     m_textShapes << TextShape{stx->first, 0, seq};
                 }
-                QVector<Prop> topt = {{0x01ff, 0x00400000}, {0x06ff, 0x00020002}};
+                QVector<Prop> topt = {{0x01ff, s->stroke.inset ? 0x00400040u : 0x00400000u}, {0x06ff, 0x00020002}};
                 topt << kSideLines << kShadowFlags;
                 if (!open) inkProps(topt, s->fill);
                 wrapProps(opt, s);
@@ -2131,7 +2131,7 @@ QByteArray PubWriter::write(QStringList *skipped)
                 if (pic->hasTransparentColor) opt << Prop{0x0107, bgr(pic->transparentColor)};
                 shadowProps(opt, pic->fx.shadow);
                 rotationProp(opt, pic);
-                QVector<Prop> topt = {{0x01ff, 0x00400000}, {0x06ff, 0x00020002}};
+                QVector<Prop> topt = {{0x01ff, pic->stroke.inset ? 0x00400040u : 0x00400000u}, {0x06ff, 0x00020002}};
                 topt << kShadowFlags << kSideLines;
                 if (pic->recolor == PictureItem::ColorTint) topt << Prop{0x011a, bgr(pic->recolorColor.resolve(m_doc.colors))};
                 if (pic->recolor == PictureItem::Sepia) topt << Prop{0x011a, bgr(QColor::fromRgb(kPubSepia))};
