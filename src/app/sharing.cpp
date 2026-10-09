@@ -10,6 +10,7 @@
 #include "render/renderer.h"
 
 #include <QBuffer>
+#include <QCoreApplication>
 #include <QDir>
 #include <QFileDialog>
 #include <QFontDatabase>
@@ -46,11 +47,11 @@ static QString emlEncode(const QByteArray &data)
 
 static void saveEml(QWidget *parent, const QString &name, const QString &body)
 {
-    const QString path = askSavePath(parent, QStringLiteral("Save Email"), name + ".eml", QStringLiteral("Email Message (*.eml)"));
+    const QString path = askSavePath(parent, QCoreApplication::translate("Sharing", "Save Email"), name + ".eml", QCoreApplication::translate("Sharing", "Email Message (*.eml)"));
     if (path.isEmpty()) return;
     QFile f(path);
     if (f.open(QIODevice::WriteOnly)) f.write(body.toUtf8());
-    QMessageBox::information(parent, QStringLiteral("Email"), QStringLiteral("Saved %1.\nOpen it in your email program, add recipients and send.").arg(QFileInfo(path).fileName()));
+    QMessageBox::information(parent, QCoreApplication::translate("Sharing", "Email"), QCoreApplication::translate("Sharing", "Saved %1.\nOpen it in your email program, add recipients and send.").arg(QFileInfo(path).fileName()));
 }
 
 void emailCurrentPage(QWidget *parent, Editor *ed)
@@ -101,7 +102,7 @@ void packAndGo(QWidget *parent, MainWindow *win, bool forPrinter)
 {
     Editor *ed = win->editor();
     if (forPrinter) {
-        const QString dir = QFileDialog::getExistingDirectory(parent, QStringLiteral("Save for a Commercial Printer"));
+        const QString dir = QFileDialog::getExistingDirectory(parent, QCoreApplication::translate("Sharing", "Save for a Commercial Printer"));
         if (dir.isEmpty()) return;
         const QString base = QDir(dir).filePath(ed->displayName());
         win->exportPdf(base + ".pdf");
@@ -113,10 +114,10 @@ void packAndGo(QWidget *parent, MainWindow *win, bool forPrinter)
                              .arg(ed->displayName()).arg(ed->doc()->pageSize().width() / 72, 0, 'f', 3).arg(ed->doc()->pageSize().height() / 72, 0, 'f', 3)
                              .arg(ed->doc()->pages.size()).toUtf8());
         }
-        QMessageBox::information(parent, QStringLiteral("Pack and Go"), QStringLiteral("Saved the PDF and publication for your printer in %1.").arg(dir));
+        QMessageBox::information(parent, QCoreApplication::translate("Sharing", "Pack and Go"), QCoreApplication::translate("Sharing", "Saved the PDF and publication for your printer in %1.").arg(dir));
         return;
     }
-    const QString path = askSavePath(parent, QStringLiteral("Save for Another Computer"), ed->displayName() + ".zip", QStringLiteral("ZIP (*.zip)"));
+    const QString path = askSavePath(parent, QCoreApplication::translate("Sharing", "Save for Another Computer"), ed->displayName() + ".zip", QCoreApplication::translate("Sharing", "ZIP (*.zip)"));
     if (path.isEmpty()) return;
     ZipWriter z;
     z.add(ed->displayName() + ".jpub", publicationBytes(*ed->doc(), win->pageThumbnail(0, 256)));
@@ -143,13 +144,13 @@ void packAndGo(QWidget *parent, MainWindow *win, bool forPrinter)
     }
     QFile out(path);
     if (out.open(QIODevice::WriteOnly)) out.write(z.finish());
-    QMessageBox::information(parent, QStringLiteral("Pack and Go"), QStringLiteral("Saved %1 with the publication and %2 font file(s).").arg(QFileInfo(path).fileName()).arg(fonts));
+    QMessageBox::information(parent, QCoreApplication::translate("Sharing", "Pack and Go"), QCoreApplication::translate("Sharing", "Saved %1 with the publication and %2 font file(s).").arg(QFileInfo(path).fileName()).arg(fonts));
 }
 
 void saveForPhotoPrinter(QWidget *parent, MainWindow *win)
 {
     Editor *ed = win->editor();
-    const QString dir = QFileDialog::getExistingDirectory(parent, QStringLiteral("Save for a Photo Printer"));
+    const QString dir = QFileDialog::getExistingDirectory(parent, QCoreApplication::translate("Sharing", "Save for a Photo Printer"));
     if (dir.isEmpty()) return;
     PaintContext ctx;
     ctx.doc = ed->doc();
@@ -161,20 +162,20 @@ void saveForPhotoPrinter(QWidget *parent, MainWindow *win)
         img.setDotsPerMeterY(11811);
         img.save(QDir(dir).filePath(QStringLiteral("%1-page%2.jpg").arg(ed->displayName()).arg(i + 1)), "JPG", 95);
     }
-    QMessageBox::information(parent, QStringLiteral("Save for a Photo Printer"), QStringLiteral("Saved %1 picture(s) at 300 dpi.").arg(ed->doc()->pages.size()));
+    QMessageBox::information(parent, QCoreApplication::translate("Sharing", "Save for a Photo Printer"), QCoreApplication::translate("Sharing", "Saved %1 picture(s) at 300 dpi.").arg(ed->doc()->pages.size()));
 }
 
 void saveAsTemplate(QWidget *parent, MainWindow *win)
 {
     bool ok = false;
-    const QString name = QInputDialog::getText(parent, QStringLiteral("Save as Template"), QStringLiteral("Template name:"), QLineEdit::Normal, win->editor()->displayName(), &ok);
+    const QString name = QInputDialog::getText(parent, QCoreApplication::translate("Sharing", "Save as Template"), QCoreApplication::translate("Sharing", "Template name:"), QLineEdit::Normal, win->editor()->displayName(), &ok);
     if (!ok || name.trimmed().isEmpty()) return;
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/Templates";
     QDir().mkpath(dir);
     QString err;
     if (savePublication(*win->editor()->doc(), dir + "/" + name.trimmed() + ".jpub", win->pageThumbnail(0, 256), &err))
-        QMessageBox::information(parent, QStringLiteral("Save as Template"), QStringLiteral("\"%1\" is now in File > New > My Templates.").arg(name.trimmed()));
-    else QMessageBox::warning(parent, QStringLiteral("Save as Template"), err);
+        QMessageBox::information(parent, QCoreApplication::translate("Sharing", "Save as Template"), QCoreApplication::translate("Sharing", "\"%1\" is now in File > New > My Templates.").arg(name.trimmed()));
+    else QMessageBox::warning(parent, QCoreApplication::translate("Sharing", "Save as Template"), err);
 }
 
 // Seamless textures generated from noise, so no texture images need shipping.

@@ -171,7 +171,7 @@ void PagesPane::contextMenuEvent(QContextMenuEvent *e)
     QMenu menu(this);
     for (const char *id : {"page.insert", "page.insertDup", "page.insertDialog", "page.delete", "page.rename", "page.move"}) menu.addAction(m_win->act(id));
     menu.addSeparator();
-    QMenu *mp = menu.addMenu(QStringLiteral("Master Pages"));
+    QMenu *mp = menu.addMenu(tr("Master Pages"));
     for (const auto &m : m_ed->doc()->masters) {
         QAction *a = mp->addAction(QStringLiteral("(%1) %2").arg(m->abbr, m->name));
         const QString id = m->id;

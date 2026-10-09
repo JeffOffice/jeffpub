@@ -127,7 +127,7 @@ void spellingIgnore(const QString &w) { Speller::get().ignore(w); }
 void spellingDialog(QWidget *p, Editor *ed)
 {
     if (dict::root().isEmpty()) {
-        QMessageBox::warning(p, QStringLiteral("Spelling"), QStringLiteral("The dictionaries are missing from this installation."));
+        QMessageBox::warning(p, QCoreApplication::translate("Proofing", "Spelling"), QCoreApplication::translate("Proofing", "The dictionaries are missing from this installation."));
         return;
     }
     // Stories in reading order.
@@ -149,21 +149,21 @@ void spellingDialog(QWidget *p, Editor *ed)
             }
         });
     QDialog dlg(p);
-    dlg.setWindowTitle(QStringLiteral("Check Spelling"));
+    dlg.setWindowTitle(QCoreApplication::translate("Proofing", "Check Spelling"));
     auto *v = new QVBoxLayout(&dlg);
     auto *notIn = new QLabel(&dlg);
     auto *change = new QLineEdit(&dlg);
     auto *sugg = new QListWidget(&dlg);
-    v->addWidget(new QLabel(QStringLiteral("Not in dictionary:")));
+    v->addWidget(new QLabel(QCoreApplication::translate("Proofing", "Not in dictionary:")));
     v->addWidget(notIn);
-    v->addWidget(new QLabel(QStringLiteral("Change to:")));
+    v->addWidget(new QLabel(QCoreApplication::translate("Proofing", "Change to:")));
     v->addWidget(change);
-    v->addWidget(new QLabel(QStringLiteral("Suggestions:")));
+    v->addWidget(new QLabel(QCoreApplication::translate("Proofing", "Suggestions:")));
     v->addWidget(sugg);
     auto *row = new QHBoxLayout();
-    auto *ignore = new QPushButton(QStringLiteral("Ignore"), &dlg), *ignoreAll = new QPushButton(QStringLiteral("Ignore All"), &dlg);
-    auto *chg = new QPushButton(QStringLiteral("Change"), &dlg), *chgAll = new QPushButton(QStringLiteral("Change All"), &dlg);
-    auto *add = new QPushButton(QStringLiteral("Add"), &dlg), *close = new QPushButton(QStringLiteral("Close"), &dlg);
+    auto *ignore = new QPushButton(QCoreApplication::translate("Proofing", "Ignore"), &dlg), *ignoreAll = new QPushButton(QCoreApplication::translate("Proofing", "Ignore All"), &dlg);
+    auto *chg = new QPushButton(QCoreApplication::translate("Proofing", "Change"), &dlg), *chgAll = new QPushButton(QCoreApplication::translate("Proofing", "Change All"), &dlg);
+    auto *add = new QPushButton(QCoreApplication::translate("Proofing", "Add"), &dlg), *close = new QPushButton(QCoreApplication::translate("Proofing", "Close"), &dlg);
     for (auto *b : {ignore, ignoreAll, chg, chgAll, add, close}) row->addWidget(b);
     v->addLayout(row);
     QObject::connect(sugg, &QListWidget::currentTextChanged, change, &QLineEdit::setText);
@@ -191,7 +191,7 @@ void spellingDialog(QWidget *p, Editor *ed)
                 return true;
             }
         }
-        QMessageBox::information(&dlg, QStringLiteral("Check Spelling"), QStringLiteral("The spelling check is complete."));
+        QMessageBox::information(&dlg, QCoreApplication::translate("Proofing", "Check Spelling"), QCoreApplication::translate("Proofing", "The spelling check is complete."));
         dlg.accept();
         return false;
     };
@@ -199,7 +199,7 @@ void spellingDialog(QWidget *p, Editor *ed)
     QObject::connect(ignoreAll, &QPushButton::clicked, &dlg, [&] { Speller::get().ignore(word); next(); });
     QObject::connect(add, &QPushButton::clicked, &dlg, [&] { Speller::get().add(word); next(); });
     QObject::connect(chg, &QPushButton::clicked, &dlg, [&] {
-        ed->beginChange(QStringLiteral("Spelling"));
+        ed->beginChange(QCoreApplication::translate("Proofing", "Spelling"));
         ed->cursor().insertText(change->text());
         ed->endChange();
         pos = ed->cursor().position();
@@ -207,7 +207,7 @@ void spellingDialog(QWidget *p, Editor *ed)
     });
     QObject::connect(chgAll, &QPushButton::clicked, &dlg, [&] {
         const QString from = word, to = change->text();
-        ed->change(QStringLiteral("Spelling"), [&] {
+        ed->change(QCoreApplication::translate("Proofing", "Spelling"), [&] {
             for (const S &s : stories) {
                 QTextDocument *doc = d->storyDoc(s.storyId);
                 QTextCursor c = doc->find(from, 0, QTextDocument::FindCaseSensitively | QTextDocument::FindWholeWords);
@@ -330,17 +330,26 @@ void thesaurusDialog(QWidget *p, Editor *ed)
         word = c.selectedText().trimmed();
     }
     QDialog dlg(p);
-    dlg.setWindowTitle(QStringLiteral("Thesaurus"));
+    dlg.setWindowTitle(QCoreApplication::translate("Proofing", "Thesaurus"));
     auto *v = new QVBoxLayout(&dlg);
     auto *q = new QLineEdit(word, &dlg);
     auto *list = new QListWidget(&dlg);
-    v->addWidget(new QLabel(QStringLiteral("Look up:")));
+    v->addWidget(new QLabel(QCoreApplication::translate("Proofing", "Look up:")));
     v->addWidget(q);
     v->addWidget(list);
     auto fill = [&] {
         list->clear();
         const QStringList syn = thesaurusLookup(q->text());
-        if (syn.isEmpty()) list->addItem(q->text().trimmed().isEmpty() ? QStringLiteral("(Type a word to look up)") : QStringLiteral("(No suggestions)"));
+        if (syn.isEmpty()) {
+            QString note;
+            if (q->text().trimmed().isEmpty())
+                //: Keep the parentheses: a list entry that starts with ( is a note, not a synonym.
+                note = QCoreApplication::translate("Proofing", "(Type a word to look up)");
+            else
+                //: Keep the parentheses: a list entry that starts with ( is a note, not a synonym.
+                note = QCoreApplication::translate("Proofing", "(No suggestions)");
+            list->addItem(note);
+        }
         list->addItems(syn);
     };
     QObject::connect(q, &QLineEdit::returnPressed, &dlg, fill);
@@ -354,13 +363,13 @@ void thesaurusDialog(QWidget *p, Editor *ed)
     if (list->count() && !list->item(0)->text().startsWith('(')) list->setCurrentRow(0);
     auto *bb = new QDialogButtonBox(&dlg);
     // Look up the chosen synonym in turn.
-    auto *again = bb->addButton(QStringLiteral("Look Up"), QDialogButtonBox::ActionRole);
+    auto *again = bb->addButton(QCoreApplication::translate("Proofing", "Look Up"), QDialogButtonBox::ActionRole);
     QObject::connect(again, &QPushButton::clicked, &dlg, [&] {
         if (!list->currentItem() || list->currentItem()->text().startsWith('(')) return;
         q->setText(list->currentItem()->text().section(QStringLiteral(" ("), 0, 0));
         fill();
     });
-    auto *insert = bb->addButton(QStringLiteral("Insert"), QDialogButtonBox::AcceptRole);
+    auto *insert = bb->addButton(QCoreApplication::translate("Proofing", "Insert"), QDialogButtonBox::AcceptRole);
     bb->addButton(QDialogButtonBox::Cancel);
     QObject::connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
     QObject::connect(insert, &QPushButton::clicked, &dlg, &QDialog::accept);
@@ -370,7 +379,7 @@ void thesaurusDialog(QWidget *p, Editor *ed)
     QString s = list->currentItem()->text();
     s = s.section(" (", 0, 0);
     if (s.startsWith('(')) return;
-    ed->beginChange(QStringLiteral("Thesaurus"));
+    ed->beginChange(QCoreApplication::translate("Proofing", "Thesaurus"));
     ed->cursor().insertText(s);
     ed->endChange();
     ed->textEdited();
