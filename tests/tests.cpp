@@ -38,6 +38,8 @@
 #include "app/editor.h"
 #include "app/mainwindow.h"
 #include "app/recovery.h"
+#include "app/pagespane.h"
+#include "app/theme.h"
 #include "app/ribbon.h"
 #include "app/telemetry.h"
 #include "app/updater.h"
@@ -80,6 +82,7 @@
 #include <QGroupBox>
 #include <QtEndian>
 #include <QLockFile>
+#include <QStyleHints>
 #include <clocale>
 
 using namespace jp;
@@ -1302,6 +1305,39 @@ private Q_SLOTS:
             QVERIFY(f.open(QIODevice::WriteOnly));
             f.write(d.toUtf8());
         }
+    }
+
+    // Switching light or dark in Options applies at once: it half-applied
+    // (the palette and the parts with colors of their own stayed) until a
+    // restart.
+    void themeSwitchAppliesNow()
+    {
+        const QPalette pal = qApp->palette();
+        const QString sheet = qApp->styleSheet();
+        const bool wasDark = jp::uiDark();
+        jp::MainWindow w;
+        auto *side = w.findChild<QFrame *>(QStringLiteral("jpSide"));
+        auto *pages = w.findChild<jp::PagesPane *>();
+        QVERIFY(side && pages);
+        for (int choice : {2, 1}) {
+            const bool dark = choice == 2;
+            jp::applyUiTheme(choice);
+            QCOMPARE(jp::uiDark(), dark);
+            QVERIFY2((qApp->palette().color(QPalette::Window).lightness() < 128) == dark, qPrintable(qApp->palette().color(QPalette::Window).name()));
+            QVERIFY(qApp->styleSheet().contains(dark ? QStringLiteral("#22262d") : QStringLiteral("#ffffff")));
+            QVERIFY2(side->styleSheet().contains(dark ? QStringLiteral("#171a1f") : QStringLiteral("#f1f2f5")), qPrintable(side->styleSheet()));
+            QVERIFY(pages->styleSheet().contains(dark ? QStringLiteral("#171a1f") : QStringLiteral("#f1f2f5")));
+            if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+                w.resize(1200, 800);
+                w.show();
+                QTest::qWait(200);
+                w.grab().save(qEnvironmentVariable("JP_SHOT_DIR") + QStringLiteral("/theme-%1.png").arg(dark ? "dark" : "light"));
+            }
+        }
+        QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Unknown);
+        jp::setUiDark(wasDark);
+        qApp->setPalette(pal);
+        qApp->setStyleSheet(sheet);
     }
 
     // AutoRecover keeps one copy per document and run: two "Cover.pub"

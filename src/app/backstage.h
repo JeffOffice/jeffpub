@@ -9,6 +9,9 @@
 class QAbstractButton;
 class QStackedWidget;
 
+class QFrame;
+class QLabel;
+
 namespace jp {
 
 class MainWindow;
@@ -34,7 +37,10 @@ private:
     QWidget *buildExport();
     QWidget *buildAbout();
     void rebuild(const QString &name);
+    void restyle();   // the colors that follow the light or dark look
     MainWindow *m_win;
+    QFrame *m_side = nullptr;
+    QLabel *m_version = nullptr;
     QHash<QString, QAbstractButton *> m_navItems;
     QStackedWidget *m_stack;
     QHash<QString, int> m_index;

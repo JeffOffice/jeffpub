@@ -11,6 +11,7 @@
 #include "app/editor.h"
 #include "app/mainwindow.h"
 #include "app/recovery.h"
+#include "app/theme.h"
 #include "app/ribbon.h"
 #include "app/updater.h"
 #include "app/settings.h"
@@ -30,42 +31,6 @@
 #endif
 
 
-namespace {
-
-void applyTheme(QApplication &app)
-{
-    app.setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
-    const int theme = jp::Settings::get().value(QStringLiteral("ui/theme"), 0).toInt();
-    bool dark = false;
-    if (theme == 2) dark = true;
-    else if (theme == 0) dark = app.styleHints()->colorScheme() == Qt::ColorScheme::Dark;
-    if (theme == 1) app.styleHints()->setColorScheme(Qt::ColorScheme::Light);
-    jp::setUiDark(dark);   // not every platform honors setColorScheme, so record the choice
-    if (!dark) return;
-    app.styleHints()->setColorScheme(Qt::ColorScheme::Dark);
-    QPalette p;
-    const QColor base(0x26, 0x26, 0x26), window(0x2f, 0x2f, 0x2f), text(0xe8, 0xe8, 0xe8);
-    p.setColor(QPalette::Window, window);
-    p.setColor(QPalette::WindowText, text);
-    p.setColor(QPalette::Base, base);
-    p.setColor(QPalette::AlternateBase, window);
-    p.setColor(QPalette::ToolTipBase, window);
-    p.setColor(QPalette::ToolTipText, text);
-    p.setColor(QPalette::Text, text);
-    p.setColor(QPalette::Button, window);
-    p.setColor(QPalette::ButtonText, text);
-    p.setColor(QPalette::BrightText, Qt::white);
-    p.setColor(QPalette::Highlight, QColor(0xC2, 0x4A, 0x8A));
-    p.setColor(QPalette::HighlightedText, Qt::white);
-    p.setColor(QPalette::Link, QColor(0xE0, 0x7A, 0xB0));
-    p.setColor(QPalette::PlaceholderText, QColor(0x9a, 0x9a, 0x9a));
-    p.setColor(QPalette::Disabled, QPalette::Text, QColor(0x80, 0x80, 0x80));
-    p.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(0x80, 0x80, 0x80));
-    p.setColor(QPalette::Disabled, QPalette::WindowText, QColor(0x80, 0x80, 0x80));
-    app.setPalette(p);
-}
-
-} // namespace
 
 int main(int argc, char **argv)
 {
@@ -94,8 +59,9 @@ int main(int argc, char **argv)
     cli.process(app);
 
     jp::initCore();
-    applyTheme(app);
-    app.setStyleSheet(jp::modernStyleSheet());
+    app.setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
+    jp::applyUiTheme(jp::Settings::get().value(QStringLiteral("ui/theme"), 0).toInt());
+    jp::followSystemTheme();
     jp::installUiPolish();
 
     auto *w = new jp::MainWindow();

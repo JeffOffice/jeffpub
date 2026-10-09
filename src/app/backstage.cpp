@@ -1,4 +1,5 @@
 #include "app/backstage.h"
+#include "app/theme.h"
 
 #include "app/appfuncs.h"
 #include "app/dialogs.h"
@@ -346,18 +347,14 @@ QLabel *sectionLabel(const QString &t, QWidget *parent)
 Backstage::Backstage(MainWindow *win) : QWidget(win), m_win(win)
 {
     setAutoFillBackground(true);
-    QPalette pal = palette();
-    pal.setColor(QPalette::Window, dark() ? QColor(0x1E, 0x22, 0x29) : QColor(0xFB, 0xFB, 0xFC));
-    setPalette(pal);
     auto *h = new QHBoxLayout(this);
     h->setContentsMargins(0, 0, 0, 0);
     h->setSpacing(0);
 
     // Sidebar: a quiet panel with the wordmark, a back button and grouped commands.
     auto *side = new QFrame(this);
+    m_side = side;
     side->setObjectName(QStringLiteral("jpSide"));
-    side->setStyleSheet(dark() ? QStringLiteral("#jpSide{background:#171a1f; border-right:1px solid #2b3038;}")
-                               : QStringLiteral("#jpSide{background:#f1f2f5; border-right:1px solid #dfe1e6;}"));
     side->setFixedWidth(236);
     auto *sv = new QVBoxLayout(side);
     sv->setContentsMargins(0, 18, 0, 14);
@@ -435,12 +432,8 @@ Backstage::Backstage(MainWindow *win) : QWidget(win), m_win(win)
     }
     sv->addStretch(1);
     auto *ver = new QLabel(QStringLiteral("Version %1").arg(QStringLiteral(JP_VERSION)), side);
+    m_version = ver;
     ver->setContentsMargins(24, 0, 12, 0);
-    QPalette vp = ver->palette();
-    QColor vc = uiText();
-    vc.setAlphaF(0.5f);
-    vp.setColor(QPalette::WindowText, vc);
-    ver->setPalette(vp);
     sv->addWidget(ver);
     h->addWidget(side);
 
@@ -449,6 +442,28 @@ Backstage::Backstage(MainWindow *win) : QWidget(win), m_win(win)
     for (const QString &key : {QStringLiteral("info"), QStringLiteral("new"), QStringLiteral("open"), QStringLiteral("print"),
                                QStringLiteral("share"), QStringLiteral("export"), QStringLiteral("about")})
         m_index[key] = m_stack->addWidget(new QWidget());
+    restyle();
+    // The look switched in Options: the colors set here, and the page shown.
+    connect(UiTheme::instance(), &UiTheme::changed, this, [this] {
+        restyle();
+        if (isVisible())
+            for (auto it = m_index.cbegin(); it != m_index.cend(); ++it)
+                if (it.value() == m_stack->currentIndex()) rebuild(it.key());
+    });
+}
+
+void Backstage::restyle()
+{
+    QPalette pal = palette();
+    pal.setColor(QPalette::Window, dark() ? QColor(0x1E, 0x22, 0x29) : QColor(0xFB, 0xFB, 0xFC));
+    setPalette(pal);
+    m_side->setStyleSheet(dark() ? QStringLiteral("#jpSide{background:#171a1f; border-right:1px solid #2b3038;}")
+                                 : QStringLiteral("#jpSide{background:#f1f2f5; border-right:1px solid #dfe1e6;}"));
+    QPalette vp = m_version->palette();
+    QColor vc = uiText();
+    vc.setAlphaF(0.5f);
+    vp.setColor(QPalette::WindowText, vc);
+    m_version->setPalette(vp);
 }
 
 void Backstage::keyPressEvent(QKeyEvent *e)

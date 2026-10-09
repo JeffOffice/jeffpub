@@ -1,4 +1,5 @@
 #include "app/pagespane.h"
+#include "app/theme.h"
 
 #include "app/editor.h"
 #include "app/icons.h"
@@ -88,8 +89,12 @@ PagesPane::PagesPane(Editor *ed, MainWindow *win) : QListWidget(win), m_ed(ed), 
     setItemDelegate(new PageDelegate(this));
     setMouseTracking(true);
     setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
-    setStyleSheet(darkUi() ? QStringLiteral("QListWidget{background:#171a1f; border:none; border-right:1px solid #2b3038; outline:0; padding-top:6px;}")
-                           : QStringLiteral("QListWidget{background:#f1f2f5; border:none; border-right:1px solid #dfe1e6; outline:0; padding-top:6px;}"));
+    auto restyle = [this] {
+        setStyleSheet(darkUi() ? QStringLiteral("QListWidget{background:#171a1f; border:none; border-right:1px solid #2b3038; outline:0; padding-top:6px;}")
+                               : QStringLiteral("QListWidget{background:#f1f2f5; border:none; border-right:1px solid #dfe1e6; outline:0; padding-top:6px;}"));
+    };
+    restyle();
+    connect(UiTheme::instance(), &UiTheme::changed, this, restyle);   // the look switched in Options
     m_timer.setSingleShot(true);
     m_timer.setInterval(15);
     connect(&m_timer, &QTimer::timeout, this, &PagesPane::renderNext);

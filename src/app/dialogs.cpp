@@ -1,4 +1,5 @@
 #include "app/dialogs.h"
+#include "app/theme.h"
 
 #include "app/appfuncs.h"
 #include "app/editor.h"
@@ -2083,7 +2084,8 @@ void optionsDialog(QWidget *p, Editor *ed)
     auto *initials = new QLineEdit(st.value("user/initials").toString(), gen);
     auto *theme = new QComboBox(gen);
     theme->addItems({"Use system setting", "Light", "Dark"});
-    theme->setCurrentIndex(st.value("ui/theme", 0).toInt());
+    const int oldTheme = st.value("ui/theme", 0).toInt();
+    theme->setCurrentIndex(oldTheme);
     gf->addRow(QStringLiteral("User name:"), name);
     gf->addRow(QStringLiteral("Initials:"), initials);
     gf->addRow(QStringLiteral("Theme:"), theme);
@@ -2147,7 +2149,7 @@ void optionsDialog(QWidget *p, Editor *ed)
     st.setValue("user/name", name->text());
     st.setValue("user/initials", initials->text());
     st.setValue("ui/theme", theme->currentIndex());
-    QGuiApplication::styleHints()->setColorScheme(theme->currentIndex() == 0 ? Qt::ColorScheme::Unknown : theme->currentIndex() == 1 ? Qt::ColorScheme::Light : Qt::ColorScheme::Dark);
+    if (theme->currentIndex() != oldTheme) applyUiTheme(theme->currentIndex());   // the whole program changes now
     st.setValue("proof/ignoreUpper", ignoreUpper->isChecked());
     st.setValue("proof/ignoreNumbers", ignoreNum->isChecked());
     st.setValue("proof/autocorrect", autocorrect->isChecked());
