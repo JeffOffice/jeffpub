@@ -1,0 +1,524 @@
+{
+  "fileKeytip": "F",
+  "quickAccess": [
+    {"cmd": "file.save", "keytip": "1"},
+    {"cmd": "edit.undo", "keytip": "2"},
+    {"cmd": "edit.redo", "keytip": "3"},
+    {"cmd": "file.print", "keytip": "4"}
+  ],
+  "templates": {
+    "Arrange": {"name": "Arrange", "keytip": "ZA", "items": [
+      {"large": {"id": "ribbon.wrapText", "text": "Wrap Text", "icon": "wrap-text"}, "keytip": "TW", "menu": [
+        "wrap.none", "wrap.square", "wrap.tight", "wrap.through", "wrap.topBottom", "wrap.inline", "-", "wrap.edit", "wrap.more"]},
+      {"small": "arr.forward", "keytip": "AF", "split": true, "menu": ["arr.forward", "arr.front"]},
+      {"small": "arr.backward", "keytip": "AB", "split": true, "menu": ["arr.backward", "arr.back"]},
+      {"small": "arr.group", "keytip": "GG"},
+      {"small": {"id": "ribbon.align", "text": "Align", "icon": "align-horizontal-justify-center"}, "keytip": "AA", "menu": [
+        "arr.alignLeft", "arr.alignCenter", "arr.alignRight", "-", "arr.alignTop", "arr.alignMiddle", "arr.alignBottom", "-",
+        "arr.distH", "arr.distV", "-", "arr.relMargins"]},
+      {"small": "arr.ungroup", "keytip": "GU", "split": true, "menu": ["arr.ungroup", "arr.regroup"]},
+      {"small": {"id": "ribbon.rotate", "text": "Rotate", "icon": "rotate-cw"}, "keytip": "AY", "menu": [
+        "arr.rotR", "arr.rotL", "arr.flipV", "arr.flipH", "-", "arr.freeRotate"]}
+    ]},
+    "Size": {"name": "Size", "keytip": "ZS", "launcher": "sizePosition", "launcherTip": "Size and Position", "launcherKeytip": "SZ", "items": [
+      {"row": [{"label": "Height"}, {"widget": "heightSpin", "keytip": "HT"}]},
+      {"row": [{"label": "Width"}, {"widget": "widthSpin", "keytip": "WD"}]}
+    ]}
+  },
+  "tabs": [
+    {"name": "Home", "keytip": "H", "groups": [
+      {"name": "Clipboard", "keytip": "ZC", "items": [
+        {"large": "edit.paste", "keytip": "V", "split": true, "menu": ["edit.paste", "edit.pasteText", "edit.pasteSpecial"]},
+        {"small": "edit.cut", "keytip": "X"},
+        {"small": "edit.copy", "keytip": "C"},
+        {"small": "edit.formatPainter", "keytip": "FP"}
+      ]},
+      {"name": "Font", "keytip": "ZF", "launcher": "font", "launcherTip": "Font", "launcherKeytip": "FN", "items": [
+        {"row": [
+          {"widget": "fontCombo", "keytip": "FF"},
+          {"widget": "sizeCombo", "keytip": "FS"},
+          {"button": "fmt.grow", "keytip": "FG"},
+          {"button": "fmt.shrink", "keytip": "FK"}]},
+        {"row": [
+          {"icon": "fmt.bold", "keytip": "1"},
+          {"icon": "fmt.italic", "keytip": "2"},
+          {"icon": "fmt.underline", "keytip": "3", "split": true, "menu": [
+            "fmt.underline", "fmt.underlineDouble", "fmt.underlineDotted", "fmt.underlineDash", "fmt.underlineWave"]},
+          {"icon": "fmt.strike", "keytip": "4"},
+          {"icon": "fmt.sub", "keytip": "5"},
+          {"icon": "fmt.sup", "keytip": "6"},
+          {"icon": {"id": "ribbon.changeCase", "text": "Change Case", "icon": "case-sensitive"}, "keytip": "7", "menu": [
+            "case.0", "case.1", "case.2", "case.3", "case.4", "-", "fmt.smallCaps", "fmt.allCaps"]},
+          {"icon": {"id": "ribbon.characterSpacing", "text": "Character Spacing", "icon": "move-horizontal"}, "keytip": "8", "menu": [
+            "spacing.Very Tight", "spacing.Tight", "spacing.Normal", "spacing.Loose", "spacing.Very Loose", "-",
+            "fmt.spacingDialog"]},
+          {"icon": "fmt.clear", "keytip": "E"},
+          {"widget": "textColor", "keytip": "FC"}]}
+      ]},
+      {"name": "Paragraph", "keytip": "ZP", "launcher": "paragraph", "launcherTip": "Paragraph", "launcherKeytip": "PG", "items": [
+        {"row": [
+          {"icon": "para.bullets", "keytip": "U", "split": true, "menu": [
+            "bullet.disc", "bullet.circle", "bullet.square", "bullet.diamond", "bullet.arrow", "bullet.check", "bullet.star",
+            "bullet.dash", "-", "para.listNone", "para.bulletsDialog"]},
+          {"icon": "para.numbers", "keytip": "N", "split": true, "menu": [
+            "number.0", "number.1", "number.2", "number.3", "number.4", "number.5", "number.6", "-", "para.listNone",
+            "para.bulletsDialog"]},
+          {"icon": "para.indentDec", "keytip": "AO"},
+          {"icon": "para.indentInc", "keytip": "AI"},
+          {"icon": "para.special", "keytip": "SC"}]},
+        {"row": [
+          {"icon": "para.left", "keytip": "AL"},
+          {"icon": "para.center", "keytip": "AC"},
+          {"icon": "para.right", "keytip": "AR"},
+          {"icon": "para.justify", "keytip": "AJ"},
+          {"icon": "para.distribute", "keytip": "AD"},
+          {"icon": "para.ltr", "keytip": "DL"},
+          {"icon": "para.rtl", "keytip": "DR"},
+          {"icon": {"id": "ribbon.lineSpacing", "text": "Line Spacing", "icon": "chevrons-up-down"}, "keytip": "K", "menu": [
+            "ls.1", "ls.1.15", "ls.1.5", "ls.2", "ls.2.5", "ls.3", "-", "para.dialog"]},
+          {"icon": {"id": "ribbon.paragraphSpacing", "text": "Paragraph Spacing", "icon": "arrow-up-down"}, "keytip": "PS", "menu": [
+            "para.spaceBefore0", "para.spaceBefore6", "para.spaceBefore12", "-", "para.spaceAfter0", "para.spaceAfter6",
+            "para.spaceAfter12", "-", "para.dialog"]}]}
+      ]},
+      {"name": "Styles", "keytip": "ZY", "items": [
+        {"widget": "styleGallery", "keytip": "L"}
+      ]},
+      {"name": "Objects", "keytip": "ZO", "items": [
+        {"large": "ins.textbox", "keytip": "TB"},
+        {"widget": "tableButton", "keytip": "TA"},
+        {"large": "ins.picture", "keytip": "PC"},
+        {"widget": "shapesButton", "keytip": "SH"}
+      ]},
+      {"use": "Arrange"},
+      {"name": "Editing", "keytip": "ZE", "items": [
+        {"small": "edit.find", "keytip": "FD"},
+        {"small": "edit.replace", "keytip": "R"},
+        {"small": {"id": "ribbon.select", "text": "Select", "icon": "mouse-pointer-2"}, "keytip": "SL", "menu": [
+          "edit.selectText", "edit.selectAll", "edit.selectObjects", "-", "sel.text", "sel.pictures", "sel.shapes", "sel.tables",
+          "sel.textart"]}
+      ]}
+    ]},
+    {"name": "Insert", "keytip": "N", "groups": [
+      {"name": "Pages", "keytip": "ZP", "items": [
+        {"large": "page.insert", "keytip": "BP", "split": true, "menu": ["page.insert", "page.insertDup", "page.insertDialog"]},
+        {"large": {"id": "ribbon.catalogPages", "text": "Catalog Pages", "icon": "book-copy"}, "keytip": "CP"}
+      ]},
+      {"name": "Tables", "keytip": "ZT", "items": [
+        {"widget": "tableButtonPlain", "keytip": "TB"}
+      ]},
+      {"name": "Illustrations", "keytip": "ZI", "items": [
+        {"large": "ins.picture", "keytip": "PC"},
+        {"large": "ins.onlinePicture", "keytip": "OP"},
+        {"widget": "shapesButton", "keytip": "SH"},
+        {"large": "ins.icons", "keytip": "IC"},
+        {"large": "ins.placeholder", "keytip": "PH"},
+        {"large": "ins.barcode", "keytip": "BC"}
+      ]},
+      {"name": "Building Blocks", "keytip": "ZB", "items": [
+        {"widget": "blockPageParts", "keytip": "PP"},
+        {"widget": "blockCalendars", "keytip": "CA"},
+        {"widget": "blockBorders", "keytip": "BA"},
+        {"widget": "blockAdvertisements", "keytip": "AD"}
+      ]},
+      {"name": "Text", "keytip": "ZX", "items": [
+        {"large": "ins.textbox", "keytip": "X"},
+        {"large": {"id": "ribbon.businessInfo", "text": "Business Information", "icon": "contact"}, "keytip": "BI", "menu": "@businessInfoMenu"},
+        {"widget": "textArtButton", "keytip": "WA"},
+        {"small": "ins.file", "keytip": "IF"},
+        {"small": "ins.symbol", "keytip": "SY", "split": true, "menu": "@symbolMenu"},
+        {"small": "ins.datetime", "keytip": "DT"},
+        {"small": "ins.object", "keytip": "OB"}
+      ]},
+      {"name": "Links", "keytip": "ZK", "items": [
+        {"large": "ins.link", "keytip": "K"},
+        {"large": "ins.bookmark", "keytip": "BM"}
+      ]},
+      {"name": "References", "keytip": "ZR", "items": [
+        {"large": "ins.toc", "keytip": "TC"},
+        {"small": "ins.updateToc", "keytip": "UT"},
+        {"small": "ins.footnote", "keytip": "FN"},
+        {"small": "ins.endnote", "keytip": "EN"}
+      ]},
+      {"name": "Header & Footer", "keytip": "ZH", "items": [
+        {"large": "ins.header", "keytip": "HD"},
+        {"large": "ins.footer", "keytip": "FT"},
+        {"large": "ins.pageNumber", "keytip": "PN", "split": true, "menu": [
+          "ins.pageNumber", "ins.pageCount", "ins.pageNumberFormat"]}
+      ]}
+    ]},
+    {"name": "Page Design", "keytip": "G", "groups": [
+      {"name": "Template", "keytip": "ZT", "items": [
+        {"large": "pd.changeTemplate", "keytip": "CT"}
+      ]},
+      {"name": "Page Setup", "keytip": "ZS", "launcher": "pageSetup", "launcherTip": "Page Setup", "launcherKeytip": "PU", "items": [
+        {"large": {"id": "ribbon.pageMargins", "text": "Margins", "icon": "square-dashed-bottom"}, "keytip": "MG", "menu": [
+          "margins.None", "margins.Narrow", "margins.Moderate", "margins.Wide", "margins.Extra Wide", "-", "pd.customMargins"]},
+        {"large": {"id": "ribbon.orientation", "text": "Orientation", "icon": "rotate-3d"}, "keytip": "OR", "menu": [
+          "pd.portrait", "pd.landscape"]},
+        {"large": {"id": "ribbon.pageSize", "text": "Size", "icon": "file-scan"}, "keytip": "SZ", "menu": "@pageSizeMenu"},
+        {"large": {"id": "ribbon.guides", "text": "Guides", "icon": "layout-grid"}, "keytip": "GD", "menu": "@guidesMenu"}
+      ]},
+      {"name": "Layout", "keytip": "ZL", "items": [
+        {"small": "pd.alignGuides", "keytip": "AG"},
+        {"small": "pd.alignObjects", "keytip": "AO"}
+      ]},
+      {"name": "Pages", "keytip": "ZP", "items": [
+        {"large": "page.delete", "keytip": "DP"},
+        {"large": "page.move", "keytip": "MV"},
+        {"large": "page.rename", "keytip": "RN"},
+        {"large": {"id": "ribbon.masterPages", "text": "Master Pages", "icon": "layout-panel-top"}, "keytip": "MP", "menu": "@masterPagesMenu"}
+      ]},
+      {"name": "Schemes", "keytip": "ZE", "items": [
+        {"widget": "schemeGallery", "keytip": "CS"},
+        {"large": {"id": "ribbon.fontSchemes", "text": "Fonts", "icon": "type"}, "keytip": "FO", "menu": "@fontSchemesMenu"}
+      ]},
+      {"name": "Page Background", "keytip": "ZB", "items": [
+        {"widget": "backgroundButton", "keytip": "BG"},
+        {"large": "pd.bgImage", "keytip": "BI"}
+      ]}
+    ]},
+    {"name": "Mailings", "keytip": "M", "groups": [
+      {"name": "Start", "keytip": "ZS", "items": [
+        {"large": {"id": "ribbon.mailMerge", "text": "Mail Merge", "icon": "mail"}, "keytip": "MM", "menu": [
+          "mm.wizard", "mm.mergeEmail"]},
+        {"large": {"id": "ribbon.selectRecipients", "text": "Select Recipients", "icon": "users"}, "keytip": "SR", "menu": [
+          "mm.typeNew", "mm.existing"]},
+        {"large": "mm.editList", "keytip": "EL"}
+      ]},
+      {"name": "Write & Insert Fields", "keytip": "ZW", "items": [
+        {"small": "mm.addressBlock", "keytip": "AB"},
+        {"small": "mm.greeting", "keytip": "GL"},
+        {"small": {"id": "ribbon.insertMergeField", "text": "Insert Merge Field", "icon": "braces"}, "keytip": "IF", "menu": "@mergeFieldMenu"},
+        {"small": "mm.pictureField", "keytip": "PF"}
+      ]},
+      {"name": "Preview Results", "keytip": "ZP", "items": [
+        {"large": "mm.preview", "keytip": "PR"},
+        {"row": [
+          {"icon": "mm.first", "keytip": "FR"},
+          {"icon": "mm.prev", "keytip": "PV"},
+          {"icon": "mm.next", "keytip": "NX"},
+          {"icon": "mm.last", "keytip": "LR"}]},
+        {"small": "mm.findRecipient", "keytip": "FD"}
+      ]},
+      {"name": "Finish", "keytip": "ZF", "items": [
+        {"large": {"id": "ribbon.finishMerge", "text": "Finish & Merge", "icon": "send"}, "keytip": "FM", "menu": [
+          "mm.mergePrint", "mm.mergeNew", "mm.mergePdf", "mm.mergeEmail", "-", "mm.exportList"]}
+      ]}
+    ]},
+    {"name": "Review", "keytip": "R", "groups": [
+      {"name": "Proofing", "keytip": "ZP", "items": [
+        {"large": "rev.spelling", "keytip": "SP", "split": true, "menu": ["rev.spelling", "rev.checkAsType"]},
+        {"large": "rev.research", "keytip": "RS"},
+        {"large": "rev.thesaurus", "keytip": "TH"}
+      ]},
+      {"name": "Language", "keytip": "ZL", "items": [
+        {"large": "rev.translate", "keytip": "TR"},
+        {"large": "rev.language", "keytip": "LA"}
+      ]},
+      {"name": "Check", "keytip": "ZC", "items": [
+        {"large": "rev.designChecker", "keytip": "DC"},
+        {"large": "rev.wordCount", "keytip": "WC"},
+        {"large": "rev.hyphenation", "keytip": "HY"}
+      ]}
+    ]},
+    {"name": "View", "keytip": "W", "groups": [
+      {"name": "Views", "keytip": "ZV", "items": [
+        {"large": "view.normal", "keytip": "NM"},
+        {"large": "view.master", "keytip": "MP"}
+      ]},
+      {"name": "Layout", "keytip": "ZL", "items": [
+        {"large": "view.single", "keytip": "SP"},
+        {"large": "view.spread", "keytip": "TP"}
+      ]},
+      {"name": "Show", "keytip": "ZS", "items": [
+        {"small": "view.boundaries", "keytip": "SB"},
+        {"small": "view.guides", "keytip": "SG"},
+        {"small": "view.fields", "keytip": "SF"},
+        {"small": "view.rulers", "keytip": "SR"},
+        {"small": "view.pageNav", "keytip": "SN"},
+        {"small": "view.scratch", "keytip": "SA"},
+        {"small": "view.baselines", "keytip": "SL"},
+        {"small": "view.graphics", "keytip": "SM"},
+        {"small": "para.special", "keytip": "SC"}
+      ]},
+      {"name": "Zoom", "keytip": "ZM", "items": [
+        {"row": [{"label": "Zoom"}, {"widget": "zoomBox", "keytip": "Q"}]},
+        {"row": [{"button": "zoom.100", "keytip": "J"}, {"button": "zoom.page", "keytip": "OP"}]},
+        {"row": [{"button": "zoom.width", "keytip": "PW"}, {"button": "zoom.selection", "keytip": "SO"}]}
+      ]},
+      {"name": "Window", "keytip": "ZW", "items": [
+        {"large": "win.new", "keytip": "NW"},
+        {"small": "win.arrange", "keytip": "AA"},
+        {"small": "win.cascade", "keytip": "CC"},
+        {"small": {"id": "ribbon.switchWindows", "text": "Switch Windows", "icon": "app-window"}, "keytip": "SW", "menu": "@switchWindowsMenu"}
+      ]},
+      {"name": "Tools", "keytip": "ZT", "items": [
+        {"large": "view.measurement", "keytip": "ME"}
+      ]}
+    ]},
+    {"name": "Master Page", "keytip": "JM", "context": "Master Page", "color": "masterPage", "groups": [
+      {"name": "Master Page", "keytip": "ZM", "items": [
+        {"large": "mp.add", "keytip": "AD"},
+        {"large": "mp.dup", "keytip": "DU"},
+        {"large": "mp.rename", "keytip": "RN"},
+        {"large": "mp.delete", "keytip": "DE"}
+      ]},
+      {"name": "Layout", "keytip": "ZL", "items": [
+        {"large": "mp.twoPage", "keytip": "TP"},
+        {"large": {"id": "ribbon.applyTo", "text": "Apply To", "icon": "copy-check"}, "keytip": "AT", "menu": [
+          "mp.applyAll", "mp.applyCurrent"]}
+      ]},
+      {"name": "Header & Footer", "keytip": "ZH", "items": [
+        {"small": "ins.header", "keytip": "HD"},
+        {"small": "ins.footer", "keytip": "FT"},
+        {"small": "ins.pageNumber", "keytip": "PN"}
+      ]},
+      {"name": "Close", "keytip": "ZC", "items": [
+        {"large": "mp.close", "keytip": "CM"}
+      ]}
+    ]},
+    {"name": "Text Box", "keytip": "JX", "context": "Text Box Tools", "color": "textBox", "groups": [
+      {"name": "Text", "keytip": "ZT", "items": [
+        {"large": "tb.textFit", "keytip": "TF", "menu": ["fit.best", "fit.shrink", "fit.grow", "fit.none"]},
+        {"large": "tb.direction", "keytip": "TD"},
+        {"large": {"id": "ribbon.hyphenation", "text": "Hyphenation", "icon": "hyphenation"}, "keytip": "HY", "menu": [
+          "rev.hyphenation"]}
+      ]},
+      {"name": "Alignment", "keytip": "ZL", "items": [
+        {"row": [
+          {"icon": "valign.0", "keytip": "VT"},
+          {"icon": "para.left", "keytip": "AL"},
+          {"icon": "para.center", "keytip": "AC"},
+          {"icon": "para.right", "keytip": "AR"}]},
+        {"row": [
+          {"icon": "valign.1", "keytip": "VM"},
+          {"icon": "para.justify", "keytip": "AJ"},
+          {"icon": "para.distribute", "keytip": "AD"}]},
+        {"row": [{"icon": "valign.2", "keytip": "VB"}]},
+        {"large": {"id": "ribbon.columns", "text": "Columns", "icon": "columns-2"}, "keytip": "CO", "menu": [
+          "cols.1", "cols.2", "cols.3", "cols.4", "-", "cols.more"]},
+        {"large": {"id": "ribbon.textBoxMargins", "text": "Margins", "icon": "square-dashed"}, "keytip": "MG", "menu": [
+          "tbmargin.None", "tbmargin.Narrow", "tbmargin.Moderate", "tbmargin.Wide", "-", "cols.more"]}
+      ]},
+      {"name": "Linking", "keytip": "ZK", "items": [
+        {"large": "tb.link", "keytip": "CL"},
+        {"small": "tb.break", "keytip": "BK"},
+        {"small": "tb.prev", "keytip": "PV"},
+        {"small": "tb.next", "keytip": "NX"}
+      ]},
+      {"name": "Font", "keytip": "ZF", "items": [
+        {"row": [
+          {"widget": "fontCombo", "keytip": "FF"},
+          {"widget": "sizeCombo", "keytip": "FS"},
+          {"button": "fmt.grow", "keytip": "FG"},
+          {"button": "fmt.shrink", "keytip": "FK"}]},
+        {"row": [
+          {"icon": "fmt.bold", "keytip": "1"},
+          {"icon": "fmt.italic", "keytip": "2"},
+          {"icon": "fmt.underline", "keytip": "3"},
+          {"icon": "fmt.strike", "keytip": "4"},
+          {"icon": "fmt.sub", "keytip": "5"},
+          {"icon": "fmt.sup", "keytip": "6"},
+          {"widget": "textColor", "keytip": "FC"}]}
+      ]},
+      {"name": "Effects", "keytip": "ZE", "items": [
+        {"small": "tb.shadow", "keytip": "SD"},
+        {"small": "tb.outline", "keytip": "OL"},
+        {"small": "tb.emboss", "keytip": "EM"},
+        {"small": "tb.engrave", "keytip": "EG"},
+        {"row": [
+          {"widget": "textFill", "keytip": "TX"},
+          {"widget": "textOutline", "keytip": "TO"},
+          {"widget": "textGlow", "keytip": "TG"}]}
+      ]},
+      {"name": "Typography", "keytip": "ZY", "items": [
+        {"large": {"id": "ribbon.dropCap", "text": "Drop Cap", "icon": "a-large-small"}, "keytip": "DC", "menu": [
+          "dropcap.0", "dropcap.2", "dropcap.3", "dropcap.4", "dropcap.5", "-", "dropcap.custom"]},
+        {"small": {"id": "ribbon.numberStyle", "text": "Number Style", "icon": "hash"}, "keytip": "NS", "menu": [
+          "numstyle.0", "numstyle.1", "numstyle.2", "-", "numspacing.0", "numspacing.1", "numspacing.2"]},
+        {"small": {"id": "ribbon.ligatures", "text": "Ligatures", "icon": "link"}, "keytip": "LG", "menu": [
+          "lig.0", "lig.1", "lig.2"]},
+        {"small": {"id": "ribbon.stylisticSets", "text": "Stylistic Sets", "icon": "spline"}, "keytip": "SS", "menu": [
+          "ss.0", "ss.1", "ss.2", "ss.3", "ss.4", "ss.5", "ss.6", "ss.7", "ss.8", "ss.9", "ss.10", "ss.11", "ss.12", "ss.13",
+          "ss.14", "ss.15", "ss.16", "ss.17", "ss.18", "ss.19", "ss.20"]},
+        {"small": "tb.swash", "keytip": "SW"},
+        {"small": "tb.alternates", "keytip": "SA"},
+        {"small": "tb.trueSmallCaps", "keytip": "SM"}
+      ]},
+      {"use": "Arrange"},
+      {"use": "Size"}
+    ]},
+    {"name": "Shape Format", "keytip": "JD", "context": "Drawing Tools", "color": "shapeFormat", "groups": [
+      {"name": "Insert Shapes", "keytip": "ZI", "items": [
+        {"widget": "shapesButton", "keytip": "SH"},
+        {"row": [{"widget": "changeShapeButton", "keytip": "CH"}]},
+        {"small": "shape.editPoints", "keytip": "EP"},
+        {"small": "ins.textbox", "keytip": "TB"}
+      ]},
+      {"name": "Shape Styles", "keytip": "ZY", "launcher": "formatShape", "launcherTip": "Format Shape", "launcherKeytip": "FO", "items": [
+        {"widget": "shapeStyles", "keytip": "SG"},
+        {"row": [{"widget": "shapeFill", "keytip": "SF"}]},
+        {"row": [
+          {"widget": "shapeOutline", "keytip": "SO"},
+          {"dropdown": {"icon": "chevron-down", "tip": "Weight, dashes and arrows"}, "keytip": "SD", "menu": [
+            {"section": "Weight"}, "weight.0.25", "weight.0.5", "weight.0.75", "weight.1", "weight.1.5", "weight.2.25",
+            "weight.3", "weight.4.5", "weight.6", {"section": "Dashes"}, "dash.0", "dash.1", "dash.2", "dash.3", "dash.4",
+            "dash.5", "dash.6", "dash.7", {"section": "Arrows"}, "arrowEnd.0", "arrowEnd.1", "arrowEnd.2", "arrowEnd.3",
+            "arrowEnd.4", "arrowEnd.5", "arrowStart.0", "arrowStart.1", "arrowStart.2", "arrowStart.3", "arrowStart.4",
+            "arrowStart.5"]}]},
+        {"small": {"id": "ribbon.shapeEffects", "text": "Shape Effects", "icon": "sparkles"}, "keytip": "SE", "menu": [
+          {"submenu": "Shadow", "icon": "square", "menu": [
+            "shadow.0", "shadow.1", "shadow.2", "shadow.3", "shadow.4", "-", "shadow.options"]},
+          {"submenu": "Reflection", "menu": ["refl.0", "refl.1", "refl.2", "refl.3"]},
+          {"submenu": "Glow", "menu": ["glow.0", "glow.5", "glow.8", "glow.11", "glow.18"]},
+          {"submenu": "Soft Edges", "menu": ["soft.0", "soft.2", "soft.5", "soft.10", "soft.25"]},
+          {"submenu": "Bevel", "menu": ["bevel.0", "bevel.1", "bevel.2", "bevel.3", "bevel.4", "bevel.5", "bevel.6"]},
+          {"submenu": "3-D Rotation", "menu": [
+            "rot3d.No Rotation", "rot3d.Perspective Left", "rot3d.Perspective Right", "rot3d.Perspective Above",
+            "rot3d.Perspective Below", "rot3d.Off Axis"]}]}
+      ]},
+      {"name": "Lines", "keytip": "ZL", "items": [
+        {"small": "line.draw", "keytip": "LN"},
+        {"small": "line.arrow", "keytip": "LA"},
+        {"small": "line.double", "keytip": "LD"}
+      ]},
+      {"use": "Arrange"},
+      {"use": "Size"}
+    ]},
+    {"name": "Picture Format", "keytip": "JP", "context": "Picture Tools", "color": "pictureFormat", "groups": [
+      {"name": "Insert", "keytip": "ZI", "items": [
+        {"large": "pic.change", "keytip": "CP", "split": true, "menu": ["pic.change", "pic.remove"]},
+        {"large": "pic.swap", "keytip": "SW"},
+        {"large": "pic.arrangeThumbs", "keytip": "AT"}
+      ]},
+      {"name": "Adjust", "keytip": "ZJ", "items": [
+        {"large": {"id": "ribbon.corrections", "text": "Corrections", "icon": "sun-medium"}, "keytip": "CR", "menu": [
+          {"section": "Brightness / Contrast"},
+          {"submenu": "Brightness -40%", "menu": ["corr.-40.-40", "corr.-40.-20", "corr.-40.0", "corr.-40.20", "corr.-40.40"]},
+          {"submenu": "Brightness -20%", "menu": ["corr.-20.-40", "corr.-20.-20", "corr.-20.0", "corr.-20.20", "corr.-20.40"]},
+          {"submenu": "Brightness 0%", "menu": ["corr.0.-40", "corr.0.-20", "corr.0.0", "corr.0.20", "corr.0.40"]},
+          {"submenu": "Brightness +20%", "menu": ["corr.20.-40", "corr.20.-20", "corr.20.0", "corr.20.20", "corr.20.40"]},
+          {"submenu": "Brightness +40%", "menu": ["corr.40.-40", "corr.40.-20", "corr.40.0", "corr.40.20", "corr.40.40"]},
+          "-",
+          "obj.format"]},
+        {"large": {"id": "ribbon.recolor", "text": "Recolor", "icon": "palette"}, "keytip": "RC", "menu": [
+          "recolor.0", "recolor.1", "recolor.2", "recolor.3", "recolor.4", "-", "recolor.slot1", "recolor.slot2",
+          "recolor.slot3", "recolor.slot4", "recolor.slot5", "-", "pic.transparent"]},
+        {"small": "pic.compress", "keytip": "CM"},
+        {"small": "pic.reset", "keytip": "RP"},
+        {"small": "pic.toShapes", "keytip": "CS"},
+        {"small": "obj.transparency", "keytip": "TR"}
+      ]},
+      {"name": "Picture Styles", "keytip": "ZP", "items": [
+        {"widget": "pictureStyles", "keytip": "PS"},
+        {"row": [
+          {"widget": "pictureBorder", "keytip": "PB"},
+          {"dropdown": {"icon": "chevron-down"}, "keytip": "PD", "menu": [
+            "weight.0.25", "weight.0.5", "weight.0.75", "weight.1", "weight.1.5", "weight.2.25", "weight.3", "weight.4.5",
+            "weight.6", "-", "dash.0", "dash.1", "dash.2", "dash.3", "dash.4", "dash.5", "dash.6", "dash.7"]}]},
+        {"small": {"id": "ribbon.pictureEffects", "text": "Picture Effects", "icon": "sparkles"}, "keytip": "PE", "menu": [
+          {"submenu": "Shadow", "menu": ["shadow.0", "shadow.1", "shadow.2", "shadow.3", "shadow.4"]},
+          {"submenu": "Reflection", "menu": ["refl.0", "refl.1", "refl.2", "refl.3"]},
+          {"submenu": "Glow", "menu": ["glow.0", "glow.5", "glow.8", "glow.11", "glow.18"]},
+          {"submenu": "Soft Edges", "menu": ["soft.0", "soft.2", "soft.5", "soft.10", "soft.25"]},
+          {"submenu": "Bevel", "menu": ["bevel.0", "bevel.1", "bevel.2", "bevel.3", "bevel.4", "bevel.5", "bevel.6"]},
+          {"submenu": "3-D Rotation", "menu": [
+            "rot3d.No Rotation", "rot3d.Perspective Left", "rot3d.Perspective Right", "rot3d.Perspective Above",
+            "rot3d.Perspective Below", "rot3d.Off Axis"]}]},
+        {"small": "pic.caption", "keytip": "CA"},
+        {"row": [{"widget": "pictureShapeButton", "keytip": "PH"}]}
+      ]},
+      {"use": "Arrange"},
+      {"name": "Crop", "keytip": "ZC", "items": [
+        {"large": "pic.crop", "keytip": "CO"},
+        {"small": "pic.fit", "keytip": "FT"},
+        {"small": "pic.fill", "keytip": "FL"},
+        {"row": [{"widget": "cropToShapeButton", "keytip": "CT"}]},
+        {"small": "pic.clearCrop", "keytip": "CC"}
+      ]},
+      {"use": "Size"}
+    ]},
+    {"name": "Table Design", "keytip": "JT", "context": "Table Tools", "color": "table", "groups": [
+      {"name": "Table Formats", "keytip": "ZF", "items": [
+        {"widget": "tableFormats", "keytip": "TF"}
+      ]},
+      {"name": "Fill", "keytip": "ZL", "items": [
+        {"row": [{"widget": "cellFill", "keytip": "CF"}]}
+      ]},
+      {"name": "Borders", "keytip": "ZB", "items": [
+        {"row": [{"widget": "borderColor", "keytip": "LC"}]},
+        {"row": [{"widget": "borderWeight", "keytip": "LW"}]},
+        {"large": {"id": "ribbon.borders", "text": "Borders", "icon": "grid-2x2"}, "keytip": "BR", "menu": [
+          "border.all", "border.outside", "border.inside", "border.none", "border.top", "border.bottom", "border.left",
+          "border.right"]}
+      ]},
+      {"name": "Alignment", "keytip": "ZA", "items": [
+        {"large": {"id": "ribbon.diagonals", "text": "Diagonals", "icon": "slash"}, "keytip": "DG", "menu": [
+          "tbl.diagDown", "tbl.diagUp", "tbl.diagNone"]}
+      ]}
+    ]},
+    {"name": "Table Layout", "keytip": "JL", "context": "Table Tools", "color": "table", "groups": [
+      {"name": "Table", "keytip": "ZT", "items": [
+        {"large": {"id": "ribbon.tableSelect", "text": "Select", "icon": "mouse-pointer-2"}, "keytip": "SL", "menu": [
+          "tbl.selectCell", "tbl.selectTable"]},
+        {"large": "view.gridlines", "keytip": "VG"}
+      ]},
+      {"name": "Rows & Columns", "keytip": "ZR", "items": [
+        {"large": {"id": "ribbon.tableDelete", "text": "Delete", "icon": "trash-2"}, "keytip": "DL", "menu": [
+          "tbl.delRow", "tbl.delCol", "tbl.delTable"]},
+        {"large": "tbl.insAbove", "keytip": "IA"},
+        {"large": "tbl.insBelow", "keytip": "IB"},
+        {"large": "tbl.insLeft", "keytip": "IL"},
+        {"large": "tbl.insRight", "keytip": "IR"}
+      ]},
+      {"name": "Merge", "keytip": "ZM", "items": [
+        {"large": "tbl.merge", "keytip": "MC"},
+        {"large": "tbl.split", "keytip": "SC"}
+      ]},
+      {"name": "Alignment", "keytip": "ZN", "items": [
+        {"row": [
+          {"icon": "valign.0", "keytip": "VT"},
+          {"icon": "para.left", "keytip": "AL"},
+          {"icon": "para.center", "keytip": "AC"},
+          {"icon": "para.right", "keytip": "AR"}]},
+        {"row": [{"icon": "valign.1", "keytip": "VM"}, {"icon": "para.justify", "keytip": "AJ"}]},
+        {"row": [{"icon": "valign.2", "keytip": "VB"}]},
+        {"large": {"id": "ribbon.cellMargins", "text": "Cell Margins", "icon": "square-dashed"}, "keytip": "CM", "menu": [
+          "tbmargin.None", "tbmargin.Narrow", "tbmargin.Moderate", "tbmargin.Wide"]}
+      ]},
+      {"name": "Size", "keytip": "ZS", "items": [
+        {"small": "tbl.grow", "keytip": "GR"},
+        {"small": "tbl.distributeRows", "keytip": "DR"},
+        {"small": "tbl.distributeCols", "keytip": "DC"}
+      ]},
+      {"use": "Arrange"}
+    ]},
+    {"name": "Text Art Format", "keytip": "JA", "context": "Text Art Tools", "color": "textArt", "groups": [
+      {"name": "Text Art Text", "keytip": "ZT", "items": [
+        {"large": "wa.edit", "keytip": "ED"},
+        {"small": {"id": "ribbon.textArtSpacing", "text": "Spacing", "icon": "move-horizontal"}, "keytip": "SP", "menu": [
+          "waspace.vt", "waspace.t", "waspace.n", "waspace.l", "waspace.vl"]},
+        {"small": "wa.even", "keytip": "EH"},
+        {"small": "wa.vertical", "keytip": "VT"},
+        {"small": {"id": "ribbon.textArtAlign", "text": "Align Text", "icon": "align-center"}, "keytip": "AT", "menu": [
+          "waalign.0", "waalign.1", "waalign.2", "waalign.3", "waalign.4", "waalign.5"]}
+      ]},
+      {"name": "Text Art Styles", "keytip": "ZY", "items": [
+        {"widget": "textArtStyles", "keytip": "SG"},
+        {"row": [{"widget": "shapeFill", "keytip": "SF"}]},
+        {"row": [{"widget": "shapeOutline", "keytip": "SO"}]},
+        {"row": [{"widget": "textArtShapeButton", "keytip": "CS"}]}
+      ]},
+      {"name": "Effects", "keytip": "ZE", "items": [
+        {"large": {"id": "ribbon.shadowEffects", "text": "Shadow Effects", "icon": "copy"}, "keytip": "SE", "menu": [
+          "shadow.0", "shadow.1", "shadow.2", "shadow.3", "shadow.4", "-", "shadow.options"]},
+        {"large": {"id": "ribbon.threeDEffects", "text": "3-D Effects", "icon": "box"}, "keytip": "TD", "menu": [
+          "rot3d.No Rotation", "rot3d.Perspective Left", "rot3d.Perspective Right", "rot3d.Perspective Above",
+          "rot3d.Perspective Below", "rot3d.Off Axis", "-", "bevel.0", "bevel.1", "bevel.2", "bevel.3", "bevel.4", "bevel.5",
+          "bevel.6"]}
+      ]},
+      {"use": "Arrange"},
+      {"use": "Size"}
+    ]}
+  ]
+}

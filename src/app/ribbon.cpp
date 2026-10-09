@@ -149,6 +149,9 @@ QToolButton *ribbonButton(QAction *a, bool large, QWidget *parent)
     return b;
 }
 
+void setKeytip(QObject *w, const QString &k) { w->setProperty("keytip", k); }
+QString keytip(const QObject *w) { return w->property("keytip").toString(); }
+
 // ---------------- group ----------------
 RibbonGroup::RibbonGroup(const QString &title, QWidget *parent) : QFrame(parent), m_title(title)
 {
@@ -245,6 +248,22 @@ void RibbonGroup::setLauncher(const std::function<void()> &fn, const QString &ti
     m_launcher->setToolTip(tip.isEmpty() ? QStringLiteral("%1 Settings").arg(m_title) : tip);
     QObject::disconnect(m_launcher, nullptr, nullptr, nullptr);
     connect(m_launcher, &QToolButton::clicked, this, [fn] { fn(); });
+}
+
+static void collectControls(const QLayout *l, QList<QWidget *> &out)
+{
+    for (int i = 0; i < l->count(); ++i) {
+        QLayoutItem *it = l->itemAt(i);
+        if (QWidget *w = it->widget()) out << w;
+        else if (QLayout *sub = it->layout()) collectControls(sub, out);
+    }
+}
+
+QList<QWidget *> RibbonGroup::controls() const
+{
+    QList<QWidget *> out;
+    collectControls(layout(), out);
+    return out;
 }
 
 void RibbonGroup::paintEvent(QPaintEvent *e)
@@ -418,7 +437,7 @@ protected:
         x += out.last().width() + 4;
         for (const auto &t : m_r->m_tabs) {
             if (!t.visible) { out << QRect(); continue; }
-            const int w = fm.horizontalAdvance(t.name) + 26 + (t.group.isEmpty() ? 0 : 12);
+            const int w = fm.horizontalAdvance(t.title) + 26 + (t.group.isEmpty() ? 0 : 12);
             out << QRect(x, 19, w, 26);
             x += w + 4;
         }
@@ -496,7 +515,7 @@ protected:
             if (cur) tf.setWeight(QFont::DemiBold);
             p.setFont(tf);
             p.setPen(cur ? (dark() ? base.lighter(140) : base.darker(t.group.isEmpty() ? 100 : 130)) : uiText());
-            p.drawText(tr, Qt::AlignCenter, t.name);
+            p.drawText(tr, Qt::AlignCenter, t.title);
         }
         p.setFont(font());
         // Collapse chevron.
@@ -587,7 +606,7 @@ Ribbon::Ribbon(QWidget *parent) : QWidget(parent)
     m_stack->setPalette(pal);
 }
 
-RibbonTab *Ribbon::addTab(const QString &name, const QString &contextGroup, const QColor &color)
+RibbonTab *Ribbon::addTab(const QString &name, const QString &contextGroup, const QColor &color, const QString &title)
 {
     auto *page = new RibbonTab();
     auto *scroll = new QScrollArea();
@@ -603,9 +622,15 @@ RibbonTab *Ribbon::addTab(const QString &name, const QString &contextGroup, cons
     page->setAutoFillBackground(true);
     page->setPalette(pal);
     m_stack->addWidget(scroll);
-    m_tabs.push_back(Tab{name, contextGroup, color, page, scroll, contextGroup.isEmpty()});
+    m_tabs.push_back(Tab{name, contextGroup, color, page, scroll, contextGroup.isEmpty(), title.isEmpty() ? name : title, QString()});
     m_header->update();
     return page;
+}
+
+void Ribbon::setTabKeytip(RibbonTab *t, const QString &k)
+{
+    for (Tab &tab : m_tabs)
+        if (tab.page == t) tab.keytip = k;
 }
 
 void Ribbon::setContextVisible(const QString &group, bool visible)
@@ -645,7 +670,7 @@ RibbonTab *Ribbon::tab(const QString &name) const
     return nullptr;
 }
 
-void Ribbon::addQuickAccess(QAction *a)
+QToolButton *Ribbon::addQuickAccess(QAction *a)
 {
     auto *b = new QToolButton(m_header);
     b->setDefaultAction(a);
@@ -656,7 +681,10 @@ void Ribbon::addQuickAccess(QAction *a)
     m_header->qatButtons << b;
     m_header->layoutQat();
     m_header->update();
+    return b;
 }
+
+QList<QToolButton *> Ribbon::quickAccessButtons() const { return QList<QToolButton *>(m_header->qatButtons.begin(), m_header->qatButtons.end()); }
 
 void Ribbon::setMinimized(bool m)
 {
@@ -689,7 +717,13 @@ QString describeMenu(const QMenu *m, int depth = 0)
     return parts.join(QStringLiteral(", "));
 }
 
-QString describeWidget(const QWidget *w)
+QString keytipSuffix(const QObject *o, bool on, const char *label = "keytip")
+{
+    const QString k = on && o ? keytip(o) : QString();
+    return k.isEmpty() ? QString() : QStringLiteral(" %1=%2").arg(QLatin1String(label), k);
+}
+
+QString describeWidget(const QWidget *w, bool keytips)
 {
     QString s = QString::fromLatin1(w->metaObject()->className());
     if (auto *b = qobject_cast<const QToolButton *>(w)) {
@@ -704,36 +738,41 @@ QString describeWidget(const QWidget *w)
         s += QStringLiteral(" \"%1\"").arg(l->text());
     }
     if (!w->toolTip().isEmpty()) s += QStringLiteral(" tip=\"%1\"").arg(w->toolTip());
-    return s;
+    return s + keytipSuffix(w, keytips);
 }
 
-void describeLayout(const QLayout *l, int depth, QStringList &out)
+void describeLayout(const QLayout *l, int depth, QStringList &out, bool keytips)
 {
     for (int i = 0; i < l->count(); ++i) {
         QLayoutItem *it = l->itemAt(i);
         const QString pad(depth * 2, QLatin1Char(' '));
-        if (QWidget *w = it->widget()) out << pad + describeWidget(w);
+        if (QWidget *w = it->widget()) out << pad + describeWidget(w, keytips);
         else if (QLayout *sub = it->layout()) {
             out << pad + QString::fromLatin1(qobject_cast<QHBoxLayout *>(sub) ? "row" : "column");
-            describeLayout(sub, depth + 1, out);
+            describeLayout(sub, depth + 1, out, keytips);
         }
     }
 }
 } // namespace
 
-QString Ribbon::describe() const
+QString Ribbon::describe(bool keytips) const
 {
     QStringList out;
+    if (keytips && !m_fileKeytip.isEmpty()) out << QStringLiteral("file keytip=") + m_fileKeytip;
     QStringList qat;
-    for (const QToolButton *b : m_header->qatButtons) qat << describeAction(b->defaultAction());
+    for (const QToolButton *b : m_header->qatButtons) qat << describeAction(b->defaultAction()) + keytipSuffix(b, keytips);
     out << QStringLiteral("quick access: ") + qat.join(QStringLiteral(", "));
     for (const Tab &t : m_tabs) {
-        out << QStringLiteral("tab %1%2").arg(t.name, t.group.isEmpty() ? QString() : QStringLiteral(" (%1, %2)").arg(t.group, t.color.name()));
+        QString line = QStringLiteral("tab %1%2").arg(t.name, t.group.isEmpty() ? QString() : QStringLiteral(" (%1, %2)").arg(t.group, t.color.name()));
+        if (keytips && !t.keytip.isEmpty()) line += QStringLiteral(" keytip=") + t.keytip;
+        out << line;
         for (const RibbonGroup *g : t.page->findChildren<RibbonGroup *>(Qt::FindDirectChildrenOnly)) {
             QString head = QStringLiteral("  group %1").arg(g->title());
-            if (auto *l = g->findChild<QToolButton *>(QStringLiteral("launcher"), Qt::FindDirectChildrenOnly)) head += QStringLiteral(" launcher=\"%1\"").arg(l->toolTip());
+            const QToolButton *l = g->findChild<QToolButton *>(QStringLiteral("launcher"), Qt::FindDirectChildrenOnly);
+            if (l) head += QStringLiteral(" launcher=\"%1\"").arg(l->toolTip());
+            head += keytipSuffix(g, keytips) + keytipSuffix(l, keytips, "launcher-keytip");
             out << head;
-            describeLayout(g->layout(), 2, out);
+            describeLayout(g->layout(), 2, out, keytips);
         }
     }
     return out.join(QLatin1Char('\n')) + QLatin1Char('\n');

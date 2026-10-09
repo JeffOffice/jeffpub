@@ -17,6 +17,12 @@ class QLabel;
 
 namespace jp {
 
+// The KeyTip of a ribbon control, group, launcher or tab: the one or two
+// letters or digits that reach it from the keyboard. It is a dynamic property
+// of the widget so the KeyTip display can read it straight from the tree.
+void setKeytip(QObject *w, const QString &k);
+QString keytip(const QObject *w);
+
 class RibbonGroup : public QFrame {
     Q_OBJECT
 public:
@@ -28,7 +34,11 @@ public:
     void addWidget(QWidget *w);                       // its own column
     void addSeparator();
     void setLauncher(const std::function<void()> &fn, const QString &tip = QString());
+    QToolButton *launcher() const { return m_launcher; }
     QString title() const { return m_title; }
+    // Every control the group lays out, in order (rows and columns
+    // flattened; the launcher sits outside the layout and isn't one).
+    QList<QWidget *> controls() const;
 
 protected:
     void paintEvent(QPaintEvent *e) override;
@@ -49,6 +59,7 @@ class RibbonTab : public QWidget {
 public:
     explicit RibbonTab(QWidget *parent = nullptr);
     RibbonGroup *addGroup(const QString &title);
+    QList<RibbonGroup *> groups() const { return m_groups; }
     void finish();
     QSize minimumSizeHint() const override;
     int collapsedCount() const;
@@ -74,17 +85,32 @@ class Ribbon : public QWidget {
     Q_OBJECT
 public:
     explicit Ribbon(QWidget *parent = nullptr);
-    RibbonTab *addTab(const QString &name, const QString &contextGroup = QString(), const QColor &color = QColor());
+    // `name` identifies the tab in code (tab(), setContextVisible()); `title`
+    // is what the header shows, the name translated (the name when empty).
+    RibbonTab *addTab(const QString &name, const QString &contextGroup = QString(), const QColor &color = QColor(),
+                      const QString &title = QString());
     void setContextVisible(const QString &group, bool visible);
     void showTab(RibbonTab *t);
     RibbonTab *current() const;
     RibbonTab *tab(const QString &name) const;
-    void addQuickAccess(QAction *a);
+    QToolButton *addQuickAccess(QAction *a);
     void setMinimized(bool m);
     bool isMinimized() const { return m_minimized; }
+    // The tabs in order, for KeyTips and tests.
+    int tabCount() const { return int(m_tabs.size()); }
+    RibbonTab *tabAt(int i) const { return m_tabs.value(i).page; }
+    QString tabName(int i) const { return m_tabs.value(i).name; }
+    QString tabTitle(int i) const { return m_tabs.value(i).title; }
+    QString tabKeytip(int i) const { return m_tabs.value(i).keytip; }
+    void setTabKeytip(RibbonTab *t, const QString &k);
+    // The File button isn't a tab; it only records its KeyTip.
+    QString fileKeytip() const { return m_fileKeytip; }
+    void setFileKeytip(const QString &k) { m_fileKeytip = k; }
+    QList<QToolButton *> quickAccessButtons() const;
     // Everything the ribbon holds, one control per line: tabs, groups, each
-    // control's kind, command and menu, in order (tests compare it).
-    QString describe() const;
+    // control's kind, command and menu, in order (tests compare it). With
+    // `keytips`, each line that has a KeyTip ends with it.
+    QString describe(bool keytips = false) const;
 
 Q_SIGNALS:
     void fileClicked();
@@ -98,12 +124,14 @@ private:
         RibbonTab *page = nullptr;
         QScrollArea *scroll = nullptr;
         bool visible = true;
+        QString title, keytip;
     };
     QVector<Tab> m_tabs;
     int m_current = 0;
     RibbonHeader *m_header;
     QStackedWidget *m_stack;
     QList<QAction *> m_qat;
+    QString m_fileKeytip;
     bool m_minimized = false;
 };
 

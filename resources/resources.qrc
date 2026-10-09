@@ -1545,5 +1545,6 @@
   <qresource prefix="/">
     <file>app.png</file>
     <file>icon-tags.txt</file>
+    <file>ribbon.json</file>
   </qresource>
 </RCC>
