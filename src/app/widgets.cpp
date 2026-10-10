@@ -678,6 +678,8 @@ GalleryButton::GalleryButton(const QIcon &ic, const QString &text, const QSize &
     setIcon(ic);
     setText(text);
     setAccessibleName(text);
+    setAccessibleDescription(tr("Opens a gallery to choose from: the arrow keys move in it, and Enter chooses."));
+    setWhatsThis(accessibleDescription());
     setAutoRaise(true);
     setFocusPolicy(Qt::TabFocus);   // the keyboard reaches it; a click leaves the focus in the text
     setPopupMode(QToolButton::InstantPopup);
@@ -831,6 +833,8 @@ public:
 FontCombo::FontCombo(QWidget *parent) : QComboBox(parent)
 {
     setAccessibleName(tr("Font"));
+    setAccessibleDescription(tr("Type or choose the font of the selected text."));
+    setWhatsThis(accessibleDescription());
     setEditable(true);
     setInsertPolicy(QComboBox::NoInsert);
     setMinimumWidth(150);
@@ -898,6 +902,8 @@ void FontCombo::setCurrentFamily(const QString &family)
 SizeCombo::SizeCombo(QWidget *parent) : QComboBox(parent)
 {
     setAccessibleName(tr("Font Size"));
+    setAccessibleDescription(tr("Type or choose the size, in points, of the selected text."));
+    setWhatsThis(accessibleDescription());
     setEditable(true);
     setInsertPolicy(QComboBox::NoInsert);
     setFixedWidth(70);

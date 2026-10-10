@@ -208,6 +208,7 @@ void MainWindow::ribbonControlParts(RibbonParts &parts)
         }
         auto *wb = new QToolButton();
         wb->setText(tr("Line Weight"));
+        wb->setToolTip(tr("The weight of the border lines that Borders draws."));
         wb->setIcon(icon("minus"));
         wb->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
         wb->setPopupMode(QToolButton::InstantPopup);
@@ -949,6 +950,8 @@ void MainWindow::buildStatusBar()
     m_zoomSlider = new QSlider(Qt::Horizontal);
     m_zoomSlider->setRange(-48, 57);   // 1.05^n: 10% .. 1600%
     m_zoomSlider->setFixedWidth(140);
+    m_zoomSlider->setAccessibleName(tr("Zoom"));
+    m_zoomSlider->setAccessibleDescription(tr("Left and Right arrows zoom out and in."));
     connect(m_zoomSlider, &QSlider::valueChanged, this, [this](int v) {
         m_canvas->zoomToFit(Canvas::Fit::None);
         m_canvas->setZoom(std::pow(1.05, v));

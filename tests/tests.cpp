@@ -1552,14 +1552,16 @@ private Q_SLOTS:
         jp::MainWindow w;
         auto *r = w.findChild<jp::Ribbon *>();
         QVERIFY(r);
-        QStringList unnamed, unreachable;
+        QStringList unnamed, unreachable, undescribed;
         int checked = 0;
         for (QWidget *c : r->findChildren<QWidget *>()) {
-            const bool control = qobject_cast<QAbstractButton *>(c) || qobject_cast<QComboBox *>(c) || qobject_cast<QAbstractSpinBox *>(c)
-                                 || qobject_cast<QAbstractItemView *>(c) || qobject_cast<QSlider *>(c);
             QWidget *pw = c->parentWidget();
+            // A box one types in hands the focus to its typing field, which
+            // Windows' screen readers name on its own.
+            const bool typingField = c->inherits("QLineEdit") && pw && pw->inherits("QComboBox");
+            const bool control = qobject_cast<QAbstractButton *>(c) || qobject_cast<QComboBox *>(c) || qobject_cast<QAbstractSpinBox *>(c)
+                                 || qobject_cast<QAbstractItemView *>(c) || qobject_cast<QSlider *>(c) || typingField;
             if (!control || !pw || qobject_cast<QAbstractItemView *>(pw) || pw->inherits("QComboBoxPrivateContainer")) continue;   // a combo's own list
-            if (c->inherits("QLineEdit") && c->parentWidget() && (c->parentWidget()->inherits("QComboBox") || c->parentWidget()->inherits("QAbstractSpinBox"))) continue;
             ++checked;
             QAccessibleInterface *iface = QAccessible::queryAccessibleInterface(c);
             QVERIFY(iface);
@@ -1570,11 +1572,43 @@ private Q_SLOTS:
             // Boxes, spin boxes and lists need a name of their own: some
             // systems read their current text instead, others nothing.
             if (name.isEmpty() || (!qobject_cast<QAbstractButton *>(c) && c->accessibleName().isEmpty())) unnamed << where;
+            if (typingField) continue;
             if (!(c->focusPolicy() & Qt::TabFocus) && c->objectName() != QLatin1String("jpRibbonTab")) unreachable << where + QStringLiteral(" [") + name + QLatin1Char(']');
+            // Windows' screen readers read Qt's help text; some read nothing
+            // else of a control's description.
+            if (iface->text(QAccessible::Help).trimmed().isEmpty()) undescribed << where + QStringLiteral(" [") + name + QLatin1Char(']');
         }
         QVERIFY2(checked > 300, qPrintable(QString::number(checked)));
         QVERIFY2(unnamed.isEmpty(), qPrintable(QStringLiteral("no name: ") + unnamed.join(QStringLiteral("; "))));
         QVERIFY2(unreachable.isEmpty(), qPrintable(QStringLiteral("no keyboard focus: ") + unreachable.join(QStringLiteral("; "))));
+        QVERIFY2(undescribed.isEmpty(), qPrintable(QStringLiteral("no description: ") + undescribed.join(QStringLiteral("; "))));
+    }
+
+    // Outside the ribbon too: everything the keyboard stops on has a name,
+    // and nothing that only holds controls takes a stop (Windows' screen
+    // readers found the page, its thumbnails, the zoom slider, and the
+    // font boxes' typing fields unnamed, and the ribbon's scroller empty).
+    void windowControlsAreNamed()
+    {
+        jp::MainWindow w;
+        QStringList unnamed;
+        int checked = 0;
+        for (QWidget *c : w.findChildren<QWidget *>()) {
+            if (!(c->focusPolicy() & Qt::TabFocus) || c->focusProxy()) continue;
+            bool inBackstage = false;
+            for (QWidget *a = c; a; a = a->parentWidget()) inBackstage |= a->inherits("jp::Backstage") || a->inherits("QMenu");
+            if (inBackstage) continue;
+            QWidget *pw = c->parentWidget();
+            if (pw && (qobject_cast<QAbstractItemView *>(pw) || pw->inherits("QComboBoxPrivateContainer"))) continue;   // a list's own parts
+            ++checked;
+            QAccessibleInterface *iface = QAccessible::queryAccessibleInterface(c);
+            QVERIFY(iface);
+            if (iface->text(QAccessible::Name).trimmed().isEmpty())
+                unnamed << QStringLiteral("%1 %2 in %3").arg(QString::fromLatin1(c->metaObject()->className()), c->objectName(),
+                                                            pw ? QString::fromLatin1(pw->metaObject()->className()) : QString());
+        }
+        QVERIFY2(checked > 300, qPrintable(QString::number(checked)));
+        QVERIFY2(unnamed.isEmpty(), qPrintable(QStringLiteral("no name: ") + unnamed.join(QStringLiteral("; "))));
     }
 
     // KeyTips: Alt shows letters on the top row, a tab's letter opens it and

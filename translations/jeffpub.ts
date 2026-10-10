@@ -439,7 +439,17 @@ Back page story	4</source>
 <context>
     <name>Canvas</name>
     <message>
-        <location filename="../src/canvas/canvas.cpp" line="+410"/>
+        <location filename="../src/canvas/canvas.cpp" line="+108"/>
+        <source>Page</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Tab selects the next object, the arrow keys move it, Enter edits its text, and Delete removes it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+310"/>
         <source>Catalog area: %1 per page</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3992,7 +4002,7 @@ Open them with your email program to send.</source>
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../src/app/mainwindow.cpp" line="+584"/>
+        <location filename="../src/app/mainwindow.cpp" line="+595"/>
         <source>A picture on page %1 has low resolution (%2 ppi; printers ask for 300).</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5974,7 +5984,7 @@ Download it from %2 now? (%3, once.)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/ribbon.cpp" line="+431"/>
+        <location filename="../src/app/ribbon.cpp" line="+434"/>
         <source>File</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5984,12 +5994,12 @@ Download it from %2 now? (%3, once.)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+151"/>
+        <location line="+152"/>
         <source>Ribbon tabs</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+44"/>
         <source>Ribbon tab</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5999,13 +6009,23 @@ Download it from %2 now? (%3, once.)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+13"/>
         <source>Expand the Ribbon</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Collapse the Ribbon</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Shows the ribbon&apos;s commands again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Shows only the tab names, leaving more room for the page.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -8094,7 +8114,7 @@ Desktop publishing</source>
 <context>
     <name>Widgets</name>
     <message>
-        <location filename="../src/app/widgets.cpp" line="+1063"/>
+        <location filename="../src/app/widgets.cpp" line="+1069"/>
         <source>Standard</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9122,7 +9142,7 @@ Desktop publishing</source>
 <context>
     <name>jp::CatalogPane</name>
     <message>
-        <location filename="../src/app/taskpane.cpp" line="+581"/>
+        <location filename="../src/app/taskpane.cpp" line="+583"/>
         <source>Choose the list of products or items (a spreadsheet, a CSV file or a list you type).</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9228,7 +9248,7 @@ Source: %3</source>
 <context>
     <name>jp::ColorButton</name>
     <message>
-        <location filename="../src/app/widgets.cpp" line="-936"/>
+        <location filename="../src/app/widgets.cpp" line="-942"/>
         <source>Applies the color shown; Down arrow or F4 opens more colors.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9372,7 +9392,7 @@ Source: %3</source>
 <context>
     <name>jp::Editor</name>
     <message>
-        <location filename="../src/app/editor.cpp" line="+102"/>
+        <location filename="../src/app/editor.cpp" line="+104"/>
         <source>Publication1</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9755,12 +9775,17 @@ Source: %3</source>
 <context>
     <name>jp::FontCombo</name>
     <message>
-        <location filename="../src/app/widgets.cpp" line="+652"/>
+        <location filename="../src/app/widgets.cpp" line="+654"/>
         <source>Font</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+1"/>
+        <source>Type or choose the font of the selected text.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+32"/>
         <source>Scheme Fonts</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9773,7 +9798,7 @@ Source: %3</source>
 <context>
     <name>jp::Gallery</name>
     <message>
-        <location line="-406"/>
+        <location line="-410"/>
         <source>Gallery</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9790,6 +9815,14 @@ Source: %3</source>
     <message>
         <location line="+1"/>
         <source>Show all</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>jp::GalleryButton</name>
+    <message>
+        <location line="+192"/>
+        <source>Opens a gallery to choose from: the arrow keys move in it, and Enter chooses.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -9932,13 +9965,18 @@ Source: %3</source>
 <context>
     <name>jp::MainWindow</name>
     <message>
-        <location filename="../src/app/mainwindow.cpp" line="-973"/>
+        <location filename="../src/app/mainwindow.cpp" line="-980"/>
         <location filename="../src/app/mainwindow_actions.cpp" line="+602"/>
         <source>%1 (%2)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+17"/>
+        <source>%1 (Recovered)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>%1%2 - JeffPub</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9990,12 +10028,12 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="+9"/>
-        <location line="+766"/>
+        <location line="+770"/>
         <source>Saved %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-755"/>
+        <location line="-759"/>
         <source>JeffPub Publication (*.jpub)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10007,13 +10045,13 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+159"/>
+        <location line="+163"/>
         <location line="+170"/>
         <source>PDF (*.pdf)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-329"/>
+        <location line="-333"/>
         <source>JeffPub Template (*.jpub)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10041,12 +10079,12 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     <message>
         <location line="+40"/>
         <location line="+4"/>
-        <location line="+45"/>
+        <location line="+44"/>
         <source>Recover Unsaved Work</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-49"/>
+        <location line="-48"/>
         <source>There&apos;s no unsaved work to recover.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10089,13 +10127,13 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+16"/>
         <source>JeffPub can&apos;t open the copy of &quot;%1&quot;.
 %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+45"/>
         <source>Export PDF/A</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10457,8 +10495,9 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="+33"/>
-        <location filename="../src/app/mainwindow_ribbon.cpp" line="+257"/>
+        <location filename="../src/app/mainwindow_ribbon.cpp" line="+258"/>
         <location line="+1"/>
+        <location line="+694"/>
         <source>Zoom</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10588,7 +10627,7 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="-151"/>
-        <location filename="../src/app/mainwindow_ribbon.cpp" line="+62"/>
+        <location filename="../src/app/mainwindow_ribbon.cpp" line="-632"/>
         <location line="+1"/>
         <source>Shapes</source>
         <translation type="unfinished"></translation>
@@ -11180,7 +11219,7 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../src/app/mainwindow_ribbon.cpp" line="+384"/>
+        <location filename="../src/app/mainwindow_ribbon.cpp" line="+386"/>
         <source>Group</source>
         <translation type="unfinished"></translation>
     </message>
@@ -11485,7 +11524,7 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="+4"/>
-        <location filename="../src/app/mainwindow_ribbon.cpp" line="-464"/>
+        <location filename="../src/app/mainwindow_ribbon.cpp" line="-466"/>
         <source>No Background</source>
         <translation type="unfinished"></translation>
     </message>
@@ -12031,7 +12070,7 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
     <message>
         <location line="+2"/>
         <location line="+57"/>
-        <location filename="../src/app/mainwindow_ribbon.cpp" line="-101"/>
+        <location filename="../src/app/mainwindow_ribbon.cpp" line="-102"/>
         <source>%1 pt</source>
         <translation type="unfinished"></translation>
     </message>
@@ -12671,7 +12710,7 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
     </message>
     <message>
         <location line="+0"/>
-        <location filename="../src/app/mainwindow_ribbon.cpp" line="+193"/>
+        <location filename="../src/app/mainwindow_ribbon.cpp" line="+194"/>
         <source>Picture Shape</source>
         <translation type="unfinished"></translation>
     </message>
@@ -12906,7 +12945,7 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/mainwindow_ribbon.cpp" line="-232"/>
+        <location filename="../src/app/mainwindow_ribbon.cpp" line="-233"/>
         <source>Font Color</source>
         <translation type="unfinished"></translation>
     </message>
@@ -12964,7 +13003,12 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+13"/>
+        <source>The weight of the border lines that Borders draws.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>Shape Height</source>
         <translation type="unfinished"></translation>
     </message>
@@ -13269,7 +13313,12 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+124"/>
+        <location line="+77"/>
+        <source>Left and Right arrows zoom out and in.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+49"/>
         <source>Undo %1 (Ctrl+Z)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -13297,7 +13346,17 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
 <context>
     <name>jp::PagesPane</name>
     <message>
-        <location filename="../src/app/pagespane.cpp" line="+174"/>
+        <location filename="../src/app/pagespane.cpp" line="+88"/>
+        <source>Pages</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The publication&apos;s pages; Up and Down choose one, which the page area then shows.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+87"/>
         <source>Master Pages</source>
         <translation type="unfinished"></translation>
     </message>
@@ -13328,7 +13387,7 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
 <context>
     <name>jp::Ribbon</name>
     <message>
-        <location filename="../src/app/ribbon.cpp" line="+63"/>
+        <location filename="../src/app/ribbon.cpp" line="+64"/>
         <source>Ribbon</source>
         <translation type="unfinished"></translation>
     </message>
@@ -13336,7 +13395,7 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
 <context>
     <name>jp::RibbonGroup</name>
     <message>
-        <location line="-445"/>
+        <location line="-453"/>
         <source>%1 Settings</source>
         <translation type="unfinished"></translation>
     </message>
@@ -13349,15 +13408,20 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
 <context>
     <name>jp::SizeCombo</name>
     <message>
-        <location filename="../src/app/widgets.cpp" line="+411"/>
+        <location filename="../src/app/widgets.cpp" line="+223"/>
         <source>Font Size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Type or choose the size, in points, of the selected text.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>jp::TableGrid</name>
     <message>
-        <location line="+77"/>
+        <location line="+78"/>
         <source>Table size</source>
         <translation type="unfinished"></translation>
     </message>
@@ -13385,7 +13449,17 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
 <context>
     <name>jp::TaskPane</name>
     <message>
-        <location filename="../src/app/taskpane.cpp" line="-749"/>
+        <location filename="../src/app/taskpane.cpp" line="-773"/>
+        <source>Close</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Close the pane</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+23"/>
         <source>Design Checker</source>
         <translation type="unfinished"></translation>
     </message>

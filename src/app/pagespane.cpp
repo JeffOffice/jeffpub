@@ -85,6 +85,8 @@ PagesPane::PagesPane(Editor *ed, MainWindow *win) : QListWidget(win), m_ed(ed), 
     setMaximumWidth(260);
     setUniformItemSizes(true);
     setFrameShape(QFrame::NoFrame);
+    setAccessibleName(tr("Pages"));
+    setAccessibleDescription(tr("The publication's pages; Up and Down choose one, which the page area then shows."));
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setItemDelegate(new PageDelegate(this));
     setMouseTracking(true);

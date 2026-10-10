@@ -43,6 +43,8 @@ TaskPane::TaskPane(MainWindow *win) : QWidget(win), m_win(win)
     m_title->setFont(f);
     auto *close = new QToolButton(this);
     close->setIcon(icon("x"));
+    close->setToolTip(tr("Close"));
+    close->setAccessibleName(tr("Close the pane"));
     close->setAutoRaise(true);
     connect(close, &QToolButton::clicked, this, &TaskPane::closed);
     head->addWidget(m_title, 1);

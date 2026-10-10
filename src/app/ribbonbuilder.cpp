@@ -10,6 +10,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMenu>
 #include <QRegularExpression>
 #include <QToolButton>
@@ -399,6 +400,30 @@ static void nameUnnamedControls(Ribbon *r)
         if (b && !b->text().isEmpty()) continue;
         if (!b && !qobject_cast<QAbstractSpinBox *>(w) && !qobject_cast<QComboBox *>(w)) continue;
         w->setAccessibleName(w->toolTip().remove(shortcut).remove(QLatin1Char('&')));
+    }
+    describeForScreenReaders(r);
+}
+
+void describeForScreenReaders(QWidget *root)
+{
+    for (QWidget *w : root->findChildren<QWidget *>()) {
+        // A box one types in hands the focus to its typing field, which is
+        // what Windows' screen readers then name.
+        if (auto *c = qobject_cast<QComboBox *>(w); c && c->lineEdit() && c->lineEdit()->accessibleName().isEmpty())
+            c->lineEdit()->setAccessibleName(c->accessibleName());
+        // Qt gives Windows a control's description as its full description,
+        // which not every screen reader reads; its help text (What's This)
+        // carries the same, or the tooltip with its shortcut.
+        if (!w->whatsThis().isEmpty()) continue;
+        const QString about = !w->accessibleDescription().isEmpty() ? w->accessibleDescription() : w->toolTip();
+        if (about.isEmpty()) continue;
+        // A button showing a command copies the command's texts, again at
+        // each change of it, so the command carries this one.
+        if (auto *b = qobject_cast<QToolButton *>(w); b && b->defaultAction()) {
+            if (b->defaultAction()->whatsThis().isEmpty()) b->defaultAction()->setWhatsThis(about);
+        } else {
+            w->setWhatsThis(about);
+        }
     }
 }
 

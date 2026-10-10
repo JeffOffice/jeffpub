@@ -19,6 +19,7 @@
 #include "app/icons.h"
 #include "app/pagespane.h"
 #include "app/ribbon.h"
+#include "app/ribbonbuilder.h"
 #include "app/settings.h"
 #include "app/taskpane.h"
 #include "app/telemetry.h"
@@ -120,6 +121,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     createActions();
     buildRibbon();
     buildStatusBar();
+    describeForScreenReaders(m_split);   // the pages, the page, and the panes
+    describeForScreenReaders(statusBar());
 
     m_backstage = new Backstage(this);
     m_backstage->hide();

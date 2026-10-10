@@ -80,6 +80,10 @@ struct RibbonParts {
 // Commands the file creates are children of `actionOwner`. On any problem it returns
 // false and fills *error with one line for each: every unknown command, widget, menu,
 // launcher, template, color or icon, and every malformed entry. It still builds what it can.
+// Gives every control under root a help text for screen readers (its
+// description, else its tooltip), and each box's typing field the box's name.
+void describeForScreenReaders(QWidget *root);
+
 bool buildRibbon(Ribbon *r, const QByteArray &json, const RibbonParts &parts, QObject *actionOwner, QString *error);
 
 } // namespace jp

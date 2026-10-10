@@ -105,6 +105,8 @@ Canvas::Canvas(Editor *ed, QWidget *parent) : QAbstractScrollArea(parent), m_ed(
     viewport()->setMouseTracking(true);
     viewport()->setAttribute(Qt::WA_OpaquePaintEvent);
     setFocusPolicy(Qt::StrongFocus);
+    setAccessibleName(QCoreApplication::translate("Canvas", "Page"));
+    setAccessibleDescription(QCoreApplication::translate("Canvas", "Tab selects the next object, the arrow keys move it, Enter edits its text, and Delete removes it."));
     setAttribute(Qt::WA_InputMethodEnabled);
     setAcceptDrops(true);
     m_hRuler = new Ruler(this, Qt::Horizontal);

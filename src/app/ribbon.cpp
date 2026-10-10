@@ -433,6 +433,7 @@ public:
         if (k == File) {
             setText(QCoreApplication::translate("Ribbon", "File"));
             setAccessibleDescription(QCoreApplication::translate("Ribbon", "Opens the File page: new, open, save, print, share, export, and options."));
+            setWhatsThis(accessibleDescription());
         }
         connect(this, &QAbstractButton::clicked, this, [this] {
             if (m_kind == File) Q_EMIT m_r->fileClicked();
@@ -627,6 +628,8 @@ public:
         x += 6 + m_file->width() + 4;
         for (HeaderButton *b : tabButtons) {
             const auto &t = m_r->m_tabs[b->tab()];
+            b->setAccessibleDescription(t.group.isEmpty() ? QCoreApplication::translate("Ribbon", "Ribbon tab") : QCoreApplication::translate("Ribbon", "Ribbon tab, %1").arg(t.group));
+            b->setWhatsThis(b->accessibleDescription());   // Windows' screen readers read this one
             b->setVisible(t.visible);
             if (!t.visible) continue;
             const int w = fm.horizontalAdvance(t.title) + 26 + (t.group.isEmpty() ? 0 : 12);
@@ -634,12 +637,14 @@ public:
             x += w + 4;
             b->setText(t.title);
             b->setAccessibleName(t.title);
-            b->setAccessibleDescription(t.group.isEmpty() ? QCoreApplication::translate("Ribbon", "Ribbon tab") : QCoreApplication::translate("Ribbon", "Ribbon tab, %1").arg(t.group));
             b->setFocusPolicy(b->tab() == m_r->m_current ? Qt::TabFocus : Qt::NoFocus);
             b->update();
         }
         m_collapse->setGeometry(width() - 30, 18, 28, 26);
         m_collapse->setAccessibleName(m_r->m_minimized ? QCoreApplication::translate("Ribbon", "Expand the Ribbon") : QCoreApplication::translate("Ribbon", "Collapse the Ribbon"));
+        m_collapse->setAccessibleDescription(m_r->m_minimized ? QCoreApplication::translate("Ribbon", "Shows the ribbon's commands again.")
+                                                              : QCoreApplication::translate("Ribbon", "Shows only the tab names, leaving more room for the page."));
+        m_collapse->setWhatsThis(m_collapse->accessibleDescription());
         m_collapse->update();
         m_file->update();
     }
@@ -745,6 +750,7 @@ RibbonTab *Ribbon::addTab(const QString &name, const QString &contextGroup, cons
 {
     auto *page = new RibbonTab();
     auto *scroll = new QScrollArea();
+    scroll->setFocusPolicy(Qt::NoFocus);   // only holds the controls; Tab goes to them
     scroll->setWidget(page);
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
