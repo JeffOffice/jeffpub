@@ -48,6 +48,9 @@ public:
     bool eventFilter(QObject *o, QEvent *e) override
     {
         switch (e->type()) {
+        // Any key counts; a shortcut's (F6 into the ribbon) never arrives as
+        // a key press, only as this check before it.
+        case QEvent::ShortcutOverride:
         case QEvent::KeyPress:
             if (!m_keyboard) {
                 m_keyboard = true;

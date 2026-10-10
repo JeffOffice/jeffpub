@@ -1707,10 +1707,16 @@ private Q_SLOTS:
         QVERIFY(QTest::qWaitForWindowActive(&w));
         auto *r = w.findChild<jp::Ribbon *>();
         auto *canvas = w.findChild<jp::Canvas *>();
+        jp::installFocusRing(qApp);
+        QTest::mouseClick(canvas->viewport(), Qt::LeftButton, {}, QPoint(5, 5));   // the mouse in use: no ring
         canvas->setFocus();
         QTest::keyClick(&w, Qt::Key_F6);
         QWidget *f = QApplication::focusWidget();
         QVERIFY(f && f->objectName() == QLatin1String("jpRibbonTab"));
+        // The first key, though a shortcut, shows where the keyboard went.
+        auto *ring = w.findChild<QWidget *>(QStringLiteral("jpFocusRing"));
+        QVERIFY(ring && ring->isVisible());
+        QVERIFY(ring->geometry().contains(QRect(f->mapTo(&w, QPoint(0, 0)), f->size())));
         QCOMPARE(f->accessibleName(), QStringLiteral("Home"));
         QTest::keyClick(f, Qt::Key_Right);
         QCOMPARE(r->current(), r->tab(QStringLiteral("Insert")));
