@@ -188,7 +188,7 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 - [x] Measurement toolbar: x, y, width, height, rotation, tracking (percent), text scaling, kerning (points), and line spacing
 - [x] Measurements to three decimal places in every unit (8.125", 1.234 cm, 10.125 pt), shown without trailing zeros and kept without rounding
 - [x] Scratch area shared across pages
-- [x] Rulers in in, cm, mm, pt, and pica, with drag-out guides, and a zero point you can move: Shift and the right mouse button dragging on a ruler moves that ruler's zero (Shift and the left button does nothing), dragging from the box where the rulers meet moves both, double-clicking a ruler puts that ruler's zero back at the page's corner, and double-clicking the box puts both back *(checked in Publisher, except dragging from the box)*. The zero is saved with the publication in `.jpub` (not in `.pub`) and undoable; the rulers' numbers and the status bar's position count from it, with a minus sign before it, while the Position fields, Ruler Guides, and guides stay measured from the page's corner *(the status bar's use of the zero was checked in Publisher; that the fields and guides stay on the corner was not)*
+- [x] Rulers in in, cm, mm, pt, and pica, with drag-out guides and a zero point you can move: Shift and the right mouse button on a ruler, or a drag from the box where the rulers meet; double-click a ruler (or the box) to put it back. The rulers and the status bar count from it, and it is saved with the publication *(in `.jpub`; `.pub` files open with it at the page's corner)*
 - [x] Context menus for every object type
 - [x] Undo and redo with full history
 - [x] Two-page spreads and facing pages
