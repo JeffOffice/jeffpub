@@ -13955,6 +13955,185 @@ private Q_SLOTS:
         QVERIFY(parsed.load(path));
         for (const auto &o : parsed.objects) QVERIFY(!QtPdf::dictOf(o.body).contains("/Subtype /Image"));
     }
+
+    // Metafiles made here play the same on every system: boxes and ovals,
+    // text, a bitmap, and text in the symbol fonts (Wingdings, Symbol) that
+    // Windows has and Linux lacks, which shows as the same pictures from Unicode.
+    void metafileDrawnFromScratch()
+    {
+        auto le16 = [](QByteArray &b, int v) { b.append(char(v & 0xFF)); b.append(char((v >> 8) & 0xFF)); };
+        auto le32 = [](QByteArray &b, quint32 v) { for (int i = 0; i < 4; ++i) b.append(char((v >> (8 * i)) & 0xFF)); };
+        auto words = [&](std::initializer_list<int> v) { QByteArray b; for (int w : v) le16(b, w); return b; };
+        auto ints = [&](std::initializer_list<qint32> v) { QByteArray b; for (qint32 w : v) le32(b, quint32(w)); return b; };
+        // A record: a metafile's has its length in words and a function, an
+        // enhanced metafile's a type and its length in bytes.
+        auto wmfRecord = [&](int fn, const QByteArray &params) {
+            QByteArray b;
+            le32(b, quint32((6 + params.size() + (params.size() & 1)) / 2));
+            le16(b, fn);
+            b += params;
+            if (params.size() & 1) b.append('\0');
+            return b;
+        };
+        auto emfRecord = [&](quint32 type, const QByteArray &payload) {
+            QByteArray pad = payload;
+            while (pad.size() % 4) pad.append('\0');
+            QByteArray b;
+            le32(b, type);
+            le32(b, quint32(8 + pad.size()));
+            return b + pad;
+        };
+        // A 400 by 300 drawing of a blue box (20 to 120 across), a red oval
+        // (280 to 380), and a line of text in `face` at (x, y), `em` tall;
+        // `more` is records after them.
+        auto wmf = [&](const QString &face, int charset, const QByteArray &text, int x, int y, int em, const QByteArray &more = QByteArray()) {
+            QByteArray body = wmfRecord(0x020B, words({0, 0})) + wmfRecord(0x020C, words({300, 400})) + wmfRecord(0x0102, words({1}));   // window, transparent text
+            QByteArray blue = words({0}), red = words({0}), pen = words({5, 0, 0});
+            le32(blue, 0xFF0000);
+            le16(blue, 0);
+            le32(red, 0x0000FF);
+            le16(red, 0);
+            le32(pen, 0);
+            body += wmfRecord(0x02FC, blue) + wmfRecord(0x02FC, red) + wmfRecord(0x02FA, pen);   // objects 0, 1, 2
+            body += wmfRecord(0x012D, words({2})) + wmfRecord(0x012D, words({0})) + wmfRecord(0x041B, words({80, 120, 20, 20}));
+            body += wmfRecord(0x012D, words({1})) + wmfRecord(0x0418, words({80, 380, 20, 280}));
+            QByteArray font = words({-em, 0, 0, 0, 400});
+            font.append(char(0)).append(char(0)).append(char(0)).append(char(charset));
+            font += QByteArray(4, '\0') + face.toLatin1() + '\0';
+            body += wmfRecord(0x02FB, font) + wmfRecord(0x012D, words({3}));
+            QByteArray line = words({int(text.size())}) + text;
+            if (text.size() & 1) line.append('\0');
+            le16(line, y);
+            le16(line, x);
+            body += wmfRecord(0x0209, QByteArray(4, '\0')) + wmfRecord(0x0521, line) + more + wmfRecord(0x0000, QByteArray());
+            QByteArray head, standard;
+            le32(head, 0x9AC6CDD7u);
+            le16(head, 0);
+            for (int v : {0, 0, 400, 300, 72}) le16(head, v);   // box, units to the inch
+            le32(head, 0);
+            quint16 sum = 0;
+            for (int i = 0; i < 20; i += 2) sum ^= quint16(quint8(head[i]) | (quint8(head[i + 1]) << 8));
+            le16(head, sum);
+            for (int v : {1, 9, 0x300}) le16(standard, v);
+            le32(standard, quint32((18 + body.size()) / 2));
+            le16(standard, 4);
+            le32(standard, 60);
+            le16(standard, 0);
+            return head + standard + body;
+        };
+        // The same drawing as an enhanced metafile, its text in UTF-16.
+        auto emf = [&](const QString &face, int charset, const QString &text, int x, int y, int em, const QByteArray &more = QByteArray()) {
+            QByteArray body = emfRecord(18, ints({1}));                           // transparent text
+            body += emfRecord(39, ints({1, 0, 0xFF0000, 0})) + emfRecord(39, ints({2, 0, 0x0000FF, 0})) + emfRecord(37, ints({qint32(0x80000008u)}));   // blue, red, no pen
+            body += emfRecord(37, ints({1})) + emfRecord(43, ints({20, 20, 120, 80})) + emfRecord(37, ints({2})) + emfRecord(42, ints({280, 20, 380, 80}));
+            QByteArray lf = ints({3, -em, 0, 0, 0, 400});
+            lf.append(char(0)).append(char(0)).append(char(0)).append(char(charset));
+            lf += QByteArray(4, '\0');
+            QByteArray name(64, '\0');
+            for (int i = 0; i < face.size() && i < 31; ++i) { name[2 * i] = char(face[i].unicode() & 0xFF); name[2 * i + 1] = char(face[i].unicode() >> 8); }
+            body += emfRecord(82, lf + name) + emfRecord(37, ints({3})) + emfRecord(24, ints({0}));
+            QByteArray chars;
+            for (QChar c : text) le16(chars, c.unicode());
+            while (chars.size() % 4) chars.append('\0');
+            const int fixed = 8 + 16 + 12 + 40;   // record header, bounds, scales, and the text's own fields
+            QByteArray spacing;
+            for (int i = 0; i < text.size(); ++i) le32(spacing, 13);
+            const QByteArray run = ints({0, 0, 0, 0, 1}) + QByteArray(8, '\0') + ints({x, y, int(text.size()), fixed, 0, 0, 0, 0, 0, fixed + int(chars.size())}) + chars + spacing;
+            body += emfRecord(84, run) + more + emfRecord(14, ints({0, 16, 20}));
+            // Bounds, a frame of 400 by 300 pixels (in hundredths of a millimeter on a 3,840 pixel screen 1,016 millimeters wide), and the counts.
+            const QByteArray head = ints({0, 0, 399, 299, 0, 0, 10583, 7937, qint32(0x464D4520u), 0x10000, 0, 1, 1, 0, 0, 0, 3840, 2880, 1016, 762});
+            QByteArray all = emfRecord(1, head) + body;
+            qToLittleEndian<quint32>(quint32(all.size()), all.data() + 48);
+            return all;
+        };
+        auto picture = [](const QByteArray &data) {
+            Metafile m;
+            if (!m.load(data)) return QImage();
+            return m.toImage(400);
+        };
+        // The dark pixels in an area, and the box they fill.
+        auto ink = [](const QImage &img, const QRect &area, QRect *box = nullptr) {
+            int n = 0, x0 = 1 << 20, y0 = 1 << 20, x1 = -1, y1 = -1;
+            for (int y = area.top(); y <= area.bottom(); ++y)
+                for (int x = area.left(); x <= area.right(); ++x) {
+                    const QRgb c = img.pixel(x, y);
+                    if (qAlpha(c) > 128 && qRed(c) < 100 && qGreen(c) < 100 && qBlue(c) < 100) {
+                        ++n;
+                        x0 = std::min(x0, x); y0 = std::min(y0, y); x1 = std::max(x1, x); y1 = std::max(y1, y);
+                    }
+                }
+            if (box) *box = n ? QRect(QPoint(x0, y0), QPoint(x1, y1)) : QRect();
+            return n;
+        };
+        const QByteArray wmfBytes = wmf(QStringLiteral("Arial"), 0, "Arial Hello", 20, 120, 28), emfBytes = emf(QStringLiteral("Arial"), 0, QStringLiteral("Arial Hello"), 20, 120, 28);
+        for (const QImage &img : {picture(wmfBytes), picture(emfBytes)}) {
+            QCOMPARE(img.size(), QSize(400, 300));
+            QCOMPARE(QColor(img.pixel(70, 50)), QColor(0, 0, 255));       // the box
+            QCOMPARE(QColor(img.pixel(330, 50)), QColor(255, 0, 0));      // the oval
+            QCOMPARE(qAlpha(img.pixel(200, 50)), 0);                      // nothing between them
+            QVERIFY(ink(img, QRect(0, 110, 400, 70)) > 150);              // the words
+        }
+        // Wingdings' round bullet is a solid disc, with the font or without
+        // it: not an empty box for a missing letter, nor a thin "l".
+        for (const QImage &img : {picture(wmf(QStringLiteral("Wingdings"), 2, "l", 120, 150, 120)), picture(emf(QStringLiteral("Wingdings"), 2, QString(QChar(0xF06C)), 120, 150, 120))}) {
+            QRect box;
+            const int dark = ink(img, QRect(0, 120, 400, 180), &box);
+            QVERIFY2(!box.isEmpty() && dark > box.width() * box.height() * 0.6, qPrintable(QStringLiteral("%1 dark in %2 x %3").arg(dark).arg(box.width()).arg(box.height())));
+        }
+        // Symbol's Greek letters show too (Linux calls another font in for Symbol).
+        for (const QImage &img : {picture(wmf(QStringLiteral("Symbol"), 2, "a", 120, 150, 120)), picture(emf(QStringLiteral("Symbol"), 2, QString(QChar(0xF061)), 120, 150, 120))})
+            QVERIFY(ink(img, QRect(0, 120, 400, 180)) > 300);
+        auto near = [](QRgb c, QColor want) { return qAlpha(c) == 255 && std::abs(qRed(c) - want.red()) < 12 && std::abs(qGreen(c) - want.green()) < 12 && std::abs(qBlue(c) - want.blue()) < 12; };
+        // A bitmap inside one (2 by 2 pixels over 150 to 250 across and 100
+        // to 200 down: blue and white above red and green) is decoded and drawn.
+        QByteArray dib;
+        for (quint32 v : {40u, 2u, 2u}) le32(dib, v);
+        le16(dib, 1);
+        le16(dib, 24);
+        for (quint32 v : {0u, 16u, 0u, 0u, 0u, 0u}) le32(dib, v);
+        dib += QByteArray::fromHex("0000FF00FF000000") + QByteArray::fromHex("FF0000FFFFFF0000");   // bottom row first, blue-green-red, each row padded to 4 bytes
+        QByteArray stretchWmf, stretchEmf;
+        le32(stretchWmf, 0x00CC0020);   // copy
+        for (int v : {0, 2, 2, 0, 0, 100, 100, 100, 150}) le16(stretchWmf, v);   // usage; source height, width, y, x; destination height, width, y, x
+        for (quint32 v : {0u, 0u, 0u, 0u, 150u, 100u, 0u, 0u, 2u, 2u, 80u, 40u, 120u, 16u, 0u, 0x00CC0020u, 100u, 100u}) le32(stretchEmf, v);   // bounds, destination, source, where the bitmap and its bits are
+        stretchWmf += dib;
+        stretchEmf += dib;
+        for (const QImage &img : {picture(wmf(QStringLiteral("Arial"), 0, "", 0, 0, 12, wmfRecord(0x0F43, stretchWmf))),
+                                  picture(emf(QStringLiteral("Arial"), 0, QString(), 0, 0, 12, emfRecord(81, stretchEmf)))}) {
+            QVERIFY(near(img.pixel(175, 125), QColor(0, 0, 255)));
+            QVERIFY(near(img.pixel(225, 125), QColor(255, 255, 255)));
+            QVERIFY(near(img.pixel(175, 175), QColor(255, 0, 0)));
+            QVERIFY(near(img.pixel(225, 175), QColor(0, 255, 0)));
+        }
+        // Insert Picture takes both from files, whatever the case of the
+        // extension, and the page shows the picture on screen and in print.
+        QTemporaryDir dir;
+        MainWindow w;
+        const QStringList names = {QStringLiteral("clip.WMF"), QStringLiteral("clip.emf")};
+        for (int i = 0; i < 2; ++i) {
+            QFile f(dir.filePath(names[i]));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(i ? emfBytes : wmfBytes);
+            f.close();
+            w.insertFiles({f.fileName()}, QPointF(20, 20 + 360 * i));
+        }
+        Editor *ed = w.editor();
+        QCOMPARE(ed->doc()->pages[0]->items.size(), size_t(2));
+        PaintContext ctx;
+        ctx.doc = ed->doc();
+        ctx.cache = &ed->cache();
+        for (int i = 0; i < 2; ++i) {
+            const auto *pic = static_cast<PictureItem *>(ed->doc()->pages[0]->items[i].get());
+            QCOMPARE(ed->doc()->images.value(pic->imageId).format, i ? QStringLiteral("emf") : QStringLiteral("wmf"));
+            for (const bool output : {false, true}) {
+                ctx.opt.output = output;
+                const QImage page = Renderer::renderToImage(ctx, 0, 1.0);
+                // The blue box, 70 of the picture's 400 units across and 50 of its 300 down.
+                const QPoint box(int(pic->rect.x() + pic->rect.width() * 70 / 400), int(pic->rect.y() + pic->rect.height() * 50 / 300));
+                QVERIFY2(QColor(page.pixel(box)) == QColor(0, 0, 255), qPrintable(QStringLiteral("picture %1, output %2").arg(i).arg(output)));
+            }
+        }
+    }
     void colorRefRoundTrip()
     {
         const ColorRef a = ColorRef::scheme(Accent2, 40);

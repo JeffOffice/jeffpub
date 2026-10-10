@@ -211,7 +211,7 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 - [x] Color schemes with 8 slots (Main, Accents 1–5, Hyperlink, Followed Hyperlink) and tints and shades of every scheme color
 - [x] Custom colors (RGB, HSL, CMYK, PANTONE-style spot color entry), recent colors, eyedropper, and transparency on fills, lines, and text *(spot colors are entered by name and value, since the PANTONE library itself is proprietary; colors entered as CMYK keep their exact ink amounts)*
 - [x] Fill effects: gradient (linear, radial, rectangular, path, with presets), texture, pattern, picture (stretch or tile), and tint
-- [x] Picture formats: PNG, JPEG, GIF, BMP, TIFF, WebP, SVG, and EMF/WMF **(EMF/WMF import is limited on Linux)**
+- [x] Picture formats: PNG, JPEG, GIF, BMP, TIFF, WebP, SVG, and EMF/WMF **(JeffPub plays EMF and WMF itself, so they look the same on every system, except that text in Wingdings or Webdings shows only some of its symbols on a computer without those fonts, which Linux is; EMF drawing that exists only as EMF+ records, gradient fills, and see-through bitmaps are not drawn)**
 
 ## Platform and packaging
 - [x] Builds and runs on Linux (x86_64) and Windows 10/11 (x86_64)

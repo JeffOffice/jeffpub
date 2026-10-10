@@ -1,6 +1,9 @@
 #include "render/metafile.h"
 
+#include "core/fonts.h"
+
 #include <QFont>
+#include <QFontDatabase>
 #include <QFontMetricsF>
 #include <QHash>
 #include <QPaintEngine>
@@ -316,9 +319,27 @@ private:
         return o;
     }
 
-    void text(QPointF pos, const QString &s, const QVector<double> &dx)
+    // Text in a symbol font the computer lacks (Windows has Wingdings, Webdings,
+    // and Symbol; Linux has none): the pictures JeffPub knows come from
+    // Unicode, and the rest from the plain codes a stand-in for Symbol has
+    // them at, rather than from 0xF020-0xF0FF, where only the real fonts do.
+    QString symbolPictures(const QString &s) const
     {
-        if (s.isEmpty()) return;
+        const QString family = m_dc.font.family();
+        if (!isSymbolFont(family) || QFontDatabase::hasFamily(family)) return s;
+        QString out;
+        for (QChar c : s) {
+            const QString picture = symbolToUnicode(family, c.unicode());
+            if (!picture.isEmpty()) out += picture;
+            else out += c.unicode() >= 0xF020 && c.unicode() <= 0xF0FF ? QChar(c.unicode() - 0xF000) : c;
+        }
+        return out;
+    }
+
+    void text(QPointF pos, const QString &shownText, const QVector<double> &dx)
+    {
+        if (shownText.isEmpty()) return;
+        const QString s = symbolPictures(shownText);
         apply();
         const QTransform t = logical();
         m_p->save();
