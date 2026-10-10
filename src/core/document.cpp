@@ -588,15 +588,14 @@ QSet<QString> Document::storiesInUse() const
         used.insert(id);
         queue << id;
     };
-    forEachItem([&](Item *it, int, const QString &) {
+    auto usedBy = [&](Item *it) {
         if (it->type() == ItemType::Text) use(static_cast<TextItem *>(it)->storyId);
         if (it->type() == ItemType::Shape) use(static_cast<ShapeItem *>(it)->storyId);
         if (it->type() == ItemType::Table)
             for (const auto &c : static_cast<TableItem *>(it)->cells) use(c.storyId);
-    });
-    walkItems(extra, [&](const ItemPtr &it) {
-        if (it->type() == ItemType::Text) use(static_cast<TextItem *>(it.get())->storyId);
-    });
+    };
+    forEachItem([&](Item *it, int, const QString &) { usedBy(it); });
+    walkItems(extra, [&](const ItemPtr &it) { usedBy(it.get()); });
     static const QRegularExpression storyKey(QStringLiteral("\"story\":\"([^\"]+)\""));
     while (!queue.isEmpty()) {
         const QTextDocument *sd = storyDoc(queue.takeFirst());

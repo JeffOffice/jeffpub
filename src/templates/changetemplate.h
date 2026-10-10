@@ -48,6 +48,7 @@ TemplateOptions optionsForChange(const Document &current, TemplateOptions o);
 struct ChangeReport {
     int stories = 0, pictures = 0;               // moved into the design
     int extraStories = 0, extraPictures = 0;     // with no place in it, now in Extra Content
+    int extraObjects = 0;                        // tables, shapes, lines, and groups that were not the old design's own, there too
 };
 
 // `design` with `current`'s stories and pictures in it, its business

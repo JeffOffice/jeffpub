@@ -958,10 +958,21 @@ public:
                 const QImage thumb = d->image(pic->imageId).scaled(96, 96, Qt::KeepAspectRatio, Qt::SmoothTransformation);
                 if (!thumb.isNull()) ic = QIcon(QPixmap::fromImage(thumb));
             } else {
-                text = e->type() == ItemType::TextArt ? static_cast<const TextArtItem *>(e.get())->text
-                                                      : d->storyDoc(static_cast<const TextItem *>(e.get())->storyId)->toPlainText();
-                text = text.simplified();
-                if (text.size() > 120) text = text.left(120) + QStringLiteral("…");
+                // The words in it; an object with none, or other than text, says what it is.
+                QString words;
+                if (e->type() == ItemType::TextArt) words = static_cast<const TextArtItem *>(e.get())->text;
+                else if (const auto *box = dynamic_cast<const TextItem *>(e.get())) words = d->storyDoc(box->storyId)->toPlainText();
+                else if (const auto *shape = dynamic_cast<const ShapeItem *>(e.get())) words = shape->storyId.isEmpty() ? QString() : d->storyDoc(shape->storyId)->toPlainText();
+                else if (const auto *table = dynamic_cast<const TableItem *>(e.get()))
+                    for (const TableCell &c : table->cells)
+                        if (words.isEmpty() && !c.storyId.isEmpty()) words = d->storyDoc(c.storyId)->toPlainText().simplified();
+                words = words.simplified();
+                if (words.size() > 120) words = words.left(120) + QStringLiteral("…");
+                text = e->type() == ItemType::Text || e->type() == ItemType::TextArt ? words : words.isEmpty() ? itemTypeName(e->type()) : tr("%1: %2").arg(itemTypeName(e->type()), words);
+                if (e->type() == ItemType::Table) ic = icon("table");
+                else if (e->type() == ItemType::Shape) ic = icon("shapes");
+                else if (e->type() == ItemType::Line) ic = icon("minus");
+                else if (e->type() == ItemType::Group) ic = icon("group");
             }
             auto *row = new QListWidgetItem(ic, text);
             row->setData(Qt::UserRole, e->id);

@@ -3,6 +3,8 @@
 #include "text/storyio.h"
 #include "text/textprops.h"
 
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QRegularExpression>
 #include <QSet>
 #include <QTextBlock>
@@ -232,21 +234,95 @@ namespace {
 
 // ---------------- moving the content ----------------
 
-// The text of the stories and TextArt the open design's own samples say, so
-// that a box you never typed in is not taken for yours.
-QSet<QString> sampleTexts(const Document &d)
+// The words of an object, every story in it in order.
+void wordsOf(const Document &d, const Item &it, QStringList *out)
 {
-    QSet<QString> out;
+    auto story = [&](const QString &id) {
+        if (const QTextDocument *sd = d.storyDoc(id)) *out << sd->toPlainText();
+    };
+    switch (it.type()) {
+    case ItemType::Text: story(static_cast<const TextItem &>(it).storyId); break;
+    case ItemType::Shape: story(static_cast<const ShapeItem &>(it).storyId); break;
+    case ItemType::TextArt: *out << static_cast<const TextArtItem &>(it).text; break;
+    case ItemType::Table:
+        for (const TableCell &c : static_cast<const TableItem &>(it).cells) story(c.storyId);
+        break;
+    case ItemType::Group:
+        for (const ItemPtr &c : static_cast<const GroupItem &>(it).children) wordsOf(d, *c, out);
+        break;
+    default: break;
+    }
+}
+
+// An object's description with the ids that tell two builds of a design apart
+// taken out (and a Text Art's font, which follows the font scheme).
+void withoutIds(QJsonObject &o)
+{
+    for (const char *key : {"id", "role", "next", "story", "font"}) o.remove(QLatin1String(key));
+    for (auto it = o.begin(); it != o.end(); ++it) {
+        if (it->isObject()) {
+            QJsonObject inner = it->toObject();
+            withoutIds(inner);
+            *it = inner;
+        } else if (it->isArray()) {
+            QJsonArray list = it->toArray();
+            for (int i = 0; i < list.size(); ++i)
+                if (list[i].isObject()) {
+                    QJsonObject inner = list[i].toObject();
+                    withoutIds(inner);
+                    list[i] = inner;
+                }
+            *it = list;
+        }
+    }
+}
+
+// What makes an object the same as another made from the same design: the
+// way it is made and the words in it, so that any change to either shows. A
+// table is its size and its words alone.
+QString objectKey(const Document &d, const Item &it)
+{
+    QStringList words;
+    wordsOf(d, it, &words);
+    const QString text = words.join(QLatin1Char('\x1f'));
+    if (it.type() == ItemType::Table) return QStringLiteral("table|%1|%2|").arg(static_cast<const TableItem &>(it).rows).arg(static_cast<const TableItem &>(it).cols) + text;
+    QJsonObject o = it.toJson();
+    withoutIds(o);
+    return QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact)) + QLatin1Char('|') + text;
+}
+
+// What the open design itself made, to tell it from what you did: the words
+// of its stories and Text Art, and the keys of its other objects. (With
+// its logo too, which moves some of its parts.)
+struct Sample {
+    QSet<QString> words, objects;
+};
+
+Sample sampleOf(const Document &d)
+{
+    Sample out;
     const TemplateInfo *t = findTemplate(d.templateId);
     if (!t) return out;
     TemplateOptions o;
     o.options = d.templateOptions;
-    const auto sample = t->build(o);
-    for (const auto &pg : sample->pages)
-        for (const auto &it : pg->items) {
-            if (it->type() == ItemType::Text) out.insert(sample->storyDoc(static_cast<const TextItem *>(it.get())->storyId)->toPlainText());
-            if (it->type() == ItemType::TextArt) out.insert(static_cast<const TextArtItem *>(it.get())->text);
-        }
+    QVector<TemplateOptions> builds{o};
+    if (t->optionKeys.contains(QStringLiteral("logo"))) {
+        o.options[QStringLiteral("logo")] = true;
+        builds << o;
+    }
+    for (const TemplateOptions &made : builds) {
+        const auto sample = t->build(made);
+        for (const auto &pg : sample->pages)
+            for (const auto &it : pg->items) {
+                if (it->type() == ItemType::Picture) continue;
+                if (it->type() == ItemType::Text || it->type() == ItemType::TextArt) {
+                    QStringList words;
+                    wordsOf(*sample, *it, &words);
+                    out.words.insert(words.join(QString()));
+                }
+                if (it->type() != ItemType::Text) out.objects.insert(objectKey(*sample, *it));
+            }
+    }
     return out;
 }
 
@@ -478,8 +554,9 @@ std::unique_ptr<Document> applyDesign(const Document &current, std::unique_ptr<D
 
     // Your stories and pictures, and the design's boxes and placeholders for them.
     const QHash<QString, QString> mine = contentRoles(current);
-    const QSet<QString> samples = sampleTexts(current);
+    const Sample samples = sampleOf(current);
     QVector<Piece> stories, pictures;
+    ItemList objects;
     {
         QSet<QString> continued;
         for (const auto &pg : current.pages)
@@ -488,19 +565,23 @@ std::unique_ptr<Document> applyDesign(const Document &current, std::unique_ptr<D
         for (int p = 0; p < current.pages.size(); ++p)
             for (const auto &it : current.pages[p]->items) {
                 const QString role = mine.value(it->id);
-                if (it->type() == ItemType::Text && !continued.contains(it->id)) {
+                if (it->type() == ItemType::Text) {
+                    if (continued.contains(it->id)) continue;   // a story is its first box
                     const QTextDocument *sd = current.storyDoc(static_cast<const TextItem *>(it.get())->storyId);
                     const QString words = sd ? sd->toPlainText() : QString();
-                    if (words.trimmed().isEmpty() || samples.contains(words)) continue;
+                    if (words.trimmed().isEmpty() || samples.words.contains(words)) continue;
                     stories.push_back({p, it->rect, role, it.get()});
                 } else if (it->type() == ItemType::TextArt) {
                     const QString words = static_cast<const TextArtItem *>(it.get())->text;
-                    if (words.trimmed().isEmpty() || samples.contains(words)) continue;
-                    stories.push_back({p, it->rect, role, it.get()});
+                    if (words.trimmed().isEmpty()) continue;
+                    if (!samples.words.contains(words)) stories.push_back({p, it->rect, role, it.get()});
+                    else if (!samples.objects.contains(objectKey(current, *it))) objects.push_back(it);   // the design's words, but not its object
                 } else if (it->type() == ItemType::Picture) {
                     const auto *pic = static_cast<const PictureItem *>(it.get());
                     if (pic->imageId.isEmpty() || isLogo(*pic) || isDesignArt(current, *pic)) continue;
                     pictures.push_back({p, it->rect, role, it.get()});
+                } else if (!samples.objects.contains(objectKey(current, *it))) {
+                    objects.push_back(it);   // a table, shape, line, or group that is not the design's own, as it was made
                 }
             }
     }
@@ -553,6 +634,11 @@ std::unique_ptr<Document> applyDesign(const Document &current, std::unique_ptr<D
         }
         r.extra.push_back(extraCopy(r, *pictures[i].item, pictures[i].role));
         ++rep.extraPictures;
+    }
+    // Together, so that lines joined to shapes among them stay joined.
+    for (const ItemPtr &copy : r.cloneItems(objects)) {
+        r.extra.push_back(copy);
+        ++rep.extraObjects;
     }
 
     // The rest of the publication stays its own.

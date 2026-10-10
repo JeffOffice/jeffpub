@@ -42,14 +42,14 @@ A few things stay as they are:
 
 - Text you never typed over is the old design's sample text. It is not carried over, and the new design shows its own sample text there.
 - The page size, margins, pages, and master pages come from the new design. A publication that has more pages than the design keeps the design's pages, and the rest of your content goes to Extra Content. JeffPub does not add pages for it.
-- Tables, shapes, lines, and Text Art other than the headline belong to the old design and are not carried over. Text in shapes and table cells is not carried over either.
+- Tables, shapes, lines, Text Art, and groups of objects that the old design made, and that you did not change, stay behind with it. Anything you drew, and anything you changed (a table with a cell you typed in, a shape whose words you edited, a line you moved), goes to Extra Content, whole.
 - Your business information, document properties, styles, mail merge list, and the objects on the scratch area stay with the publication.
 
 ## Extra Content
 
-Content with no place in the new design is not thrown away. It waits in the **Extra Content** pane, which opens beside the page when the change is done. It lists each leftover story and picture.
+Nothing you made is thrown away. Content with no place in the new design waits in the **Extra Content** pane, which opens beside the page when the change is done. It lists each leftover story, picture, table, shape, line, and group.
 
-- Click an item, then click **Place on Page** to put it on the page you are looking at. A story becomes a text box that fits its text, and a picture is made small enough to fit the page. You can also double-click an item, or drag it onto the page.
+- Click an item, then click **Place on Page** to put it on the page you are looking at. A story becomes a text box that fits its text, a table or group comes back whole, and a picture or object that is too big is made smaller to fit the page. You can also double-click an item, or drag it onto the page.
 - Click an item, then click **Discard** to remove it for good. (You can still undo.)
 
 The pane stays with the publication until you close the publication, and it is saved in the publication's file. (A .pub file has no place for it, so saving as .pub leaves it out.) To open it again, click **Page Design > Template > Extra Content**. The button is dimmed when nothing is left over.

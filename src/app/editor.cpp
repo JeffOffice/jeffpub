@@ -1482,12 +1482,15 @@ QString Editor::placeExtra(const QString &id, const std::optional<QPointF> &at)
     beginChange(tr("Place Extra Content"));
     const ItemPtr it = *found;
     m_doc->extra.erase(found);
-    // As wide as it was, but no wider than the text area; a picture no longer than four inches.
+    // As big as it was, but no wider than the text area (a text box grows to its text, so it
+    // may be taller), and a picture no longer than four inches.
     const QSizeF page = surfaceSize();
     const QRectF area = QRectF(QPointF(0, 0), page).marginsRemoved(m_doc->setup.margins);
-    QSizeF size = it->rect.size();
+    const QRectF was = it->bounds();
+    QSizeF size = was.size();
     double k = std::min(1.0, area.width() / std::max(1.0, size.width()));
-    if (it->type() == ItemType::Picture) k = std::min({k, 288.0 / std::max(1.0, std::max(size.width(), size.height())), area.height() / std::max(1.0, size.height())});
+    if (it->type() != ItemType::Text && it->type() != ItemType::TextArt) k = std::min(k, area.height() / std::max(1.0, size.height()));
+    if (it->type() == ItemType::Picture) k = std::min(k, 288.0 / std::max(1.0, std::max(size.width(), size.height())));
     size *= k;
     QPointF topLeft;
     if (at) {
@@ -1502,7 +1505,7 @@ QString Editor::placeExtra(const QString &id, const std::optional<QPointF> &at)
             if (taken) topLeft += QPointF(18, 18);
         }
     }
-    it->scaleInto(it->rect, QRectF(topLeft, size));
+    it->scaleInto(was, QRectF(topLeft, size));
     surfaceItems().push_back(it);
     if (it->type() == ItemType::Text) {
         auto *t = static_cast<TextItem *>(it.get());

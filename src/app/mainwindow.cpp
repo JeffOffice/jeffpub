@@ -400,7 +400,7 @@ MainWindow *MainWindow::changeTemplate(std::unique_ptr<Document> design, bool to
     }
     hideBackstage();
     target->hideBackstage();
-    const int extra = report.extraStories + report.extraPictures;
+    const int extra = report.extraStories + report.extraPictures + report.extraObjects;
     target->statusBar()->showMessage(extra ? tr("Moved your text and pictures into the new design. What had no place is in Extra Content.")
                                            : tr("Moved your text and pictures into the new design."),
                                      8000);

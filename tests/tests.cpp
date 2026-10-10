@@ -2664,6 +2664,130 @@ private Q_SLOTS:
         QVERIFY(textOf(*d, boxes[0]).startsWith(QLatin1String("Upper story")));
         QVERIFY(textOf(*d, boxes[1]).startsWith(QLatin1String("Lower story")));
         QVERIFY(d->extra.empty());
+
+        // Nothing the user made is lost. A table, shape, line, group, or Text Art
+        // stays behind only when it is the old design's own and unchanged; any
+        // other goes to Extra Content, whole, and can be placed back.
+        auto extrasOf = [&](jp::ItemType t) {
+            int n = 0;
+            for (const auto &e : d->extra) n += e->type() == t;
+            return n;
+        };
+        auto firstOf = [&](jp::ItemType t) -> jp::Item * {
+            for (const auto &it : d->pages[0]->items)
+                if (it->type() == t) return it.get();
+            return nullptr;
+        };
+        auto start = [&](const QString &id) {
+            auto made = jp::findTemplate(id)->build(jp::TemplateOptions());
+            made->templateId = id;
+            ed->setDocument(std::move(made));
+            d = ed->doc();
+        };
+        auto change = [&](const QString &id, jp::ChangeReport *r) {
+            const jp::TemplateInfo *to = jp::findTemplate(id);
+            auto design = to->build(jp::optionsForChange(*d, jp::TemplateOptions()));
+            design->templateId = id;
+            ed->applyTemplate(std::move(design), r);
+            d = ed->doc();
+        };
+        auto editStory = [&](const QString &storyId, const QString &text) {
+            QTextCursor c(d->storyDoc(storyId));
+            c.select(QTextCursor::Document);
+            c.insertText(text);
+        };
+        // Untouched, a design's own shapes and lines stay with it.
+        start(QStringLiteral("flyer-announce"));
+        jp::ChangeReport kept;
+        change(QStringLiteral("flyer-event"), &kept);
+        QVERIFY(d->extra.empty());
+        QCOMPARE(kept.extraObjects, 0);
+        // Edited, moved, or drawn by the user, they go to Extra Content.
+        start(QStringLiteral("flyer-announce"));
+        auto *sidebar = static_cast<jp::ShapeItem *>(firstOf(jp::ItemType::Shape));
+        QVERIFY(sidebar && !sidebar->storyId.isEmpty());
+        editStory(sidebar->storyId, QStringLiteral("Doors open at six"));
+        static_cast<jp::LineItem *>(firstOf(jp::ItemType::Line))->moveBy(0, 10);
+        auto box = std::make_shared<jp::ShapeItem>();
+        box->rect = QRectF(300, 600, 80, 40);
+        ed->addItem(box);
+        auto stroke = std::make_shared<jp::LineItem>();
+        stroke->p1 = QPointF(40, 600);
+        stroke->p2 = QPointF(240, 640);
+        stroke->syncRect();
+        ed->addItem(stroke);
+        auto wordArt = std::make_shared<jp::TextArtItem>();
+        wordArt->text = QStringLiteral("Drawn WordArt");
+        wordArt->rect = QRectF(72, 640, 200, 60);
+        ed->addItem(wordArt);
+        auto table = std::static_pointer_cast<jp::TableItem>(ed->newTable(QRectF(72, 500, 240, 60), 2, 3));
+        editStory(table->cell(0, 0).storyId, QStringLiteral("Cell A"));
+        ed->addItem(table);
+        auto inner = std::make_shared<jp::ShapeItem>();
+        inner->rect = QRectF(420, 640, 50, 50);
+        auto rule = std::make_shared<jp::LineItem>();
+        rule->p1 = QPointF(420, 700);
+        rule->p2 = QPointF(520, 700);
+        rule->syncRect();
+        auto group = std::make_shared<jp::GroupItem>();
+        group->children = {inner, rule};
+        group->syncRect();
+        ed->addItem(group);
+        jp::ChangeReport lost;
+        change(QStringLiteral("flyer-event"), &lost);
+        QCOMPARE(extrasOf(jp::ItemType::Shape), 2);   // the sidebar with its new words, and the drawn one
+        QCOMPARE(extrasOf(jp::ItemType::Line), 2);    // the divider that was moved, and the drawn one
+        QCOMPARE(extrasOf(jp::ItemType::Table), 1);
+        QCOMPARE(extrasOf(jp::ItemType::Group), 1);
+        QCOMPARE(extrasOf(jp::ItemType::TextArt), 1);
+        QCOMPARE(lost.extraObjects, 6);
+        QCOMPARE(lost.extraStories, 1);   // the Text Art is a story with no title box to take it
+        // Placed back, a table is whole: its size, and the words in its cells.
+        jp::Item *extraTable = nullptr, *extraGroup = nullptr;
+        for (const auto &e : d->extra) {
+            if (e->type() == jp::ItemType::Table) extraTable = e.get();
+            if (e->type() == jp::ItemType::Group) extraGroup = e.get();
+        }
+        QVERIFY(extraTable && extraGroup);
+        ed->placeExtra(extraTable->id);
+        auto *back = dynamic_cast<jp::TableItem *>(d->pages[ed->currentPage()]->items.back().get());
+        QVERIFY(back);
+        QCOMPARE(back->rows, 2);
+        QCOMPARE(back->cols, 3);
+        QCOMPARE(d->storyDoc(back->cell(0, 0).storyId)->toPlainText(), QStringLiteral("Cell A"));
+        ed->placeExtra(extraGroup->id);
+        auto *regrouped = dynamic_cast<jp::GroupItem *>(d->pages[ed->currentPage()]->items.back().get());
+        QVERIFY(regrouped);
+        QCOMPARE(int(regrouped->children.size()), 2);
+        // A design's own table stays behind unchanged; once a cell is edited, it goes to Extra Content.
+        start(QStringLiteral("newsletter-classic"));
+        change(QStringLiteral("letterhead"), &kept);
+        QVERIFY(d->extra.empty());
+        start(QStringLiteral("newsletter-classic"));
+        ed->setCurrentPage(1);
+        auto *calendar = static_cast<jp::TableItem *>(d->pages[1]->items.back().get());
+        QCOMPARE(calendar->type(), jp::ItemType::Table);
+        editStory(calendar->cell(1, 1).storyId, QStringLiteral("Opening night: the tulip show"));
+        change(QStringLiteral("letterhead"), &lost);
+        QCOMPARE(extrasOf(jp::ItemType::Table), 1);
+        ed->placeExtra(d->extra.back()->id);
+        auto *calendarBack = dynamic_cast<jp::TableItem *>(d->pages[ed->currentPage()]->items.back().get());
+        QVERIFY(calendarBack);
+        QCOMPARE(calendarBack->rows, 5);
+        QCOMPARE(d->storyDoc(calendarBack->cell(1, 1).storyId)->toPlainText(), QStringLiteral("Opening night: the tulip show"));
+        QCOMPARE(d->storyDoc(calendarBack->cell(2, 1).storyId)->toPlainText(), QStringLiteral("Open house at the new studio"));
+        // Built with its logo (which moves a line), and saved and opened again, a design's own parts are still its own.
+        jp::TemplateOptions withLogo;
+        withLogo.options["logo"] = true;
+        auto card = jp::findTemplate(QStringLiteral("bizcard-classic"))->build(withLogo);
+        card->templateId = QStringLiteral("bizcard-classic");
+        QString err;
+        auto reopened = jp::publicationFromBytes(jp::publicationBytes(*card, QImage()), &err);
+        QVERIFY2(reopened, qPrintable(err));
+        ed->setDocument(std::move(reopened));
+        d = ed->doc();
+        change(QStringLiteral("bizcard-band"), &kept);
+        QVERIFY(d->extra.empty());
     }
 
     // The gallery Change Template opens is the New page's, in a mode of its
