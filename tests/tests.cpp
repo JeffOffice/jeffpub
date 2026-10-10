@@ -692,7 +692,10 @@ private Q_SLOTS:
     // The Master Page tab as the other program has it: Show Header/Footer
     // goes to the master's header, then its footer; Insert Date and Insert
     // Time (Alt+Shift+D, Alt+Shift+T) add fields; the Mailings tab hides.
-    // Select Recipients also offers contacts (vCard files).
+    // Select Recipients also offers contacts (vCard files). In master view the
+    // Master Page tab comes first, right after File, and is the one showing;
+    // the other contextual tabs stay where they were, and the KeyTips stay
+    // unique.
     void masterPageTabAsTheOtherProgram()
     {
         jp::MainWindow w;
@@ -703,11 +706,36 @@ private Q_SLOTS:
                 if (r->tabName(i) == name) return r->tabVisible(i);
             return false;
         };
+        auto shown = [r] {
+            QStringList names;
+            for (int i = 0; i < r->tabCount(); ++i)
+                if (r->tabVisible(i)) names << r->tabName(i);
+            return names;
+        };
+        const QStringList onThePage = shown();
+        QCOMPARE(onThePage, (QStringList{"Home", "Insert", "Page Design", "Mailings", "Review", "View", "Help"}));
         QVERIFY(visible(QStringLiteral("Mailings")));
         w.act(QStringLiteral("mp.showHeaderFooter"))->trigger();
         QVERIFY(!ed->masterView().isEmpty());
         QVERIFY(visible(QStringLiteral("Master Page")));
         QVERIFY(!visible(QStringLiteral("Mailings")));
+        QCOMPARE(shown(), (QStringList{"Master Page", "Home", "Insert", "Page Design", "Review", "View", "Help", "Text Box"}));
+        QCOMPARE(r->current(), r->tab(QStringLiteral("Master Page")));
+        // Screen readers go through the tab buttons in the order the parent holds them: the order shown.
+        int last = -1;
+        for (int i = 0; i < r->tabCount(); ++i) {
+            if (!r->tabVisible(i)) continue;
+            QWidget *b = r->tabButton(i);
+            const int at = b->parentWidget()->children().indexOf(b);
+            QVERIFY2(at > last, qPrintable(r->tabName(i)));
+            last = at;
+        }
+        // Their KeyTips are still all different (Master Page is JM), and the first tab is the one reached by it.
+        QStringList keys{r->fileKeytip()};
+        for (int i = 0; i < r->tabCount(); ++i)
+            if (r->tabVisible(i)) keys << r->tabKeytip(i);
+        QCOMPARE(QSet<QString>(keys.begin(), keys.end()).size(), keys.size());
+        QCOMPARE(keys.mid(0, 3), (QStringList{"F", "JM", "H"}));
         QVERIFY(ed->isEditingText());
         const QString header = ed->textTarget().itemId;
         QCOMPARE(ed->doc()->item(header)->name, QStringLiteral("Header"));
@@ -727,6 +755,28 @@ private Q_SLOTS:
         w.act(QStringLiteral("mp.close"))->trigger();
         QVERIFY(visible(QStringLiteral("Mailings")));
         QVERIFY(w.act(QStringLiteral("mm.contacts")));
+        // Closed, the tab goes and the others are as they were, Home showing.
+        QCOMPARE(shown(), onThePage);
+        QCOMPARE(r->current(), r->tab(QStringLiteral("Home")));
+        // From another tab, opening master view (Ctrl+M) shows the Master Page tab; a tab picked afterward stays, even as the selection brings other tabs.
+        r->showTab(r->tab(QStringLiteral("View")));
+        w.act(QStringLiteral("view.master"))->trigger();
+        QCOMPARE(shown(), (QStringList{"Master Page", "Home", "Insert", "Page Design", "Review", "View", "Help"}));
+        QCOMPARE(r->current(), r->tab(QStringLiteral("Master Page")));
+        r->showTab(r->tab(QStringLiteral("Insert")));
+        auto note = ed->newTextBox(QRectF(72, 72, 200, 100), QStringLiteral("x"));
+        ed->addItem(note);
+        ed->select(QStringList{note->id});
+        QCOMPARE(shown().first(), QStringLiteral("Master Page"));
+        QVERIFY(visible(QStringLiteral("Text Box")));
+        QCOMPARE(r->current(), r->tab(QStringLiteral("Insert")));
+        w.act(QStringLiteral("view.master"))->trigger();
+        QCOMPARE(shown(), onThePage);
+        // The contextual tabs that come with the selection keep their place, after Help.
+        auto box = ed->newTextBox(QRectF(72, 72, 200, 100), QStringLiteral("y"));
+        ed->addItem(box);
+        ed->select(QStringList{box->id});
+        QCOMPARE(shown(), onThePage + QStringList{"Text Box"});
     }
 
     // Increase Indent on list items nests them a level (numbered a., b. under
@@ -9136,6 +9186,157 @@ private Q_SLOTS:
         // One undo step takes the dialog's changes back.
         w.editor()->undoStack()->undo();
         QCOMPARE(w.editor()->surface()->guides.h, (QVector<double>{396, 432}));
+    }
+
+    // The rulers' zero point can move. Shift and the right button dragging on
+    // a ruler sets that ruler's zero where you let go; dragging from the box
+    // where the two rulers meet sets both, and a double-click there puts both
+    // back at the page's corner. Only the rulers' numbers change: guides are
+    // still placed from the page's corner.
+    void rulerZeroPoint()
+    {
+        jp::Settings &st = jp::Settings::get();
+        const jp::Unit was = st.unit();
+        st.setUnit(jp::Unit::Inch);
+        jp::MainWindow w;
+        w.resize(1200, 900);
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        QTest::qWait(50);   // the whole page fits the window
+        jp::Canvas *c = w.canvas();
+        c->setRulersVisible(true);
+        jp::Ruler *h = c->hRuler(), *v = c->vRuler();
+        QWidget *corner = c->rulerCorner();
+        QVERIFY(corner);
+        // A place on the page, as a place on a ruler or on the box where they meet.
+        auto view = [&](QWidget *on, QPointF page) { return on->mapFromGlobal(c->viewport()->mapToGlobal(c->pageToView(page).toPoint())); };
+        auto onH = [&](double x) { return QPoint(view(h, QPointF(x, 0)).x(), 5); };
+        auto onV = [&](double y) { return QPoint(5, view(v, QPointF(0, y)).y()); };
+        auto send = [](QWidget *on, QEvent::Type type, Qt::MouseButton button, Qt::MouseButtons held, Qt::KeyboardModifiers mods, QPoint pos) {
+            QMouseEvent e(type, QPointF(pos), QPointF(on->mapToGlobal(pos)), button, held, mods);
+            QApplication::sendEvent(on, &e);
+        };
+        auto drag = [&](QWidget *on, Qt::MouseButton button, Qt::KeyboardModifiers mods, QPoint from, QPoint to) {
+            send(on, QEvent::MouseButtonPress, button, button, mods, from);
+            send(on, QEvent::MouseMove, Qt::NoButton, button, mods, (from + to) / 2);
+            send(on, QEvent::MouseMove, Qt::NoButton, button, mods, to);
+            send(on, QEvent::MouseButtonRelease, button, Qt::NoButton, mods, to);
+        };
+        const double pixel = 2 / c->ppp();   // a pixel or two, in points
+        auto closeTo = [&](double a, double b) { return qAbs(a - b) <= pixel; };
+        auto look = [](jp::Ruler *r) {
+            r->setMouse(-1e9);
+            return r->grab().toImage();
+        };
+
+        // At first both count from the page's corner.
+        const QImage plainH = look(h), plainV = look(v);
+        QCOMPARE(h->zero(), 0.0);
+        QCOMPARE(v->zero(), 0.0);
+        QCOMPARE(h->valueAt(144), 2.0);
+        QCOMPARE(v->valueAt(216), 3.0);
+
+        // Shift and the right button on the top ruler: its zero goes to 2 in. The side ruler stays.
+        drag(h, Qt::RightButton, Qt::ShiftModifier, onH(72), onH(144));
+        QVERIFY2(closeTo(h->zero(), 144), qPrintable(QString::number(h->zero())));
+        QCOMPARE(v->zero(), 0.0);
+        const double hz = h->zero();
+        QVERIFY(qAbs(h->valueAt(hz)) < 1e-9);
+        QVERIFY(qAbs(h->valueAt(hz + 72) - 1.0) < 1e-9);
+        QVERIFY(qAbs(h->valueAt(hz - 36) + 0.5) < 1e-9);
+        QVERIFY(look(h) != plainH);
+        QCOMPARE(look(v), plainV);
+        // And the same on the side ruler.
+        drag(v, Qt::RightButton, Qt::ShiftModifier, onV(300), onV(216));
+        QVERIFY2(closeTo(v->zero(), 216), qPrintable(QString::number(v->zero())));
+        QCOMPARE(h->zero(), hz);
+        QVERIFY(qAbs(v->valueAt(v->zero() + 72) - 1.0) < 1e-9);
+        // Other buttons, and the right button without Shift, leave the zero alone.
+        drag(h, Qt::RightButton, Qt::NoModifier, onH(300), onH(400));
+        drag(h, Qt::MiddleButton, Qt::ShiftModifier, onH(300), onH(400));
+        QCOMPARE(h->zero(), hz);
+        // Shift and the right button do not bring up the page's pop-up menu.
+        QSignalSpy menu(c, &jp::Canvas::contextMenuWanted);
+        QContextMenuEvent ce(QContextMenuEvent::Mouse, onH(144), h->mapToGlobal(onH(144)), Qt::ShiftModifier);
+        QApplication::sendEvent(h, &ce);
+        QCOMPARE(menu.count(), 0);
+
+        // The box where they meet moves both; a click on it moves nothing.
+        drag(corner, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10), view(corner, QPointF(72, 108)));
+        QVERIFY2(closeTo(h->zero(), 72), qPrintable(QString::number(h->zero())));
+        QVERIFY2(closeTo(v->zero(), 108), qPrintable(QString::number(v->zero())));
+        const double hz2 = h->zero(), vz2 = v->zero();
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) w.grab().save(qEnvironmentVariable("JP_SHOT_DIR") + "/ruler-zero.png");
+        QTest::mouseClick(corner, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));
+        QCOMPARE(h->zero(), hz2);
+        QCOMPARE(v->zero(), vz2);
+
+        // Guides are placed from the page's corner all the same.
+        drag(h, Qt::LeftButton, Qt::NoModifier, onH(300), QPoint(onH(300).x(), view(h, QPointF(0, 250)).y()));
+        const QVector<double> &guides = w.editor()->surface()->guides.h;
+        QCOMPARE(guides.size(), 1);
+        QVERIFY2(closeTo(guides[0], 250), qPrintable(QString::number(guides[0])));
+        QCOMPARE(h->zero(), hz2);
+
+        // A double-click on the box puts both back, and the rulers look as they did.
+        QTest::mouseDClick(corner, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));
+        QCOMPARE(h->zero(), 0.0);
+        QCOMPARE(v->zero(), 0.0);
+        QCOMPARE(look(h), plainH);
+        QCOMPARE(look(v), plainV);
+
+        // A new publication starts with the rulers at the corner.
+        drag(corner, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10), view(corner, QPointF(72, 108)));
+        QVERIFY(h->zero() > 1 && v->zero() > 1);
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        QCOMPARE(h->zero(), 0.0);
+        QCOMPARE(v->zero(), 0.0);
+        st.setUnit(was);
+    }
+
+    // The text ruler (indents and tabs) is measured from the text box, so it
+    // works as ever with the zero moved.
+    void rulerZeroLeavesTextRuler()
+    {
+        jp::MainWindow w;
+        w.resize(1200, 900);
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        QTest::qWait(50);
+        jp::Editor *ed = w.editor();
+        jp::Canvas *c = w.canvas();
+        c->setRulersVisible(true);
+        jp::Ruler *h = c->hRuler();
+        auto box = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 72, 300, 200), QStringLiteral("one two three")));
+        ed->addItem(box);
+        ed->beginTextEdit(box->id);
+        const double left = box->rect.left() + box->insets.left();   // where the text starts
+        auto onH = [&](double x) {
+            const QPoint p = h->mapFromGlobal(c->viewport()->mapToGlobal(c->pageToView(QPointF(x, 0)).toPoint()));
+            return QPoint(p.x(), 5);
+        };
+        auto send = [&](QEvent::Type type, Qt::MouseButton button, Qt::MouseButtons held, QPoint pos) {
+            QMouseEvent e(type, QPointF(pos), QPointF(h->mapToGlobal(pos)), button, held, Qt::NoModifier);
+            QApplication::sendEvent(h, &e);
+        };
+        const double pixel = 2 / c->ppp();
+        h->setZero(200);
+        // Drag the first-line marker half an inch in.
+        send(QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, onH(left));
+        send(QEvent::MouseMove, Qt::NoButton, Qt::LeftButton, onH(left + 18));
+        send(QEvent::MouseMove, Qt::NoButton, Qt::LeftButton, onH(left + 36));
+        send(QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, onH(left + 36));
+        const QTextBlockFormat bf = ed->cursor().blockFormat();
+        QVERIFY2(qAbs(bf.textIndent() - 36) <= pixel, qPrintable(QString::number(bf.textIndent())));
+        // A click inside the text area sets a tab stop that far from the text, wherever the zero is.
+        send(QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, onH(left + 100));
+        send(QEvent::MouseButtonRelease, Qt::LeftButton, Qt::NoButton, onH(left + 100));
+        const auto tabs = ed->cursor().blockFormat().tabPositions();
+        QCOMPARE(tabs.size(), 1);
+        QVERIFY2(qAbs(tabs[0].position - 100) <= pixel, qPrintable(QString::number(tabs[0].position)));
+        QCOMPARE(h->zero(), 200.0);
     }
 
     // A saved PDF opens in the system's viewer when the option is on (the

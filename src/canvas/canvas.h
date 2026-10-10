@@ -19,6 +19,13 @@ public:
     Ruler(Canvas *c, Qt::Orientation o);
     QSize sizeHint() const override;
     void setMouse(double scenePos) { m_mouse = scenePos; update(); }
+    // Where this ruler counts from, in points from the page's corner (the
+    // corner itself until moved). Not saved: it belongs to the open window.
+    double zero() const { return m_zero; }
+    void setZero(double pagePt);
+    // What the ruler reads at `pagePt` (points from the page's corner), in
+    // the current unit, counting from its zero: negative before it.
+    double valueAt(double pagePt) const;
 
 protected:
     void paintEvent(QPaintEvent *) override;
@@ -26,15 +33,21 @@ protected:
     void mouseMoveEvent(QMouseEvent *e) override;
     void mouseReleaseEvent(QMouseEvent *e) override;
     void mouseDoubleClickEvent(QMouseEvent *e) override;
+    void contextMenuEvent(QContextMenuEvent *e) override;
 
 private:
+    QPointF viewAt(const QMouseEvent *e) const;
+    double pageAlong(const QMouseEvent *e) const;
     struct TextRuler { bool on = false; double left = 0, right = 0; double firstIndent = 0, leftIndent = 0, rightIndent = 0; QList<QTextOption::Tab> tabs; QTransform map; };
     TextRuler textRuler() const;
     Canvas *m_c;
     Qt::Orientation m_o;
     double m_mouse = -1e9;
+    double m_zero = 0;
     int m_dragMarker = -1;     // 0 first-line, 1 left, 2 right, 10+ tab index
     bool m_dragGuide = false;
+    bool m_dragZero = false;   // the zero point is being dragged
+    Qt::MouseButton m_zeroButton = Qt::NoButton;
 };
 
 class Canvas : public QAbstractScrollArea {
@@ -67,6 +80,7 @@ public:
     void endGuideDrag(const QPoint &globalPos);
     Ruler *hRuler() const { return m_hRuler; }
     Ruler *vRuler() const { return m_vRuler; }
+    QWidget *rulerCorner() const { return m_corner; }   // the box where the rulers meet
     void setRulersVisible(bool on);
     QRectF caretViewRect() const;
     // For screen readers: a rectangle of the page on the screen, and where

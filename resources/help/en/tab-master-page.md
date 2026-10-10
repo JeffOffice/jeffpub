@@ -1,7 +1,7 @@
 # Master Page tab
 <!-- keywords: master page tab, master tab, header, footer, show header footer, insert date, insert time, page number, two-page master, close master page, ribbon -->
 
-The **Master Page** tab appears while you are editing a master page. To get there, click **View > Views > Master Page**. A master page is a background page whose contents show on every page that uses it.
+The **Master Page** tab appears while you are editing a master page. It comes first, right after **File**, and it is the tab showing when you open a master page. To get there, click **View > Views > Master Page**. A master page is a background page whose contents show on every page that uses it.
 
 While you edit a master page, the **Mailings** tab is hidden.
 

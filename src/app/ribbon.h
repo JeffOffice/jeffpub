@@ -94,7 +94,10 @@ public:
     // is what the header shows, the name translated (the name when empty).
     RibbonTab *addTab(const QString &name, const QString &contextGroup = QString(), const QColor &color = QColor(),
                       const QString &title = QString());
-    void setContextVisible(const QString &group, bool visible);
+    // With `first`, the group's tabs come before all the others, right after
+    // File, while shown, and the first of them is the current tab when they
+    // appear (the Master Page tab does this).
+    void setContextVisible(const QString &group, bool visible, bool first = false);
     void setTabVisible(const QString &name, bool visible);   // any tab, by name
     void showTab(RibbonTab *t);
     RibbonTab *current() const;
@@ -144,7 +147,10 @@ private:
         QScrollArea *scroll = nullptr;
         bool visible = true;
         QString title, keytip;
+        int home = 0;         // its place as built
+        bool first = false;   // placed before the rest
     };
+    void sortTabs();
     QVector<Tab> m_tabs;
     int m_current = 0;
     RibbonHeader *m_header;

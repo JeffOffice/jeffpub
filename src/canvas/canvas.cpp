@@ -30,6 +30,61 @@ namespace jp {
 static const int kRuler = 22;
 static const double kHandle = 4.5;     // handle radius in pixels
 
+// How people move the rulers' zero points; the gestures are all here. Shift
+// and the right button on a ruler move that ruler's zero to where you let
+// go. The left button from the box where the rulers meet moves both, and a
+// double-click on that box puts both back at the page's corner.
+static bool movesRulerZero(Qt::MouseButton b, Qt::KeyboardModifiers m) { return b == Qt::RightButton && (m & Qt::ShiftModifier); }
+static bool movesBothZeros(Qt::MouseButton b) { return b == Qt::LeftButton; }
+static bool resetsZeros(Qt::MouseButton b) { return b == Qt::LeftButton; }
+
+// The small box where the two rulers meet.
+class RulerCorner : public QWidget {
+public:
+    explicit RulerCorner(Canvas *c) : QWidget(c), m_c(c)
+    {
+        setAutoFillBackground(true);
+        setCursor(Qt::SizeAllCursor);
+        setAccessibleName(QCoreApplication::translate("Canvas", "Ruler zero point"));
+        setAccessibleDescription(QCoreApplication::translate("Canvas", "Drag to move both rulers' zero point. Double-click to put it back at the page's corner."));
+        setToolTip(accessibleDescription());
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent *e) override
+    {
+        m_button = movesBothZeros(e->button()) ? e->button() : Qt::NoButton;
+        m_press = e->position().toPoint();
+    }
+    void mouseMoveEvent(QMouseEvent *e) override { if (m_button != Qt::NoButton) follow(e); }
+    void mouseReleaseEvent(QMouseEvent *e) override
+    {
+        if (m_button == Qt::NoButton || e->button() != m_button) return;
+        follow(e);
+        m_button = Qt::NoButton;
+    }
+    void mouseDoubleClickEvent(QMouseEvent *e) override
+    {
+        if (!resetsZeros(e->button())) return;
+        m_button = Qt::NoButton;
+        m_c->hRuler()->setZero(0);
+        m_c->vRuler()->setZero(0);
+    }
+
+private:
+    // Both zeros go to the pointer; a click that never leaves its spot moves nothing.
+    void follow(QMouseEvent *e)
+    {
+        if (e->position().toPoint() == m_press) return;
+        const QPointF page = m_c->toPage(m_c->viewport()->mapFromGlobal(e->globalPosition().toPoint()));
+        m_c->hRuler()->setZero(page.x());
+        m_c->vRuler()->setZero(page.y());
+    }
+    Canvas *m_c;
+    Qt::MouseButton m_button = Qt::NoButton;   // the button dragging, if one is
+    QPoint m_press;
+};
+
 static bool darkUi()
 {
     return uiDark();
@@ -115,8 +170,7 @@ Canvas::Canvas(Editor *ed, QWidget *parent) : QAbstractScrollArea(parent), m_ed(
     setAcceptDrops(true);
     m_hRuler = new Ruler(this, Qt::Horizontal);
     m_vRuler = new Ruler(this, Qt::Vertical);
-    m_corner = new QWidget(this);
-    m_corner->setAutoFillBackground(true);
+    m_corner = new RulerCorner(this);
     setViewportMargins(kRuler, kRuler, 0, 0);
     m_caretTimer.setInterval(QApplication::cursorFlashTime() / 2 > 0 ? QApplication::cursorFlashTime() / 2 : 530);
     connect(&m_caretTimer, &QTimer::timeout, this, [this] {
@@ -144,7 +198,12 @@ Canvas::Canvas(Editor *ed, QWidget *parent) : QAbstractScrollArea(parent), m_ed(
         m_hRuler->update();
         m_vRuler->update();
     });
-    connect(ed, &Editor::documentReplaced, this, [this] { m_fit = Fit::WholePage; QTimer::singleShot(0, this, [this] { zoomToFit(Fit::WholePage); }); });
+    connect(ed, &Editor::documentReplaced, this, [this] {
+        m_fit = Fit::WholePage;
+        QTimer::singleShot(0, this, [this] { zoomToFit(Fit::WholePage); });
+        m_hRuler->setZero(0);
+        m_vRuler->setZero(0);
+    });
     connect(ed, &Editor::textCursorChanged, this, [this] {
         m_caretOn = true;
         if (m_ed->isEditingText()) {
@@ -2983,6 +3042,31 @@ Ruler::Ruler(Canvas *c, Qt::Orientation o) : QWidget(c), m_c(c), m_o(o)
 
 QSize Ruler::sizeHint() const { return m_o == Qt::Horizontal ? QSize(100, kRuler) : QSize(kRuler, 100); }
 
+void Ruler::setZero(double pagePt)
+{
+    if (pagePt == m_zero) return;
+    m_zero = pagePt;
+    update();
+}
+
+double Ruler::valueAt(double pagePt) const { return Settings::get().toUnit(pagePt - m_zero); }
+
+// Where the pointer is in the page area, whichever ruler's coordinates it comes in.
+QPointF Ruler::viewAt(const QMouseEvent *e) const { return m_c->viewport()->mapFromGlobal(e->globalPosition().toPoint()); }
+
+// Where along this ruler the pointer is on the page, in points from the page's corner.
+double Ruler::pageAlong(const QMouseEvent *e) const
+{
+    const QPointF p = m_c->toPage(viewAt(e));
+    return m_o == Qt::Horizontal ? p.x() : p.y();
+}
+
+// A zero-point gesture is not for the page's pop-up menu.
+void Ruler::contextMenuEvent(QContextMenuEvent *e)
+{
+    e->setAccepted(m_dragZero || movesRulerZero(Qt::RightButton, e->modifiers()));
+}
+
 Ruler::TextRuler Ruler::textRuler() const
 {
     TextRuler tr;
@@ -3064,7 +3148,8 @@ void Ruler::paintEvent(QPaintEvent *)
     while (subdiv > 1 && major / subdiv * ppp < 5) subdiv /= 2;
     const double startScene = horiz ? m_c->toScene(QPointF(0, 0)).x() : m_c->toScene(QPointF(0, 0)).y();
     const double endScene = horiz ? m_c->toScene(QPointF(width(), 0)).x() : m_c->toScene(QPointF(0, height())).y();
-    const double o = horiz ? origin.x() : origin.y();
+    const double pageO = horiz ? origin.x() : origin.y();
+    const double o = pageO + m_zero;   // where the numbers start
     QFont f = font();
     f.setPointSizeF(7);
     p.setFont(f);
@@ -3081,7 +3166,7 @@ void Ruler::paintEvent(QPaintEvent *)
         if (horiz) p.drawLine(QPointF(v, extent - len), QPointF(v, extent));
         else p.drawLine(QPointF(extent - len, v), QPointF(extent, v));
         if (isMajor) {
-            const double val = st.toUnit(i * step);
+            const double val = valueAt(scene - pageO);
             const QString label = QString::number(std::abs(std::round(val * 100) / 100), 'g', 4);
             if (horiz) p.drawText(QPointF(v + 2, 9), label);
             else {
@@ -3128,6 +3213,11 @@ void Ruler::paintEvent(QPaintEvent *)
 
 void Ruler::mousePressEvent(QMouseEvent *e)
 {
+    if (movesRulerZero(e->button(), e->modifiers())) {
+        m_dragZero = true;
+        m_zeroButton = e->button();
+        return;
+    }
     const TextRuler tr = textRuler();
     if (tr.on && e->button() == Qt::LeftButton) {
         auto vx = [&](double pagex) { return m_c->pageToView(QPointF(pagex, 0)).x(); };
@@ -3144,7 +3234,7 @@ void Ruler::mousePressEvent(QMouseEvent *e)
         }
         if (m_dragMarker < 0 && x > vx(tr.left) && x < vx(tr.right)) {
             // Click inside the text area adds a left tab stop.
-            const double pos = m_c->toPage(m_c->viewport()->mapFrom(this, e->position().toPoint())).x() - tr.left;
+            const double pos = m_c->toPage(viewAt(e)).x() - tr.left;
             QTextBlockFormat bf;
             QList<QTextOption::Tab> tabs = tr.tabs;
             tabs << QTextOption::Tab(pos, QTextOption::LeftTab);
@@ -3166,6 +3256,10 @@ void Ruler::mousePressEvent(QMouseEvent *e)
 
 void Ruler::mouseMoveEvent(QMouseEvent *e)
 {
+    if (m_dragZero) {
+        setZero(pageAlong(e));
+        return;
+    }
     if (m_dragGuide) {
         m_c->updateGuideDrag(e->globalPosition().toPoint());
         return;
@@ -3173,7 +3267,7 @@ void Ruler::mouseMoveEvent(QMouseEvent *e)
     if (m_dragMarker >= 0) {
         const TextRuler tr = textRuler();
         Editor *ed = m_c->editor();
-        const double pagex = m_c->toPage(m_c->viewport()->mapFrom(this, e->position().toPoint())).x();
+        const double pagex = m_c->toPage(viewAt(e)).x();
         QTextBlockFormat bf = ed->cursor().blockFormat();
         if (m_dragMarker == 0) bf.setTextIndent(pagex - tr.left - bf.leftMargin());
         else if (m_dragMarker == 1) { const double first = bf.leftMargin() + bf.textIndent(); bf.setLeftMargin(std::max(0.0, pagex - tr.left)); bf.setTextIndent(first - bf.leftMargin()); }
@@ -3193,7 +3287,7 @@ void Ruler::mouseMoveEvent(QMouseEvent *e)
         update();
         return;
     }
-    const QPointF scene = m_c->toScene(m_c->viewport()->mapFrom(this, e->position().toPoint()));
+    const QPointF scene = m_c->toScene(viewAt(e));
     m_mouse = m_o == Qt::Horizontal ? scene.x() : scene.y();
     const TextRuler tr = textRuler();
     setCursor(tr.on ? Qt::ArrowCursor : (m_o == Qt::Horizontal ? Qt::SplitVCursor : Qt::SplitHCursor));
@@ -3202,6 +3296,11 @@ void Ruler::mouseMoveEvent(QMouseEvent *e)
 
 void Ruler::mouseReleaseEvent(QMouseEvent *e)
 {
+    if (m_dragZero && e->button() == m_zeroButton) {
+        m_dragZero = false;
+        setZero(pageAlong(e));
+        return;
+    }
     if (m_dragGuide) {
         m_dragGuide = false;
         m_c->endGuideDrag(e->globalPosition().toPoint());

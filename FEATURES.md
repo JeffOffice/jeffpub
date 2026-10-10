@@ -131,6 +131,7 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 ## Master Page tab (while editing master pages)
 - [x] Add Master Page, Duplicate, Rename, Delete, Two-Page Master, Apply To, Close Master Page
 - [x] Header and footer editing with Show Header/Footer, Insert Page Number, Insert Date, and Insert Time (Alt+Shift+P, D, and T); the Mailings tab hides while a master page is open, as there
+- [x] The Master Page tab comes first, right after File, and is the one showing when master view opens; the other contextual tabs keep their places after Help
 
 ## Drawing Tools / Shape Format tab
 - [x] Insert Shapes gallery, Edit Shape (Change Shape and Edit Points), Draw Text Box
@@ -187,7 +188,7 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 - [x] Measurement toolbar: x, y, width, height, rotation, tracking (percent), text scaling, kerning (points), and line spacing
 - [x] Measurements to three decimal places in every unit (8.125", 1.234 cm, 10.125 pt), shown without trailing zeros and kept without rounding
 - [x] Scratch area shared across pages
-- [~] Rulers in in, cm, mm, pt, and pica, with drag-out guides *(not yet: moving the rulers' zero point)*
+- [x] Rulers in in, cm, mm, pt, and pica, with drag-out guides, and a zero point you can move: Shift and the right mouse button dragging on a ruler moves that ruler's zero, dragging from the box where the rulers meet moves both, and double-clicking that box puts both back at the page's corner. Only the rulers' numbers move (positions elsewhere, and guides, stay measured from the corner), and the zero is not saved in the file
 - [x] Context menus for every object type
 - [x] Undo and redo with full history
 - [x] Two-page spreads and facing pages

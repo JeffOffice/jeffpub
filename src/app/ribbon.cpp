@@ -6,6 +6,7 @@
 
 #include <QAction>
 #include <QGuiApplication>
+#include <QHash>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QKeyEvent>
@@ -23,6 +24,7 @@
 #include <QResizeEvent>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <climits>
 
 namespace jp {
@@ -447,6 +449,7 @@ public:
     }
     Kind kind() const { return m_kind; }
     int tab() const { return m_tab; }
+    void setTab(int t) { m_tab = t; }
     bool isCurrent() const { return m_kind == Tab && m_tab == m_r->m_current && !m_r->m_minimized; }
 
 protected:
@@ -788,7 +791,7 @@ RibbonTab *Ribbon::addTab(const QString &name, const QString &contextGroup, cons
     page->setAutoFillBackground(true);
     page->setPalette(pal);
     m_stack->addWidget(scroll);
-    m_tabs.push_back(Tab{name, contextGroup, color, page, scroll, contextGroup.isEmpty(), title.isEmpty() ? name : title, QString()});
+    m_tabs.push_back(Tab{name, contextGroup, color, page, scroll, contextGroup.isEmpty(), title.isEmpty() ? name : title, QString(), int(m_tabs.size()), false});
     m_header->addTabButton(int(m_tabs.size()) - 1);
     return page;
 }
@@ -811,21 +814,46 @@ void Ribbon::setTabVisible(const QString &name, bool visible)
         }
 }
 
-void Ribbon::setContextVisible(const QString &group, bool visible)
+void Ribbon::setContextVisible(const QString &group, bool visible, bool first)
 {
-    bool changed = false, currentHidden = false;
+    bool changed = false, currentHidden = false, reorder = false;
+    RibbonTab *appeared = nullptr;
     for (int i = 0; i < m_tabs.size(); ++i) {
         auto &t = m_tabs[i];
         if (t.group != group || t.visible == visible) continue;
         t.visible = visible;
+        if (t.first != (visible && first)) {
+            t.first = visible && first;
+            reorder = true;
+        }
         changed = true;
         if (!visible && i == m_current) currentHidden = true;
+        if (t.first && !appeared) appeared = t.page;
     }
+    if (reorder) sortTabs();
     if (currentHidden) {
         for (int i = 0; i < m_tabs.size(); ++i)
             if (m_tabs[i].name == QLatin1String("Home")) { showTab(m_tabs[i].page); break; }
     }
+    if (appeared) showTab(appeared);
     if (changed) m_header->layoutButtons();
+}
+
+// The tabs in order: those placed first, then the rest as built. Every tab
+// button follows its tab to its new number.
+void Ribbon::sortTabs()
+{
+    RibbonTab *current = m_tabs.value(m_current).page;
+    QHash<HeaderButton *, RibbonTab *> pages;
+    for (HeaderButton *b : m_header->tabButtons) pages[b] = m_tabs[b->tab()].page;
+    std::stable_sort(m_tabs.begin(), m_tabs.end(), [](const Tab &a, const Tab &b) { return a.first != b.first ? a.first : a.home < b.home; });
+    for (int i = 0; i < m_tabs.size(); ++i) {
+        if (m_tabs[i].page == current) m_current = i;
+        for (HeaderButton *b : m_header->tabButtons)
+            if (pages[b] == m_tabs[i].page) b->setTab(i);
+    }
+    std::sort(m_header->tabButtons.begin(), m_header->tabButtons.end(), [](const HeaderButton *a, const HeaderButton *b) { return a->tab() < b->tab(); });
+    for (HeaderButton *b : m_header->tabButtons) b->raise();   // screen readers go through them in the order the parent holds them
 }
 
 void Ribbon::showTab(RibbonTab *t)

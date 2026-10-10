@@ -1039,7 +1039,7 @@ void MainWindow::updateContextTabs()
     m_ribbon->setContextVisible(QStringLiteral("Picture Tools"), picture);
     m_ribbon->setContextVisible(QStringLiteral("Table Tools"), table);
     m_ribbon->setContextVisible(QStringLiteral("Text Art Tools"), textart);
-    m_ribbon->setContextVisible(QStringLiteral("Master Page"), !m_ed->masterView().isEmpty());
+    m_ribbon->setContextVisible(QStringLiteral("Master Page"), !m_ed->masterView().isEmpty(), true);   // first, as the other program shows it
     m_ribbon->setTabVisible(QStringLiteral("Mailings"), m_ed->masterView().isEmpty());   // as the other program: no merging on a master
     Q_UNUSED(before);
 }

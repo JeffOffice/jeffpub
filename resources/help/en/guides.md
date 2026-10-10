@@ -1,5 +1,5 @@
 # Rulers, guides, and snapping
-<!-- keywords: ruler, guide, ruler guide, margin guide, grid, columns, baseline, snap, align to guides, align to objects, measurement units, inches, centimeters, show guides, boundaries -->
+<!-- keywords: ruler, zero point, ruler origin, guide, ruler guide, margin guide, grid, columns, baseline, snap, align to guides, align to objects, measurement units, inches, centimeters, show guides, boundaries -->
 
 Guides are lines that help you line things up. They show on screen but never print. Snapping makes objects jump to a guide or to another object when they get close.
 
@@ -8,6 +8,16 @@ Guides are lines that help you line things up. They show on screen but never pri
 Turn rulers on or off with **View > Show > Rulers**. A red line on each ruler follows your pointer, and the part of the ruler over your selected object is shaded. While you type in a text box, the top ruler shows indent and tab markers.
 
 To change the units, click **File > Options**, open the **Advanced** tab, and choose **Measurement units**: inches, centimeters, millimeters, points, or picas. In any size or position box, you can also type a unit, such as 2 cm.
+
+## Move the zero point
+
+Each ruler counts from the top-left corner of the page: 0 is the corner, and the numbers grow as you move away from it. To count from somewhere else, such as the corner of an object you want to measure, move the zero point:
+
+- Hold **Shift** and drag with the **right** mouse button along a ruler. That ruler's zero moves to where you let go.
+- To move both rulers at once, drag from the small box where the two rulers meet.
+- To put both back at the page's corner, double-click that small box.
+
+Only the numbers and tick marks on the two page rulers change. The status bar, the position boxes (such as the ones in the **Measurement** window), and the **Ruler Guides** window still measure from the page's corner, and so do the guides you drag out. The indent and tab markers on the text ruler still measure from the text box. The zero point belongs to the window, not to the file: it is not saved, and every publication you open starts at the corner.
 
 ## The four kinds of guides
 
