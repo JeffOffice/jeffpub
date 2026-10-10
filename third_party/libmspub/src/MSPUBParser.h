@@ -110,6 +110,7 @@ protected:
   bool parsePageChunk(librevenge::RVNGInputStream *input, const ContentChunkReference &chunk);
   bool parsePaletteChunk(librevenge::RVNGInputStream *input, const ContentChunkReference &chunk);
   void parseStoryListChunk(librevenge::RVNGInputStream *input, const ContentChunkReference &chunk);
+  void parseSectionChunk(librevenge::RVNGInputStream *input, const ContentChunkReference &chunk);
   bool parsePageShapeList(librevenge::RVNGInputStream *input, MSPUBBlockInfo block, unsigned pageSeqNum);
   bool parseShape(librevenge::RVNGInputStream *input, const ContentChunkReference &chunk);
   bool parseBorderArtChunk(librevenge::RVNGInputStream *input,

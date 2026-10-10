@@ -178,6 +178,15 @@ public:
             } else if (layout == 7) {
                 m_doc.setup.layout = PageSetup::Envelope;
             }
+            // Page numbering: the first page's number and the style (1 I II
+            // III, 2 i ii iii, 3 A B C, 4 a b c; others stay 1 2 3). JeffPub
+            // numbers the whole publication one way: the first section's.
+            m_doc.setup.firstPageNumber = p["jp:first-page-number"] ? std::clamp(p["jp:first-page-number"]->getInt(), 1, 99999) : 1;
+            const int style = p["jp:page-number-style"] ? p["jp:page-number-style"]->getInt() : 0;
+            static const char *const styles[] = {"", "ROMAN", "roman", "ALPHA", "alpha"};
+            m_doc.setup.pageNumberFormat = style >= 1 && style <= 4 ? QString::fromLatin1(styles[style]) : QString();
+            if (p["jp:page-number-sections"])
+                m_rep.warnings << QCoreApplication::translate("Import", "Only the first section's page numbering was imported.");
         }
         auto page = m_doc.addPage();
         // The page's master: the one written under that sequence number (A when the file names none).

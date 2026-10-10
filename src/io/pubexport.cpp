@@ -186,7 +186,7 @@ DirInfo dirInfo(quint16 type, bool nonEmpty)
     case 0x43: return {0x0102, true, 1};
     case 0x60: return {0x0102, false, nonEmpty ? 1 : -1};
     case 0x77: return {0x0102, false, 1};
-    case 0x5b: case 0x5c: case 0x4f: case 0x4a: case 0x6c: return {0x0102, true, 1};
+    case 0x5b: case 0x5c: case 0x4f: case 0x4a: case 0x6c: case 0x75: return {0x0102, true, 1};
     case 0x61: case 0x65: return {0x0102, true, nonEmpty ? 1 : -1};
     case 0x4b: case 0x8a: return {0x0102, true, 0x14};
     case 0x4c: return {0x0102, true, 0x0f};
@@ -2217,6 +2217,14 @@ QByteArray PubWriter::write(QStringList *skipped)
         inlineIndex << rec(0x00, {u32(0x01, quint32(n + 1)), u32(0x02, quint32(o.tid)), ref(0x03, o.seq, 0x68)});
     }
     const quint32 inlineIndexSeq = inlineIndex.isEmpty() ? 0 : next++;
+    // Page numbering (Format Page Numbers) is kept in sections: a chunk
+    // (type 75, named by DOCUMENT 2f) with an entry for each section's first
+    // page (01) holding its start number (02) and, unless 1 2 3, its style
+    // (03: 1 I II III, 2 i ii iii, 3 A B C, 4 a b c). JeffPub numbers the
+    // whole publication one way, so it writes one section, and none for 1 2 3.
+    const int numberStyle = int(QStringList{QString(), QStringLiteral("ROMAN"), QStringLiteral("roman"), QStringLiteral("ALPHA"), QStringLiteral("alpha")}
+                                    .indexOf(m_doc.setup.pageNumberFormat));
+    const quint32 sectionSeq = m_doc.setup.firstPageNumber != 1 || numberStyle > 0 ? next++ : 0;
     const quint32 fontSeq = m_fonts.isEmpty() && m_textIds.isEmpty() ? 0 : next++;
     // Fonts the style sheet names, so the font table, written first, has them.
     for (const QString &name : styleNames())
@@ -2249,9 +2257,15 @@ QByteArray PubWriter::write(QStringList *skipped)
     else if (m_doc.setup.layout == PageSetup::Envelope) docBody << u32(0x11, 7);
     docBody << rec(0x12, {u32(0x01, quint32(pw)), u32(0x02, quint32(ph))}) << ref(0x18, 259) << ref(0x19, 261) << ref(0x1a, 257) << ref(0x20, 282)
             << ref(0x21, 262) << ref(0x22, 285) << u32(0x23, quint32(pageSeq.size())) << bytesB(0x2a, 0x38, {}) << u16(0x2c, 5)
-            << u16(0x2d, quint32(masterSeqs.size() * (spreads ? 2 : 1))) << ref(0x31, 278, 0x68) << flag(0x39, 0x00) << u32(0x3c, 1) << u32(0x41, 0)
-            << ref(0x44, 292) << flag(0x4d);
+            << u16(0x2d, quint32(masterSeqs.size() * (spreads ? 2 : 1)));
+    if (sectionSeq) docBody << ref(0x2f, sectionSeq);
+    docBody << ref(0x31, 278, 0x68) << flag(0x39, 0x00) << u32(0x3c, 1) << u32(0x41, 0) << ref(0x44, 292) << flag(0x4d);
     cw.put(256, {0x44, 0, docBody});
+    if (sectionSeq) {
+        QVector<B> entry{u32(0x01, 1), u16(0x02, quint32(std::clamp(m_doc.setup.firstPageNumber, 1, 1000)))};   // Publisher refuses a file starting past 1000
+        if (numberStyle > 0) entry << u16(0x03, quint32(numberStyle));
+        cw.put(sectionSeq, {0x75, 256, {u16(0x01, 1), list(0x02, {rec(0x00, entry)})}});
+    }
     cw.put(257, {0x72, 256, {}});
     cw.put(259, {0x73, 256, {}});
     cw.put(261, {0x46, 256, {}});

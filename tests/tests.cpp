@@ -8345,6 +8345,59 @@ private Q_SLOTS:
         QCOMPARE(back->storyDoc(bt->storyId)->toPlainText(), QStringLiteral("Page ") + QChar(QChar::ObjectReplacementCharacter));
     }
 
+    // The first page number and the number style are kept in a .pub file: the
+    // DOCUMENT chunk names (field 2f) a section chunk (type 75) with an entry
+    // for the first page holding its start number (02) and, unless it is 1 2
+    // 3, its style (03: 1 I II III, 2 i ii iii, 3 A B C, 4 a b c). A
+    // publication numbered 1 2 3 has no such chunk, as in Publisher's files.
+    void pubFirstPageNumberAndStyle()
+    {
+        using namespace jp;
+        struct Case { int first; QString style; };
+        const QStringList styles = {QString(), QStringLiteral("ROMAN"), QStringLiteral("roman"), QStringLiteral("ALPHA"), QStringLiteral("alpha")};
+        auto le16 = [](int v) {
+            QByteArray b;
+            b.append(char(v & 0xff));
+            b.append(char(v >> 8));
+            return b;
+        };
+        QTemporaryDir dir;
+        int n = 0;
+        for (const Case &c : {Case{5, QStringLiteral("roman")}, Case{1, QStringLiteral("ROMAN")}, Case{12, QStringLiteral("alpha")},
+                              Case{3, QStringLiteral("ALPHA")}, Case{7, QString()}, Case{1000, QStringLiteral("roman")}, Case{1, QString()}}) {
+            auto doc = Document::blank(QSizeF(612, 792), QStringLiteral("Letter"), 3);
+            doc->setup.firstPageNumber = c.first;
+            doc->setup.pageNumberFormat = c.style;
+            const QString path = dir.filePath(QStringLiteral("num%1.pub").arg(n++));
+            QString err;
+            QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+            auto back = importPublisherFile(path, &err);
+            QVERIFY2(back, qPrintable(err));
+            QCOMPARE(back->pages.size(), 3);
+            QCOMPARE(back->setup.firstPageNumber, c.first);
+            QCOMPARE(back->setup.pageNumberFormat, c.style);
+            // The entry: first page (01 = 1), start number, and style.
+            const QByteArray contents = cfb::readStream(path, QStringLiteral("Contents"));
+            const QByteArray first = QByteArray::fromHex("012001000000") + QByteArray::fromHex("0218");
+            if (c.first == 1 && c.style.isEmpty()) {
+                QVERIFY(!contents.contains(first));
+            } else {
+                QByteArray entry = first + le16(c.first);
+                if (!c.style.isEmpty()) entry += QByteArray::fromHex("0318") + le16(int(styles.indexOf(c.style)));
+                QVERIFY(contents.contains(entry));
+            }
+        }
+        // Publisher won't open a file whose numbering starts past 1000.
+        auto doc = Document::blank(QSizeF(612, 792));
+        doc->setup.firstPageNumber = 5000;
+        const QString path = dir.filePath(QStringLiteral("big.pub"));
+        QString err;
+        QVERIFY2(exportPublisher(*doc, path, &err), qPrintable(err));
+        auto back = importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(back->setup.firstPageNumber, 1000);
+    }
+
     // A .pub story marks an object set in its text with U+FFFC. Publisher
     // shows nothing there when the object doesn't come through; JeffPub
     // drew the font's "OBJ" box.

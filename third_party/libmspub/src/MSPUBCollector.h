@@ -154,6 +154,11 @@ public:
     for (const auto &o : objects) m_inlineNums.insert(o.second);
   }
   void setPublicationLayout(unsigned layout) { m_publicationLayout = layout; } // JeffPub patch
+  // JeffPub patch: the first section's first page number and number style
+  // (0 1 2 3, 1 I II III, 2 i ii iii, 3 A B C, 4 a b c), and whether a later
+  // section numbers its pages on its own.
+  void setPageNumbering(unsigned first, unsigned style) { m_firstPageNumber = first; m_pageNumberStyle = style; }
+  void setLaterSectionsNumbered() { m_laterSectionsNumbered = true; }
   // JeffPub patch: text wrapping around the shape, and its distances.
   void setShapeWrap(unsigned seqNum, unsigned wrap) { m_shapeInfosBySeqNum[seqNum].m_wrap = wrap; }
   void setShapeWrapDistances(unsigned seqNum, int l, int t, int r, int b) { m_shapeInfosBySeqNum[seqNum].m_wrapDistances = std::array<int, 4>{{l, t, r, b}}; }
@@ -221,6 +226,9 @@ private:
   bool isInlineShape(unsigned seqNum) const;
   void writeInlineShapes() const;
   unsigned m_publicationLayout = 0;       // JeffPub patch: Page Setup layout type (0 one page per sheet)
+  unsigned m_firstPageNumber = 1;         // JeffPub patch: see setPageNumbering
+  unsigned m_pageNumberStyle = 0;
+  bool m_laterSectionsNumbered = false;
   std::vector<Color> m_paletteColors;
   std::vector<unsigned> m_shapeSeqNumsOrdered;
   std::map<unsigned, unsigned> m_pageSeqNumsByShapeSeqNum;

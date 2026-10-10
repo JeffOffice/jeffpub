@@ -586,14 +586,18 @@ bool MSPUBParser::parseContents(librevenge::RVNGInputStream *input)
         }
       }
       // JeffPub patch: the story list (0x65) marks the stories that are
-      // not hyphenated automatically.
+      // not hyphenated automatically; the section list (0x75) holds the
+      // page numbering.
       for (unsigned int unknownChunkIndex : m_unknownChunkIndices)
       {
         const ContentChunkReference &storyChunk = m_contentChunks.at(unknownChunkIndex);
-        if (storyChunk.type != 0x65)
+        if (storyChunk.type != 0x65 && storyChunk.type != 0x75)
           continue;
         input->seek(storyChunk.offset, librevenge::RVNG_SEEK_SET);
-        parseStoryListChunk(input, storyChunk);
+        if (storyChunk.type == 0x75)
+          parseSectionChunk(input, storyChunk);
+        else
+          parseStoryListChunk(input, storyChunk);
       }
       input->seek(documentChunk.offset, librevenge::RVNG_SEEK_SET);
       if (!parseDocumentChunk(input, documentChunk))
@@ -3526,6 +3530,47 @@ void MSPUBParser::parseStoryListChunk(librevenge::RVNGInputStream *input, const 
             m_collector->setTextAutofit(textId, 2);
           else if (grow)
             m_collector->setTextAutofit(textId, 3);
+        }
+        skipBlock(input, subInfo);
+      }
+    }
+    skipBlock(input, info);
+  }
+}
+
+// JeffPub patch: the page numbering sections (0x75, named by the DOCUMENT
+// chunk's 2f): one record (00) per section with its first page (01) and,
+// unless the numbers continue from the section before, its start number (02);
+// 03 is the number style when not 1 2 3 (1 I II III, 2 i ii iii, 3 A B C,
+// 4 a b c). Checked by numbering sections in Publisher and saving.
+void MSPUBParser::parseSectionChunk(librevenge::RVNGInputStream *input, const ContentChunkReference &chunk)
+{
+  unsigned length = readU32(input);
+  bool first = true;
+  while (stillReading(input, chunk.offset + length))
+  {
+    MSPUBBlockInfo info = parseBlock(input);
+    if (info.type == 0xA0)
+    {
+      while (stillReading(input, info.dataOffset + info.dataLength))
+      {
+        MSPUBBlockInfo subInfo = parseBlock(input);
+        if (subInfo.type == GENERAL_CONTAINER)
+        {
+          unsigned start = 0, style = 0;
+          while (stillReading(input, subInfo.dataOffset + subInfo.dataLength))
+          {
+            MSPUBBlockInfo field = parseBlock(input, true);
+            if (field.id == 0x02)
+              start = field.data;
+            else if (field.id == 0x03)
+              style = field.data;
+          }
+          if (first)
+            m_collector->setPageNumbering(start ? start : 1, style);
+          else if (start || style)
+            m_collector->setLaterSectionsNumbered();
+          first = false;
         }
         skipBlock(input, subInfo);
       }

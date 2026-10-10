@@ -2405,7 +2405,7 @@ void pageNumberFormatDialog(QWidget *p, Editor *ed)
     format->setCurrentIndex(std::max(0, int(codes.indexOf(d->setup.pageNumberFormat))));
     auto *start = new QSpinBox(&dlg.d);
     start->setObjectName(QStringLiteral("start"));
-    start->setRange(1, 99999);
+    start->setRange(1, 1000);   // Publisher refuses a file starting past 1000
     start->setValue(d->setup.firstPageNumber);
     form->addRow(QCoreApplication::translate("Dialogs", "Number format:"), format);
     form->addRow(QCoreApplication::translate("Dialogs", "Start numbering at:"), start);
