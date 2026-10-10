@@ -29,6 +29,9 @@ double substituteHeightScale(const QString &family, bool bold = false);
 // resources/fontwidths.txt: the face asked for, else the nearest the family
 // has. Null when JeffPub has no measurements of the family.
 const QHash<char16_t, double> *originalLetterWidths(const QString &family, bool bold, bool italic);
+// The same fonts' pair kerning (em), keyed first << 16 | second, from
+// resources/fontkerning.txt. Null when JeffPub has none for the family.
+const QHash<quint32, double> *originalKerning(const QString &family, bool bold, bool italic);
 QStringList bundledFamilies();
 
 // Symbol fonts (Symbol, Wingdings) give their pictures their own character

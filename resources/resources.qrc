@@ -1547,6 +1547,7 @@
     <file>icon-tags.txt</file>
     <file>ribbon.json</file>
     <file>fontwidths.txt</file>
+    <file>fontkerning.txt</file>
   </qresource>
   <qresource prefix="/help">
     <file alias="context.json">help/context.json</file>

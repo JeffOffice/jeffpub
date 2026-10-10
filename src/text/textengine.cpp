@@ -997,11 +997,15 @@ static QVector<QTextLayout::FormatRange> applyLetterWidths(const QVector<QTextLa
             if (!first && !c.isSpace()) shift[i - r.start] = diff[i - r.start] / 2;
             first = false;
         }
+        // Kerning (from the size it applies at) is the original's pairs too,
+        // taken into the spacing; the pieces don't kern by the stand-in's.
+        const QHash<quint32, double> *kerning = plain.kerning() ? originalKerning(k.value(0), k.value(1) == QLatin1String("1"), k.value(2) == QLatin1String("1")) : nullptr;
         for (int i = r.start, next = -1; i < end; ++i) {
             if (transparent(disp[i])) continue;
             next = i + 1;
             while (next < end && transparent(disp[next])) ++next;
             want[i - r.start] = diff[i - r.start] - shift[i - r.start] + (next < end ? shift[next - r.start] : 0);
+            if (kerning && next < end) want[i - r.start] += kerning->value(quint32(disp[i].unicode()) << 16 | disp[next].unicode()) * em;
         }
         int pieceStart = r.start;
         double pieceDelta = 0, drift = 0;   // drift: how far the letters so far sit from their places
@@ -1013,6 +1017,7 @@ static QVector<QTextLayout::FormatRange> applyLetterWidths(const QVector<QTextLa
             x.length = to - pieceStart;
             x.format.setFontLetterSpacingType(QFont::AbsoluteSpacing);
             x.format.setFontLetterSpacing(base + pieceDelta);
+            if (kerning) x.format.setFontKerning(false);
             out << x;
         };
         for (int i = r.start; i < end; ++i) {

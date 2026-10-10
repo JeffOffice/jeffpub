@@ -906,6 +906,43 @@ private Q_SLOTS:
         }
     }
 
+    // From 14 pt up, a missing stock font's letters kern by the original's
+    // pairs: Gill Sans MT Bold's "Yo" closes up by 0.14 em, as in a banner
+    // of Publisher's. Smaller, they don't kern.
+    void missingFontsKernAsTheOriginal()
+    {
+        const QString fam = QStringLiteral("Gill Sans MT");
+        if (QFontDatabase::hasFamily(fam)) QSKIP("Gill Sans MT is installed here");
+        const QHash<char16_t, double> *widths = jp::originalLetterWidths(fam, true, false);
+        const QHash<quint32, double> *kerning = jp::originalKerning(fam, true, false);
+        QVERIFY(widths && kerning);
+        const double yo = kerning->value(quint32(u'Y') << 16 | u'o');
+        QVERIFY2(std::abs(yo + 0.140) < 0.001, qPrintable(QString::number(yo)));
+        for (double size : {100.0, 12.0}) {
+            QTextDocument doc;
+            QTextCursor c(&doc);
+            QTextCharFormat cf;
+            cf.setFontFamilies(QStringList{fam});
+            cf.setFontWeight(QFont::Bold);
+            cf.setFontPointSize(size);
+            c.insertText(QStringLiteral("Yo you"), cf);
+            jp::FrameSpec fs;
+            fs.size = QSizeF(2000, 400);
+            fs.insets = QMarginsF(0, 0, 0, 0);
+            fs.hyphenate = false;
+            jp::StoryLayout lay;
+            lay.build(&doc, {fs}, jp::LayoutEnv());
+            auto x = [&](int pos) {
+                int frame = -1;
+                QRectF r;
+                lay.caretRect(pos, &frame, &r);
+                return r.x();
+            };
+            const double want = (widths->value(u'Y') + widths->value(u'o') + (size >= 14 ? yo : 0)) * size;
+            QVERIFY2(std::abs(x(2) - x(0) - want) < 0.01 * size / 12, qPrintable(QStringLiteral("%1 pt: %2, not %3").arg(size).arg(x(2) - x(0)).arg(want)));
+        }
+    }
+
     // A centered line is centered on its letters, a right-aligned one ends
     // at its last letter: Publisher lets the spaces a line ends with hang
     // past them. Qt counted them whenever they fit, half a space off.

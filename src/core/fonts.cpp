@@ -668,4 +668,33 @@ const QHash<char16_t, double> *originalLetterWidths(const QString &family, bool 
     return nullptr;
 }
 
+
+const QHash<quint32, double> *originalKerning(const QString &family, bool bold, bool italic)
+{
+    static const QHash<QString, QHash<quint32, double>> table = [] {
+        QHash<QString, QHash<quint32, double>> t;
+        if (!QFile::exists(QStringLiteral(":/fontkerning.txt"))) initCoreResources();
+        QFile f(QStringLiteral(":/fontkerning.txt"));
+        if (!f.open(QIODevice::ReadOnly)) return t;
+        const QList<QByteArray> lines = f.readAll().split('\n');
+        for (const QByteArray &line : lines) {
+            if (line.isEmpty() || line.startsWith('#')) continue;
+            const QList<QByteArray> p = line.split('\t');
+            if (p.size() < 3) continue;
+            QHash<quint32, double> pairs;
+            for (const QByteArray &e : p[2].split(',')) {
+                const QList<QByteArray> v = e.split(':');
+                if (v.size() == 3) pairs.insert(v[0].toUInt() << 16 | v[1].toUInt(), v[2].toInt() / 2048.0);
+            }
+            t.insert(QString::fromUtf8(p[0]).toLower() + QLatin1Char('|') + QString::fromLatin1(p[1]), pairs);
+        }
+        return t;
+    }();
+    const QString fam = family.toLower() + QLatin1Char('|');
+    const int style = (bold ? 1 : 0) + (italic ? 2 : 0);
+    for (int s : {style, style & 1, style & 2, 0})
+        if (auto it = table.constFind(fam + QString::number(s)); it != table.constEnd()) return &*it;
+    return nullptr;
+}
+
 } // namespace jp
