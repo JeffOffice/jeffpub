@@ -227,12 +227,12 @@ void MainWindow::ribbonControlParts(RibbonParts &parts)
         connect(fill, &ColorButton::colorPicked, this, [this](const ColorRef &c) {
             TableItem *tb = selTableForUi(m_ed);
             if (!tb) return;
-            const bool inCell = m_ed->isEditingText();
-            const auto tt = m_ed->textTarget();
+            // The selected cells, the cell the text cursor is in, or with the table selected, every cell.
+            const CellRange rg = m_ed->targetCells();
             m_ed->change(tr("Fill"), [&] {
                 for (int rr = 0; rr < tb->rows; ++rr)
                     for (int cc = 0; cc < tb->cols; ++cc)
-                        if (!inCell || (rr == tt.row && cc == tt.col)) tb->cell(rr, cc).fill = c.isNone() ? Fill() : Fill::solid(c);
+                        if (!rg.valid() || rg.contains(rr, cc)) tb->cell(rr, cc).fill = c.isNone() ? Fill() : Fill::solid(c);
             });
         });
         m_colorButtons << fill;

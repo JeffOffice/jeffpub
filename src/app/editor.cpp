@@ -79,6 +79,7 @@ void Editor::setDocument(std::unique_ptr<Document> d, const QString &path)
     m_page = 0;
     m_master.clear();
     m_sel.clear();
+    m_block = CellBlock();
     m_mergeRecord = -1;
     m_spread = m_doc->facingPages;
     m_tool = Tool::Select;
@@ -226,7 +227,12 @@ void Editor::select(const QStringList &ids, bool add)
     QStringList next = add ? m_sel : QStringList();
     for (const auto &id : ids)
         if (!next.contains(id) && m_doc->item(id)) next << id;
-    if (next == m_sel) return;
+    const bool hadBlock = hasCellBlock();   // choosing a selection puts the block away
+    m_block = CellBlock();
+    if (next == m_sel) {
+        if (hadBlock) Q_EMIT selectionChanged();
+        return;
+    }
     if (isEditingText() && !next.contains(m_text.itemId)) endTextEdit();
     if (!pointsItem.isEmpty() && !next.contains(pointsItem)) pointsItem.clear();
     if (!wrapItem.isEmpty() && !next.contains(wrapItem)) wrapItem.clear();
@@ -239,6 +245,7 @@ void Editor::toggleSelect(const QString &id)
     QStringList next = m_sel;
     if (next.contains(id)) next.removeAll(id); else next << id;
     if (isEditingText()) endTextEdit();
+    m_block = CellBlock();
     m_sel = next;
     Q_EMIT selectionChanged();
 }
@@ -295,6 +302,65 @@ QStringList Editor::topLevelSelection() const
     return out;
 }
 
+// ---------- table cell block ----------
+Editor::CellBlock Editor::cellBlock() const
+{
+    // Only while the table is the one selected object and no text is being edited.
+    if (m_block.itemId.isEmpty() || isEditingText() || m_sel != QStringList{m_block.itemId}) return CellBlock();
+    const auto *t = dynamic_cast<const TableItem *>(m_doc->item(m_block.itemId));
+    if (!t || m_block.range.r1 >= t->rows || m_block.range.c1 >= t->cols) return CellBlock();
+    return m_block;
+}
+
+void Editor::selectCells(const QString &tableId, int fromRow, int fromCol, int toRow, int toCol)
+{
+    const QString id = tableId;   // may be the text target's own, which ending the edit clears
+    auto *t = dynamic_cast<TableItem *>(m_doc->item(id));
+    if (!t) return;
+    const CellRange range = t->cellsBetween(fromRow, fromCol, toRow, toCol);
+    if (!range.valid()) return;
+    endTextEdit();
+    if (m_sel != QStringList{id}) {
+        if (!pointsItem.isEmpty()) pointsItem.clear();
+        if (!wrapItem.isEmpty()) wrapItem.clear();
+    }
+    m_sel = QStringList{id};
+    m_block = CellBlock{id, range, std::clamp(fromRow, 0, t->rows - 1), std::clamp(fromCol, 0, t->cols - 1)};
+    Q_EMIT selectionChanged();
+}
+
+void Editor::clearCellBlock()
+{
+    const bool had = hasCellBlock();
+    m_block = CellBlock();
+    if (had) Q_EMIT selectionChanged();
+}
+
+CellRange Editor::targetCells() const
+{
+    if (const CellBlock b = cellBlock(); b.range.valid()) return b.range;
+    if (isEditingText() && m_text.row >= 0)
+        if (const auto *t = dynamic_cast<const TableItem *>(m_doc->item(m_text.itemId))) return t->cellsBetween(m_text.row, m_text.col, m_text.row, m_text.col);
+    return CellRange();
+}
+
+void Editor::clearCellBlockText()
+{
+    const CellBlock b = cellBlock();
+    auto *t = b.range.valid() ? dynamic_cast<TableItem *>(m_doc->item(b.itemId)) : nullptr;
+    if (!t) return;
+    change(tr("Clear Cells"), [&] {
+        for (int r = b.range.r0; r <= b.range.r1; ++r)
+            for (int c = b.range.c0; c <= b.range.c1; ++c) {
+                QTextDocument *d = m_doc->storyDoc(t->cell(r, c).storyId);
+                if (!d || d->isEmpty()) continue;
+                QTextCursor cur(d);
+                cur.select(QTextCursor::Document);
+                cur.removeSelectedText();
+            }
+    });
+}
+
 // ---------- text editing ----------
 QTextDocument *Editor::editDoc() const { return m_doc->storyDoc(m_text.storyId); }
 
@@ -335,6 +401,7 @@ void Editor::beginTextEdit(const QString &itemId, int pos, int row, int col)
     }
     if (story.isEmpty() || !m_doc->storyDoc(story)) return;
     flushTyping();
+    m_block = CellBlock();
     m_text = TextTarget{itemId, story, row, col};
     m_cursor = QTextCursor(m_doc->storyDoc(story));
     if (pos >= 0) m_cursor.setPosition(std::clamp(pos, 0, m_doc->storyDoc(story)->characterCount() - 1));
@@ -408,6 +475,9 @@ void Editor::restore(const QByteArray &snap, const QStringList &sel, int page, c
     m_sel.clear();
     for (const auto &id : sel)
         if (m_doc->item(id)) m_sel << id;
+    // A block stays while its table is still the selection and large enough, whole over any merged cells.
+    if (hasCellBlock()) m_block.range = static_cast<TableItem *>(m_doc->item(m_block.itemId))->cellsBetween(m_block.range.r0, m_block.range.c0, m_block.range.r1, m_block.range.c1);
+    else m_block = CellBlock();
     Q_UNUSED(editItem);
     Q_EMIT pageChanged();
     Q_EMIT selectionChanged();
@@ -558,7 +628,12 @@ void Editor::deleteItems(const QStringList &ids)
     Q_EMIT selectionChanged();
 }
 
-void Editor::deleteSelection() { deleteItems(topLevelSelection()); }
+void Editor::deleteSelection()
+{
+    // With cells selected, Delete clears their text and the table stays.
+    if (hasCellBlock()) { clearCellBlockText(); return; }
+    deleteItems(topLevelSelection());
+}
 
 // ---- objects set in text ----
 
@@ -1095,6 +1170,23 @@ void Editor::copy()
         QTextCursor tc(&tmp);
         tc.insertFragment(frag);
         md->setData(QStringLiteral("application/x-jeffpub-text"), QJsonDocument(storyToJson(&tmp)).toJson(QJsonDocument::Compact));
+        QApplication::clipboard()->setMimeData(md);
+        return;
+    }
+    if (const CellBlock b = cellBlock(); b.range.valid()) {
+        // Selected cells copy as their text, a row to a line and a tab between cells, as a spreadsheet takes it.
+        const auto *t = dynamic_cast<const TableItem *>(m_doc->item(b.itemId));
+        QStringList lines;
+        for (int r = b.range.r0; r <= b.range.r1; ++r) {
+            QStringList row;
+            for (int c = b.range.c0; c <= b.range.c1; ++c) {
+                const QTextDocument *d = m_doc->storyDoc(t->cell(r, c).storyId);
+                row << (d ? d->toPlainText().replace(QChar::ParagraphSeparator, ' ').replace(QLatin1Char('\n'), QLatin1Char(' ')) : QString());
+            }
+            lines << row.join(QLatin1Char('\t'));
+        }
+        auto *md = new QMimeData;
+        md->setText(lines.join(QLatin1Char('\n')));
         QApplication::clipboard()->setMimeData(md);
         return;
     }

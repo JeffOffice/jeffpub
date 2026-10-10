@@ -103,6 +103,25 @@ public:
     void textEdited();                 // call after any cursor-based edit
     double desiredX = -1;              // for up/down movement
 
+    // ---- table cell block ----
+    // Several cells of one table selected at once (dragging across cells,
+    // Shift+click, Select Row and Select Column). The table is the selected
+    // object and no text is being edited; cell and text commands apply to
+    // every cell in the block.
+    struct CellBlock {
+        QString itemId;
+        CellRange range;                      // grown to hold whole merged cells
+        int anchorRow = -1, anchorCol = -1;   // the cell it grew from: Shift+click extends from here
+    };
+    CellBlock cellBlock() const;              // empty (range not valid) when there is none
+    bool hasCellBlock() const { return cellBlock().range.valid(); }
+    void selectCells(const QString &tableId, int fromRow, int fromCol, int toRow, int toCol);
+    void clearCellBlock();
+    void clearCellBlockText();                // Delete with a block: the cells' text goes, the table stays
+    // The cells a cell command acts on: the block, or the cell (all of a
+    // merged one) the text cursor is in; not valid when neither.
+    CellRange targetCells() const;
+
     // ---- changes and undo ----
     void beginChange(const QString &label);
     void endChange();
@@ -273,6 +292,7 @@ private:
     QStringList m_sel;
     TextTarget m_text;
     QTextCursor m_cursor;
+    CellBlock m_block;
     Tool m_tool = Tool::Select;
     QStringList m_regroup;   // the objects of the group last ungrouped
     QString m_toolShape;

@@ -141,7 +141,7 @@ public:
     int textPosAt(const QString &itemId, const QPointF &page, int row = -1, int col = -1) const;
 
 private:
-    enum class Drag { None, Pending, Move, Resize, Rotate, LineEnd, LineBend, Free, Adjust, Marquee, Draw, TextSelect, TextMove, Guide, Crop, CropMove, ColResize, RowResize, Pan, Point, WrapPoint };
+    enum class Drag { None, Pending, Move, Resize, Rotate, LineEnd, LineBend, Free, Adjust, Marquee, Draw, TextSelect, CellBlock, TextMove, Guide, Crop, CropMove, ColResize, RowResize, Pan, Point, WrapPoint };
 
     void updateScrollBars();
     void paintPageSlot(QPainter &p, const Slot &s, bool current);

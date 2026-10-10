@@ -12,9 +12,9 @@ The **Table Design** and **Table Layout** tabs appear, under the label **Table T
 
 ## Table Layout
 
-- **Table** has **Select**, for the cell or the whole table, and **View Gridlines**. See [Make and edit tables](tables).
-- **Rows & Columns** inserts rows and columns above, below, left, or right, and deletes rows, columns, or the table. See [Make and edit tables](tables).
-- **Merge** has **Merge Cells** and **Split Cells**. See [Make and edit tables](tables).
+- **Table** has **Select**, for a cell, a row, a column, or the whole table, and **View Gridlines**. See [Make and edit tables](tables).
+- **Rows & Columns** inserts rows and columns above, below, left, or right, and deletes the rows or columns of the selected cells, or the table. See [Make and edit tables](tables).
+- **Merge** has **Merge Cells**, which joins the selected cells into one, and **Split Cells**. See [Make and edit tables](tables).
 - **Alignment** puts text at the top, middle, or bottom of a cell, and left, center, right, or justified. **Text Direction** turns the text a quarter turn. **Hyphenation** sets whether long words break at the end of a line. **Cell Margins** sets the space around the text. See [Make and edit tables](tables).
 - **Size** has **Grow to Fit Text**, **Distribute Rows**, and **Distribute Columns**. See [Make and edit tables](tables).
 - **Arrange** controls text wrap, stacking order, grouping, alignment, and rotation. See [Move, align, group, and layer objects](arrange).

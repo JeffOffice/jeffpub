@@ -36,7 +36,7 @@ Click the page area, or press F6 until you reach it. Then:
 - **Tab** selects the next object. **Shift+Tab** selects the one before it.
 - The **arrow keys** move the selected object a small step. Hold **Alt** for the smallest step. To set the step size, see [Change JeffPub's settings](options).
 - **Enter** or **F2** edits the text of the selected text box, shape, or table. You can also just start typing.
-- **Delete** removes the selected object.
+- **Delete** removes the selected object. With cells of a table selected, it clears their text instead.
 - **Esc** stops editing text. The text box stays selected. Press Esc again to clear the selection.
 
 While you type in a table, **Tab** moves to the next cell. Tab in the last cell adds a row.

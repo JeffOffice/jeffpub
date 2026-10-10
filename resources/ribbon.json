@@ -468,7 +468,7 @@
     {"name": "Table Layout", "keytip": "JL", "context": "Table Tools", "color": "table", "groups": [
       {"name": "Table", "keytip": "ZT", "items": [
         {"large": {"id": "ribbon.tableSelect", "text": "Select", "icon": "mouse-pointer-2"}, "keytip": "SL", "menu": [
-          "tbl.selectCell", "tbl.selectTable"]},
+          "tbl.selectCell", "tbl.selectRow", "tbl.selectCol", "tbl.selectTable"]},
         {"large": "view.gridlines", "keytip": "VG"}
       ]},
       {"name": "Rows & Columns", "keytip": "ZR", "items": [

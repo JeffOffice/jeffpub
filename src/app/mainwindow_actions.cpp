@@ -112,28 +112,71 @@ static void tableInsertCol(Editor *ed, TableItem *t, int at)
     t->syncRect();
 }
 
-static void tableDeleteRow(TableItem *t, int r)
+// Deletes rows r0..r1 (a table keeps at least one). A merged cell reaching
+// into them gets shorter; one that began in a deleted row begins in the
+// first row after them, keeping its text.
+static void tableDeleteRows(TableItem *t, int r0, int r1)
 {
-    if (t->rows <= 1) return;
-    t->cells.remove(r * t->cols, t->cols);
-    t->rowH.removeAt(r);
-    --t->rows;
+    const int n = r1 - r0 + 1;
+    if (n < 1 || n >= t->rows) return;
+    for (int r = 0; r < t->rows; ++r)
+        for (int c = 0; c < t->cols; ++c) {
+            TableCell &cell = t->cell(r, c);
+            if (cell.covered || cell.rowSpan <= 1) continue;
+            const int cut = std::min(r + cell.rowSpan - 1, r1) - std::max(r, r0) + 1;
+            if (cut <= 0) continue;
+            cell.rowSpan -= cut;
+            if (cell.rowSpan > 0 && r >= r0 && r <= r1) {
+                TableCell moved = cell;
+                moved.covered = false;
+                cell.rowSpan = 1;
+                t->cell(r1 + 1, c) = moved;
+            }
+        }
+    t->cells.remove(r0 * t->cols, n * t->cols);
+    t->rowH.remove(r0, n);
+    t->rows -= n;
     t->syncRect();
 }
 
-static void tableDeleteCol(TableItem *t, int c)
+// Deletes columns c0..c1, as above; the others widen to keep the table's width.
+static void tableDeleteCols(TableItem *t, int c0, int c1)
 {
-    if (t->cols <= 1) return;
+    const int n = c1 - c0 + 1;
+    if (n < 1 || n >= t->cols) return;
+    for (int r = 0; r < t->rows; ++r)
+        for (int c = 0; c < t->cols; ++c) {
+            TableCell &cell = t->cell(r, c);
+            if (cell.covered || cell.colSpan <= 1) continue;
+            const int cut = std::min(c + cell.colSpan - 1, c1) - std::max(c, c0) + 1;
+            if (cut <= 0) continue;
+            cell.colSpan -= cut;
+            if (cell.colSpan > 0 && c >= c0 && c <= c1) {
+                TableCell moved = cell;
+                moved.covered = false;
+                cell.colSpan = 1;
+                t->cell(r, c1 + 1) = moved;
+            }
+        }
     QVector<TableCell> cells;
     for (int r = 0; r < t->rows; ++r)
         for (int k = 0; k < t->cols; ++k)
-            if (k != c) cells << t->cell(r, k);
-    const double w = t->colW[c];
-    t->colW.removeAt(c);
-    --t->cols;
+            if (k < c0 || k > c1) cells << t->cell(r, k);
+    double removed = 0;
+    for (int k = c0; k <= c1; ++k) removed += t->colW[k];
+    t->colW.remove(c0, n);
+    t->cols -= n;
     t->cells = cells;
-    for (double &v : t->colW) v += w / t->cols;
+    for (double &v : t->colW) v += removed / t->cols;
     t->syncRect();
+}
+
+// The cells a cell command acts on: the selected block, the cell the text
+// cursor is in, or with only the table selected, every cell.
+static CellRange cellsToFormat(Editor *ed, const TableItem *t)
+{
+    const CellRange r = ed->targetCells();
+    return r.valid() ? r : CellRange{0, 0, t->rows - 1, t->cols - 1};
 }
 
 void MainWindow::createActions()
@@ -1063,9 +1106,12 @@ void MainWindow::createActions()
                Item *it = ed->isEditingText() ? ed->doc()->item(ed->textTarget().itemId) : ed->single();
                if (auto *t = dynamic_cast<TextItem *>(it)) ed->change(tr("Vertical Alignment"), [t, k] { t->valign = VAlign(k); });
                else if (auto *s = dynamic_cast<ShapeItem *>(it)) ed->change(tr("Vertical Alignment"), [s, k] { s->valign = VAlign(k); });
-               else if (auto *tb = dynamic_cast<TableItem *>(it); tb && ed->isEditingText()) {
-                   const auto &tt = ed->textTarget();
-                   ed->change(tr("Cell Alignment"), [tb, tt, k] { tb->cell(tt.row, tt.col).valign = VAlign(k); });
+               else if (auto *tb = dynamic_cast<TableItem *>(it); tb && ed->targetCells().valid()) {
+                   const CellRange rg = ed->targetCells();
+                   ed->change(tr("Cell Alignment"), [tb, rg, k] {
+                       for (int r = rg.r0; r <= rg.r1; ++r)
+                           for (int c = rg.c0; c <= rg.c1; ++c) tb->cell(r, c).valign = VAlign(k);
+                   });
                }
            }, true);
     }
@@ -1087,12 +1133,11 @@ void MainWindow::createActions()
             if (auto *t = dynamic_cast<TextItem *>(it)) ed->change(tr("Margins"), [t, v] { t->insets = QMarginsF(v, v, v, v); });
             else if (auto *s = dynamic_cast<ShapeItem *>(it)) ed->change(tr("Margins"), [s, v] { s->insets = QMarginsF(v, v, v, v); });
             else if (auto *tb = dynamic_cast<TableItem *>(it)) {
-                // The cell the text cursor is in, or with the table selected, every cell.
-                const int r = ed->isEditingText() ? ed->textTarget().row : -1, c = ed->isEditingText() ? ed->textTarget().col : -1;
-                ed->change(tr("Cell Margins"), [tb, v, r, c] {
-                    for (int rr = 0; rr < tb->rows; ++rr)
-                        for (int cc = 0; cc < tb->cols; ++cc)
-                            if (r < 0 || (rr == r && cc == c)) tb->cell(rr, cc).margins = QMarginsF(v, v, v, v);
+                // The selected cells, the cell the text cursor is in, or with the table selected, every cell.
+                const CellRange rg = cellsToFormat(ed, tb);
+                ed->change(tr("Cell Margins"), [tb, v, rg] {
+                    for (int r = rg.r0; r <= rg.r1; ++r)
+                        for (int c = rg.c0; c <= rg.c1; ++c) tb->cell(r, c).margins = QMarginsF(v, v, v, v);
                 });
             }
         });
@@ -1300,98 +1345,133 @@ void MainWindow::createActions()
     mk("obj.transparency", tr("Transparency…"), "blend", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 4); });
 
     // ---------------- Tables ----------------
-    // A row and column command: on the cell the text cursor is in, or with the
-    // whole table selected, -1 (callers choose: the ends to insert at, and
+    // A row and column command: on the rows and columns the selected cells (or
+    // the cell the text cursor is in) cover, or with the whole table selected,
+    // a range that is not valid (callers choose: the ends to insert at, and
     // nothing to delete).
-    auto tableEdit = [this](const QString &label, const std::function<void(TableItem *, int, int)> &fn) {
+    auto tableEdit = [this](const QString &label, const std::function<void(TableItem *, const CellRange &)> &fn) {
         TableItem *t = selTable(m_ed);
         if (!t) return;
-        const int r = m_ed->isEditingText() ? m_ed->textTarget().row : -1;
-        const int c = m_ed->isEditingText() ? m_ed->textTarget().col : -1;
+        const CellRange rg = m_ed->targetCells();
         m_ed->endTextEdit();
-        m_ed->change(label, [&] { fn(t, r, c); });
+        m_ed->change(label, [&] { fn(t, rg); });
         m_ed->select(t->id);
     };
-    mk("tbl.insAbove", tr("Insert Above"), "between-horizontal-end", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Row"), [this](TableItem *t, int r, int) { tableInsertRow(m_ed, t, std::max(0, r)); }); });
-    mk("tbl.insBelow", tr("Insert Below"), "between-horizontal-start", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Row"), [this](TableItem *t, int r, int) { tableInsertRow(m_ed, t, r < 0 ? t->rows : r + 1); }); });
-    mk("tbl.insLeft", tr("Insert Left"), "between-vertical-end", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Column"), [this](TableItem *t, int, int c) { tableInsertCol(m_ed, t, std::max(0, c)); }); });
-    mk("tbl.insRight", tr("Insert Right"), "between-vertical-start", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Column"), [this](TableItem *t, int, int c) { tableInsertCol(m_ed, t, c < 0 ? t->cols : c + 1); }); });
-    auto needCell = [this](const QString &what) {
-        if (selTable(m_ed) && !m_ed->isEditingText()) { Q_EMIT m_ed->status(what); return true; }
-        return false;
+    mk("tbl.insAbove", tr("Insert Above"), "between-horizontal-end", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Row"), [this](TableItem *t, const CellRange &rg) { tableInsertRow(m_ed, t, std::max(0, rg.r0)); }); });
+    mk("tbl.insBelow", tr("Insert Below"), "between-horizontal-start", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Row"), [this](TableItem *t, const CellRange &rg) { tableInsertRow(m_ed, t, rg.valid() ? rg.r1 + 1 : t->rows); }); });
+    mk("tbl.insLeft", tr("Insert Left"), "between-vertical-end", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Column"), [this](TableItem *t, const CellRange &rg) { tableInsertCol(m_ed, t, std::max(0, rg.c0)); }); });
+    mk("tbl.insRight", tr("Insert Right"), "between-vertical-start", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Column"), [this](TableItem *t, const CellRange &rg) { tableInsertCol(m_ed, t, rg.valid() ? rg.c1 + 1 : t->cols); }); });
+    // Rows and columns can only be deleted by naming cells in them; and a table keeps one of each.
+    auto canDelete = [this](bool rows, const QString &pick) {
+        TableItem *t = selTable(m_ed);
+        if (!t) return false;
+        const CellRange rg = m_ed->targetCells();
+        if (!rg.valid()) { Q_EMIT m_ed->status(pick); return false; }
+        if (rows ? rg.r1 - rg.r0 + 1 >= t->rows : rg.c1 - rg.c0 + 1 >= t->cols) {
+            Q_EMIT m_ed->status(rows ? tr("A table keeps at least one row. Delete Table removes the whole table.") : tr("A table keeps at least one column. Delete Table removes the whole table."));
+            return false;
+        }
+        return true;
     };
-    mk("tbl.delRow", tr("Delete Rows"), "", QKeySequence(), [tableEdit, needCell, this] {
-        if (needCell(tr("Click in the row to delete, then choose Delete Rows. Delete Table removes the whole table."))) return;
-        tableEdit(tr("Delete Row"), [](TableItem *t, int r, int) { tableDeleteRow(t, r); });
+    mk("tbl.delRow", tr("Delete Rows"), "", QKeySequence(), [tableEdit, canDelete] {
+        if (!canDelete(true, tr("Click in the row to delete, or select cells in the rows, then choose Delete Rows. Delete Table removes the whole table."))) return;
+        tableEdit(tr("Delete Rows"), [](TableItem *t, const CellRange &rg) { tableDeleteRows(t, rg.r0, rg.r1); });
     });
-    mk("tbl.delCol", tr("Delete Columns"), "", QKeySequence(), [tableEdit, needCell, this] {
-        if (needCell(tr("Click in the column to delete, then choose Delete Columns. Delete Table removes the whole table."))) return;
-        tableEdit(tr("Delete Column"), [](TableItem *t, int, int c) { tableDeleteCol(t, c); });
+    mk("tbl.delCol", tr("Delete Columns"), "", QKeySequence(), [tableEdit, canDelete] {
+        if (!canDelete(false, tr("Click in the column to delete, or select cells in the columns, then choose Delete Columns. Delete Table removes the whole table."))) return;
+        tableEdit(tr("Delete Columns"), [](TableItem *t, const CellRange &rg) { tableDeleteCols(t, rg.c0, rg.c1); });
     });
     mk("tbl.delTable", tr("Delete Table"), "", QKeySequence(), [this] {
         if (TableItem *t = selTable(m_ed)) { m_ed->endTextEdit(); m_ed->deleteItems({t->id}); }
     });
     mk("tbl.merge", tr("Merge Cells"), "table-cells-merge", QKeySequence(), [this] {
         TableItem *t = selTable(m_ed);
-        if (!t || !m_ed->isEditingText()) { Q_EMIT m_ed->status(tr("Click in a cell, then choose Merge Cells to merge it with the cell to its right.")); return; }
-        const int r = m_ed->textTarget().row, c = m_ed->textTarget().col;
-        TableCell &cell = t->cell(r, c);
-        const int next = c + cell.colSpan;
-        if (next >= t->cols) return;
+        CellRange rg = m_ed->targetCells();
+        if (!t || !rg.valid()) { Q_EMIT m_ed->status(tr("Select the cells to merge, then choose Merge Cells. With the cursor in one cell, it merges with the cell to its right.")); return; }
+        // A single cell joins the cell on its right.
+        const TableCell &first = t->cell(rg.r0, rg.c0);
+        if (!first.covered && rg.r1 == rg.r0 + first.rowSpan - 1 && rg.c1 == rg.c0 + first.colSpan - 1) {
+            if (rg.c1 + 1 >= t->cols) return;
+            rg = t->cellsBetween(rg.r0, rg.c0, rg.r1, rg.c1 + 1);
+        }
         m_ed->endTextEdit();
         m_ed->change(tr("Merge Cells"), [&] {
-            TableCell &right = t->cell(r, next);
-            // Move the right cell's text into this one.
-            QTextDocument *dst = m_ed->doc()->storyDoc(cell.storyId), *src = m_ed->doc()->storyDoc(right.storyId);
-            if (dst && src && !src->toPlainText().isEmpty()) {
-                QTextCursor dc(dst);
-                dc.movePosition(QTextCursor::End);
-                dc.insertBlock();
-                dc.insertFragment(QTextDocumentFragment(src));
-            }
-            cell.colSpan += right.colSpan;
-            for (int k = next; k < c + cell.colSpan; ++k) t->cell(r, k).covered = true;
+            TableCell &head = t->cell(rg.r0, rg.c0);
+            QTextDocument *dst = m_ed->doc()->storyDoc(head.storyId);
+            for (int r = rg.r0; r <= rg.r1; ++r)
+                for (int c = rg.c0; c <= rg.c1; ++c) {
+                    if (r == rg.r0 && c == rg.c0) continue;
+                    TableCell &cell = t->cell(r, c);
+                    // The other cells' text joins the first cell's, a paragraph each.
+                    QTextDocument *src = cell.covered ? nullptr : m_ed->doc()->storyDoc(cell.storyId);
+                    if (dst && src && !src->toPlainText().isEmpty()) {
+                        QTextCursor dc(dst);
+                        dc.movePosition(QTextCursor::End);
+                        if (!dst->toPlainText().isEmpty()) dc.insertBlock();
+                        dc.insertFragment(QTextDocumentFragment(src));
+                        QTextCursor sc(src);
+                        sc.select(QTextCursor::Document);
+                        sc.removeSelectedText();
+                    }
+                    cell.covered = true;
+                    cell.rowSpan = cell.colSpan = 1;
+                }
+            head.rowSpan = rg.r1 - rg.r0 + 1;
+            head.colSpan = rg.c1 - rg.c0 + 1;
         });
-        m_ed->select(t->id);
+        m_ed->selectCells(t->id, rg.r0, rg.c0, rg.r1, rg.c1);
     });
     mk("tbl.split", tr("Split Cells"), "table-cells-split", QKeySequence(), [this] {
         TableItem *t = selTable(m_ed);
-        if (!t || !m_ed->isEditingText()) return;
-        const int r = m_ed->textTarget().row, c = m_ed->textTarget().col;
+        const CellRange rg = m_ed->targetCells();
+        if (!t || !rg.valid()) return;
         m_ed->endTextEdit();
         m_ed->change(tr("Split Cells"), [&] {
-            TableCell &cell = t->cell(r, c);
-            for (int rr = r; rr < r + cell.rowSpan; ++rr)
-                for (int cc = c; cc < c + cell.colSpan; ++cc)
-                    if (rr != r || cc != c) t->cell(rr, cc).covered = false;
-            cell.rowSpan = cell.colSpan = 1;
+            for (int r = rg.r0; r <= rg.r1; ++r)
+                for (int c = rg.c0; c <= rg.c1; ++c) {
+                    TableCell &cell = t->cell(r, c);
+                    if (cell.covered || (cell.rowSpan == 1 && cell.colSpan == 1)) continue;
+                    for (int rr = r; rr < std::min(t->rows, r + cell.rowSpan); ++rr)
+                        for (int cc = c; cc < std::min(t->cols, c + cell.colSpan); ++cc)
+                            if (rr != r || cc != c) t->cell(rr, cc).covered = false;
+                    cell.rowSpan = cell.colSpan = 1;
+                }
         });
-        m_ed->select(t->id);
+        m_ed->selectCells(t->id, rg.r0, rg.c0, rg.r1, rg.c1);
     });
-    mk("tbl.diagDown", tr("Divide Down"), "", QKeySequence(), [this] {
-        TableItem *t = selTable(m_ed);
-        if (!t || !m_ed->isEditingText()) return;
-        const auto tt = m_ed->textTarget();
-        m_ed->change(tr("Diagonals"), [&] { t->cell(tt.row, tt.col).diagonal = 1; });
-    });
-    mk("tbl.diagUp", tr("Divide Up"), "", QKeySequence(), [this] {
-        TableItem *t = selTable(m_ed);
-        if (!t || !m_ed->isEditingText()) return;
-        const auto tt = m_ed->textTarget();
-        m_ed->change(tr("Diagonals"), [&] { t->cell(tt.row, tt.col).diagonal = 2; });
-    });
-    mk("tbl.diagNone", tr("No Division"), "", QKeySequence(), [this] {
-        TableItem *t = selTable(m_ed);
-        if (!t || !m_ed->isEditingText()) return;
-        const auto tt = m_ed->textTarget();
-        m_ed->change(tr("Diagonals"), [&] { t->cell(tt.row, tt.col).diagonal = 0; });
-    });
+    for (const auto &[id, label, kind] : {std::tuple{"tbl.diagDown", tr("Divide Down"), 1}, {"tbl.diagUp", tr("Divide Up"), 2}, {"tbl.diagNone", tr("No Division"), 0}}) {
+        const int diagonal = kind;
+        mk(id, label, "", QKeySequence(), [this, diagonal] {
+            TableItem *t = selTable(m_ed);
+            const CellRange rg = m_ed->targetCells();
+            if (!t || !rg.valid()) return;
+            m_ed->change(tr("Diagonals"), [&] {
+                for (int r = rg.r0; r <= rg.r1; ++r)
+                    for (int c = rg.c0; c <= rg.c1; ++c) t->cell(r, c).diagonal = diagonal;
+            });
+        });
+    }
     mk("tbl.selectTable", tr("Select Table"), "", QKeySequence(), [this] { if (TableItem *t = selTable(m_ed)) { m_ed->endTextEdit(); m_ed->select(t->id); } });
     mk("tbl.selectCell", tr("Select Cell"), "", QKeySequence(), [this] {
+        // From a block, the cell it began with.
+        if (const auto b = m_ed->cellBlock(); b.range.valid()) m_ed->beginTextEdit(b.itemId, 0, b.anchorRow, b.anchorCol);
         if (!m_ed->isEditingText()) return;
         QTextCursor c = m_ed->cursor();
         c.select(QTextCursor::Document);
         m_ed->setCursor(c);
+    });
+    // A row or column of the cell the cursor is in; from a block, every row or column it covers.
+    mk("tbl.selectRow", tr("Select Row"), "", QKeySequence(), [this] {
+        TableItem *t = selTable(m_ed);
+        const CellRange rg = m_ed->targetCells();
+        if (!t || !rg.valid()) { Q_EMIT m_ed->status(tr("Click in a cell, then choose Select Row.")); return; }
+        m_ed->selectCells(t->id, rg.r0, 0, rg.r1, t->cols - 1);
+    });
+    mk("tbl.selectCol", tr("Select Column"), "", QKeySequence(), [this] {
+        TableItem *t = selTable(m_ed);
+        const CellRange rg = m_ed->targetCells();
+        if (!t || !rg.valid()) { Q_EMIT m_ed->status(tr("Click in a cell, then choose Select Column.")); return; }
+        m_ed->selectCells(t->id, 0, rg.c0, t->rows - 1, rg.c1);
     });
     mk("tbl.grow", tr("Grow to Fit Text"), "", QKeySequence(), [this] {
         if (TableItem *t = selTable(m_ed)) m_ed->change(tr("Grow to Fit Text"), [this, t] { t->growToFit = !t->growToFit; m_ed->fitTableRows(t); });
@@ -1418,14 +1498,15 @@ void MainWindow::createActions()
             TableItem *t = selTable(m_ed);
             if (!t) return;
             const Stroke s = w == 3 ? Stroke::none() : currentBorderStroke();
-            const bool inCell = m_ed->isEditingText();
-            const int r0 = inCell ? m_ed->textTarget().row : 0, c0 = inCell ? m_ed->textTarget().col : 0;
-            const int r1 = inCell ? r0 : t->rows - 1, c1 = inCell ? c0 : t->cols - 1;
+            const CellRange rg = cellsToFormat(m_ed, t);
             m_ed->change(tr("Borders"), [&] {
-                for (int r = r0; r <= r1; ++r)
-                    for (int c = c0; c <= c1; ++c) {
+                for (int r = rg.r0; r <= rg.r1; ++r)
+                    for (int c = rg.c0; c <= rg.c1; ++c) {
+                        // A merged cell draws its borders round the whole of it.
+                        const TableCell &cell = t->cell(r, c);
+                        if (cell.covered) continue;
                         CellBorder &b = t->cell(r, c).border;
-                        const bool top = r == r0, bottom = r == r1, left = c == c0, right = c == c1;
+                        const bool top = r == rg.r0, bottom = r + cell.rowSpan - 1 >= rg.r1, left = c == rg.c0, right = c + cell.colSpan - 1 >= rg.c1;
                         switch (w) {
                         case 0: case 3: b.top = b.bottom = b.left = b.right = s; break;
                         case 1: if (top) b.top = s; if (bottom) b.bottom = s; if (left) b.left = s; if (right) b.right = s; break;

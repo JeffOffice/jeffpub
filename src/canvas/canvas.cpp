@@ -1036,6 +1036,21 @@ void Canvas::paintOverlay(QPainter &p)
     // Selection.
     const auto sel = m_ed->selectedItems();
     for (Item *it : sel) paintHandles(p, it);
+    // Selected table cells, shaded the way selected text is.
+    if (const auto block = m_ed->cellBlock(); block.range.valid())
+        if (const auto *tb = dynamic_cast<const TableItem *>(d->item(block.itemId))) {
+            const CellRange &g = block.range;
+            double x = 0, y = 0, w = 0, h = 0;
+            for (int c = 0; c < g.c0; ++c) x += tb->colW[c];
+            for (int r = 0; r < g.r0; ++r) y += tb->rowH[r];
+            for (int c = g.c0; c <= g.c1; ++c) w += tb->colW[c];
+            for (int r = g.r0; r <= g.r1; ++r) h += tb->rowH[r];
+            QPolygonF shade;
+            for (const QPointF &pt : tb->transform().map(QPolygonF(QRectF(x, y, w, h)))) shade << pageToView(pt);
+            p.setPen(Qt::NoPen);
+            p.setBrush(PaintOptions().selColor);
+            p.drawPolygon(shade);
+        }
     if (sel.size() > 1) {
         const QRectF b = m_ed->selectionBounds();
         p.setPen(QPen(QColor(70, 120, 200), 1, Qt::DashLine));
@@ -1260,14 +1275,8 @@ QString Canvas::itemAt(const QPointF &page, bool enterGroups, int *row, int *col
             if (textInterior) *textInterior = (target->type() == ItemType::Text || target->type() == ItemType::Table) && interior(target);
             if (target->type() == ItemType::Table && (row || col)) {
                 const auto *t = static_cast<const TableItem *>(target);
-                const QPointF local = t->transform().inverted().map(page);
                 int rr = 0, cc = 0;
-                double acc = 0;
-                for (cc = 0; cc < t->cols - 1 && local.x() > acc + t->colW[cc]; ++cc) acc += t->colW[cc];
-                acc = 0;
-                for (rr = 0; rr < t->rows - 1 && local.y() > acc + t->rowH[rr]; ++rr) acc += t->rowH[rr];
-                while (t->cell(rr, cc).covered && cc > 0) --cc;
-                while (t->cell(rr, cc).covered && rr > 0) --rr;
+                t->cellAt(t->transform().inverted().map(page), &rr, &cc);
                 if (row) *row = rr;
                 if (col) *col = cc;
             }
@@ -1735,6 +1744,23 @@ void Canvas::mousePressEvent(QMouseEvent *e)
     }
     case HitKind::Item: {
         Item *it = m_ed->doc()->item(h.id);
+        // Shift+click in a table selects the cells from the one the cursor is in (or the block began with) to the one clicked.
+        if ((e->modifiers() & Qt::ShiftModifier) && it->type() == ItemType::Table && h.row >= 0 && !it->locked) {
+            int fromRow = -1, fromCol = -1;
+            const auto block = m_ed->cellBlock();
+            if (m_ed->isEditingText() && m_ed->textTarget().itemId == h.id) {
+                fromRow = m_ed->textTarget().row;
+                fromCol = m_ed->textTarget().col;
+            } else if (block.range.valid() && block.itemId == h.id) {
+                fromRow = block.anchorRow;
+                fromCol = block.anchorCol;
+            }
+            if (fromRow >= 0 && (!m_ed->isEditingText() || fromRow != h.row || fromCol != h.col)) {
+                m_ed->selectCells(h.id, fromRow, fromCol, h.row, h.col);
+                m_drag = Drag::CellBlock;
+                return;
+            }
+        }
         // Clicking in the text of the box being edited moves the caret.
         if (m_ed->isEditingText() && m_ed->textTarget().itemId == h.id &&
             (h.textInterior || it->type() == ItemType::Shape) && (it->type() != ItemType::Table || (h.row == m_ed->textTarget().row && h.col == m_ed->textTarget().col))) {
@@ -2182,10 +2208,32 @@ void Canvas::mouseMoveEvent(QMouseEvent *e)
         viewport()->update();
         return;
     }
+    case Drag::CellBlock: {
+        const auto block = m_ed->cellBlock();
+        const auto *tb = dynamic_cast<TableItem *>(d->item(block.itemId));
+        if (!tb) return;
+        int row = 0, col = 0;
+        tb->cellAt(tb->transform().inverted().map(page), &row, &col);
+        if (!(tb->cellsBetween(block.anchorRow, block.anchorCol, row, col) == block.range)) m_ed->selectCells(block.itemId, block.anchorRow, block.anchorCol, row, col);
+        return;
+    }
     case Drag::TextSelect:
     case Drag::TextMove: {
         const auto &tt = m_ed->textTarget();
         if (tt.itemId.isEmpty()) return;
+        // Dragging from one table cell into another selects cells, not text.
+        if (m_drag == Drag::TextSelect && tt.row >= 0)
+            if (const auto *tb = dynamic_cast<TableItem *>(d->item(tt.itemId))) {
+                int row = 0, col = 0;
+                tb->cellAt(tb->transform().inverted().map(page), &row, &col);
+                if (row != tt.row || col != tt.col) {
+                    const QString id = tt.itemId;
+                    m_ed->selectCells(id, tt.row, tt.col, row, col);
+                    m_drag = Drag::CellBlock;
+                    viewport()->update();
+                    return;
+                }
+            }
         int pos = textPosAt(tt.itemId, page, tt.row, tt.col);
         // Allow dragging into other linked boxes on this page.
         if (Item *it = d->item(tt.itemId); it && it->type() == ItemType::Text) {
@@ -2840,6 +2888,7 @@ void Canvas::keyPressEvent(QKeyEvent *e)
         if (!m_ed->cropItem.isEmpty()) { m_ed->setCropItem(QString()); return; }
         if (!m_ed->pointsItem.isEmpty()) { m_ed->setPointsItem(QString()); return; }
         if (!m_ed->wrapItem.isEmpty()) { m_ed->setWrapItem(QString()); return; }
+        if (m_ed->hasCellBlock()) { m_ed->clearCellBlock(); return; }   // the table stays selected
         if (m_ed->selection().size() == 1) {
             const auto loc = m_ed->doc()->find(m_ed->selection().first());
             if (loc.parent) { m_ed->select(loc.parent->id); return; }
@@ -2869,6 +2918,10 @@ void Canvas::keyPressEvent(QKeyEvent *e)
     case Qt::Key_Return:
     case Qt::Key_Enter:
     case Qt::Key_F2:
+        if (const auto block = m_ed->cellBlock(); block.range.valid()) {
+            m_ed->beginTextEdit(block.itemId, -1, block.anchorRow, block.anchorCol);
+            return;
+        }
         if (Item *it = m_ed->single(); it && (it->type() == ItemType::Text || it->type() == ItemType::Shape || it->type() == ItemType::Table)) {
             m_ed->beginTextEdit(it->id);
             return;

@@ -520,6 +520,50 @@ QRectF TableItem::cellRect(int r, int c) const
     return QRectF(x, y, w, h);
 }
 
+void TableItem::cellAt(const QPointF &local, int *row, int *col) const
+{
+    int rr = 0, cc = 0;
+    double acc = 0;
+    for (cc = 0; cc < cols - 1 && local.x() >= acc + colW[cc]; ++cc) acc += colW[cc];
+    acc = 0;
+    for (rr = 0; rr < rows - 1 && local.y() >= acc + rowH[rr]; ++rr) acc += rowH[rr];
+    // Under a merged cell: the cell it belongs to.
+    for (int r = 0; r <= rr; ++r)
+        for (int c = 0; c <= cc; ++c) {
+            const TableCell &cl = cell(r, c);
+            if (!cl.covered && r + cl.rowSpan > rr && c + cl.colSpan > cc) { *row = r; *col = c; return; }
+        }
+    *row = rr;
+    *col = cc;
+}
+
+CellRange TableItem::cellsBetween(int r0, int c0, int r1, int c1) const
+{
+    if (rows <= 0 || cols <= 0) return CellRange();
+    CellRange g;
+    g.r0 = std::clamp(std::min(r0, r1), 0, rows - 1);
+    g.r1 = std::clamp(std::max(r0, r1), 0, rows - 1);
+    g.c0 = std::clamp(std::min(c0, c1), 0, cols - 1);
+    g.c1 = std::clamp(std::max(c0, c1), 0, cols - 1);
+    for (bool grew = true; grew;) {
+        grew = false;
+        for (int r = 0; r < rows; ++r)
+            for (int c = 0; c < cols; ++c) {
+                const TableCell &cl = cell(r, c);
+                if (cl.covered) continue;
+                const int rEnd = std::min(rows, r + cl.rowSpan) - 1, cEnd = std::min(cols, c + cl.colSpan) - 1;
+                if (r > g.r1 || rEnd < g.r0 || c > g.c1 || cEnd < g.c0) continue;   // clear of the block
+                if (r >= g.r0 && rEnd <= g.r1 && c >= g.c0 && cEnd <= g.c1) continue;   // already whole in it
+                g.r0 = std::min(g.r0, r);
+                g.r1 = std::max(g.r1, rEnd);
+                g.c0 = std::min(g.c0, c);
+                g.c1 = std::max(g.c1, cEnd);
+                grew = true;
+            }
+    }
+    return g;
+}
+
 void TableItem::syncRect()
 {
     double w = 0, h = 0;

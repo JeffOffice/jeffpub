@@ -35,7 +35,15 @@ QVector<QTextCursor> Editor::formatTargets() const
         switch (it->type()) {
         case ItemType::Text: addStory(static_cast<TextItem *>(it)->storyId); break;
         case ItemType::Shape: addStory(static_cast<ShapeItem *>(it)->storyId); break;
-        case ItemType::Table: for (const auto &c : static_cast<TableItem *>(it)->cells) addStory(c.storyId); break;
+        case ItemType::Table: {
+            // Selected cells: just their text; otherwise all of the table's.
+            auto *t = static_cast<TableItem *>(it);
+            const CellBlock b = cellBlock();
+            for (int r = 0; r < t->rows; ++r)
+                for (int c = 0; c < t->cols; ++c)
+                    if (b.itemId != t->id || b.range.contains(r, c)) addStory(t->cell(r, c).storyId);
+            break;
+        }
         case ItemType::Group: for (const auto &c : static_cast<GroupItem *>(it)->children) visit(c.get()); break;
         default: break;
         }

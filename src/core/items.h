@@ -199,6 +199,14 @@ struct TableCell {
     CellBorder border;
 };
 
+// A rectangle of table cells: rows r0..r1 and columns c0..c1, both inclusive.
+struct CellRange {
+    int r0 = -1, c0 = -1, r1 = -1, c1 = -1;
+    bool valid() const { return r0 >= 0 && c0 >= 0 && r1 >= r0 && c1 >= c0; }
+    bool contains(int r, int c) const { return valid() && r >= r0 && r <= r1 && c >= c0 && c <= c1; }
+    bool operator==(const CellRange &o) const { return r0 == o.r0 && c0 == o.c0 && r1 == o.r1 && c1 == o.c1; }
+};
+
 class TableItem : public Item {
 public:
     TableItem();
@@ -218,6 +226,12 @@ public:
     TableCell &cell(int r, int c) { return cells[r * cols + c]; }
     const TableCell &cell(int r, int c) const { return cells[r * cols + c]; }
     QRectF cellRect(int r, int c) const;   // frame-local, spans included
+    // The cell (the first of a merged cell) under a frame-local point; a
+    // point outside the table is taken to the nearest cell.
+    void cellAt(const QPointF &local, int *row, int *col) const;
+    // The rectangle of cells between two cells, grown until it holds every
+    // merged cell it touches whole.
+    CellRange cellsBetween(int r0, int c0, int r1, int c1) const;
     void syncRect();                       // rect size = sum of columns and rows
     void scaleInto(const QRectF &from, const QRectF &to) override;
     QJsonObject toJson() const override;

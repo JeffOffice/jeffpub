@@ -493,6 +493,541 @@ private Q_SLOTS:
         QCOMPARE(t->rows, 2);
     }
 
+    // Several table cells at once, as in Publisher: dragging across cells, or
+    // Shift+click, selects a block, shaded the way selected text is; a block
+    // that touches part of a merged cell takes the whole cell.
+    void tableCellsSelectedAsABlock()
+    {
+        // The rectangle between two cells grows over every merged cell it touches.
+        jp::TableItem model;
+        model.rows = 4;
+        model.cols = 4;
+        model.colW = QVector<double>(4, 50);
+        model.rowH = QVector<double>(4, 20);
+        model.cells.resize(16);
+        model.cell(1, 1).rowSpan = 2;
+        model.cell(1, 1).colSpan = 2;
+        for (auto [r, c] : {std::pair{1, 2}, {2, 1}, {2, 2}}) model.cell(r, c).covered = true;
+        QCOMPARE(model.cellsBetween(0, 0, 1, 1), (jp::CellRange{0, 0, 2, 2}));
+        QCOMPARE(model.cellsBetween(2, 2, 3, 3), (jp::CellRange{1, 1, 3, 3}));   // given in any order
+        QCOMPARE(model.cellsBetween(3, 3, 2, 0), (jp::CellRange{1, 0, 3, 3}));
+        QCOMPARE(model.cellsBetween(0, 0, 0, 3), (jp::CellRange{0, 0, 0, 3}));
+        int row = -1, col = -1;
+        model.cellAt(QPointF(120, 50), &row, &col);   // under the merged cell
+        QCOMPARE(std::make_pair(row, col), std::make_pair(1, 1));
+        model.cellAt(QPointF(-30, 500), &row, &col);   // outside: the nearest cell
+        QCOMPARE(std::make_pair(row, col), std::make_pair(3, 0));
+
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        jp::Editor *ed = w.editor();
+        auto made = std::static_pointer_cast<jp::TableItem>(ed->newTable(QRectF(72, 72, 360, 160), 4, 4));
+        ed->addItem(made);
+        const QString id = made->id;
+        auto table = [&] { return static_cast<jp::TableItem *>(ed->doc()->item(id)); };
+        jp::Canvas *cv = w.canvas();
+        QTest::qWait(50);
+        auto at = [&](int r, int c) { return cv->pageToView(table()->transform().map(table()->cellRect(r, c).center())).toPoint(); };
+        auto block = [&] {
+            const jp::CellRange b = ed->cellBlock().range;
+            return QVector<int>{b.r0, b.c0, b.r1, b.c1};
+        };
+        auto drag = [&](const QPoint &from, const QPoint &to) {
+            QTest::mousePress(cv->viewport(), Qt::LeftButton, Qt::NoModifier, from);
+            for (int k = 1; k <= 4; ++k) {
+                const QPoint p = from + (to - from) * k / 4;
+                QMouseEvent mv(QEvent::MouseMove, QPointF(p), cv->viewport()->mapToGlobal(QPointF(p)), Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+                QApplication::sendEvent(cv->viewport(), &mv);
+            }
+            QTest::mouseRelease(cv->viewport(), Qt::LeftButton, Qt::NoModifier, to);
+        };
+
+        // A click, or a drag inside one cell, is text editing as before.
+        QTest::mouseClick(cv->viewport(), Qt::LeftButton, Qt::NoModifier, at(3, 3));
+        QVERIFY(ed->isEditingText());
+        QVERIFY(!ed->hasCellBlock());
+        drag(at(3, 3) - QPoint(8, 0), at(3, 3) + QPoint(8, 0));
+        QVERIFY(ed->isEditingText());
+        QVERIFY(!ed->hasCellBlock());
+        const QImage plain = cv->viewport()->grab().toImage();
+
+        // Dragging across cells selects the block: the table stays the selected object.
+        drag(at(0, 0), at(1, 2));
+        QVERIFY(!ed->isEditingText());
+        QCOMPARE(ed->selection(), QStringList{id});
+        QCOMPARE(block(), (QVector<int>{0, 0, 1, 2}));
+        // Shaded as selected text is, in the cells of the block only.
+        const QImage shaded = cv->viewport()->grab().toImage();
+        for (auto [r, c] : {std::pair{0, 0}, {0, 2}, {1, 1}})
+            QVERIFY2(shaded.pixelColor(at(r, c)) != plain.pixelColor(at(r, c)), qPrintable(QStringLiteral("%1,%2").arg(r).arg(c)));
+        for (auto [r, c] : {std::pair{2, 0}, {0, 3}, {2, 2}, {1, 3}})
+            QVERIFY2(shaded.pixelColor(at(r, c)) == plain.pixelColor(at(r, c)), qPrintable(QStringLiteral("%1,%2").arg(r).arg(c)));
+        // A drag up and to the left, shaded where it is and nowhere else.
+        drag(at(2, 2), at(1, 1));
+        QCOMPARE(block(), (QVector<int>{1, 1, 2, 2}));
+        const QImage lower = cv->viewport()->grab().toImage();
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) lower.save(qEnvironmentVariable("JP_SHOT_DIR") + QStringLiteral("/table-cells.png"));
+        for (auto [r, c] : {std::pair{1, 1}, {2, 2}, {1, 2}})
+            QVERIFY2(lower.pixelColor(at(r, c)) != plain.pixelColor(at(r, c)), qPrintable(QStringLiteral("%1,%2").arg(r).arg(c)));
+        for (auto [r, c] : {std::pair{0, 0}, {0, 1}, {3, 1}, {2, 3}})
+            QVERIFY2(lower.pixelColor(at(r, c)) == plain.pixelColor(at(r, c)), qPrintable(QStringLiteral("%1,%2").arg(r).arg(c)));
+        drag(at(2, 2), at(2, 2) + QPoint(3, 0));
+        QVERIFY(ed->isEditingText());   // not far enough to leave the cell
+
+        // Shift+click extends from the cell the cursor is in, then from where the block began.
+        QTest::mouseClick(cv->viewport(), Qt::LeftButton, Qt::NoModifier, at(1, 1));
+        QTest::mouseClick(cv->viewport(), Qt::LeftButton, Qt::ShiftModifier, at(2, 3));
+        QVERIFY(!ed->isEditingText());
+        QCOMPARE(block(), (QVector<int>{1, 1, 2, 3}));
+        QTest::mouseClick(cv->viewport(), Qt::LeftButton, Qt::ShiftModifier, at(0, 0));
+        QCOMPARE(block(), (QVector<int>{0, 0, 1, 1}));
+        QTest::mouseClick(cv->viewport(), Qt::LeftButton, Qt::ShiftModifier, at(3, 1));
+        QCOMPARE(block(), (QVector<int>{1, 1, 3, 1}));
+        // A click in a cell ends the block and puts the cursor there.
+        QTest::mouseClick(cv->viewport(), Qt::LeftButton, Qt::NoModifier, at(2, 2));
+        QVERIFY(ed->isEditingText());
+        QVERIFY(!ed->hasCellBlock());
+        QCOMPARE(std::make_pair(ed->textTarget().row, ed->textTarget().col), std::make_pair(2, 2));
+
+        // A block that touches part of a merged cell grows to hold all of it.
+        ed->change(QStringLiteral("Merge"), [&] {
+            table()->cell(1, 1).rowSpan = 2;
+            table()->cell(1, 1).colSpan = 2;
+            for (auto [r, c] : {std::pair{1, 2}, {2, 1}, {2, 2}}) table()->cell(r, c).covered = true;
+        });
+        drag(at(0, 0), at(1, 1));
+        QCOMPARE(block(), (QVector<int>{0, 0, 2, 2}));
+        ed->selectCells(id, 2, 0, 2, 1);   // the second is under the merged cell
+        QCOMPARE(block(), (QVector<int>{1, 0, 2, 2}));
+        QTest::mouseClick(cv->viewport(), Qt::LeftButton, Qt::ShiftModifier, at(3, 3));
+        QCOMPARE(block(), (QVector<int>{1, 0, 3, 3}));
+        // Esc puts the block away and leaves the table selected; Enter types in the cell the block began with.
+        QTest::keyClick(cv, Qt::Key_Escape);
+        QVERIFY(!ed->hasCellBlock());
+        QCOMPARE(ed->selection(), QStringList{id});
+        ed->selectCells(id, 3, 2, 1, 1);
+        QTest::keyClick(cv, Qt::Key_Return);
+        QVERIFY(ed->isEditingText());
+        QCOMPARE(std::make_pair(ed->textTarget().row, ed->textTarget().col), std::make_pair(3, 2));
+        // Choosing another object, or selecting the table again, puts the block away.
+        ed->selectCells(id, 0, 0, 1, 0);
+        ed->select(id);
+        QVERIFY(!ed->hasCellBlock());
+        ed->selectCells(id, 0, 0, 1, 0);
+        ed->clearSelection();
+        QVERIFY(!ed->hasCellBlock());
+    }
+
+    // Table Layout > Select has Select Row and Select Column beside Select
+    // Cell and Select Table, reached by the KeyTips of the Select button: a
+    // row or column of the cell the cursor is in, or every row or column a
+    // block covers (merged cells whole).
+    void tableSelectRowAndColumn()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        QVERIFY(QTest::qWaitForWindowActive(&w));
+        jp::Editor *ed = w.editor();
+        auto made = std::static_pointer_cast<jp::TableItem>(ed->newTable(QRectF(72, 72, 360, 160), 4, 3));
+        ed->addItem(made);
+        const QString id = made->id;
+        auto block = [&] {
+            const jp::CellRange b = ed->cellBlock().range;
+            return QVector<int>{b.r0, b.c0, b.r1, b.c1};
+        };
+        const int steps = ed->undoStack()->index();
+        ed->beginTextEdit(id, 0, 1, 2);
+        w.act(QStringLiteral("tbl.selectRow"))->trigger();
+        QVERIFY(!ed->isEditingText());
+        QCOMPARE(ed->selection(), QStringList{id});
+        QCOMPARE(block(), (QVector<int>{1, 0, 1, 2}));
+        ed->beginTextEdit(id, 0, 1, 2);
+        w.act(QStringLiteral("tbl.selectCol"))->trigger();
+        QCOMPARE(block(), (QVector<int>{0, 2, 3, 2}));
+        // From a block: every row, or every column, that it covers.
+        ed->selectCells(id, 1, 0, 2, 1);
+        w.act(QStringLiteral("tbl.selectRow"))->trigger();
+        QCOMPARE(block(), (QVector<int>{1, 0, 2, 2}));
+        QCOMPARE(ed->cellBlock().anchorRow, 1);
+        ed->selectCells(id, 1, 0, 2, 1);
+        w.act(QStringLiteral("tbl.selectCol"))->trigger();
+        QCOMPARE(block(), (QVector<int>{0, 0, 3, 1}));
+        // A merged cell in the row comes whole.
+        auto *t = static_cast<jp::TableItem *>(ed->doc()->item(id));
+        t->cell(2, 1).rowSpan = 2;
+        t->cell(3, 1).covered = true;
+        ed->beginTextEdit(id, 0, 2, 0);
+        w.act(QStringLiteral("tbl.selectRow"))->trigger();
+        QCOMPARE(block(), (QVector<int>{2, 0, 3, 2}));
+        // With the whole table selected there is no cell to take a row from.
+        ed->select(id);
+        w.act(QStringLiteral("tbl.selectRow"))->trigger();
+        QVERIFY(!ed->hasCellBlock());
+        w.act(QStringLiteral("tbl.selectCol"))->trigger();
+        QVERIFY(!ed->hasCellBlock());
+        // Selecting is not an edit: nothing to undo.
+        QCOMPARE(ed->undoStack()->index(), steps);
+        // Select Cell from a block goes to its first cell, all its text selected.
+        ed->doc()->storyDoc(t->cell(1, 0).storyId)->setPlainText(QStringLiteral("hello"));
+        ed->selectCells(id, 1, 0, 2, 1);
+        w.act(QStringLiteral("tbl.selectCell"))->trigger();
+        QVERIFY(ed->isEditingText());
+        QCOMPARE(std::make_pair(ed->textTarget().row, ed->textTarget().col), std::make_pair(1, 0));
+        QCOMPARE(ed->cursor().selectedText(), QStringLiteral("hello"));
+
+        // The Select button's menu lists all four, and its KeyTips open it.
+        auto *r = w.findChild<jp::Ribbon *>();
+        QVERIFY(r);
+        ed->select(id);
+        const QString described = r->describe(true);
+        const QRegularExpression line(QStringLiteral("ribbon\\.tableSelect.*menu=\\[([^\\]]*)\\].*keytip=(\\w+)"));
+        const QRegularExpressionMatch m = line.match(described);
+        QVERIFY2(m.hasMatch(), "the Select button");
+        const QStringList entries = m.captured(1).split(QLatin1Char(','), Qt::SkipEmptyParts);
+        QCOMPARE(entries.size(), 4);
+        for (const char *cmd : {"tbl.selectCell", "tbl.selectRow", "tbl.selectCol", "tbl.selectTable"})
+            QVERIFY2(m.captured(1).contains(QLatin1String(cmd)), cmd);
+        QCOMPARE(m.captured(2), QStringLiteral("SL"));
+        QStringList shown;
+        QTimer::singleShot(300, [&] {
+            if (auto *menu = qobject_cast<QMenu *>(QApplication::activePopupWidget())) {
+                for (QAction *a : menu->actions()) shown << a->objectName();
+                menu->close();
+            }
+        });
+        QTest::keyPress(&w, Qt::Key_Alt);
+        QTest::keyRelease(&w, Qt::Key_Alt);
+        for (Qt::Key k : {Qt::Key_J, Qt::Key_L, Qt::Key_S, Qt::Key_L}) QTest::keyClick(&w, k);
+        QCOMPARE(shown, (QStringList{"tbl.selectCell", "tbl.selectRow", "tbl.selectCol", "tbl.selectTable"}));
+    }
+
+    // Every cell-formatting command applies to every cell in the block, as
+    // one undo step: fill, borders, diagonals, alignment, cell margins, and
+    // the text's font, size, bold, italic, underline, color, and alignment.
+    void tableBlockFormatsEveryCell()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        jp::Editor *ed = w.editor();
+        auto made = std::static_pointer_cast<jp::TableItem>(ed->newTable(QRectF(72, 72, 360, 160), 4, 4));
+        ed->addItem(made);
+        const QString id = made->id;
+        auto table = [&] { return static_cast<jp::TableItem *>(ed->doc()->item(id)); };
+        for (int r = 0; r < 4; ++r)
+            for (int c = 0; c < 4; ++c) ed->doc()->storyDoc(table()->cell(r, c).storyId)->setPlainText(QStringLiteral("cell %1,%2").arg(r).arg(c));
+        for (auto &cl : table()->cells) {   // plain cells, so every command has something to change
+            cl.fill = jp::Fill();
+            cl.border = jp::CellBorder();
+        }
+        auto inBlock = [](int r, int c) { return r >= 1 && r <= 2 && c >= 1 && c <= 2; };
+        auto story = [&](int r, int c) { return ed->doc()->storyDoc(table()->cell(r, c).storyId); };
+        auto charFormat = [&](int r, int c) {
+            QTextCursor cur(story(r, c));
+            cur.setPosition(3);
+            return cur.charFormat();
+        };
+        auto cellJson = [&](int r, int c) {
+            const jp::TableCell &cl = table()->cell(r, c);
+            return QJsonObject{{"fill", cl.fill.toJson()}, {"top", cl.border.top.toJson()}, {"bottom", cl.border.bottom.toJson()}, {"left", cl.border.left.toJson()},
+                               {"right", cl.border.right.toJson()}, {"diag", cl.diagonal}, {"valign", int(cl.valign)},
+                               {"margins", QJsonArray{cl.margins.left(), cl.margins.top(), cl.margins.right(), cl.margins.bottom()}}};
+        };
+        auto cellsJson = [&] {
+            QVector<QJsonObject> all;
+            for (int r = 0; r < 4; ++r)
+                for (int c = 0; c < 4; ++c) all << cellJson(r, c);
+            return all;
+        };
+        auto textFormats = [&] {
+            QVector<QString> all;
+            for (int r = 0; r < 4; ++r)
+                for (int c = 0; c < 4; ++c) {
+                    const QTextCharFormat f = charFormat(r, c);
+                    all << QStringLiteral("%1 %2 %3 %4 %5 %6 %7").arg(f.fontWeight()).arg(f.fontItalic()).arg(int(f.underlineStyle())).arg(f.fontFamilies().toStringList().join(QLatin1Char('+')))
+                               .arg(f.fontPointSize()).arg(f.stringProperty(jp::tp::ColorRefP), QString::number(int(story(r, c)->firstBlock().blockFormat().alignment())));
+                }
+            return all;
+        };
+        // Runs one command on the block: it changes exactly the block's cells, in
+        // one undo step, and the block stays selected, also after undoing it.
+        // `prepare` first puts every cell in the state the command should change.
+        auto command = [&](const char *what, const std::function<void()> &run, const std::function<bool(int, int)> &changed, const std::function<void(jp::TableCell &)> &prepare = nullptr) {
+            if (prepare)
+                for (auto &cl : table()->cells) prepare(cl);
+            ed->selectCells(id, 1, 1, 2, 2);
+            w.refreshUi();   // the ribbon catches up: text commands are on for selected cells
+            const int steps = ed->undoStack()->index();
+            const auto cellsBefore = cellsJson();
+            const auto textBefore = textFormats();
+            run();
+            QVERIFY2(ed->undoStack()->index() == steps + 1, what);
+            QVERIFY2(ed->hasCellBlock(), what);
+            const auto cellsAfter = cellsJson();
+            const auto textAfter = textFormats();
+            for (int r = 0; r < 4; ++r)
+                for (int c = 0; c < 4; ++c) {
+                    const int k = r * 4 + c;
+                    const bool did = cellsAfter[k] != cellsBefore[k] || textAfter[k] != textBefore[k];
+                    QVERIFY2(did == inBlock(r, c), qPrintable(QStringLiteral("%1 at %2,%3").arg(QLatin1String(what)).arg(r).arg(c)));
+                    if (inBlock(r, c)) QVERIFY2(changed(r, c), qPrintable(QStringLiteral("%1 at %2,%3").arg(QLatin1String(what)).arg(r).arg(c)));
+                }
+            ed->undo();
+            QVERIFY2(cellsJson() == cellsBefore && textFormats() == textBefore, what);
+            QVERIFY2(ed->hasCellBlock(), what);
+        };
+        auto cellFill = [&]() -> jp::ColorButton * {
+            for (auto *b : w.findChildren<jp::ColorButton *>())
+                if (b->toolTip() == QStringLiteral("Cell Fill")) return b;
+            return nullptr;
+        };
+        QVERIFY(cellFill());
+
+        const jp::ColorRef red = jp::ColorRef::fromString(QStringLiteral("#ff0000"));
+        command("fill", [&] { Q_EMIT cellFill()->colorPicked(red); }, [&](int r, int c) { return table()->cell(r, c).fill == jp::Fill::solid(red); });
+        command("fill removed", [&] { Q_EMIT cellFill()->colorPicked(jp::ColorRef()); }, [&](int r, int c) { return table()->cell(r, c).fill.isNone(); },
+                [&](jp::TableCell &cl) { cl.fill = jp::Fill::solid(red); });
+        command("diagonal down", [&] { w.act(QStringLiteral("tbl.diagDown"))->trigger(); }, [&](int r, int c) { return table()->cell(r, c).diagonal == 1; });
+        command("diagonal up", [&] { w.act(QStringLiteral("tbl.diagUp"))->trigger(); }, [&](int r, int c) { return table()->cell(r, c).diagonal == 2; });
+        command("align bottom", [&] { w.act(QStringLiteral("valign.2"))->trigger(); }, [&](int r, int c) { return table()->cell(r, c).valign == jp::VAlign::Bottom; });
+        command("align middle", [&] { w.act(QStringLiteral("valign.1"))->trigger(); }, [&](int r, int c) { return table()->cell(r, c).valign == jp::VAlign::Middle; });
+        command("margins", [&] { w.act(QStringLiteral("tbmargin.Wide"))->trigger(); }, [&](int r, int c) { return table()->cell(r, c).margins == QMarginsF(14.4, 14.4, 14.4, 14.4); });
+        command("all borders", [&] { w.act(QStringLiteral("border.all"))->trigger(); }, [&](int r, int c) {
+            const jp::CellBorder &b = table()->cell(r, c).border;
+            return !b.top.isNone() && !b.bottom.isNone() && !b.left.isNone() && !b.right.isNone();
+        });
+        command("no borders", [&] { w.act(QStringLiteral("border.none"))->trigger(); }, [&](int r, int c) {
+            const jp::CellBorder &b = table()->cell(r, c).border;
+            return b.top.isNone() && b.bottom.isNone() && b.left.isNone() && b.right.isNone();
+        }, [](jp::TableCell &cl) { cl.border.top = cl.border.bottom = cl.border.left = cl.border.right = jp::Stroke::line(jp::ColorRef::fromString(QStringLiteral("#000000"))); });
+        for (auto &cl : table()->cells) cl.border = jp::CellBorder();
+        // Outside Borders draws round the block, not round each cell in it.
+        ed->selectCells(id, 1, 1, 2, 2);
+        const int plain = ed->undoStack()->index();
+        w.act(QStringLiteral("border.none"))->trigger();
+        w.act(QStringLiteral("border.outside"))->trigger();
+        QVERIFY(!table()->cell(1, 1).border.top.isNone() && !table()->cell(1, 1).border.left.isNone());
+        QVERIFY(table()->cell(1, 1).border.right.isNone() && table()->cell(1, 1).border.bottom.isNone());
+        QVERIFY(!table()->cell(2, 2).border.bottom.isNone() && !table()->cell(2, 2).border.right.isNone());
+        QVERIFY(table()->cell(2, 2).border.left.isNone() && table()->cell(2, 2).border.top.isNone());
+        ed->undoStack()->setIndex(plain);
+
+        // The text of every cell in the block, whole.
+        command("bold", [&] { w.act(QStringLiteral("fmt.bold"))->trigger(); }, [&](int r, int c) { return charFormat(r, c).fontWeight() >= QFont::DemiBold; });
+        command("italic", [&] { w.act(QStringLiteral("fmt.italic"))->trigger(); }, [&](int r, int c) { return charFormat(r, c).fontItalic(); });
+        command("underline", [&] { w.act(QStringLiteral("fmt.underline"))->trigger(); }, [&](int r, int c) { return charFormat(r, c).underlineStyle() != QTextCharFormat::NoUnderline; });
+        command("font", [&] { ed->setFontFamily(QStringLiteral("DejaVu Serif")); }, [&](int r, int c) { return charFormat(r, c).fontFamilies().toStringList() == QStringList{"DejaVu Serif"}; });
+        command("size", [&] { ed->setFontSize(23); }, [&](int r, int c) { return charFormat(r, c).fontPointSize() == 23.0; });
+        command("color", [&] { ed->setTextColor(red); }, [&](int r, int c) { return charFormat(r, c).stringProperty(jp::tp::ColorRefP) == red.toString(); });
+        command("center", [&] { w.act(QStringLiteral("para.center"))->trigger(); }, [&](int r, int c) { return story(r, c)->firstBlock().blockFormat().alignment().testFlag(Qt::AlignHCenter); });
+        command("right", [&] { w.act(QStringLiteral("para.right"))->trigger(); }, [&](int r, int c) { return story(r, c)->firstBlock().blockFormat().alignment().testFlag(Qt::AlignRight); });
+        // All the text of a cell, not just its start.
+        ed->doc()->storyDoc(table()->cell(1, 1).storyId)->setPlainText(QStringLiteral("one\ntwo"));
+        ed->selectCells(id, 1, 1, 2, 2);
+        w.refreshUi();
+        w.act(QStringLiteral("fmt.bold"))->trigger();
+        QTextCursor last(story(1, 1));
+        last.movePosition(QTextCursor::End);
+        QVERIFY(last.charFormat().fontWeight() >= QFont::DemiBold);
+        // The Home tab's boxes show the block's first cell.
+        ed->selectCells(id, 1, 1, 1, 1);
+        ed->setFontSize(31);
+        ed->selectCells(id, 1, 1, 2, 2);
+        QCOMPARE(ed->currentCharFormat().fontPointSize(), 31.0);
+        ed->selectCells(id, 2, 2, 3, 3);
+        QVERIFY(ed->currentCharFormat().fontPointSize() != 31.0);
+
+        // With the cursor in one cell, a cell command still takes only that cell.
+        for (auto &cl : table()->cells) cl.fill = jp::Fill();
+        ed->beginTextEdit(id, 0, 3, 3);
+        Q_EMIT cellFill()->colorPicked(red);
+        for (int r = 0; r < 4; ++r)
+            for (int c = 0; c < 4; ++c) QCOMPARE(table()->cell(r, c).fill == jp::Fill::solid(red), r == 3 && c == 3);
+        // A merged cell in the block is bordered as the one cell it is: its far edges, not its inner ones.
+        ed->endTextEdit();
+        for (auto &cl : table()->cells) cl.border = jp::CellBorder();
+        table()->cell(1, 1).rowSpan = 2;
+        table()->cell(1, 1).colSpan = 2;
+        for (auto [r, c] : {std::pair{1, 2}, {2, 1}, {2, 2}}) table()->cell(r, c).covered = true;
+        ed->selectCells(id, 0, 0, 2, 2);
+        w.act(QStringLiteral("border.outside"))->trigger();
+        const jp::CellBorder &merged = table()->cell(1, 1).border;
+        QVERIFY(merged.right.isNone() == false && merged.bottom.isNone() == false);
+        QVERIFY(merged.top.isNone() && merged.left.isNone());
+        QVERIFY(!table()->cell(0, 0).border.top.isNone() && table()->cell(0, 0).border.bottom.isNone());
+    }
+
+    // Merge Cells merges the block; Delete Rows and Delete Columns remove
+    // every row and column it covers, merged cells kept consistent; the
+    // Insert commands go beside the block.
+    void tableBlockMergesAndDeletes()
+    {
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        auto made = std::static_pointer_cast<jp::TableItem>(ed->newTable(QRectF(72, 72, 400, 200), 4, 4));
+        ed->addItem(made);
+        const QString id = made->id;
+        auto table = [&] { return static_cast<jp::TableItem *>(ed->doc()->item(id)); };
+        auto text = [&](int r, int c) { return ed->doc()->storyDoc(table()->cell(r, c).storyId)->toPlainText(); };
+        auto fill = [&] {
+            for (int r = 0; r < table()->rows; ++r)
+                for (int c = 0; c < table()->cols; ++c) ed->doc()->storyDoc(table()->cell(r, c).storyId)->setPlainText(QStringLiteral("%1%2").arg(r).arg(c));
+        };
+        fill();
+
+        // Merge the block: one cell with the text of all, in reading order.
+        ed->selectCells(id, 1, 1, 2, 2);
+        int steps = ed->undoStack()->index();
+        w.act(QStringLiteral("tbl.merge"))->trigger();
+        QCOMPARE(ed->undoStack()->index(), steps + 1);
+        QCOMPARE(table()->cell(1, 1).rowSpan, 2);
+        QCOMPARE(table()->cell(1, 1).colSpan, 2);
+        for (auto [r, c] : {std::pair{1, 2}, {2, 1}, {2, 2}}) QVERIFY(table()->cell(r, c).covered);
+        QVERIFY(!table()->cell(1, 1).covered);
+        QCOMPARE(text(1, 1), QStringLiteral("11\n12\n21\n22"));
+        QVERIFY(text(2, 2).isEmpty());   // the text moved
+        QVERIFY(table()->cell(0, 0).rowSpan == 1 && !table()->cell(0, 1).covered && !table()->cell(3, 3).covered);
+        ed->undo();
+        QCOMPARE(table()->cell(1, 1).rowSpan, 1);
+        QVERIFY(!table()->cell(2, 2).covered);
+        QCOMPARE(text(2, 2), QStringLiteral("22"));
+
+        // A row of cells merges into one; a block over a merged cell takes all of it.
+        ed->selectCells(id, 0, 0, 0, 3);
+        w.act(QStringLiteral("tbl.merge"))->trigger();
+        QCOMPARE(table()->cell(0, 0).colSpan, 4);
+        QCOMPARE(text(0, 0), QStringLiteral("00\n01\n02\n03"));
+        ed->selectCells(id, 0, 1, 1, 1);   // touches the merged row
+        w.act(QStringLiteral("tbl.merge"))->trigger();
+        QCOMPARE(table()->cell(0, 0).rowSpan, 2);
+        QCOMPARE(table()->cell(0, 0).colSpan, 4);
+        QCOMPARE(text(0, 0), QStringLiteral("00\n01\n02\n03\n10\n11\n12\n13"));
+        // Split Cells puts a merged cell in a block back.
+        ed->selectCells(id, 0, 0, 0, 0);
+        w.act(QStringLiteral("tbl.split"))->trigger();
+        QCOMPARE(table()->cell(0, 0).colSpan, 1);
+        QVERIFY(!table()->cell(1, 3).covered);
+        ed->undo();
+        ed->undo();
+        ed->undo();
+        QCOMPARE(table()->cell(0, 0).colSpan, 1);
+
+        // Delete Rows: every row the block covers, in one step.
+        ed->selectCells(id, 1, 0, 2, 1);
+        steps = ed->undoStack()->index();
+        w.act(QStringLiteral("tbl.delRow"))->trigger();
+        QCOMPARE(ed->undoStack()->index(), steps + 1);
+        QCOMPARE(table()->rows, 2);
+        QCOMPARE(table()->rowH.size(), 2);
+        QCOMPARE(table()->cells.size(), 8);
+        QCOMPARE(text(0, 0), QStringLiteral("00"));
+        QCOMPARE(text(1, 3), QStringLiteral("33"));
+        QCOMPARE(table()->rect.height(), table()->rowH[0] + table()->rowH[1]);
+        ed->undo();
+        QCOMPARE(table()->rows, 4);
+        QCOMPARE(text(2, 3), QStringLiteral("23"));
+
+        // Delete Columns likewise, the table keeping its width.
+        const double width = table()->rect.width();
+        ed->selectCells(id, 0, 1, 1, 2);
+        steps = ed->undoStack()->index();
+        w.act(QStringLiteral("tbl.delCol"))->trigger();
+        QCOMPARE(ed->undoStack()->index(), steps + 1);
+        QCOMPARE(table()->cols, 2);
+        QCOMPARE(table()->colW.size(), 2);
+        QCOMPARE(text(2, 0), QStringLiteral("20"));
+        QCOMPARE(text(2, 1), QStringLiteral("23"));
+        QVERIFY(std::abs(table()->rect.width() - width) < 0.001);
+        ed->undo();
+        QCOMPARE(table()->cols, 4);
+
+        // A table keeps at least one row and one column.
+        ed->selectCells(id, 0, 0, 3, 3);
+        steps = ed->undoStack()->index();
+        w.act(QStringLiteral("tbl.delRow"))->trigger();
+        w.act(QStringLiteral("tbl.delCol"))->trigger();
+        QCOMPARE(table()->rows, 4);
+        QCOMPARE(table()->cols, 4);
+        QCOMPARE(ed->undoStack()->index(), steps);
+
+        // Insert goes above or below, left or right, of the whole block.
+        ed->selectCells(id, 1, 1, 2, 2);
+        w.act(QStringLiteral("tbl.insAbove"))->trigger();
+        QCOMPARE(table()->rows, 5);
+        QCOMPARE(text(2, 0), QStringLiteral("10"));
+        ed->undo();
+        ed->selectCells(id, 1, 1, 2, 2);
+        w.act(QStringLiteral("tbl.insBelow"))->trigger();
+        QCOMPARE(table()->rows, 5);
+        QCOMPARE(text(2, 0), QStringLiteral("20"));
+        QCOMPARE(text(3, 0), QString());
+        QCOMPARE(text(4, 0), QStringLiteral("30"));
+        ed->undo();
+        ed->selectCells(id, 1, 1, 2, 2);
+        w.act(QStringLiteral("tbl.insLeft"))->trigger();
+        QCOMPARE(table()->cols, 5);
+        QCOMPARE(text(1, 2), QStringLiteral("11"));
+        ed->undo();
+        ed->selectCells(id, 1, 1, 2, 2);
+        w.act(QStringLiteral("tbl.insRight"))->trigger();
+        QCOMPARE(table()->cols, 5);
+        QCOMPARE(text(1, 2), QStringLiteral("12"));
+        QCOMPARE(text(1, 3), QString());
+        QCOMPARE(text(1, 4), QStringLiteral("13"));
+        ed->undo();
+
+        // Delete or Backspace with a block clears the cells' text, in one step, and keeps the table.
+        ed->selectCells(id, 1, 1, 2, 2);
+        steps = ed->undoStack()->index();
+        QTest::keyClick(w.canvas(), Qt::Key_Delete);
+        QCOMPARE(ed->undoStack()->index(), steps + 1);
+        QVERIFY(ed->doc()->item(id));
+        for (int r = 0; r < 4; ++r)
+            for (int c = 0; c < 4; ++c) QCOMPARE(text(r, c).isEmpty(), r >= 1 && r <= 2 && c >= 1 && c <= 2);
+        QVERIFY(ed->hasCellBlock());
+        ed->undo();
+        QCOMPARE(text(1, 1), QStringLiteral("11"));
+
+        // A merged cell reaching into the deleted rows shrinks; one whose first row goes starts in the next.
+        ed->change(QStringLiteral("Merge"), [&] {
+            table()->cell(1, 3).rowSpan = 3;
+            table()->cell(2, 3).covered = table()->cell(3, 3).covered = true;
+        });
+        ed->selectCells(id, 0, 0, 1, 0);   // rows 0 and 1; the merged cell began in row 1
+        w.act(QStringLiteral("tbl.delRow"))->trigger();
+        QCOMPARE(table()->rows, 2);
+        QVERIFY(!table()->cell(0, 3).covered);
+        QCOMPARE(table()->cell(0, 3).rowSpan, 2);
+        QVERIFY(table()->cell(1, 3).covered);
+        QCOMPARE(text(0, 3), QStringLiteral("13"));   // it keeps its text
+        ed->undo();
+        QCOMPARE(table()->rows, 4);
+        ed->selectCells(id, 2, 0, 2, 0);   // a row inside it
+        w.act(QStringLiteral("tbl.delRow"))->trigger();
+        QCOMPARE(table()->rows, 3);
+        QCOMPARE(table()->cell(1, 3).rowSpan, 2);
+        QVERIFY(table()->cell(2, 3).covered);
+        ed->undo();
+        ed->selectCells(id, 1, 3, 3, 3);   // all its rows
+        w.act(QStringLiteral("tbl.delRow"))->trigger();
+        QCOMPARE(table()->rows, 1);
+        QVERIFY(!table()->cell(0, 3).covered);
+        ed->undo();
+        // The columns of a merged cell go together.
+        ed->change(QStringLiteral("Merge"), [&] {
+            table()->cell(0, 1).colSpan = 2;
+            table()->cell(0, 2).covered = true;
+        });
+        ed->selectCells(id, 0, 2, 0, 2);   // grows to columns 1 and 2
+        w.act(QStringLiteral("tbl.delCol"))->trigger();
+        QCOMPARE(table()->cols, 2);
+        ed->undo();
+        QCOMPARE(table()->cols, 4);
+    }
+
     // A picture dragged onto another swaps with it, as the scratch area's
     // message says (nothing did): the dragged frame goes back, and the two
     // pictures trade frames.
