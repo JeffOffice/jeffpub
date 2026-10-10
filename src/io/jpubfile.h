@@ -11,7 +11,9 @@ namespace jp {
 
 // `embedLinks`: pictures linked to their files are stored whole, for a
 // publication that goes to another computer.
-bool savePublication(const Document &doc, const QString &path, const QImage &thumbnail, QString *error, bool embedLinks = false);
+// `folder`, when given, is where the publication will be read from, if that is not
+// where `path` is (AutoRecover's copy is read as if it were in the original's folder).
+bool savePublication(const Document &doc, const QString &path, const QImage &thumbnail, QString *error, bool embedLinks = false, const QString &folder = QString());
 std::unique_ptr<Document> loadPublication(const QString &path, QString *error);
 
 // `folder` is where the bytes will be saved: linked pictures keep their paths

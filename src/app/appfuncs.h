@@ -32,6 +32,9 @@ QString userBlocksDir();
 // Pack and Go's printer folder: a commercial press PDF, the publication, and a note.
 // False, with `error` saying what, when any of them could not be saved.
 bool packForPrinter(MainWindow *win, const QString &dir, QString *error = nullptr);
+// Pack and Go's ZIP for another computer: the publication with its pictures whole, and the
+// font files it uses. `fonts` gets how many; false, with `error`, when it could not be saved.
+bool packToZip(MainWindow *win, const QString &path, int *fonts, QString *error);
 void saveForPhotoPrinter(QWidget *parent, MainWindow *win);
 void saveAsTemplate(QWidget *parent, MainWindow *win);
 QStringList thesaurusLookup(const QString &word);

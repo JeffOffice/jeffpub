@@ -451,7 +451,7 @@ links are resolved. It must not even ask whether any other file is there: a
 `relative` that is absolute, are never followed on their own. That picture
 shows its stored copy or its `previews/` entry, and is reported as *not
 updated*; the user can ask for that one file to be read, and it is then read
-for that session only. A file that is read must be a regular file (never a
+for that session only. (So is a mail merge picture outside the folder, until the user picks the recipient list again; that, too, lasts only the session and is never saved.) A file that is read must be a regular file (never a
 pipe or a device) of 1 byte to 256 MB, and no more than one byte past that is
 ever read. With
 `copy` false there is no `images/` entry, only `previews/<id>.<ext>`, which

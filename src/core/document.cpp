@@ -734,9 +734,9 @@ bool pathInside(const QStringList &roots, const QString &path, int hops)
     }
     return true;
 }
-} // namespace
 
-bool Document::inFolder(const QString &path) const
+// Whether `path` is in `folder` or below it.
+bool pathInFolder(const QString &folder, const QString &path)
 {
     if (folder.isEmpty() || isDevicePath(folder) || !QDir::isAbsolutePath(folder)) return false;
     // The folder as it is spelled, and as the system names it (a link in
@@ -745,6 +745,24 @@ bool Document::inFolder(const QString &path) const
     const QString canonical = QFileInfo(folder).canonicalFilePath();
     if (!canonical.isEmpty() && canonical != roots.first()) roots << canonical;
     return pathInside(roots, path, 0);
+}
+} // namespace
+
+bool Document::inFolder(const QString &path) const { return pathInFolder(folder, path); }
+
+bool Document::mayFollow(const QString &path) const
+{
+    if (!fromFile || pathInFolder(folder, path)) return true;
+    for (const QString &allowed : allowedFolders)
+        if (pathInFolder(allowed, path)) return true;
+    return false;
+}
+
+void Document::allowFolder(const QString &dir)
+{
+    if (dir.isEmpty() || isDevicePath(dir) || !QDir::isAbsolutePath(dir)) return;
+    const QString clean = QDir::cleanPath(dir);
+    if (!allowedFolders.contains(clean)) allowedFolders << clean;
 }
 
 LinkStatus Document::linkStatus(const QString &imageId) const

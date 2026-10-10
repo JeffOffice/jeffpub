@@ -685,7 +685,8 @@ static QImage mergePicture(const Document &d, const QString &field, int record)
     };
     static QMutex lock;
     static QCache<QString, Entry> cache(256 * 1024 * 1024);   // bytes
-    const QString key = QString::number(d.fromFile) + QLatin1Char('|') + d.folder + QLatin1Char('|') + path;
+    // (What the user allowed is part of the key: choosing the list again must show the pictures at once.)
+    const QString key = QString::number(d.fromFile) + QLatin1Char('|') + d.folder + QLatin1Char('|') + d.allowedFolders.join(QLatin1Char('|')) + QLatin1Char('|') + path;
     QMutexLocker locked(&lock);
     Entry *entry = cache.object(key);
     if (entry && entry->checked.isValid() && entry->checked.elapsed() < 3000) return entry->image;

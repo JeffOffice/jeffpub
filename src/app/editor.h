@@ -193,6 +193,10 @@ public:
     void flipSelection(bool horizontal);
     void settleScratch(const QStringList &ids);   // move items between page and scratch area
     void arrangeThumbnails();                       // tidy the pictures on the scratch area into a tray
+    // The user chose this recipient list (read from its file): it becomes the
+    // publication's, and pictures in its folder and below may be read for the
+    // rest of the session, which a publication opened from a file waits for.
+    void selectRecipients(const MergeSource &list);
     // Pictures linked to their files (Graphics Manager). Each is one undo
     // step and says why in the status bar when it can't be done.
     bool updateLink(const QString &pictureId);      // reads the file again (every picture with this link follows)

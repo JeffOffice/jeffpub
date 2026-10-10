@@ -105,7 +105,9 @@ QString copyPath(const QString &docPath, const QString &displayName, quint64 win
 bool write(const Document &doc, const QString &copy, const QString &docPath, const QString &title, QString *error)
 {
     if (copy.isEmpty()) return false;
-    if (!savePublication(doc, copy, QImage(), error)) return false;
+    // Its pictures' links are kept relative to the original's folder, which is
+    // where the copy is read as being when it is recovered.
+    if (!savePublication(doc, copy, QImage(), error, false, docPath.isEmpty() ? QString() : QFileInfo(docPath).absolutePath())) return false;
     QSaveFile meta(sidecar(copy));
     if (!meta.open(QIODevice::WriteOnly)) return true;   // the copy alone still recovers
     const QJsonObject o{{QStringLiteral("source"), docPath}, {QStringLiteral("title"), title},

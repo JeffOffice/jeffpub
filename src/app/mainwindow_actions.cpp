@@ -761,7 +761,7 @@ void MainWindow::createActions()
         MergeSource src;
         QString err;
         if (!loadMergeSource(p, &src, &err)) { QMessageBox::warning(this, title, err); return; }
-        m_ed->change(tr("Select Recipients"), [&] { m_ed->doc()->merge = src; });
+        m_ed->selectRecipients(src);
         recipientsDialog(this, m_ed, false);
     };
     mk("mm.existing", tr("Use an Existing List…"), "file-spreadsheet", QKeySequence(), [useList] {

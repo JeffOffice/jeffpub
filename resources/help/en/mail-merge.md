@@ -22,7 +22,7 @@ A merge field is a placeholder, such as «First Name», that becomes a real valu
 - **Address Block**: a mailing address built from columns named like First Name, Last Name, and Address Line 1.
 - **Greeting Line**: "Dear" and the person's name, or "Dear Friend," if there is no name.
 - **Insert Merge Field**: pick any column.
-- **Picture Field**: pick a column of picture file names. JeffPub adds an empty frame and looks for the files next to your list. In a publication you saved and opened again, a picture shows only if its file is in the publication's folder or in a folder inside it, so keep the picture files there. Each record's picture shows when you preview the results, print, save a PDF, or merge to a new publication or a catalog.
+- **Picture Field**: pick a column of picture file names. JeffPub adds an empty frame and looks for the files next to your list. After you save the publication and open it again, a picture whose file is outside the publication's folder does not show until you choose the recipient list again (**Mailings > Select Recipients > Use an Existing List…**). Then the pictures in the list's folder, and in the folders inside it, show until you close the publication. JeffPub does not remember this for next time. Or keep the picture files in the publication's folder, or in a folder inside it, and they show as soon as it opens. This keeps a publication someone sends you from reading pictures from your computer on its own. Each record's picture shows when you preview the results, print, save a PDF, or merge to a new publication or a catalog.
 
 ## Preview the results
 

@@ -1018,6 +1018,14 @@ void Editor::arrangeThumbnails()
     endChange();
 }
 
+void Editor::selectRecipients(const MergeSource &list)
+{
+    change(tr("Select Recipients"), [&] {
+        m_doc->merge = list;
+        if (!list.path.isEmpty()) m_doc->allowFolder(QFileInfo(list.path).absolutePath());
+    });
+}
+
 bool Editor::updateLink(const QString &pictureId)
 {
     const auto *pic = dynamic_cast<PictureItem *>(m_doc->item(pictureId));

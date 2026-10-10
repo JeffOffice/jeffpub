@@ -18,6 +18,7 @@
 #include <QMessageBox>
 #include <QPainter>
 #include <QRandomGenerator>
+#include <QSaveFile>
 #include <QStandardPaths>
 #include <QTextBlock>
 #include <QTemporaryDir>
@@ -128,22 +129,9 @@ bool packForPrinter(MainWindow *win, const QString &dir, QString *error)
     return true;
 }
 
-void packAndGo(QWidget *parent, MainWindow *win, bool forPrinter)
+bool packToZip(MainWindow *win, const QString &path, int *fontCount, QString *error)
 {
     Editor *ed = win->editor();
-    if (forPrinter) {
-        const QString dir = QFileDialog::getExistingDirectory(parent, QCoreApplication::translate("Sharing", "Save for a Commercial Printer"));
-        if (dir.isEmpty()) return;
-        QString err;
-        if (!packForPrinter(win, dir, &err)) {
-            QMessageBox::warning(parent, QCoreApplication::translate("Sharing", "Pack and Go"), err);
-            return;
-        }
-        QMessageBox::information(parent, QCoreApplication::translate("Sharing", "Pack and Go"), QCoreApplication::translate("Sharing", "Saved the PDF and publication for your printer in %1.").arg(dir));
-        return;
-    }
-    const QString path = askSavePath(parent, QCoreApplication::translate("Sharing", "Save for Another Computer"), ed->displayName() + ".zip", QCoreApplication::translate("Sharing", "ZIP (*.zip)"));
-    if (path.isEmpty()) return;
     ZipWriter z;
     z.add(ed->displayName() + ".jpub", publicationBytes(*ed->doc(), win->pageThumbnail(0, 256), QString(), true));
     // Include the font files the publication uses, when they are bundled or installed as files.
@@ -167,8 +155,38 @@ void packAndGo(QWidget *parent, MainWindow *win, bool forPrinter)
         }
         if (fonts) break;
     }
-    QFile out(path);
-    if (out.open(QIODevice::WriteOnly)) out.write(z.finish());
+    if (fontCount) *fontCount = fonts;
+    const QByteArray bytes = z.finish();
+    QSaveFile out(path);
+    if (!out.open(QIODevice::WriteOnly) || out.write(bytes) != bytes.size() || !out.commit()) {
+        if (error) *error = QCoreApplication::translate("Sharing", "JeffPub couldn't save %1.\n%2").arg(QDir::toNativeSeparators(path), out.errorString());
+        return false;
+    }
+    return true;
+}
+
+void packAndGo(QWidget *parent, MainWindow *win, bool forPrinter)
+{
+    Editor *ed = win->editor();
+    if (forPrinter) {
+        const QString dir = QFileDialog::getExistingDirectory(parent, QCoreApplication::translate("Sharing", "Save for a Commercial Printer"));
+        if (dir.isEmpty()) return;
+        QString err;
+        if (!packForPrinter(win, dir, &err)) {
+            QMessageBox::warning(parent, QCoreApplication::translate("Sharing", "Pack and Go"), err);
+            return;
+        }
+        QMessageBox::information(parent, QCoreApplication::translate("Sharing", "Pack and Go"), QCoreApplication::translate("Sharing", "Saved the PDF and publication for your printer in %1.").arg(dir));
+        return;
+    }
+    const QString path = askSavePath(parent, QCoreApplication::translate("Sharing", "Save for Another Computer"), ed->displayName() + ".zip", QCoreApplication::translate("Sharing", "ZIP (*.zip)"));
+    if (path.isEmpty()) return;
+    int fonts = 0;
+    QString err;
+    if (!packToZip(win, path, &fonts, &err)) {
+        QMessageBox::warning(parent, QCoreApplication::translate("Sharing", "Pack and Go"), err);
+        return;
+    }
     QMessageBox::information(parent, QCoreApplication::translate("Sharing", "Pack and Go"), QCoreApplication::translate("Sharing", "Saved %1 with the publication and %2 font file(s).").arg(QFileInfo(path).fileName()).arg(fonts));
 }
 

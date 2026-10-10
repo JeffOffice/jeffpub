@@ -304,7 +304,16 @@ public:
     // symbolic links on the way are read, one by one and not followed, so
     // one that leads out is seen first.
     bool inFolder(const QString &path) const;
-    bool mayFollow(const QString &path) const { return !fromFile || inFolder(path); }
+    // The folders the user has pointed this session at since the publication
+    // opened (the recipient list chosen, so its pictures show): what a file
+    // names there may be read too. Never saved or read from a file, so a
+    // publication can't add to it.
+    QStringList allowedFolders;
+    void allowFolder(const QString &dir);
+    // Whether what a file names at `path` may be read: any path, in a
+    // publication made in this session; in one that came from a file, those
+    // in its folder, or below it, or in an allowed folder.
+    bool mayFollow(const QString &path) const;
 
     // items
     struct Loc { Item *item = nullptr; ItemList *list = nullptr; int index = -1; int page = -1; QString masterId; bool scratch = false; GroupItem *parent = nullptr; };

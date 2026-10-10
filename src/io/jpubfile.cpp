@@ -81,7 +81,7 @@ QByteArray publicationBytes(const Document &doc, const QImage &thumbnail, const 
     return z.finish();
 }
 
-bool savePublication(const Document &doc, const QString &path, const QImage &thumbnail, QString *error, bool embedLinks)
+bool savePublication(const Document &doc, const QString &path, const QImage &thumbnail, QString *error, bool embedLinks, const QString &folder)
 {
     QSaveFile f(path);
     // Some sync and security tools refuse the temporary file; write in place then.
@@ -90,7 +90,7 @@ bool savePublication(const Document &doc, const QString &path, const QImage &thu
         if (error) *error = f.errorString();
         return false;
     }
-    f.write(publicationBytes(doc, thumbnail, QFileInfo(path).absolutePath(), embedLinks));
+    f.write(publicationBytes(doc, thumbnail, folder.isEmpty() ? QFileInfo(path).absolutePath() : folder, embedLinks));
     if (!f.commit()) {
         if (error) *error = f.errorString();
         return false;

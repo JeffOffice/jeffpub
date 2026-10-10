@@ -22,6 +22,8 @@ The next time you start JeffPub after a crash, the **Recover Unsaved Work** wind
 
 The recovered publication shows "(Recovered)" in the title bar until you save it. Ctrl+S asks for a name, and starts in the folder of the original file, with the original name. Pick the original name to replace the file, or choose a new name to keep both.
 
+Pictures linked to files are found as they would be if the publication were open in the original file's folder: the ones in that folder, or in a folder inside it, load as usual. A picture linked to a file anywhere else shows its saved preview and is marked **Not updated**; select it and click **Update Link** in the [Graphics Manager](graphics-manager). A publication that was never saved has no folder, so all its linked pictures wait for **Update Link**.
+
 The other buttons in the window are:
 
 - **Delete** removes the checked copies for good, after it asks you to confirm.

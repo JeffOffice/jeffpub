@@ -525,6 +525,7 @@ static std::unique_ptr<Document> copyOfPublication(const Document &src, QString 
     auto copy = publicationFromBytes(publicationBytes(src, QImage()), err, src.folder);
     if (!copy) return nullptr;
     copy->fromFile = src.fromFile;
+    copy->allowedFolders = src.allowedFolders;
     for (auto it = src.images.cbegin(); it != src.images.cend(); ++it) {
         const auto mine = copy->images.find(it.key());
         if (mine != copy->images.end() && mine->linked && it->followed) mine->followed = true;

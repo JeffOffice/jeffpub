@@ -7107,6 +7107,193 @@ private Q_SLOTS:
         QVERIFY(linkColorsClose(shows(loaded.get(), 4), QColor(255, 255, 255)));
     }
 
+    // What a mail merge picture frame shows for a record, at the frame's left half.
+    static QColor mergeShows(jp::Document *d, int record)
+    {
+        jp::LayoutCache cache;
+        jp::PaintContext ctx;
+        ctx.doc = d;
+        ctx.cache = &cache;
+        ctx.opt.output = true;
+        ctx.opt.mergeRecord = record;
+        return QColor(jp::Renderer::renderToImage(ctx, 0, 1.0).pixel(150, 180));
+    }
+
+    // Merge pictures outside the publication's folder wait for the user: a
+    // publication that is opened again shows none of them until the recipient
+    // list is chosen again (Use an Existing List, Select from Contacts), and
+    // then those in the list's folder and below, for that session only. What
+    // the user chose is never saved, and a file cannot say it.
+    void mergePicturesFollowTheListChosenThisSession()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        QDir root(dir.path());
+        QVERIFY(root.mkpath(QStringLiteral("pub")) && root.mkpath(QStringLiteral("lists/faces")) && root.mkpath(QStringLiteral("elsewhere")));
+        linkPicture(root.filePath(QStringLiteral("lists/faces/ann.png")), QSize(200, 160), QColor(200, 30, 30));
+        linkPicture(root.filePath(QStringLiteral("elsewhere/bob.png")), QSize(200, 160), QColor(30, 30, 200));
+        const QString list = root.filePath(QStringLiteral("lists/people.csv"));
+        {
+            QFile f(list);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("Name,Photo\nAnn,faces/ann.png\nBob,../../elsewhere/bob.png\n");
+        }
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto frame = std::make_shared<jp::PictureItem>();
+        frame->rect = QRectF(100, 100, 200, 160);
+        frame->imgRect = QRectF(0, 0, 200, 160);
+        frame->name = QStringLiteral("merge:Photo");
+        doc->pages[0]->items.push_back(frame);
+        QString err;
+        QVERIFY2(jp::loadMergeSource(list, &doc->merge, &err), qPrintable(err));
+        QVERIFY(linkColorsClose(mergeShows(doc.get(), 0), QColor(200, 30, 30)));   // made in this session: shows
+        const QString path = root.filePath(QStringLiteral("pub/book.jpub"));
+        QVERIFY(jp::savePublication(*doc, path, QImage(), &err));
+
+        auto loaded = jp::loadPublication(path, &err);
+        QVERIFY2(loaded, qPrintable(err));
+        QCOMPARE(loaded->merge.rows.size(), 2);
+        QVERIFY(loaded->allowedFolders.isEmpty());
+        QVERIFY(linkColorsClose(mergeShows(loaded.get(), 0), QColor(255, 255, 255)));
+        QVERIFY(linkColorsClose(mergeShows(loaded.get(), 1), QColor(255, 255, 255)));
+
+        // A file that says which folders to allow doesn't get them.
+        QMap<QString, QByteArray> entries;
+        QVERIFY(jp::readZip(linkFileBytes(path), entries));
+        QJsonObject json = QJsonDocument::fromJson(entries["document.json"]).object();
+        json["allowedFolders"] = QJsonArray{root.filePath(QStringLiteral("lists")), root.path(), QStringLiteral("/")};
+        json["merge"] = [&] { QJsonObject m = json["merge"].toObject(); m["allowedFolders"] = QJsonArray{root.path()}; return m; }();
+        entries["document.json"] = QJsonDocument(json).toJson(QJsonDocument::Compact);
+        jp::ZipWriter crafted;
+        crafted.add(QStringLiteral("mimetype"), entries.take(QStringLiteral("mimetype")));
+        for (auto it = entries.cbegin(); it != entries.cend(); ++it) crafted.add(it.key(), it.value());
+        auto sneaky = jp::publicationFromBytes(crafted.finish(), &err, root.filePath(QStringLiteral("pub")));
+        QVERIFY2(sneaky, qPrintable(err));
+        QVERIFY(sneaky->allowedFolders.isEmpty());
+        QVERIFY(linkColorsClose(mergeShows(sneaky.get(), 0), QColor(255, 255, 255)));
+
+        // Opened in a window, still nothing; the list chosen again brings its folder's pictures.
+        jp::MainWindow w;
+        w.editor()->setDocument(std::move(loaded), path);
+        QVERIFY(linkColorsClose(mergeShows(w.editor()->doc(), 0), QColor(255, 255, 255)));
+        jp::MergeSource again;
+        QVERIFY2(jp::loadMergeSource(list, &again, &err), qPrintable(err));
+        w.editor()->selectRecipients(again);
+        jp::Document *d = w.editor()->doc();
+        QCOMPARE(d->allowedFolders, QStringList{QFileInfo(list).absolutePath()});
+        QVERIFY(linkColorsClose(mergeShows(d, 0), QColor(200, 30, 30)));
+        QVERIFY(linkColorsClose(mergeShows(d, 1), QColor(255, 255, 255)));   // outside the list's folder too
+        w.editor()->undo();   // the list goes back, the folder stays allowed for the session
+        QVERIFY(linkColorsClose(mergeShows(d, 0), QColor(200, 30, 30)));
+
+        // Saved, nothing of it is in the file; opened again, it is asked again.
+        QVERIFY(w.saveTo(path));
+        QMap<QString, QByteArray> saved;
+        QVERIFY(jp::readZip(linkFileBytes(path), saved));
+        QVERIFY(!saved["document.json"].contains("allowed"));
+        QVERIFY(!saved["document.json"].contains(QFileInfo(list).absolutePath().toUtf8() + "\"]"));
+        auto reopened = jp::loadPublication(path, &err);
+        QVERIFY2(reopened, qPrintable(err));
+        QVERIFY(reopened->allowedFolders.isEmpty());
+        QVERIFY(linkColorsClose(mergeShows(reopened.get(), 0), QColor(255, 255, 255)));
+        // A copy made in memory (Merge to a new publication) keeps what this session allowed.
+        auto copy = jp::mergeToNewPublication(*d);
+        QVERIFY(copy);
+        QCOMPARE(copy->allowedFolders, d->allowedFolders);
+    }
+
+    // A recovered copy is opened as if in the folder of the file it was made
+    // from: linked pictures in that folder load as usual; the others do not.
+    void recoveredPublicationFollowsLinksInItsOriginalFolder()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        QDir root(dir.path());
+        QVERIFY(root.mkpath(QStringLiteral("pub/sub")) && root.mkpath(QStringLiteral("outside")));
+        jp::recovery::setRoot(root.filePath(QStringLiteral("AutoRecover")));
+        const QSize size(900, 700);
+        const QString inside = linkPicture(root.filePath(QStringLiteral("pub/sub/in.png")), size, QColor(200, 30, 30));
+        const QString outside = linkPicture(root.filePath(QStringLiteral("outside/out.png")), size, QColor(30, 30, 200));
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        QStringList ids;
+        for (const QString &file : {inside, outside}) {
+            auto item = std::make_shared<jp::PictureItem>();
+            item->rect = QRectF(50, 50 + 200 * ids.size(), 160, 120);
+            item->imgRect = QRectF(0, 0, 160, 120);
+            item->imageId = doc->addLinkedImage(linkFileBytes(file), QStringLiteral("png"), file, false);
+            ids << item->imageId;
+            doc->pages[0]->items.push_back(item);
+        }
+        const QString original = root.filePath(QStringLiteral("pub/book.jpub"));
+        const QString lost = root.filePath(QStringLiteral("AutoRecover/lost"));
+        QVERIFY(root.mkpath(QStringLiteral("AutoRecover/lost")));
+        const QString copy = lost + QStringLiteral("/Book 0123abcd.jpub");
+        QVERIFY(jp::recovery::write(*doc, copy, original, QStringLiteral("Book")));
+        for (const QString &f : {inside, outside}) linkPicture(f, size, QColor(250, 250, 10));   // changed since: what is read shows
+
+        // The copy keeps the links relative to the original folder, as the file does
+        // (opening it discards the copy, so it is read first).
+        QMap<QString, QByteArray> entries;
+        QVERIFY(jp::readZip(linkFileBytes(copy), entries));
+        QString relative;
+        for (const auto &v : QJsonDocument::fromJson(entries["document.json"]).object()["images"].toArray())
+            if (v.toObject()["id"].toString() == ids[0]) relative = v.toObject()["relative"].toString();
+        QCOMPARE(relative, QStringLiteral("sub/in.png"));
+
+        jp::MainWindow w;
+        const jp::recovery::Recovered found{copy, original, QStringLiteral("Book"), QDateTime::currentDateTime()};
+        QCOMPARE(w.openRecovered(found), &w);
+        jp::Document *d = w.editor()->doc();
+        QCOMPARE(d->linkStatus(ids[0]), jp::LinkStatus::Modified);   // in the original folder: read, found changed
+        QCOMPARE(d->images[ids[0]].bytes, linkFileBytes(inside));
+        QCOMPARE(d->images[ids[0]].sourcePath, QFileInfo(inside).absoluteFilePath());
+        QCOMPARE(d->linkStatus(ids[1]), jp::LinkStatus::NotUpdated);
+        QVERIFY(d->images[ids[1]].bytes != linkFileBytes(outside));
+        QCOMPARE(d->folder, QFileInfo(original).absolutePath());
+
+        // Work that was never saved has no original folder: no link is followed.
+        auto fresh = jp::Document::blank(QSizeF(612, 792));
+        auto item = std::make_shared<jp::PictureItem>();
+        item->rect = QRectF(50, 50, 160, 120);
+        item->imgRect = QRectF(0, 0, 160, 120);
+        item->imageId = fresh->addLinkedImage(linkFileBytes(inside), QStringLiteral("png"), inside, false);
+        fresh->pages[0]->items.push_back(item);
+        QVERIFY(root.mkpath(QStringLiteral("AutoRecover/lost2")));
+        const QString copy2 = root.filePath(QStringLiteral("AutoRecover/lost2/Publication2 4567abcd.jpub"));
+        QVERIFY(jp::recovery::write(*fresh, copy2, QString(), QStringLiteral("Publication2")));
+        jp::MainWindow v;
+        QCOMPARE(v.openRecovered(jp::recovery::Recovered{copy2, QString(), QStringLiteral("Publication2"), QDateTime::currentDateTime()}), &v);
+        QCOMPARE(v.editor()->doc()->linkStatus(item->imageId), jp::LinkStatus::NotUpdated);
+        jp::recovery::endSession();
+        jp::recovery::setRoot(QString());
+    }
+
+    // Pack and Go for another computer says so when the ZIP can't be saved,
+    // instead of reporting that it did.
+    void packToZipReportsAFailedSave()
+    {
+        jp::MainWindow w;
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        QString err;
+        int fonts = -1;
+        QVERIFY(QDir(dir.path()).mkdir(QStringLiteral("taken.zip")));   // a folder where the file must go
+        QVERIFY(!jp::packToZip(&w, dir.filePath(QStringLiteral("taken.zip")), &fonts, &err));
+        QVERIFY2(err.contains(QStringLiteral("taken.zip")), qPrintable(err));
+        err.clear();
+        QVERIFY(!jp::packToZip(&w, dir.filePath(QStringLiteral("no/such/folder/pack.zip")), nullptr, &err));
+        QVERIFY2(!err.isEmpty(), qPrintable(err));
+        QVERIFY(!QFile::exists(dir.filePath(QStringLiteral("no"))));
+        err.clear();
+        const QString good = dir.filePath(QStringLiteral("pack.zip"));
+        QVERIFY(jp::packToZip(&w, good, &fonts, &err));
+        QVERIFY2(err.isEmpty(), qPrintable(err));
+        QVERIFY(fonts >= 0);
+        QMap<QString, QByteArray> entries;
+        QVERIFY(jp::readZip(linkFileBytes(good), entries));
+        QVERIFY(entries.contains(w.editor()->displayName() + QStringLiteral(".jpub")));
+    }
+
     // A linked picture copied from one publication into one that came from a
     // file, whose file is outside that publication's folder, arrives without
     // the link: the file is not looked at.
