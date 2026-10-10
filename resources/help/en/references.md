@@ -30,7 +30,11 @@ A footnote is a short note at the bottom of the page. A small raised number in t
 3. Type the note in the **Insert Footnote** dialog.
 4. Click **OK**.
 
-JeffPub numbers footnotes 1, 2, 3, and so on. It places each note at the bottom of the column that holds its number, under a short line. The note text is a little smaller than your text. A note that is taller than a whole column is not split.
+JeffPub numbers footnotes 1, 2, 3, and so on. It places each note at the bottom of the column that holds its number, under a short line. The note text is a little smaller than your text. If a note and the line with its number do not fit in the room left in a column, both move to the next column.
+
+A footnote that is taller than a whole column is split. The first part stays at the bottom of the column with its number, and the line with the number stays above it. The rest continues at the bottom of the next column, or the next linked text box, even on another page. There it sits above that column's own footnotes, under a line as wide as the column. A long note continues through as many columns as it needs.
+
+If no column is left for the rest, the story is too long for its boxes. The red overflow indicator appears, as it does for any text that does not fit. [Link another text box](linked-text) or make room, and the rest of the note appears.
 
 ## Add an endnote
 

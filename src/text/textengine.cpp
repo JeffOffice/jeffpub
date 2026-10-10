@@ -1107,12 +1107,6 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
     bool columnEmpty = true;   // no line placed yet in the current column
     const bool hyphenate = !frames.isEmpty() && frames.first().hyphenate;
     const double zone = (frames.isEmpty() ? 18.0 : frames.first().hyphenZone) * env.fontScale;
-    auto advance = [&]() {
-        rowActive = false;
-        columnEmpty = true;
-        y = 0;
-        if (f < nF && ++c >= std::max(1, frames[f].columns)) { c = 0; ++f; }
-    };
 
     // Notes. A note's own text is laid out without notes of its own.
     m_notes.clear();
@@ -1125,7 +1119,18 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
     int footCount = 0, endCount = 0;
     QHash<int, double> reserve;   // a column's room for footnotes, by frame * 64 + column
     auto rkey = [](int fi, int ci) { return fi * 64 + ci; };
+    QVector<int> carry;           // footnotes (in m_notes) with text left for the next column, in order
     const double ruleGap = 9 * scale, noteGap = 2 * scale;
+    auto noteFrame = [&](const Note &n, double width, double height) {
+        FrameSpec fs = frames.first();
+        fs.size = QSizeF(width, height);
+        fs.insets = QMarginsF(n.numberWidth, 0, 0, 0);
+        fs.columns = 1;
+        fs.valign = VAlign::Top;
+        fs.obstacles.clear();
+        fs.baselineGrid = 0;
+        return fs;
+    };
     auto measureNote = [&](Note &n, double width) {
         if (n.layout && std::abs(n.width - width) < 0.01) return n.height;
         n.width = width;
@@ -1140,13 +1145,7 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
         n.numberFont = rf.font();
         n.numberColor = rf.foreground().color();
         n.numberWidth = advanceOf(n.numberFont, QStringLiteral("00.")) + 3 * scale;
-        FrameSpec fs = frames.first();
-        fs.size = QSizeF(width, 100000);
-        fs.insets = QMarginsF(n.numberWidth, 0, 0, 0);
-        fs.columns = 1;
-        fs.valign = VAlign::Top;
-        fs.obstacles.clear();
-        fs.baselineGrid = 0;
+        const FrameSpec fs = noteFrame(n, width, 100000);
         if (nd) {
             ++noteDepth;
             n.layout->build(nd, {fs}, env);
@@ -1159,6 +1158,102 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
             n.firstBaseline = n.height * 0.8;
         }
         return n.height;
+    };
+    // A note's text from `from` on, laid out for a column `width` wide with
+    // `room` to spare: what fits, and in `rest` where the rest starts in the
+    // note's text (-1: all of it fits). A line always fits.
+    auto cutNote = [&](const Note &n, int from, double width, double room, int *rest) {
+        auto lay = std::make_shared<StoryLayout>();
+        *rest = -1;
+        const QTextDocument *nd = notesDoc ? notesDoc->storyDoc(n.storyId) : nullptr;
+        if (!nd) return lay;
+        std::unique_ptr<QTextDocument> tail;
+        if (from > 0) {
+            // The text from there on as a story of its own; a paragraph
+            // cut in the middle has no first-line indent.
+            tail.reset(nd->clone());
+            QTextCursor cut(tail.get());
+            cut.setPosition(from, QTextCursor::KeepAnchor);
+            cut.removeSelectedText();
+            const QTextBlock at = nd->findBlock(from);
+            QTextBlockFormat bf = at.blockFormat();
+            if (from > at.position()) bf.setTextIndent(0);
+            QTextCursor(tail->begin()).setBlockFormat(bf);
+        }
+        ++noteDepth;
+        lay->build(tail ? tail.get() : nd, {noteFrame(n, width, room)}, env);
+        --noteDepth;
+        const int last = lay->lastPosition(0);
+        if (lay->overflow() && last >= 0) {
+            // A cut at a paragraph's end goes on with the next paragraph.
+            int end = from + last;
+            const QTextBlock at = nd->findBlock(end);
+            if (at.isValid() && end >= at.position() + at.length() - 1) end = at.next().isValid() ? at.next().position() : -1;
+            if (end > from) *rest = end;
+        }
+        return lay;
+    };
+    // The notes of one line in a column with `room` for them: those that fit
+    // whole, then the first that doesn't, cut where the room ends. That fails
+    // (ok is false) when not even a line of it fits, unless `force`.
+    struct Cut { bool ok = true; int at = -1; std::shared_ptr<StoryLayout> layout; double height = 0, used = 0; int rest = -1; };
+    auto cutNotes = [&](const QVector<int> &ids, double room, double width, bool force) {
+        Cut cut;
+        for (int k = 0; k < ids.size(); ++k) {
+            const Note &n = m_notes[ids[k]];
+            if (n.height + noteGap <= room + 0.01) {
+                room -= n.height + noteGap;
+                cut.used += n.height + noteGap;
+                continue;
+            }
+            cut.at = k;
+            cut.layout = cutNote(n, 0, width, std::max(0.0, room - noteGap), &cut.rest);
+            cut.height = std::max(heightOf(n.numberFont), cut.layout->usedHeight(0));
+            cut.ok = force || cut.height + noteGap <= room + 0.01;
+            cut.used += cut.height + noteGap;
+            break;
+        }
+        return cut;
+    };
+    // Notes that go on from the column before come first in the column just
+    // entered, under a rule as wide as the column, each with what fits of
+    // its text; what's left goes on again in the next column.
+    auto settleCarry = [&]() {
+        if (carry.isEmpty() || f >= nF) return;
+        const QRectF col = colRect(f, c);
+        double used = ruleGap;
+        while (!carry.isEmpty()) {
+            Note &n = m_notes[carry.first()];
+            const double room = col.height() - used - noteGap;
+            int rest = -1;
+            const auto lay = cutNote(n, n.from, col.width(), std::max(0.0, room), &rest);
+            const double h = std::max(heightOf(n.numberFont), lay->usedHeight(0));
+            if (h > room + 0.01 && used > ruleGap) break;   // not even a line fits under the notes before it
+            if (n.frame < 0) {   // a note of the same line that hadn't begun
+                n.frame = f;
+                n.column = c;
+                n.width = col.width();
+                n.layout = lay;
+                n.height = h;
+            } else {
+                n.more << Note::Piece{f, c, QRectF(), h, lay};
+            }
+            used += h + noteGap;
+            if (rest < 0) {
+                carry.removeFirst();
+                continue;
+            }
+            n.from = rest;
+            break;
+        }
+        if (used > ruleGap) reserve[rkey(f, c)] = used;
+    };
+    auto advance = [&]() {
+        rowActive = false;
+        columnEmpty = true;
+        y = 0;
+        if (f < nF && ++c >= std::max(1, frames[f].columns)) { c = 0; ++f; }
+        settleCarry();
     };
 
     for (QTextBlock b = doc->begin(); b.isValid(); b = b.next()) {
@@ -1463,13 +1558,15 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
             QVector<double> used;
             QHash<int, double> reserve;
             QVector<Note> notes;
+            QVector<int> carry;
         };
-        const Spot startSpot{f, c, y, overflowY, rowH, row, rowIdx, rowActive, columnEmpty, m_overflow, m_used, reserve, m_notes};
+        const Spot startSpot{f, c, y, overflowY, rowH, row, rowIdx, rowActive, columnEmpty, m_overflow, m_used, reserve, m_notes, carry};
         auto placeLines = [&](bool startNext, int breakAfter) {
             // Start in next text box.
             if (bf.boolProperty(tp::StartInNextBox) && f < nF && (y > 0 || c > 0)) {
                 rowActive = false;
                 y = 0; c = 0; ++f;
+                settleCarry();
             }
             if (startNext && f < nF) advance();
             if (f < nF && y > 0) y += before;
@@ -1578,22 +1675,41 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
                     h += rise;
                     textH += rise;
                     baseDown += rise;
-                    const bool firstInColumn = (y <= 0.001) && rowIdx == 0;
+                    // The first line of a column goes there however tall it
+                    // is, unless notes going on from the column before fill it.
+                    const bool firstInColumn = (y <= 0.001) && rowIdx == 0 && !reserve.contains(rkey(f, c));
                     // Footnotes referred to on this line go at the bottom of
-                    // its column, with it: both fit, or both move on.
+                    // its column, with it: both fit, or both move on. Notes
+                    // too tall for a whole column are cut instead: the line
+                    // stays with the start of its note, and the rest goes on
+                    // at the bottom of the next column.
                     QVector<int> lineNotes;
-                    double pending = 0;
+                    double pending = 0, notesH = 0;
                     for (const auto &ref : B->noteRefs)
                         if (!m_notes[ref.second].endnote && ref.first >= line.textStart() && ref.first < line.textStart() + std::max(1, line.textLength()))
                             lineNotes << ref.second;
-                    if (!lineNotes.isEmpty()) {
-                        if (!reserve.contains(rkey(f, c))) pending += ruleGap;
-                        for (int ni : lineNotes) pending += measureNote(m_notes[ni], col.width()) + noteGap;
-                    }
-                    const double bottom = col.bottom() - reserve.value(rkey(f, c)) - pending;
-                    if (col.top() + y + textH > bottom + 0.01 && !firstInColumn) {
+                    // A note still going on comes before any later one.
+                    if (!lineNotes.isEmpty() && !carry.isEmpty()) {
                         advance();
                         continue;
+                    }
+                    if (!lineNotes.isEmpty()) {
+                        if (!reserve.contains(rkey(f, c))) pending += ruleGap;
+                        for (int ni : lineNotes) notesH += measureNote(m_notes[ni], col.width()) + noteGap;
+                        pending += notesH;
+                    }
+                    double bottom = col.bottom() - reserve.value(rkey(f, c)) - pending;
+                    bool cutting = false;
+                    if (col.top() + y + textH > bottom + 0.01) {
+                        if (!lineNotes.isEmpty() && textH + ruleGap + notesH > col.height() + 0.01) {
+                            // Room here for the line and a line of the note?
+                            const double least = heightOf(m_notes[lineNotes.first()].numberFont) + noteGap;
+                            cutting = firstInColumn || col.top() + y + textH + (reserve.contains(rkey(f, c)) ? 0 : ruleGap) + least <= col.bottom() - reserve.value(rkey(f, c)) + 0.01;
+                        }
+                        if (!cutting && !firstInColumn) {
+                            advance();
+                            continue;
+                        }
                     }
                     // Re-check wrap for a line taller than estimated.
                     const double inkH = rise > 0 ? textH : std::min(textH, line.height());
@@ -1614,6 +1730,16 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
                         const double snapped = origin + std::ceil((base - origin) / grid - 1e-6) * grid;
                         if (snapped > base) y += snapped - base;
                     }
+                    Cut cut;
+                    if (cutting) {
+                        const bool firstNotes = !reserve.contains(rkey(f, c));
+                        cut = cutNotes(lineNotes, col.bottom() - reserve.value(rkey(f, c)) - (col.top() + y) - textH - (firstNotes ? ruleGap : 0), col.width(), firstInColumn);
+                        if (!cut.ok) {
+                            advance();
+                            continue;
+                        }
+                        bottom = col.bottom() - reserve.value(rkey(f, c)) - (firstNotes ? ruleGap : 0) - cut.used;
+                    }
                     if (col.top() + y + textH > bottom + 0.01 && !firstInColumn) {   // snapped past the bottom
                         advance();
                         continue;
@@ -1625,10 +1751,21 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
                         const bool firstNotes = !reserve.contains(rkey(f, c));
                         double &room = reserve[rkey(f, c)];
                         if (firstNotes) room += ruleGap;
-                        for (int ni : lineNotes) {
-                            m_notes[ni].frame = f;
-                            m_notes[ni].column = c;
-                            room += m_notes[ni].height + noteGap;
+                        for (int k = 0; k < lineNotes.size(); ++k) {
+                            Note &n = m_notes[lineNotes[k]];
+                            if (cut.at >= 0 && k > cut.at) {   // after the one cut: first in the next column
+                                carry << lineNotes[k];
+                                continue;
+                            }
+                            n.frame = f;
+                            n.column = c;
+                            if (k == cut.at) {
+                                n.layout = cut.layout;
+                                n.height = cut.height;
+                                n.from = cut.rest;
+                                if (cut.rest >= 0) carry << lineNotes[k];
+                            }
+                            room += n.height + noteGap;
                         }
                     }
                     m_used[f] = std::max(m_used[f], col.top() + y + textH);
@@ -1657,6 +1794,7 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
             rowIdx = startSpot.rowIdx; rowActive = startSpot.rowActive; columnEmpty = startSpot.columnEmpty; m_overflow = startSpot.overflow; m_used = startSpot.used;
             reserve = startSpot.reserve;
             m_notes = startSpot.notes;
+            carry = startSpot.carry;
             B->lines.clear();
             placeLines(startNext, breakAfter);
         };
@@ -1712,6 +1850,11 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
         m_blocks.push_back(std::move(B));
     }
 
+    // A footnote still going on after the story's last line: the columns
+    // after it take the rest, or the story overflows.
+    while (!carry.isEmpty() && f < nF) advance();
+    if (!carry.isEmpty()) m_overflow = true;
+
     // Endnotes: after the story's last line, under a heading, in order;
     // each one whole in a column (a note too tall for an empty column
     // starts there anyway).
@@ -1720,7 +1863,7 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
             while (f < nF) {
                 const QRectF col = colRect(f, c);
                 const double top = y > 0.001 ? y + gapBefore : 0;
-                if (col.top() + top + h <= col.bottom() - reserve.value(rkey(f, c)) + 0.01 || y <= 0.001) {
+                if (col.top() + top + h <= col.bottom() - reserve.value(rkey(f, c)) + 0.01 || (y <= 0.001 && !reserve.contains(rkey(f, c)))) {
                     *frameOut = f;
                     const QRectF r(col.left(), col.top() + top, col.width(), h);
                     y = top + h;
@@ -1759,19 +1902,31 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
             n.rect = nf2 >= 0 ? QRectF(r.topLeft(), QSizeF(r.width(), n.height)) : QRectF();
         }
     }
-    // Footnotes: stacked at the bottom of their column, under a short rule.
+    // Footnotes: stacked at the bottom of their column, under a short rule,
+    // or, when one goes on from the column before, as wide as the column.
     for (auto it = reserve.cbegin(); it != reserve.cend(); ++it) {
         const int fi = it.key() / 64, ci = it.key() % 64;
         if (fi < 0 || fi >= nF) continue;
         const QRectF col = colRect(fi, ci);
         const double areaTop = col.bottom() - it.value();
-        m_noteRules << Rule{fi, QLineF(col.left(), areaTop + ruleGap * 0.45, col.left() + col.width() / 3, areaTop + ruleGap * 0.45)};
         double ny = areaTop + ruleGap;
+        bool goesOn = false, first = true;
         for (Note &n : m_notes) {
-            if (n.endnote || n.frame != fi || n.column != ci) continue;
-            n.rect = QRectF(col.left(), ny, col.width(), n.height);
-            ny += n.height + noteGap;
+            if (n.endnote) continue;
+            if (n.frame == fi && n.column == ci) {
+                n.rect = QRectF(col.left(), ny, col.width(), n.height);
+                ny += n.height + noteGap;
+                first = false;
+            }
+            for (Note::Piece &pc : n.more) {
+                if (pc.frame != fi || pc.column != ci) continue;
+                pc.rect = QRectF(col.left(), ny, col.width(), pc.height);
+                ny += pc.height + noteGap;
+                goesOn |= first;
+                first = false;
+            }
         }
+        m_noteRules << Rule{fi, QLineF(col.left(), areaTop + ruleGap * 0.45, col.left() + (goesOn ? col.width() : col.width() / 3), areaTop + ruleGap * 0.45)};
         m_used[fi] = std::max(m_used[fi], col.bottom());
     }
 
@@ -2272,13 +2427,21 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
         drawPlainText(p, m_notesHeading.baseline, m_notesHeading.font, QCoreApplication::translate("Text", "Notes"));
     }
     for (const Note &n : m_notes) {
-        if (n.frame != frame || !n.layout) continue;
-        p->setPen(n.numberColor);
-        drawPlainText(p, QPointF(n.rect.left(), n.rect.top() + n.firstBaseline), n.numberFont, QString::number(n.number) + (n.endnote ? QStringLiteral(".") : QString()));
-        p->save();
-        p->translate(n.rect.topLeft());
-        n.layout->paint(p, 0, PaintOptions());
-        p->restore();
+        if (n.frame == frame && n.layout) {
+            p->setPen(n.numberColor);
+            drawPlainText(p, QPointF(n.rect.left(), n.rect.top() + n.firstBaseline), n.numberFont, QString::number(n.number) + (n.endnote ? QStringLiteral(".") : QString()));
+            p->save();
+            p->translate(n.rect.topLeft());
+            n.layout->paint(p, 0, PaintOptions());
+            p->restore();
+        }
+        for (const Note::Piece &pc : n.more) {
+            if (pc.frame != frame || !pc.layout) continue;
+            p->save();
+            p->translate(pc.rect.topLeft());
+            pc.layout->paint(p, 0, PaintOptions());
+            p->restore();
+        }
     }
     if (o.selFrom >= 0 && o.selTo > o.selFrom)
         for (const QRectF &r : rangeRects(frame, o.selFrom, o.selTo)) p->fillRect(r, o.selColor);

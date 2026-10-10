@@ -8982,6 +8982,392 @@ private Q_SLOTS:
         }
     }
 
+    // A footnote too tall for a whole column is cut where its column ends and
+    // goes on at the bottom of the next column, above that column's own
+    // notes, under a rule as wide as the column. The line with the number
+    // stays where the note starts, no line of the note is hidden, and they
+    // keep their order.
+    void footnoteTallerThanColumnGoesOnInNextColumn()
+    {
+        jp::MainWindow w;
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto a = std::make_shared<jp::TextItem>();
+        a->rect = QRectF(72, 72, 300, 200);
+        a->columns = 2;
+        a->storyId = doc->createStory();
+        doc->pages[0]->items.push_back(a);
+        QTextDocument *sd = doc->storyDoc(a->storyId);
+        {
+            QTextCursor c(sd);
+            for (int i = 0; i < 4; ++i) {
+                if (i) c.insertBlock();
+                c.insertText(QStringLiteral("Paragraph %1.").arg(i + 1));
+            }
+        }
+        w.editor()->setDocument(std::move(doc));
+        jp::Editor *ed = w.editor();
+        auto at = [&](int block) {
+            ed->beginTextEdit(a->id);
+            QTextCursor c(sd->findBlockByNumber(block));
+            c.movePosition(QTextCursor::EndOfBlock);
+            ed->setCursor(c);
+        };
+        auto words = [](int n) {
+            QStringList l;
+            for (int i = 1; i <= n; ++i) l << QStringLiteral("word%1").arg(i);
+            return l.join(QLatin1Char(' '));
+        };
+        at(0);
+        const QString big = jp::addNote(ed, false, words(10));
+        at(3);
+        const QString small = jp::addNote(ed, false, QStringLiteral("The second note."));
+        QVERIFY(!big.isEmpty() && !small.isEmpty());
+        jp::LayoutCache cache;
+        jp::RenderOptions opt;
+        auto lay = [&] {
+            cache.clear();
+            return cache.textFrame(*ed->doc(), *a, 1, opt);
+        };
+        // Words are added to the first note until it no longer fits a column
+        // with its line (whatever the fonts), then a few lines more.
+        auto fl = lay();
+        int count = 10;
+        while (fl.layout->notes()[0].more.isEmpty() && count < 1000) {
+            count += 5;
+            jp::setNoteText(ed, big, words(count));
+            fl = lay();
+        }
+        QVERIFY(count < 1000);
+        count += 15;
+        jp::setNoteText(ed, big, words(count));
+        fl = lay();
+        const auto &notes = fl.layout->notes();
+        QCOMPARE(notes.size(), 2);
+        const auto &n = notes[0];
+        QCOMPARE(n.frame, 0);
+        QCOMPARE(n.column, 0);
+        QCOMPARE(n.more.size(), 1);
+        QCOMPARE(n.more[0].frame, 0);
+        QCOMPARE(n.more[0].column, 1);
+        QVERIFY(!fl.layout->overflow());
+        // Each part is at the bottom of its own column; the second note
+        // follows the rest of the first in the second column.
+        const double colW = (300 - a->insets.left() - a->insets.right() - a->columnGap) / 2;
+        const double col1Left = a->insets.left() + colW + a->columnGap;
+        const double bottom = 200 - a->insets.bottom();
+        QVERIFY(std::abs(n.rect.left() - a->insets.left()) < 0.01);
+        QVERIFY(std::abs(n.more[0].rect.left() - col1Left) < 0.01);
+        QVERIFY2(std::abs(n.rect.bottom() + 2 - bottom) < 1.5, qPrintable(QString::number(n.rect.bottom())));
+        QCOMPARE(notes[1].frame, 0);
+        QCOMPARE(notes[1].column, 1);
+        QVERIFY(n.more[0].rect.bottom() <= notes[1].rect.top() + 0.01);
+        QVERIFY(std::abs(notes[1].rect.bottom() + 2 - bottom) < 1.5);
+        QVERIFY(n.rect.top() >= a->insets.top());
+        // The line with the number is the first in the first column, above its note;
+        // no line of text runs into a note.
+        const auto info = fl.layout->lineInfo(0);
+        QVERIFY(info.first().rect.left() < col1Left - 1);
+        QVERIFY(info.first().text.contains(QStringLiteral(".1")));
+        for (const QRectF &r : fl.layout->lineRects(0))
+            QVERIFY(r.bottom() <= (r.left() < col1Left - 1 ? n.rect.top() : n.more[0].rect.top()) + 0.01);
+        // The note's lines, in order, none hidden.
+        auto shown = [](const jp::StoryLayout *l) {
+            QString s;
+            for (const auto &li : l->lineInfo(0)) s += li.text;
+            return s;
+        };
+        QVERIFY(!shown(n.layout.get()).isEmpty());
+        QVERIFY(!shown(n.more[0].layout.get()).isEmpty());
+        QString all = shown(n.layout.get()) + shown(n.more[0].layout.get());
+        all.remove(QChar(0x00AD));
+        QCOMPARE(all.simplified(), words(count));
+        // A short rule over the first column's notes, one as wide as the column over the second's.
+        QVector<QLineF> rules;
+        for (const auto &r : fl.layout->noteRules())
+            if (r.frame == 0) rules << r.line;
+        QCOMPARE(rules.size(), 2);
+        std::sort(rules.begin(), rules.end(), [](const QLineF &x, const QLineF &y) { return x.x1() < y.x1(); });
+        QVERIFY(std::abs(rules[0].length() - colW / 3) < 0.01);
+        QVERIFY(std::abs(rules[1].x1() - col1Left) < 0.01);
+        QVERIFY2(std::abs(rules[1].length() - colW) < 0.01, qPrintable(QString::number(rules[1].length())));
+        QVERIFY(rules[0].y1() < n.rect.top() && rules[1].y1() < n.more[0].rect.top());
+        // Drawn: ink where the rest of the note is, none above the box.
+        const QRectF firstRect = n.rect, restRect = n.more[0].rect;
+        jp::PaintContext pc;
+        pc.doc = ed->doc();
+        pc.cache = &cache;
+        pc.opt.output = true;
+        const QImage img = jp::Renderer::renderToImage(pc, 0, 1.0);
+        auto ink = [&](const QRectF &r) {
+            int dark = 0;
+            for (int y = std::max(0, int(r.top())); y < std::min(img.height(), int(std::ceil(r.bottom()))); ++y)
+                for (int x = std::max(0, int(r.left())); x < std::min(img.width(), int(std::ceil(r.right()))); ++x) dark += qGray(img.pixel(x, y)) < 128;
+            return dark;
+        };
+        QVERIFY(ink(restRect.translated(a->rect.topLeft())) > 20);
+        QVERIFY(ink(firstRect.translated(a->rect.topLeft())) > 20);
+        QCOMPARE(ink(QRectF(0, 0, 612, a->rect.top())), 0);
+    }
+
+    // The rest of a footnote goes on in the next linked text box, on whatever
+    // page it is and however wide its columns are.
+    void footnoteTallerThanBoxGoesOnInNextBox()
+    {
+        jp::MainWindow w;
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto a = std::make_shared<jp::TextItem>();
+        a->rect = QRectF(72, 72, 300, 200);
+        a->storyId = doc->createStory();
+        auto b2 = std::make_shared<jp::TextItem>();
+        b2->rect = QRectF(100, 72, 240, 200);
+        b2->storyId = a->storyId;
+        a->nextId = b2->id;
+        doc->pages[0]->items.push_back(a);
+        doc->addPage()->items.push_back(b2);
+        QTextDocument *sd = doc->storyDoc(a->storyId);
+        {
+            QTextCursor c(sd);
+            for (int i = 0; i < 6; ++i) {
+                if (i) c.insertBlock();
+                c.insertText(QStringLiteral("Paragraph %1.").arg(i + 1));
+            }
+        }
+        w.editor()->setDocument(std::move(doc));
+        jp::Editor *ed = w.editor();
+        ed->beginTextEdit(a->id);
+        QTextCursor cur(sd->findBlockByNumber(0));
+        cur.movePosition(QTextCursor::EndOfBlock);
+        ed->setCursor(cur);
+        auto words = [](int n) {
+            QStringList l;
+            for (int i = 1; i <= n; ++i) l << QStringLiteral("word%1").arg(i);
+            return l.join(QLatin1Char(' '));
+        };
+        const QString big = jp::addNote(ed, false, words(10));
+        QVERIFY(!big.isEmpty());
+        jp::LayoutCache cache;
+        jp::RenderOptions opt;
+        auto lay = [&] {
+            cache.clear();
+            return cache.textFrame(*ed->doc(), *a, 1, opt);
+        };
+        auto fl = lay();
+        int count = 10;
+        while (fl.layout->notes()[0].more.isEmpty() && count < 1000) {
+            count += 5;
+            jp::setNoteText(ed, big, words(count));
+            fl = lay();
+        }
+        QVERIFY(count < 1000);
+        count += 25;
+        jp::setNoteText(ed, big, words(count));
+        fl = lay();
+        QCOMPARE(fl.layout->frameCount(), 2);
+        const auto &n = fl.layout->notes()[0];
+        QCOMPARE(n.frame, 0);
+        QCOMPARE(n.more.size(), 1);
+        QCOMPARE(n.more[0].frame, 1);
+        QCOMPARE(n.more[0].column, 0);
+        QVERIFY(!fl.layout->overflow());
+        // The rest is laid out for the second box's column and sits at its bottom.
+        const double colW2 = 240 - b2->insets.left() - b2->insets.right();
+        QVERIFY(std::abs(n.more[0].rect.width() - colW2) < 0.01);
+        QVERIFY(std::abs(n.more[0].rect.left() - b2->insets.left()) < 0.01);
+        QVERIFY2(std::abs(n.more[0].rect.bottom() + 2 - (200 - b2->insets.bottom())) < 1.5, qPrintable(QString::number(n.more[0].rect.bottom())));
+        // The text of the story goes on above it in the second box.
+        const auto second = fl.layout->lineInfo(1);
+        QVERIFY(!second.isEmpty());
+        for (const QRectF &r : fl.layout->lineRects(1)) QVERIFY(r.bottom() <= n.more[0].rect.top() + 0.01);
+        for (const QRectF &r : fl.layout->lineRects(0)) QVERIFY(r.bottom() <= n.rect.top() + 0.01);
+        QVERIFY(fl.layout->lineInfo(0).first().text.contains(QStringLiteral(".1")));
+        // Every line of the note, in order.
+        auto shown = [](const jp::StoryLayout *l) {
+            QString s;
+            for (const auto &li : l->lineInfo(0)) s += li.text;
+            return s;
+        };
+        QString all = shown(n.layout.get()) + shown(n.more[0].layout.get());
+        all.remove(QChar(0x00AD));
+        QCOMPARE(all.simplified(), words(count));
+        // A short rule in the first box, one as wide as the column in the second.
+        QLineF first, rest;
+        for (const auto &r : fl.layout->noteRules()) (r.frame == 0 ? first : rest) = r.line;
+        QVERIFY(std::abs(first.length() - (300 - a->insets.left() - a->insets.right()) / 3) < 0.01);
+        QVERIFY2(std::abs(rest.length() - colW2) < 0.01, qPrintable(QString::number(rest.length())));
+        // Drawn on the second box's page.
+        const QRectF restRect = n.more[0].rect;
+        jp::PaintContext pc;
+        pc.doc = ed->doc();
+        pc.cache = &cache;
+        pc.opt.output = true;
+        const QImage img = jp::Renderer::renderToImage(pc, 1, 1.0);
+        int dark = 0;
+        const QRectF r = restRect.translated(b2->rect.topLeft());
+        for (int y = int(r.top()); y < int(std::ceil(r.bottom())); ++y)
+            for (int x = int(r.left()); x < int(std::ceil(r.right())); ++x) dark += qGray(img.pixel(x, y)) < 128;
+        QVERIFY(dark > 20);
+    }
+
+    // A very long footnote (of several paragraphs) goes on through as many
+    // text boxes as it needs, a whole box where it takes one; with no box
+    // left, the story overflows as for any other text.
+    void footnoteGoesOnThroughManyBoxes()
+    {
+        jp::MainWindow w;
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        std::shared_ptr<jp::TextItem> boxes[3];
+        for (int i = 0; i < 3; ++i) {
+            boxes[i] = std::make_shared<jp::TextItem>();
+            boxes[i]->rect = QRectF(72, 72 + 230 * i, 300, 200);
+            doc->pages[0]->items.push_back(boxes[i]);
+        }
+        auto a = boxes[0];
+        a->storyId = doc->createStory();
+        for (int i = 1; i < 3; ++i) {
+            boxes[i]->storyId = a->storyId;
+            boxes[i - 1]->nextId = boxes[i]->id;
+        }
+        QTextDocument *sd = doc->storyDoc(a->storyId);
+        QTextCursor(sd).insertText(QStringLiteral("Paragraph 1."));
+        w.editor()->setDocument(std::move(doc));
+        jp::Editor *ed = w.editor();
+        ed->beginTextEdit(a->id);
+        QTextCursor cur(sd->findBlockByNumber(0));
+        cur.movePosition(QTextCursor::EndOfBlock);
+        ed->setCursor(cur);
+        // Paragraphs of twelve words each, the last shorter.
+        auto words = [](int n) {
+            QStringList paragraphs, l;
+            for (int i = 1; i <= n; ++i) {
+                l << QStringLiteral("word%1").arg(i);
+                if (l.size() == 12 || i == n) {
+                    paragraphs << l.join(QLatin1Char(' '));
+                    l.clear();
+                }
+            }
+            return paragraphs.join(QLatin1Char('\n'));
+        };
+        const QString big = jp::addNote(ed, false, words(10));
+        QVERIFY(!big.isEmpty());
+        jp::LayoutCache cache;
+        jp::RenderOptions opt;
+        auto lay = [&] {
+            cache.clear();
+            return cache.textFrame(*ed->doc(), *a, 1, opt);
+        };
+        auto fl = lay();
+        int count = 10;
+        while (fl.layout->notes()[0].more.size() < 2 && count < 2000) {
+            count += 10;
+            jp::setNoteText(ed, big, words(count));
+            fl = lay();
+        }
+        QVERIFY(count < 2000);
+        const auto &n = fl.layout->notes()[0];
+        QCOMPARE(n.more.size(), 2);
+        QVERIFY(!fl.layout->overflow());
+        QCOMPARE(n.frame, 0);
+        QCOMPARE(n.more[0].frame, 1);
+        QCOMPARE(n.more[1].frame, 2);
+        // The second box holds nothing but the note, from its rule to its
+        // bottom, though the text ended in the first.
+        QVERIFY(fl.layout->lineRects(1).isEmpty());
+        QVERIFY(n.more[0].rect.top() < 40);
+        QVERIFY(std::abs(n.more[0].rect.bottom() + 2 - (200 - a->insets.bottom())) < 1.5);
+        QVERIFY(std::abs(n.more[1].rect.bottom() + 2 - (200 - a->insets.bottom())) < 1.5);
+        QVector<QLineF> rules(3);
+        for (const auto &r : fl.layout->noteRules()) rules[r.frame] = r.line;
+        QVERIFY(std::abs(rules[0].length() - (300 - a->insets.left() - a->insets.right()) / 3) < 0.01);
+        QVERIFY(std::abs(rules[1].length() - (300 - a->insets.left() - a->insets.right())) < 0.01);
+        QVERIFY(std::abs(rules[2].length() - (300 - a->insets.left() - a->insets.right())) < 0.01);
+        auto shown = [](const jp::StoryLayout *l) {
+            QString s;
+            for (const auto &li : l->lineInfo(0)) s += li.text + QLatin1Char(' ');
+            return s;
+        };
+        QString all = shown(n.layout.get()) + shown(n.more[0].layout.get()) + shown(n.more[1].layout.get());
+        all.remove(QChar(0x00AD));
+        QCOMPARE(all.simplified(), words(count).simplified());
+        // The last box taken away: the rest of the note has nowhere to go.
+        boxes[1]->nextId.clear();
+        fl = lay();
+        QVERIFY(fl.layout->overflow());
+        QCOMPARE(fl.layout->notes()[0].more.size(), 1);
+        QCOMPARE(fl.layout->notes()[0].more[0].frame, 1);
+    }
+
+    // A note that fits a column is never cut: at the bottom of the column
+    // under the short rule, or, when it doesn't fit under its line, on with
+    // the line in the next column.
+    void shortFootnoteIsNotCut()
+    {
+        jp::MainWindow w;
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto a = std::make_shared<jp::TextItem>();
+        a->rect = QRectF(72, 72, 300, 200);
+        a->columns = 2;
+        a->storyId = doc->createStory();
+        doc->pages[0]->items.push_back(a);
+        QTextDocument *sd = doc->storyDoc(a->storyId);
+        {
+            QTextCursor c(sd);
+            for (int i = 0; i < 9; ++i) {
+                if (i) c.insertBlock();
+                c.insertText(QStringLiteral("Paragraph %1.").arg(i + 1));
+            }
+        }
+        w.editor()->setDocument(std::move(doc));
+        jp::Editor *ed = w.editor();
+        auto at = [&](int block) {
+            ed->beginTextEdit(a->id);
+            QTextCursor c(sd->findBlockByNumber(block));
+            c.movePosition(QTextCursor::EndOfBlock);
+            ed->setCursor(c);
+        };
+        at(0);
+        QVERIFY(!jp::addNote(ed, false, QStringLiteral("The first note.")).isEmpty());
+        jp::LayoutCache cache;
+        jp::RenderOptions opt;
+        auto fl = cache.textFrame(*ed->doc(), *a, 1, opt);
+        const double colW = (300 - a->insets.left() - a->insets.right() - a->columnGap) / 2;
+        const double col1Left = a->insets.left() + colW + a->columnGap;
+        auto n = fl.layout->notes()[0];
+        QCOMPARE(n.frame, 0);
+        QCOMPARE(n.column, 0);
+        QVERIFY(n.more.isEmpty());
+        QVERIFY(std::abs(n.rect.bottom() + 2 - (200 - a->insets.bottom())) < 1.5);
+        QVERIFY(std::abs(n.rect.width() - colW) < 0.01);
+        QCOMPARE(fl.layout->noteRules().size(), 1);
+        QVERIFY(std::abs(fl.layout->noteRules()[0].line.length() - colW / 3) < 0.01);
+        QVERIFY(!fl.layout->overflow());
+        for (const QRectF &r : fl.layout->lineRects(0)) QVERIFY(r.left() > col1Left - 1 || r.bottom() <= n.rect.top() + 0.01);
+        // A note that fits an empty column but not the room left under its
+        // line: lines are added to it until it no longer fits the first
+        // column; both go to the next column, the note whole.
+        at(6);
+        const QString mid = jp::addNote(ed, false, QStringLiteral("Note line 1"));
+        QVERIFY(!mid.isEmpty());
+        QStringList lines{QStringLiteral("Note line 1")};
+        cache.clear();
+        fl = cache.textFrame(*ed->doc(), *a, 1, opt);
+        QCOMPARE(fl.layout->notes().size(), 2);
+        QCOMPARE(fl.layout->notes()[1].column, 0);
+        while (fl.layout->notes()[1].column == 0 && lines.size() < 40) {
+            lines << QStringLiteral("Note line %1").arg(lines.size() + 1);
+            jp::setNoteText(ed, mid, lines.join(QLatin1Char('\n')));
+            cache.clear();
+            fl = cache.textFrame(*ed->doc(), *a, 1, opt);
+        }
+        n = fl.layout->notes()[1];
+        QCOMPARE(n.frame, 0);
+        QCOMPARE(n.column, 1);
+        QVERIFY(n.more.isEmpty());
+        QVERIFY(!fl.layout->overflow());
+        bool refInSecond = false;
+        for (const auto &li : fl.layout->lineInfo(0)) refInSecond |= li.rect.left() > col1Left - 1 && li.text.contains(QStringLiteral("7.2"));
+        QVERIFY(refInSecond);
+    }
+
     // About: the third-party table fits its card at a modest window size
     // (its last rows and long license names were cut off).
     void aboutLicensesFit()

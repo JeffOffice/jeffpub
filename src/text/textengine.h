@@ -130,8 +130,14 @@ public:
     // endnotes counted apart, in order within the story); its text is that
     // story, laid out at the bottom of the column the reference lands in
     // (footnotes, under a short rule) or after the story's last line, under
-    // a "Notes" heading (endnotes).
+    // a "Notes" heading (endnotes). A footnote too tall for a whole column
+    // is cut where the column ends: the rest goes on at the bottom of the
+    // next column (or text box), above that column's own notes, under a rule
+    // as wide as the column.
     struct Note {
+        // The rest of a cut note in one column: its own layout, starting
+        // where the column before left off.
+        struct Piece { int frame = -1, column = 0; QRectF rect; double height = 0; std::shared_ptr<StoryLayout> layout; };
         QString storyId;
         bool endnote = false;
         int number = 0;
@@ -140,9 +146,13 @@ public:
         double width = -1, height = 0, numberWidth = 0, firstBaseline = 0;
         QFont numberFont;
         QColor numberColor;
-        std::shared_ptr<StoryLayout> layout;
+        std::shared_ptr<StoryLayout> layout;   // the part with the number (all of a note that isn't cut)
+        QVector<Piece> more;           // the rest of a cut note, a piece for each column it goes on in
+        int from = 0;                  // while a cut note goes on: where its rest starts in the note's text
     };
     const QVector<Note> &notes() const { return m_notes; }
+    struct Rule { int frame; QLineF line; };
+    const QVector<Rule> &noteRules() const { return m_noteRules; }   // above each column's footnotes
 
 private:
     const Block *blockAt(int pos, int *rel) const;
@@ -157,8 +167,7 @@ private:
     bool m_overflow = false;
     LayoutEnv m_env;
     QVector<Note> m_notes;
-    struct Rule { int frame; QLineF line; };
-    QVector<Rule> m_noteRules;         // above each column's footnotes
+    QVector<Rule> m_noteRules;
     struct Heading { int frame = -1; QPointF baseline; QFont font; QColor color; };
     Heading m_notesHeading;            // above the endnotes
     QVector<InlineObject> m_inline;
