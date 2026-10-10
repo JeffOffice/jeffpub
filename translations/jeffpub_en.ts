@@ -15,7 +15,7 @@
 <context>
     <name>jp::OnlinePicturesPane</name>
     <message numerus="yes">
-        <location filename="../../src/app/onlinepictures.cpp" line="+210"/>
+        <location filename="../../src/app/onlinepictures.cpp" line="+211"/>
         <source>%n picture(s) found. Choose one to see its license.</source>
         <translation>
             <numerusform>%n picture found. Choose it to see its license.</numerusform>

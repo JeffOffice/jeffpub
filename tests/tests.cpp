@@ -43,6 +43,7 @@
 #include "app/i18n.h"
 #include "app/keytips.h"
 #include "app/help.h"
+#include "app/taskpane.h"
 #include "app/onlinepictures.h"
 #include "app/focusring.h"
 #include "app/keyboardnav.h"
@@ -2359,6 +2360,28 @@ private Q_SLOTS:
         QVERIFY(w.ribbon()->isMinimized());
         QTest::keyClick(&w, Qt::Key_F1, Qt::ControlModifier);
         QVERIFY(!w.ribbon()->isMinimized());
+    }
+
+    // Every task pane's controls have names too (the panes are made when
+    // first opened, so windowControlsAreNamed doesn't see them).
+    void taskPaneControlsAreNamed()
+    {
+        jp::MainWindow w;
+        QStringList unnamed;
+        for (const char *pane : {"help", "online", "find", "designchecker", "mailmerge", "graphics", "research", "catalog"}) {
+            w.showTaskPane(QString::fromLatin1(pane));
+            auto *tp = w.findChild<jp::TaskPane *>();
+            QVERIFY(tp);
+            for (QWidget *c : tp->findChildren<QWidget *>()) {
+                if (!(c->focusPolicy() & Qt::TabFocus) || c->focusProxy() || !c->isVisibleTo(tp)) continue;
+                QWidget *pw = c->parentWidget();
+                if (pw && (qobject_cast<QAbstractItemView *>(pw) || pw->inherits("QComboBoxPrivateContainer"))) continue;
+                QAccessibleInterface *iface = QAccessible::queryAccessibleInterface(c);
+                if (!iface || iface->text(QAccessible::Name).trimmed().isEmpty())
+                    unnamed << QStringLiteral("%1: %2 %3").arg(QLatin1String(pane), QString::fromLatin1(c->metaObject()->className()), c->objectName());
+            }
+        }
+        QVERIFY2(unnamed.isEmpty(), qPrintable(unnamed.join(QStringLiteral("; "))));
     }
 
     // KeyTips: Alt shows letters on the top row, a tab's letter opens it and

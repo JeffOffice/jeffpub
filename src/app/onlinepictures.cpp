@@ -171,6 +171,7 @@ OnlinePicturesPane::OnlinePicturesPane(MainWindow *win) : m_win(win)
     m_results->setAccessibleName(tr("Pictures found"));
     v->addWidget(m_results, 1);
     m_details = new QLabel(this);
+    m_details->setAccessibleName(tr("About the picture"));
     m_details->setWordWrap(true);
     m_details->setOpenExternalLinks(true);
     m_details->setTextInteractionFlags(Qt::TextBrowserInteraction);

@@ -105,6 +105,7 @@ public:
         v->addWidget(m_print);
         v->addWidget(new QLabel(tr("Select an item to fix:"), this));
         m_list = new QListWidget(this);
+        m_list->setAccessibleName(tr("Problems found"));
         m_list->setWordWrap(true);
         v->addWidget(m_list, 1);
         auto *fix = new QPushButton(tr("Go to Item"), this);
@@ -216,12 +217,17 @@ public:
     {
         auto *v = new QVBoxLayout(this);
         v->setContentsMargins(0, 0, 0, 0);
-        v->addWidget(new QLabel(tr("Find what:"), this));
+        // Each label names its box for screen readers (its buddy).
+        auto *findLabel = new QLabel(tr("Find what:"), this);
+        v->addWidget(findLabel);
         m_find = new QLineEdit(this);
+        findLabel->setBuddy(m_find);
         v->addWidget(m_find);
-        v->addWidget(new QLabel(tr("Replace with:"), this));
+        auto *replaceLabel = new QLabel(tr("Replace with:"), this);
+        v->addWidget(replaceLabel);
         m_replace = new QLineEdit(this);
         m_replace->setObjectName("replace");
+        replaceLabel->setBuddy(m_replace);
         v->addWidget(m_replace);
         m_case = new QCheckBox(tr("Match case"), this);
         m_whole = new QCheckBox(tr("Find whole words only"), this);
@@ -371,6 +377,7 @@ public:
         m_sort->addItems({tr("Sort by page"), tr("Sort by name"), tr("Sort by size"), tr("Sort by type")});
         v->addWidget(m_sort);
         m_list = new QListWidget(this);
+        m_list->setAccessibleName(tr("Pictures"));
         m_list->setIconSize(QSize(56, 56));
         v->addWidget(m_list, 1);
         auto *row = new QHBoxLayout();
@@ -798,13 +805,16 @@ public:
     {
         auto *v = new QVBoxLayout(this);
         v->setContentsMargins(0, 0, 0, 0);
-        v->addWidget(new QLabel(tr("Search for:"), this));
+        auto *qLabel = new QLabel(tr("Search for:"), this);
+        v->addWidget(qLabel);
         m_q = new QLineEdit(this);
+        qLabel->setBuddy(m_q);
         v->addWidget(m_q);
         auto *go = new QPushButton(tr("Look Up"), this);
         v->addWidget(go);
         m_out = new QListWidget(this);
         m_out->setWordWrap(true);
+        m_out->setAccessibleName(tr("Words found"));
         v->addWidget(m_out, 1);
         auto *note = new QLabel(tr("JeffPub looks up words in its offline thesaurus. It does not send your text to online services."), this);
         note->setWordWrap(true);

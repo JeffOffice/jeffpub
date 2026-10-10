@@ -9260,7 +9260,7 @@ Desktop publishing</source>
 <context>
     <name>jp::CatalogPane</name>
     <message>
-        <location filename="../src/app/taskpane.cpp" line="+594"/>
+        <location filename="../src/app/taskpane.cpp" line="+601"/>
         <source>Choose the list of products or items (a spreadsheet, a CSV file or a list you type).</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9422,7 +9422,7 @@ Source: %3</source>
 <context>
     <name>jp::DesignChecker</name>
     <message>
-        <location filename="../src/app/taskpane.cpp" line="-665"/>
+        <location filename="../src/app/taskpane.cpp" line="-672"/>
         <source>Run general design checks</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9437,7 +9437,12 @@ Source: %3</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+2"/>
+        <source>Problems found</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Go to Item</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9845,17 +9850,17 @@ Source: %3</source>
 <context>
     <name>jp::FindPane</name>
     <message>
-        <location filename="../src/app/taskpane.cpp" line="+28"/>
+        <location filename="../src/app/taskpane.cpp" line="+29"/>
         <source>Find what:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+5"/>
         <source>Replace with:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+6"/>
         <source>Match case</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9974,7 +9979,12 @@ Source: %3</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+3"/>
+        <source>Pictures</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Go to</source>
         <translation type="unfinished"></translation>
     </message>
@@ -13747,7 +13757,12 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+3"/>
+        <source>About the picture</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Add a credit under the picture</source>
         <translation type="unfinished"></translation>
     </message>
@@ -13860,12 +13875,17 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+5"/>
         <source>Look Up</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+4"/>
+        <source>Words found</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>JeffPub looks up words in its offline thesaurus. It does not send your text to online services.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -13940,7 +13960,7 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
 <context>
     <name>jp::TaskPane</name>
     <message>
-        <location filename="../src/app/taskpane.cpp" line="-782"/>
+        <location filename="../src/app/taskpane.cpp" line="-792"/>
         <source>Close</source>
         <translation type="unfinished"></translation>
     </message>
