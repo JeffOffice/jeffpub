@@ -14,6 +14,7 @@
 #include "render/metafile.h"
 #include "text/storyio.h"
 #include "text/textengine.h"
+#include "PolygonUtils.h"   // libmspub's shape table
 #include "text/textprops.h"
 #include "text/hyphenation.h"
 #include "text/dictionaries.h"
@@ -60,6 +61,7 @@
 #include "app/settings.h"
 #include "canvas/canvas.h"
 #include <cstdio>
+#include <tuple>
 #include <QTemporaryDir>
 #include <QFileOpenEvent>
 #include <QSettings>
@@ -941,6 +943,44 @@ private Q_SLOTS:
             const double want = (widths->value(u'Y') + widths->value(u'o') + (size >= 14 ? yo : 0)) * size;
             QVERIFY2(std::abs(x(2) - x(0) - want) < 0.01 * size / 12, qPrintable(QStringLiteral("%1 pt: %2, not %3").arg(size).arg(x(2) - x(0)).arg(want)));
         }
+    }
+
+    // Book Antiqua's lines are as Publisher spaces them, by the font's
+    // Windows metrics (1.2427 em; bold 1.2056, its extra space above the
+    // letters): a garage sale sign's two best-fit lines filled the box
+    // exactly there, and came out 11% closer here (typo metrics, 1.07 em).
+    void bookAntiquaLineSpacing()
+    {
+        for (const auto &[bold, line, base] : {std::tuple{false, 1.2427, 0.9604}, std::tuple{true, 1.2056, 0.9404}}) {
+            QTextDocument doc;
+            QTextCursor c(&doc);
+            QTextCharFormat cf;
+            cf.setFontFamilies(QStringList{QStringLiteral("Book Antiqua")});
+            cf.setFontPointSize(100);
+            if (bold) cf.setFontWeight(QFont::Bold);
+            c.insertText(QStringLiteral("Garage"), cf);
+            c.insertBlock();
+            c.insertText(QStringLiteral("Sale"), cf);
+            jp::FrameSpec fs;
+            fs.size = QSizeF(600, 400);
+            fs.insets = QMarginsF(0, 0, 0, 0);
+            jp::StoryLayout lay;
+            lay.build(&doc, {fs}, jp::LayoutEnv());
+            const auto lines = lay.lineInfo(0);
+            QCOMPARE(lines.size(), 2);
+            QVERIFY2(std::abs(lines[1].baseline - lines[0].baseline - line * 100) < 0.05, qPrintable(QString::number(lines[1].baseline - lines[0].baseline)));
+            QVERIFY2(std::abs(lines[0].baseline - base * 100) < 0.05, qPrintable(QString::number(lines[0].baseline)));
+        }
+    }
+
+    // An octagon with no proportion of its own is Publisher's regular one,
+    // its corners cut at 29.3% of each side (6326 of 21600, as its PDFs
+    // draw a stop sign); libmspub had 5000, a squatter octagon.
+    void octagonAsPublisherDrawsIt()
+    {
+        const libmspub::CustomShape *octagon = libmspub::getCustomShape(libmspub::OCTAGON);
+        QVERIFY(octagon && octagon->m_numDefaultAdjustValues > 0);
+        QCOMPARE(octagon->mp_defaultAdjustValues[0], 6326);
     }
 
     // A centered line is centered on its letters, a right-aligned one ends

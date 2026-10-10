@@ -590,8 +590,9 @@ static KnownMetrics knownMetrics(const QString &family, bool bold = false)
     if (f == "arial narrow") return {(1916.0 + 434) / 2048, 434.0 / 2048};                  // hhea
     if (f == "times new roman") return {((bold ? 1387.0 : 1420.0) + 442 + 307) / 2048, 442.0 / 2048};
     if (f == "tahoma") return {(1566.0 + 423 + 59) / 2048, 423.0 / 2048};
-    if (f == "garamond") return {(1339.0 + 539 + 313) / 2048, 539.0 / 2048};
-    if (f == "book antiqua") return {(1489.0 + 578 + 124) / 2048, 578.0 / 2048};
+    if (f == "garamond") return {(1765.0 + 539) / 2048, 539.0 / 2048};                    // win
+    if (f == "book antiqua") return bold ? KnownMetrics{(1891.0 + 578) / 2048, 543.0 / 2048}   // win, its gap above
+                                         : KnownMetrics{(1967.0 + 578) / 2048, 578.0 / 2048};  // win
     if (f == "bookman old style") return {(1929.0 + 475) / 2048, 475.0 / 2048};             // hhea
     if (f == "century gothic") return {(1536.0 + 426 + 229) / 2048, 426.0 / 2048};
     if (f == "gill sans mt condensed") return {(1913.0 + 553) / 2048, 553.0 / 2048};   // hhea

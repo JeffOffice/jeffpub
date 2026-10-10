@@ -100,7 +100,9 @@ endif()
 
 enable_testing()
 qt_add_executable(jptests tests/tests.cpp)
-target_link_libraries(jptests PRIVATE jpcore Qt6::Test)
+target_link_libraries(jptests PRIVATE jpcore jp_libmspub Qt6::Test)
+# libmspub's shape table, for checking its defaults against Publisher's.
+target_include_directories(jptests PRIVATE ${CMAKE_SOURCE_DIR}/third_party/libmspub/src ${CMAKE_SOURCE_DIR}/third_party/compat)
 target_compile_definitions(jptests PRIVATE JP_TEST_DATA="${CMAKE_SOURCE_DIR}/tests/data")
 # qt_add_executable makes Windows GUI programs by default; tests must keep their console output.
 set_target_properties(jptests PROPERTIES WIN32_EXECUTABLE OFF)

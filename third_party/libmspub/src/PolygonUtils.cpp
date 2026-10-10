@@ -2277,7 +2277,7 @@ const TextRectangle OCTAGON_TRS[] =
 
 const int OCTAGON_DEFAULT_ADJUST[] =
 {
-  5000
+  6326   // JeffPub: Publisher's regular octagon (corners cut at 29.3%); upstream 5000
 };
 
 const Vertex OCTAGON_GLUE_POINTS[] =
