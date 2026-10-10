@@ -556,6 +556,9 @@ QSet<QString> Document::storiesInUse() const
         if (it->type() == ItemType::Table)
             for (const auto &c : static_cast<TableItem *>(it)->cells) use(c.storyId);
     });
+    walkItems(extra, [&](const ItemPtr &it) {
+        if (it->type() == ItemType::Text) use(static_cast<TextItem *>(it.get())->storyId);
+    });
     static const QRegularExpression storyKey(QStringLiteral("\"story\":\"([^\"]+)\""));
     while (!queue.isEmpty()) {
         const QTextDocument *sd = storyDoc(queue.takeFirst());
@@ -954,6 +957,7 @@ QJsonObject Document::toJson() const
     o["masters"] = ms;
     o["pages"] = ps;
     o["scratch"] = itemsJ(scratch);
+    if (!extra.empty()) o["extra"] = itemsJ(extra);
     o["stories"] = ss;
     o["styles"] = st;
     o["business"] = bz;
@@ -1006,6 +1010,7 @@ void Document::fromJson(const QJsonObject &o)
         pages << p;
     }
     scratch = itemsF(o["scratch"]);
+    extra = itemsF(o["extra"]);
     const auto cso = o["colorScheme"].toObject();
     colors.name = cso["name"].toString();
     const auto cs = cso["colors"].toArray();

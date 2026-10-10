@@ -6,12 +6,14 @@
 
 #include "core/document.h"
 #include "render/renderer.h"
+#include "templates/changetemplate.h"
 
 #include <QObject>
 #include <QTextCursor>
 #include <QTimer>
 #include <QUndoStack>
 #include <functional>
+#include <optional>
 
 namespace jp {
 
@@ -30,6 +32,9 @@ struct ViewOptions {
     bool spelling = true;
     bool gridlines = true;
 };
+
+// The drag-and-drop format of Extra Content: the ids of the items, one a line.
+constexpr const char *kExtraContentMime = "application/x-jeffpub-extra";
 
 enum class Tool { Select, Text, Table, Picture, Shape, Line, Arrow, DoubleArrow, Freeform, TextArt, Link, FormatPainter };
 
@@ -207,6 +212,17 @@ public:
     // saved by Save as Building Block do. Returns their ids.
     QStringList insertItemsJson(const QByteArray &json, const QString &label);
     bool canPaste() const;
+
+    // ---- Change Template ----
+    // Applies a built design to this publication as one undo step: its stories
+    // and pictures move into the design (see templates/changetemplate.h), and
+    // what has no place there goes to Extra Content.
+    void applyTemplate(std::unique_ptr<Document> design, ChangeReport *report = nullptr);
+    // Extra Content: puts the item on the page being edited, at `at` or near
+    // its middle, as a text box or picture you can work with (returns its id,
+    // or nothing when there is no such item); or discards it.
+    QString placeExtra(const QString &id, const std::optional<QPointF> &at = std::nullopt);
+    void discardExtra(const QString &id);
 
     // ---- pages ----
     int insertPages(int after, int count, bool duplicate, bool oneTextBox, const QString &masterId = QString());

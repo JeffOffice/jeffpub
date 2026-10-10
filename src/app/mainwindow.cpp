@@ -385,6 +385,29 @@ void MainWindow::newPublication(std::unique_ptr<Document> doc)
     hideBackstage();
 }
 
+MainWindow *MainWindow::changeTemplate(std::unique_ptr<Document> design, bool toNewWindow)
+{
+    ChangeReport report;
+    MainWindow *target = this;
+    if (toNewWindow) {
+        target = new MainWindow();
+        target->setAttribute(Qt::WA_DeleteOnClose);
+        target->m_ed->setDocument(applyDesign(*m_ed->doc(), std::move(design), &report));
+        target->m_ed->markUnsaved();
+        target->show();
+    } else {
+        m_ed->applyTemplate(std::move(design), &report);
+    }
+    hideBackstage();
+    target->hideBackstage();
+    const int extra = report.extraStories + report.extraPictures;
+    target->statusBar()->showMessage(extra ? tr("Moved your text and pictures into the new design. What had no place is in Extra Content.")
+                                           : tr("Moved your text and pictures into the new design."),
+                                     8000);
+    if (extra) target->showTaskPane(QStringLiteral("extra"));
+    return target;
+}
+
 bool MainWindow::openFile(const QString &path)
 {
     QFile f(path);

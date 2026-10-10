@@ -3035,7 +3035,8 @@ bool Canvas::viewportEvent(QEvent *e)
 
 void Canvas::dragEnterEvent(QDragEnterEvent *e)
 {
-    if (e->mimeData()->hasUrls() || e->mimeData()->hasImage() || e->mimeData()->hasText()) e->acceptProposedAction();
+    if (e->mimeData()->hasFormat(QString::fromLatin1(kExtraContentMime)) || e->mimeData()->hasUrls() || e->mimeData()->hasImage() || e->mimeData()->hasText())
+        e->acceptProposedAction();
 }
 
 void Canvas::dragMoveEvent(QDragMoveEvent *e) { e->acceptProposedAction(); }
@@ -3043,6 +3044,19 @@ void Canvas::dragMoveEvent(QDragMoveEvent *e) { e->acceptProposedAction(); }
 void Canvas::dropEvent(QDropEvent *e)
 {
     const QPointF page = toPage(viewport()->mapFrom(this, e->position().toPoint()));
+    if (e->mimeData()->hasFormat(QString::fromLatin1(kExtraContentMime))) {
+        // Extra Content dropped on the page.
+        const QStringList ids = QString::fromUtf8(e->mimeData()->data(QString::fromLatin1(kExtraContentMime))).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        m_ed->beginChange(QCoreApplication::translate("Canvas", "Place Extra Content"));
+        QPointF at = toPage(e->position());   // the drop came to the viewport
+        for (const QString &id : ids) {
+            m_ed->placeExtra(id, at);
+            at += QPointF(18, 18);
+        }
+        m_ed->endChange();
+        e->acceptProposedAction();
+        return;
+    }
     QStringList files;
     for (const QUrl &u : e->mimeData()->urls())
         if (u.isLocalFile()) files << u.toLocalFile();

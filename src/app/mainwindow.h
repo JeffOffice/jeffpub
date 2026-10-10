@@ -56,6 +56,11 @@ public:
 
     // File operations (used by the backstage too).
     void newPublication(std::unique_ptr<Document> doc);
+    // Page Design > Change Template: `design`, built from the gallery's choices,
+    // takes this publication's text and pictures, in this window as one undo
+    // step, or, with `toNewWindow`, in a new publication in a window of its
+    // own while this one stays as it is. Returns the window with the result.
+    MainWindow *changeTemplate(std::unique_ptr<Document> design, bool toNewWindow);
     bool openFile(const QString &path);
     // Copies of unsaved work left by a run of JeffPub that didn't close
     // normally: offered for opening or deleting (askIfNone: say so when

@@ -620,7 +620,8 @@ void MainWindow::createActions()
     });
 
     // ---------------- Page Design ----------------
-    mk("pd.changeTemplate", tr("Change Template"), "layout-template", QKeySequence(), [this] { showBackstage("new"); });
+    mk("pd.changeTemplate", tr("Change Template"), "layout-template", QKeySequence(), [this] { showBackstage("change"); });
+    mk("pd.extraContent", tr("Extra Content"), "files", QKeySequence(), [this] { showTaskPane("extra"); });
     mk("pd.pageSetup", tr("Page Setup…"), "file-cog", QKeySequence(), [this] { pageSetupDialog(this, m_ed); });
     mk("pd.guidesDialog", tr("Grid and Baseline Guides…"), "grid-3x3", QKeySequence(), [this] { gridGuidesDialog(this, m_ed); });
     // A new guide goes to the middle of the page, or half an inch on from

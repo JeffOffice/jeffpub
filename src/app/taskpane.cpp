@@ -23,6 +23,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QTextBlock>
@@ -75,6 +76,7 @@ void TaskPane::open(const QString &nameIn)
     else if (name == "graphics") title = tr("Graphics Manager");
     else if (name == "research") title = tr("Research");
     else if (name == "online") title = tr("Online Pictures");
+    else if (name == "extra") title = tr("Extra Content");
     else if (name == "catalog") title = tr("Catalog Merge");
     else if (name == "help") title = tr("Help");
     m_title->setText(title);
@@ -888,6 +890,124 @@ private:
     QListWidget *m_out;
 };
 
+// ---------------- Extra Content ----------------
+// The stories and pictures Change Template found no place for: each can be
+// dragged onto the page, placed with the button, or discarded.
+class ExtraList : public QListWidget {
+public:
+    using QListWidget::QListWidget;
+
+protected:
+    QStringList mimeTypes() const override { return {QString::fromLatin1(kExtraContentMime)}; }
+    QMimeData *mimeData(const QList<QListWidgetItem *> &items) const override
+    {
+        QStringList ids;
+        for (const QListWidgetItem *it : items) ids << it->data(Qt::UserRole).toString();
+        auto *md = new QMimeData;
+        md->setData(QString::fromLatin1(kExtraContentMime), ids.join(QLatin1Char('\n')).toUtf8());
+        return md;
+    }
+};
+
+class ExtraPane : public QWidget {
+    Q_OBJECT
+public:
+    explicit ExtraPane(MainWindow *win) : m_win(win)
+    {
+        auto *v = new QVBoxLayout(this);
+        v->setContentsMargins(0, 0, 0, 0);
+        auto *about = new QLabel(tr("Text and pictures from your publication that had no place in the new design. Drag one onto the page, or select it and click Place on Page."), this);
+        about->setWordWrap(true);
+        v->addWidget(about);
+        m_list = new ExtraList(this);
+        m_list->setObjectName(QStringLiteral("extraContentList"));
+        m_list->setAccessibleName(tr("Extra content"));
+        m_list->setSelectionMode(QAbstractItemView::ExtendedSelection);
+        m_list->setIconSize(QSize(48, 48));
+        m_list->setWordWrap(true);
+        m_list->setDragEnabled(true);
+        m_list->setDragDropMode(QAbstractItemView::DragOnly);
+        v->addWidget(m_list, 1);
+        m_none = new QLabel(tr("Nothing is left over."), this);
+        v->addWidget(m_none);
+        auto *row = new QHBoxLayout();
+        m_place = new QPushButton(tr("Place on Page"), this);
+        m_discard = new QPushButton(tr("Discard"), this);
+        row->addWidget(m_place);
+        row->addWidget(m_discard);
+        v->addLayout(row);
+        connect(m_place, &QPushButton::clicked, this, &ExtraPane::place);
+        connect(m_discard, &QPushButton::clicked, this, &ExtraPane::discard);
+        connect(m_list, &QListWidget::itemDoubleClicked, this, &ExtraPane::place);
+        connect(m_list, &QListWidget::itemSelectionChanged, this, &ExtraPane::enable);
+        connect(win->editor(), &Editor::changed, this, &ExtraPane::refresh);
+        refresh();
+    }
+    Q_INVOKABLE void refresh()
+    {
+        const Document *d = m_win->editor()->doc();
+        QStringList keep;
+        for (const QListWidgetItem *it : m_list->selectedItems()) keep << it->data(Qt::UserRole).toString();
+        m_list->clear();
+        for (const ItemPtr &e : d->extra) {
+            QString text;
+            QIcon ic = icon("type");
+            if (e->type() == ItemType::Picture) {
+                const auto *pic = static_cast<const PictureItem *>(e.get());
+                text = pic->altText.isEmpty() ? tr("Picture") : pic->altText;
+                const QImage thumb = d->image(pic->imageId).scaled(96, 96, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                if (!thumb.isNull()) ic = QIcon(QPixmap::fromImage(thumb));
+            } else {
+                text = e->type() == ItemType::TextArt ? static_cast<const TextArtItem *>(e.get())->text
+                                                      : d->storyDoc(static_cast<const TextItem *>(e.get())->storyId)->toPlainText();
+                text = text.simplified();
+                if (text.size() > 120) text = text.left(120) + QStringLiteral("…");
+            }
+            auto *row = new QListWidgetItem(ic, text);
+            row->setData(Qt::UserRole, e->id);
+            m_list->addItem(row);
+            if (keep.contains(e->id)) row->setSelected(true);
+        }
+        m_none->setVisible(m_list->count() == 0);
+        enable();
+    }
+
+private:
+    QStringList chosen() const
+    {
+        QStringList ids;
+        for (const QListWidgetItem *it : m_list->selectedItems()) ids << it->data(Qt::UserRole).toString();
+        return ids;
+    }
+    void enable()
+    {
+        m_place->setEnabled(!m_list->selectedItems().isEmpty());
+        m_discard->setEnabled(!m_list->selectedItems().isEmpty());
+    }
+    void place()
+    {
+        Editor *ed = m_win->editor();
+        const QStringList ids = chosen();
+        if (ids.isEmpty()) return;
+        ed->beginChange(tr("Place Extra Content"));
+        for (const QString &id : ids) ed->placeExtra(id);
+        ed->endChange();
+    }
+    void discard()
+    {
+        Editor *ed = m_win->editor();
+        const QStringList ids = chosen();
+        if (ids.isEmpty()) return;
+        ed->beginChange(tr("Discard Extra Content"));
+        for (const QString &id : ids) ed->discardExtra(id);
+        ed->endChange();
+    }
+    MainWindow *m_win;
+    QListWidget *m_list;
+    QLabel *m_none;
+    QPushButton *m_place, *m_discard;
+};
+
 QWidget *TaskPane::create(const QString &name)
 {
     if (name == "designchecker") return new DesignChecker(m_win);
@@ -898,6 +1018,7 @@ QWidget *TaskPane::create(const QString &name)
     if (name == "research") return new ResearchPane(m_win);
     if (name == "help") return new HelpView(m_win);
     if (name == "online") return new OnlinePicturesPane(m_win);
+    if (name == "extra") return new ExtraPane(m_win);
     return nullptr;
 }
 

@@ -38,10 +38,11 @@ A background belongs to a page. A background on a master page shows on every pag
 
 ## Change the template
 
-**Page Design > Template > Change Template** opens the **New** page of the File view, with the gallery of designs. Picking a design starts a new publication. It does not restyle the one you have open. To restyle an open publication, change its schemes and backgrounds.
+**Page Design > Template > Change Template** opens a gallery of designs. Pick one, and JeffPub moves the text and pictures of the publication you have open into that design. You can apply it to the open publication, or make a new publication and leave this one as it is. Your color scheme and font scheme change only if you pick others in the gallery. To restyle a publication without changing its design, change its schemes and backgrounds here instead. See [change a publication's template](change-template).
 
 ## Related
 
+- [Change a publication's template](change-template)
 - [Master pages, headers, and page numbers](master-pages)
 - [Start a new publication](create)
 - [Format text and paragraphs](formatting-text)

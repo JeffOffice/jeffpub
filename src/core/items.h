@@ -35,6 +35,9 @@ public:
 
     QString id = newId();
     QString name;
+    // What the box is for in a design (title, body, picture...): Change Template
+    // moves your content into the new design's box with the same role.
+    QString role;
     QString altText;
     QString hyperlink;
     QRectF rect{72, 72, 144, 72};

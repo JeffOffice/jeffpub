@@ -1274,6 +1274,19 @@ void insertTableDialog(QWidget *p, Editor *ed)
     ed->addItem(ed->newTable(QRectF((ps.width() - w) / 2, (ps.height() - h) / 2, w, h), rows->value(), cols->value(), fmt->currentData().toString()));
 }
 
+int changeTemplateDialog(QWidget *p)
+{
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Change Template"));
+    dlg.v->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "Where do you want the new design?"), &dlg.d));
+    auto *apply = new QRadioButton(QCoreApplication::translate("Dialogs", "Apply template to the current publication"), &dlg.d);
+    auto *another = new QRadioButton(QCoreApplication::translate("Dialogs", "Create a new publication with my text and graphics"), &dlg.d);
+    apply->setChecked(true);
+    dlg.v->addWidget(apply);
+    dlg.v->addWidget(another);
+    if (!dlg.exec()) return 0;
+    return another->isChecked() ? 2 : 1;
+}
+
 void insertPageDialog(QWidget *p, Editor *ed)
 {
     Dlg dlg(p, QCoreApplication::translate("Dialogs", "Insert Page"));

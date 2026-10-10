@@ -11,6 +11,7 @@
 #include "io/importers.h"
 #include "io/jpubfile.h"
 #include "render/renderer.h"
+#include "templates/changetemplate.h"
 #include "templates/templates.h"
 
 #include <QAction>
@@ -404,6 +405,7 @@ Backstage::Backstage(MainWindow *win) : QWidget(win), m_win(win)
     sv->addWidget(back);
 
     auto *group = new QButtonGroup(this);
+    m_navGroup = group;
     group->setExclusive(true);
     struct Entry { const char *key, *icon; QString label; };
     const QList<QPair<QString, QList<Entry>>> sections = {
@@ -441,7 +443,7 @@ Backstage::Backstage(MainWindow *win) : QWidget(win), m_win(win)
 
     m_stack = new QStackedWidget(this);
     h->addWidget(m_stack, 1);
-    for (const QString &key : {QStringLiteral("info"), QStringLiteral("new"), QStringLiteral("open"), QStringLiteral("print"),
+    for (const QString &key : {QStringLiteral("info"), QStringLiteral("new"), QStringLiteral("change"), QStringLiteral("open"), QStringLiteral("print"),
                                QStringLiteral("share"), QStringLiteral("export"), QStringLiteral("about")})
         m_index[key] = m_stack->addWidget(new QWidget());
     restyle();
@@ -478,6 +480,7 @@ void Backstage::rebuild(const QString &name)
     QWidget *w = nullptr;
     if (name == "info") w = buildInfo();
     else if (name == "new") w = buildNew();
+    else if (name == "change") w = buildNew(true);
     else if (name == "open") w = buildOpen();
     else if (name == "print") w = buildPrint();
     else if (name == "share") w = buildShare();
@@ -503,6 +506,11 @@ void Backstage::showPage(const QString &name)
     rebuild(name);
     m_stack->setCurrentIndex(m_index.value(name, 0));
     if (QAbstractButton *b = m_navItems.value(name)) b->setChecked(true);
+    else if (QAbstractButton *on = m_navGroup->checkedButton()) {   // a page with no item of its own: none is lit
+        m_navGroup->setExclusive(false);
+        on->setChecked(false);
+        m_navGroup->setExclusive(true);
+    }
 }
 
 // ---------------- Info ----------------
@@ -614,12 +622,18 @@ QWidget *Backstage::buildInfo()
 }
 
 // ---------------- New ----------------
-QWidget *Backstage::buildNew()
+QWidget *Backstage::buildNew(bool change)
 {
     auto *w = new QWidget();
     auto *v = new QVBoxLayout(w);
     v->setContentsMargins(40, 30, 40, 30);
-    v->addWidget(heading(tr("New Publication"), w));
+    v->addWidget(heading(change ? tr("Change Template") : tr("New Publication"), w));
+    if (change) {
+        auto *about = new QLabel(tr("Pick a design for this publication. Your text and pictures move into it."), w);
+        about->setWordWrap(true);
+        v->addWidget(about);
+        v->addSpacing(6);
+    }
     auto *search = new QLineEdit(w);
     search->setPlaceholderText(tr("Search templates"));
     search->setClearButtonEnabled(true);
@@ -651,7 +665,7 @@ QWidget *Backstage::buildNew()
             for (const auto &t : templates()) n += t.category == c;
             add(c, QStringLiteral("%1  (%2)").arg(c).arg(n));
         }
-        add(QStringLiteral("Blank Sizes"), tr("Blank Sizes"));
+        if (!change) add(QStringLiteral("Blank Sizes"), tr("Blank Sizes"));
         add(QStringLiteral("My Templates"), tr("My Templates"));
         QFont cf = cats->font();
         cf.setPointSizeF(cf.pointSizeF() * 1.05);
@@ -725,10 +739,10 @@ QWidget *Backstage::buildNew()
     form->setRowWrapPolicy(QFormLayout::WrapAllRows);
     form->setVerticalSpacing(6);
     auto *scheme = new QComboBox(panel);
-    scheme->addItem(tr("(template default)"));
+    scheme->addItem(change ? tr("(keep current)") : tr("(template default)"));
     for (const auto &s : builtinColorSchemes()) scheme->addItem(s.name);
     auto *fonts = new QComboBox(panel);
-    fonts->addItem(tr("(template default)"));
+    fonts->addItem(change ? tr("(keep current)") : tr("(template default)"));
     for (const auto &s : builtinFontSchemes()) fonts->addItem(s.name);
     auto *bizBox = new QComboBox(panel);
     for (const auto &b : m_win->editor()->doc()->biz) bizBox->addItem(b.setName);
@@ -745,7 +759,7 @@ QWidget *Backstage::buildNew()
     optAddr->setChecked(true);
     form->addRow(optLogo);
     form->addRow(optAddr);
-    auto *create = new QPushButton(tr("Create"), panel);
+    auto *create = new QPushButton(change ? tr("Change Template") : tr("Create"), panel);
     create->setProperty("primary", true);
     create->setDefault(true);
     create->setMinimumHeight(38);
@@ -777,7 +791,7 @@ QWidget *Backstage::buildNew()
             o.logoBytes = img->bytes;
             o.logoFormat = img->format;
         }
-        return o;
+        return change ? optionsForChange(*cur, o) : o;
     };
     const qreal dpr = devicePixelRatioF();
     auto thumbFor = [dpr](Document &doc) {
@@ -806,7 +820,13 @@ QWidget *Backstage::buildNew()
         return QIcon(thumbFor(*blank));
     }();
     auto optionsKey = [](const TemplateOptions &o) {
-        return o.colorScheme + QLatin1Char('|') + o.fontScheme + QLatin1Char('|') +
+        QString kept;   // a publication's own schemes, when the gallery keeps them
+        if (o.colors) {
+            kept = o.colors->name;
+            for (int i = 0; i < SlotCount; ++i) kept += o.colors->c[i].name();
+        }
+        if (o.fonts) kept += o.fonts->name + o.fonts->heading + o.fonts->body;
+        return kept + QLatin1Char('|') + o.colorScheme + QLatin1Char('|') + o.fontScheme + QLatin1Char('|') +
                QString::fromUtf8(QJsonDocument(o.business.toJson()).toJson(QJsonDocument::Compact)) + QLatin1Char('|') +
                QString::fromUtf8(QJsonDocument(o.options).toJson(QJsonDocument::Compact)) + QLatin1Char('|') +
                QString::fromLatin1(QCryptographicHash::hash(o.logoBytes, QCryptographicHash::Md5).toHex());
@@ -861,7 +881,7 @@ QWidget *Backstage::buildNew()
             }
             return;
         }
-        if (cat == "Featured" && q.isEmpty()) {
+        if (cat == "Featured" && q.isEmpty() && !change) {
             auto *it = new QListWidgetItem(placeholder, tr("Blank 8.5 × 11\""));
             it->setData(Qt::UserRole, "blank:Letter");
             list->addItem(it);
@@ -974,12 +994,15 @@ QWidget *Backstage::buildNew()
             }
             return;
         }
-        if (!m_win->maybeSave()) return;
+        if (!change && !m_win->maybeSave()) return;
         auto doc = build(key);
-        if (doc) {
-            if (key.startsWith("tpl:")) doc->templateId = key.mid(4);
+        if (!doc) return;
+        if (key.startsWith("tpl:")) doc->templateId = key.mid(4);
+        if (!change) {
             m_win->newPublication(std::move(doc));
+            return;
         }
+        if (const int where = changeTemplateDialog(this)) m_win->changeTemplate(std::move(doc), where == 2);
     };
     connect(create, &QPushButton::clicked, this, doCreate);
     connect(list, &QListWidget::itemDoubleClicked, this, [doCreate] { doCreate(); });

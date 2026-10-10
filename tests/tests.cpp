@@ -2058,6 +2058,379 @@ private Q_SLOTS:
         QCOMPARE(mergeBlocks(*pc->build(jp::TemplateOptions())), 1);
     }
 
+    // Page Design > Change Template applies another design to the open
+    // publication: each story goes into the new design's box of the same
+    // role, the pictures replace its placeholder pictures in reading order,
+    // and what has no place waits in Extra Content. One undo step undoes it.
+    void changeTemplate()
+    {
+        auto png = [](const QColor &c) {
+            QImage im(60, 40, QImage::Format_RGB32);
+            im.fill(c);
+            QByteArray bytes;
+            QBuffer buf(&bytes);
+            buf.open(QIODevice::WriteOnly);
+            im.save(&buf, "PNG");
+            return bytes;
+        };
+        auto textOf = [](const jp::Document &d, const jp::Item *it) {
+            if (it->type() == jp::ItemType::TextArt) return static_cast<const jp::TextArtItem *>(it)->text;
+            return d.storyDoc(static_cast<const jp::TextItem *>(it)->storyId)->toPlainText();
+        };
+        // The boxes, TextArt, and pictures of a role, in the order they were made.
+        auto withRole = [](const jp::Document &d, const QString &role) {
+            QVector<jp::Item *> out;
+            for (const auto &pg : d.pages)
+                for (const auto &it : pg->items)
+                    if (it->role == role) out << it.get();
+            return out;
+        };
+        auto typeOver = [](jp::Document &d, jp::Item *it, const QString &text) {
+            QTextCursor c(d.storyDoc(static_cast<jp::TextItem *>(it)->storyId));
+            c.select(QTextCursor::Document);
+            c.insertText(text);
+        };
+        auto noImages = [](QJsonObject o) {   // pictures stay in the file after an undo, like any edit's
+            o.remove(QStringLiteral("images"));
+            return o;
+        };
+
+        // Every built-in design tags its text boxes, TextArt, and pictures.
+        for (const jp::TemplateInfo &t : jp::templates()) {
+            auto built = t.build(jp::TemplateOptions());
+            for (const auto &pg : built->pages)
+                for (const auto &it : pg->items)
+                    if (it->type() == jp::ItemType::Text || it->type() == jp::ItemType::TextArt || it->type() == jp::ItemType::Picture)
+                        QVERIFY2(!it->role.isEmpty(), qPrintable(t.id));
+        }
+
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        jp::Editor *ed = w.editor();
+        auto first = jp::findTemplate(QStringLiteral("flyer-announce"))->build(jp::TemplateOptions());
+        first->templateId = QStringLiteral("flyer-announce");
+        ed->setDocument(std::move(first));
+        jp::Document *d = ed->doc();
+        const QString scheme = d->colors.name, fonts = d->fonts.name;
+        // Typed over: the headline and the story. Added: a date, a note, and
+        // a second picture. The footer stays as the design made it.
+        typeOver(*d, withRole(*d, QStringLiteral("title")).first(), QStringLiteral("Grand Opening Weekend"));
+        typeOver(*d, withRole(*d, QStringLiteral("body")).first(), QStringLiteral("Tulips bloom along the whole river walk."));
+        ed->addItem(ed->newTextBox(QRectF(72, 700, 200, 24), QStringLiteral("Friday, March 13")));
+        ed->addItem(ed->newTextBox(QRectF(72, 730, 200, 24), QStringLiteral("Bring a lawn chair")));
+        static_cast<jp::PictureItem *>(withRole(*d, QStringLiteral("picture")).first())->imageId = d->addImage(png(Qt::red), "png");
+        auto blue = std::make_shared<jp::PictureItem>();
+        blue->rect = QRectF(400, 40, 120, 80);
+        blue->imageId = d->addImage(png(Qt::blue), "png");
+        blue->imgRect = QRectF(QPointF(), blue->rect.size());
+        ed->addItem(blue);
+
+        const jp::TemplateInfo *event = jp::findTemplate(QStringLiteral("flyer-event"));
+        auto reference = event->build(jp::optionsForChange(*d, jp::TemplateOptions()));
+        auto refBox = [&](const QString &role) {
+            const auto found = withRole(*reference, role);
+            return found.size() == 1 ? found.first() : nullptr;
+        };
+        QVERIFY(refBox(QStringLiteral("title")) && refBox(QStringLiteral("body")) && refBox(QStringLiteral("date")) && refBox(QStringLiteral("picture")));
+
+        const QJsonObject before = d->toJson();
+        auto design = event->build(jp::optionsForChange(*d, jp::TemplateOptions()));
+        design->templateId = event->id;
+        const int steps = ed->undoStack()->count();
+        jp::ChangeReport rep;
+        ed->applyTemplate(std::move(design), &rep);
+        QCOMPARE(ed->undoStack()->count(), steps + 1);
+        d = ed->doc();
+        QCOMPARE(d->templateId, event->id);
+        QCOMPARE(d->colors.name, scheme);   // only the gallery's choices replace the schemes
+        QCOMPARE(d->fonts.name, fonts);
+        // The headline went into the new design's TextArt title, the story and the date
+        // into their boxes, and the red picture into the placeholder.
+        const auto title = withRole(*d, QStringLiteral("title"));
+        QCOMPARE(title.size(), 1);
+        QCOMPARE(title.first()->type(), jp::ItemType::TextArt);
+        QCOMPARE(textOf(*d, title.first()), QStringLiteral("Grand Opening Weekend"));
+        QCOMPARE(title.first()->rect, refBox(QStringLiteral("title"))->rect);
+        const auto body = withRole(*d, QStringLiteral("body"));
+        QCOMPARE(body.size(), 1);
+        QCOMPARE(textOf(*d, body.first()), QStringLiteral("Tulips bloom along the whole river walk."));
+        QCOMPARE(body.first()->rect, refBox(QStringLiteral("body"))->rect);
+        QCOMPARE(static_cast<jp::TextItem *>(body.first())->columns, 2);   // the new design's box
+        const auto date = withRole(*d, QStringLiteral("date"));
+        QCOMPARE(date.size(), 1);
+        QCOMPARE(textOf(*d, date.first()), QStringLiteral("Friday, March 13"));
+        QCOMPARE(date.first()->rect, refBox(QStringLiteral("date"))->rect);
+        // Text the design keeps is its own: nothing of the old footer came across.
+        const auto footers = withRole(*d, QStringLiteral("address"));
+        QCOMPARE(footers.size(), withRole(*reference, QStringLiteral("address")).size());
+        QCOMPARE(textOf(*d, footers.first()), textOf(*reference, withRole(*reference, QStringLiteral("address")).first()));
+        const auto pics = withRole(*d, QStringLiteral("picture"));
+        QCOMPARE(pics.size(), 1);
+        auto *placed = static_cast<jp::PictureItem *>(pics.first());
+        QCOMPARE(placed->rect, refBox(QStringLiteral("picture"))->rect);
+        QCOMPARE(d->image(placed->imageId).pixelColor(30, 20), QColor(Qt::red));
+        // The note and the second picture have no place: they are in Extra Content.
+        QCOMPARE(rep.stories, 3);
+        QCOMPARE(rep.pictures, 1);
+        QCOMPARE(rep.extraStories, 1);
+        QCOMPARE(rep.extraPictures, 1);
+        QCOMPARE(int(d->extra.size()), 2);
+        QCOMPARE(d->extra[0]->type(), jp::ItemType::Text);
+        QCOMPARE(textOf(*d, d->extra[0].get()), QStringLiteral("Bring a lawn chair"));
+        QCOMPARE(d->extra[1]->type(), jp::ItemType::Picture);
+        QCOMPARE(d->image(static_cast<jp::PictureItem *>(d->extra[1].get())->imageId).pixelColor(30, 20), QColor(Qt::blue));
+        // They stay with the publication when it is saved and opened again.
+        {
+            QString err;
+            auto back = jp::publicationFromBytes(jp::publicationBytes(*d, QImage()), &err);
+            QVERIFY2(back, qPrintable(err));
+            QCOMPARE(int(back->extra.size()), 2);
+            QCOMPARE(textOf(*back, back->extra[0].get()), QStringLiteral("Bring a lawn chair"));
+            QCOMPARE(back->image(static_cast<jp::PictureItem *>(back->extra[1].get())->imageId).pixelColor(30, 20), QColor(Qt::blue));
+        }
+
+        // One undo step brings the first design back, and redo applies it again.
+        ed->undo();
+        QCOMPARE(noImages(ed->doc()->toJson()), noImages(before));
+        QVERIFY(ed->doc()->extra.empty());
+        ed->redo();
+        QCOMPARE(int(ed->doc()->extra.size()), 2);
+        d = ed->doc();
+
+        // Extra Content: the pane lists what is left, each can be placed on the page or discarded.
+        QTRY_VERIFY(w.act(QStringLiteral("pd.extraContent"))->isEnabled());   // the window updates its commands soon after a change
+        w.showTaskPane(QStringLiteral("extra"));
+        QCOMPARE(w.currentTaskPane(), QStringLiteral("extra"));
+        auto *pane = w.findChild<jp::TaskPane *>();
+        QVERIFY(pane);
+        auto *list = pane->findChild<QListWidget *>(QStringLiteral("extraContentList"));
+        QVERIFY(list);
+        QCOMPARE(list->count(), 2);
+        auto button = [&](const QString &text) -> QPushButton * {
+            for (QPushButton *b : pane->findChildren<QPushButton *>())
+                if (b->text() == text) return b;
+            return nullptr;
+        };
+        QVERIFY(button(QStringLiteral("Place on Page")) && button(QStringLiteral("Discard")));
+        {   // What a drag from the list carries: the ids of the items.
+            std::unique_ptr<QMimeData> drag(list->model()->mimeData({list->model()->index(1, 0)}));
+            QVERIFY(drag && drag->hasFormat(QString::fromLatin1(jp::kExtraContentMime)));
+            QCOMPARE(QString::fromUtf8(drag->data(QString::fromLatin1(jp::kExtraContentMime))), d->extra[1]->id);
+        }
+        const int onPage = int(d->pages[ed->currentPage()]->items.size());
+        list->setCurrentRow(1);   // the blue picture
+        button(QStringLiteral("Place on Page"))->click();
+        QCOMPARE(list->count(), 1);
+        QCOMPARE(int(d->extra.size()), 1);
+        QCOMPARE(int(d->pages[ed->currentPage()]->items.size()), onPage + 1);
+        auto *landed = dynamic_cast<jp::PictureItem *>(d->pages[ed->currentPage()]->items.back().get());
+        QVERIFY(landed);
+        QCOMPARE(d->image(landed->imageId).pixelColor(30, 20), QColor(Qt::blue));
+        QVERIFY(QRectF(QPointF(0, 0), d->pageSize()).contains(landed->rect));
+        // A story placed becomes a text box big enough for its text.
+        ed->placeExtra(d->extra[0]->id, QPointF(100, 600));
+        auto *note = dynamic_cast<jp::TextItem *>(d->pages[ed->currentPage()]->items.back().get());
+        QVERIFY(note);
+        QCOMPARE(textOf(*d, note), QStringLiteral("Bring a lawn chair"));
+        QCOMPARE(note->rect.topLeft(), QPointF(100, 600));
+        QVERIFY(d->extra.empty());
+        QCOMPARE(list->count(), 0);
+        ed->undo();   // back in Extra Content
+        QCOMPARE(int(d->extra.size()), 1);
+        // Dragged from the pane onto the page, it lands where it is dropped.
+        QMimeData dragged;
+        dragged.setData(QString::fromLatin1(jp::kExtraContentMime), d->extra[0]->id.toUtf8());
+        QDragEnterEvent enter(QPoint(300, 300), Qt::CopyAction, &dragged, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(w.canvas()->viewport(), &enter);
+        QVERIFY(enter.isAccepted());
+        QDropEvent drop(QPointF(300, 300), Qt::CopyAction, &dragged, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(w.canvas()->viewport(), &drop);
+        QVERIFY(d->extra.empty());
+        auto *dropped = dynamic_cast<jp::TextItem *>(d->pages[ed->currentPage()]->items.back().get());
+        QVERIFY(dropped);
+        QCOMPARE(dropped->rect.topLeft(), w.canvas()->toPage(QPointF(300, 300)));
+        ed->undo();
+        QCOMPARE(int(d->extra.size()), 1);
+        ed->discardExtra(d->extra[0]->id);
+        QVERIFY(d->extra.empty());
+        QTRY_VERIFY(!w.act(QStringLiteral("pd.extraContent"))->isEnabled());
+        ed->undo();
+        QCOMPARE(int(d->extra.size()), 1);
+
+        // "Create a new publication": the gallery's color scheme applies, the new
+        // design's page size, and this publication stays as it is.
+        const QJsonObject mid = noImages(d->toJson());
+        const jp::TemplateInfo *invite = jp::findTemplate(QStringLiteral("invitation-evening"));
+        jp::TemplateOptions pick;
+        pick.colorScheme = QStringLiteral("Cherry");
+        auto second = invite->build(jp::optionsForChange(*d, pick));
+        second->templateId = invite->id;
+        jp::MainWindow *other = w.changeTemplate(std::move(second), true);
+        QVERIFY(other && other != &w);
+        QCOMPARE(noImages(ed->doc()->toJson()), mid);
+        const jp::Document *nd = other->editor()->doc();
+        QCOMPARE(nd->pageSize(), QSizeF(5 * 72, 7 * 72));
+        QCOMPARE(nd->colors.name, QStringLiteral("Cherry"));
+        QCOMPARE(nd->fonts.name, fonts);
+        QCOMPARE(nd->templateId, invite->id);
+        const auto headline = withRole(*nd, QStringLiteral("title"));   // TextArt text into a text box
+        QCOMPARE(headline.size(), 1);
+        QCOMPARE(headline.first()->type(), jp::ItemType::Text);
+        QCOMPARE(textOf(*nd, headline.first()), QStringLiteral("Grand Opening Weekend"));
+        QVERIFY(!nd->extra.empty());   // the story and the note have no box in an invitation
+        delete other;
+
+        // Pictures take placeholders in reading order, page by page, top to
+        // bottom, left to right; stories of one role take the boxes the same way.
+        ed->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        d = ed->doc();
+        auto addPicture = [&](const QColor &c, const QRectF &r) {
+            auto p = std::make_shared<jp::PictureItem>();
+            p->rect = r;
+            p->imageId = d->addImage(png(c), "png");
+            p->imgRect = QRectF(QPointF(), r.size());
+            ed->addItem(p);
+        };
+        addPicture(Qt::red, QRectF(300, 100, 120, 80));
+        addPicture(Qt::green, QRectF(50, 104, 120, 80));   // in red's row, to its left
+        addPicture(Qt::blue, QRectF(50, 400, 120, 80));
+        ed->addItem(ed->newTextBox(QRectF(50, 600, 300, 60), QStringLiteral("Lower story, written first, long enough to count as running text.")));
+        ed->addItem(ed->newTextBox(QRectF(50, 300, 300, 60), QStringLiteral("Upper story, written second, long enough to count as running text.")));
+        auto catalog = jp::findTemplate(QStringLiteral("catalog-fall"))->build(jp::optionsForChange(*d, jp::TemplateOptions()));
+        ed->applyTemplate(std::move(catalog));
+        d = ed->doc();
+        auto reading = [&](int page, jp::ItemType type) {
+            QVector<jp::Item *> out;
+            for (const auto &it : d->pages[page]->items)
+                if (it->type() == type && it->role != QLatin1String("logo")) out << it.get();
+            std::stable_sort(out.begin(), out.end(), [](const jp::Item *a, const jp::Item *b) {
+                return a->rect.top() != b->rect.top() ? a->rect.top() < b->rect.top() : a->rect.left() < b->rect.left();
+            });
+            return out;
+        };
+        auto colorOf = [&](const jp::Item *it) { return d->image(static_cast<const jp::PictureItem *>(it)->imageId).pixelColor(30, 20); };
+        QCOMPARE(colorOf(reading(0, jp::ItemType::Picture).first()), QColor(Qt::green));
+        const auto grid = reading(1, jp::ItemType::Picture);
+        QCOMPARE(colorOf(grid[0]), QColor(Qt::red));
+        QCOMPARE(colorOf(grid[1]), QColor(Qt::blue));
+        QVERIFY(colorOf(grid[2]) != QColor(Qt::blue) && colorOf(grid[2]) != QColor(Qt::red));   // the design's own picture
+        const auto boxes = reading(1, jp::ItemType::Text);
+        QVERIFY(textOf(*d, boxes[0]).startsWith(QLatin1String("Upper story")));
+        QVERIFY(textOf(*d, boxes[1]).startsWith(QLatin1String("Lower story")));
+        QVERIFY(d->extra.empty());
+    }
+
+    // The gallery Change Template opens is the New page's, in a mode of its
+    // own: its title and button say so, it offers designs and no blank
+    // sizes, its schemes default to the publication's own, and choosing a
+    // design asks whether to apply it here or to make a new publication.
+    void changeTemplateGallery()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        jp::Editor *ed = w.editor();
+        auto first = jp::findTemplate(QStringLiteral("flyer-announce"))->build(jp::TemplateOptions());
+        first->templateId = QStringLiteral("flyer-announce");
+        ed->setDocument(std::move(first));
+        for (const auto &it : ed->doc()->pages[0]->items)
+            if (it->role == QLatin1String("body")) {
+                QTextCursor c(ed->doc()->storyDoc(static_cast<jp::TextItem *>(it.get())->storyId));
+                c.select(QTextCursor::Document);
+                c.insertText(QStringLiteral("Tulips bloom along the whole river walk."));
+            }
+        auto gallery = [&]() -> QWidget * {
+            for (QWidget *c : w.findChildren<QWidget *>())
+                if (c->inherits("jp::Backstage")) return c;
+            return nullptr;
+        };
+        // What shows: the File view keeps its other pages, hidden.
+        auto label = [](QWidget *in, const QString &text) {
+            for (QLabel *l : in->findChildren<QLabel *>())
+                if (l->isVisible() && l->text() == text) return true;
+            return false;
+        };
+        auto button = [](QWidget *in, const QString &text) -> QAbstractButton * {
+            for (QAbstractButton *b : in->findChildren<QAbstractButton *>())
+                if (b->isVisible() && b->text() == text) return b;
+            return nullptr;
+        };
+        // The New page is as it was.
+        w.act(QStringLiteral("file.new"))->trigger();
+        QVERIFY(gallery() && gallery()->isVisible());
+        QVERIFY(label(gallery(), QStringLiteral("New Publication")));
+        QVERIFY(button(gallery(), QStringLiteral("Create")));
+        bool blankSizes = false;
+        for (QListWidget *l : gallery()->findChildren<QListWidget *>())
+            for (int i = 0; i < l->count(); ++i) blankSizes |= l->isVisible() && l->item(i)->text() == QLatin1String("Blank Sizes");
+        QVERIFY(blankSizes);
+        w.hideBackstage();
+
+        w.act(QStringLiteral("pd.changeTemplate"))->trigger();
+        QVERIFY(gallery()->isVisible());
+        QVERIFY(label(gallery(), QStringLiteral("Change Template")));
+        QVERIFY(!label(gallery(), QStringLiteral("New Publication")));
+        QAbstractButton *go = button(gallery(), QStringLiteral("Change Template"));
+        QVERIFY(go && !button(gallery(), QStringLiteral("Create")));
+        QListWidget *designs = nullptr;
+        blankSizes = false;
+        for (QListWidget *l : gallery()->findChildren<QListWidget *>()) {
+            if (!l->isVisible()) continue;
+            if (l->count() && l->item(0)->data(Qt::UserRole).toString().startsWith(QLatin1String("tpl:"))) designs = l;
+            for (int i = 0; i < l->count(); ++i) blankSizes |= l->item(i)->text() == QLatin1String("Blank Sizes");
+        }
+        QVERIFY(designs && !blankSizes);
+        int keeping = 0;
+        for (QComboBox *c : gallery()->findChildren<QComboBox *>()) keeping += c->isVisible() && c->itemText(0) == QLatin1String("(keep current)");
+        QCOMPARE(keeping, 2);   // the color scheme and the font scheme
+        for (int i = 0; i < designs->count(); ++i)
+            if (designs->item(i)->data(Qt::UserRole).toString() == QLatin1String("tpl:flyer-event")) designs->setCurrentRow(i);
+        QCOMPARE(designs->currentItem()->data(Qt::UserRole).toString(), QStringLiteral("tpl:flyer-event"));
+        // The dialog gives the two ways; answer it the way it starts, applying here.
+        QStringList choices;
+        QTimer answer;
+        answer.setInterval(20);
+        connect(&answer, &QTimer::timeout, &answer, [&] {
+            auto *dlg = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            if (!dlg) return;
+            for (QAbstractButton *b : dlg->findChildren<QAbstractButton *>())
+                if (b->inherits("QRadioButton")) choices << b->text() + (b->isChecked() ? QStringLiteral(" (chosen)") : QString());
+            answer.stop();
+            dlg->accept();
+        });
+        answer.start();
+        const int steps = ed->undoStack()->count();
+        go->click();
+        answer.stop();
+        QCOMPARE(choices, (QStringList{QStringLiteral("Apply template to the current publication (chosen)"),
+                                       QStringLiteral("Create a new publication with my text and graphics")}));
+        QCOMPARE(ed->doc()->templateId, QStringLiteral("flyer-event"));
+        QCOMPARE(ed->undoStack()->count(), steps + 1);
+        QVERIFY(!gallery()->isVisible());
+        bool landed = false;
+        for (const auto &it : ed->doc()->pages[0]->items)
+            if (it->type() == jp::ItemType::Text && ed->doc()->storyDoc(static_cast<jp::TextItem *>(it.get())->storyId)->toPlainText() == QLatin1String("Tulips bloom along the whole river walk."))
+                landed = it->role == QLatin1String("body");
+        QVERIFY(landed);
+        // Cancelling the question changes nothing.
+        w.act(QStringLiteral("pd.changeTemplate"))->trigger();
+        go = button(gallery(), QStringLiteral("Change Template"));
+        QTimer cancel;
+        cancel.setInterval(20);
+        connect(&cancel, &QTimer::timeout, &cancel, [&] {
+            if (auto *dlg = qobject_cast<QDialog *>(QApplication::activeModalWidget())) {
+                cancel.stop();
+                dlg->reject();
+            }
+        });
+        cancel.start();
+        go->click();
+        cancel.stop();
+        QCOMPARE(ed->undoStack()->count(), steps + 1);
+        QVERIFY(gallery()->isVisible());   // still choosing
+    }
+
     // Typing: AutoCorrect fixes a word when it ends, capitalizes sentences,
     // and smart quotes curl; each can be turned off in Options.
     void typingAutoCorrect()

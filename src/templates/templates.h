@@ -5,12 +5,17 @@
 
 #include <QJsonObject>
 #include <functional>
+#include <optional>
 
 namespace jp {
 
 struct TemplateOptions {
     QString colorScheme;
     QString fontScheme;
+    // Schemes to use as they are, in place of the named ones (Change Template
+    // keeps the open publication's own).
+    std::optional<ColorScheme> colors;
+    std::optional<FontScheme> fonts;
     BusinessInfo business;
     QJsonObject options;        // "logo" (default off), "address" (default on)
     QByteArray logoBytes;       // the business logo's picture, when it has one

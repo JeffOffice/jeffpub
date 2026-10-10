@@ -49,6 +49,9 @@ QByteArray publicationBytes(const Document &doc, const QImage &thumbnail, const 
         if (it->type() == ItemType::Picture) used.insert(static_cast<PictureItem *>(it)->imageId);
         if (!it->fill.imageId.isEmpty()) used.insert(it->fill.imageId);
     });
+    walkItems(doc.extra, [&](const ItemPtr &it) {
+        if (it->type() == ItemType::Picture) used.insert(static_cast<PictureItem *>(it.get())->imageId);
+    });
     for (const auto &p : doc.pages) used.insert(p->background.imageId);
     for (const auto &m : doc.masters) used.insert(m->background.imageId);
     for (const auto &b : doc.biz) used.insert(b.logoImageId);

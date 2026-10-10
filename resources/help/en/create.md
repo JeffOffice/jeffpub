@@ -43,6 +43,7 @@ Turn a finished publication into a template you can use again. Click **File > Ex
 
 ## Related
 
+- [Change a publication's template](change-template)
 - [Open and save publications](open-save)
 - [Page size, margins, and layout](page-setup)
 - [Color and font schemes](color-schemes)

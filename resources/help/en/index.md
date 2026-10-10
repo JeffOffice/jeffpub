@@ -38,6 +38,7 @@ Type in the search box above to find a topic, or a command to run. Press **F1** 
 
 - [Page size, margins, and layout](page-setup)
 - [Color and font schemes](color-schemes)
+- [Change a publication's template](change-template)
 - [Master pages, headers, and page numbers](master-pages)
 - [Add, move, and delete pages](pages)
 - [Rulers, guides, and snapping](guides)

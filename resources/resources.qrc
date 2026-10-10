@@ -1553,6 +1553,7 @@
     <file alias="context.json">help/context.json</file>
     <file alias="en/accessibility.md">help/en/accessibility.md</file>
     <file alias="en/arrange.md">help/en/arrange.md</file>
+    <file alias="en/change-template.md">help/en/change-template.md</file>
     <file alias="en/color-schemes.md">help/en/color-schemes.md</file>
     <file alias="en/create.md">help/en/create.md</file>
     <file alias="en/design-checker.md">help/en/design-checker.md</file>

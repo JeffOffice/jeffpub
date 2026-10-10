@@ -1438,6 +1438,76 @@ void Editor::paste(bool textOnly)
     }
 }
 
+// ---------- Change Template ----------
+void Editor::applyTemplate(std::unique_ptr<Document> design, ChangeReport *report)
+{
+    endTextEdit();
+    std::unique_ptr<Document> made = applyDesign(*m_doc, std::move(design), report);
+    beginChange(tr("Change Template"));
+    m_doc->images = std::move(made->images);
+    m_doc->fromJson(made->toJson());
+    m_cache.clear();
+    m_page = 0;
+    m_master.clear();
+    m_sel.clear();
+    endChange();
+    Q_EMIT pageChanged();
+    Q_EMIT selectionChanged();
+}
+
+QString Editor::placeExtra(const QString &id, const std::optional<QPointF> &at)
+{
+    const auto found = std::find_if(m_doc->extra.begin(), m_doc->extra.end(), [&](const ItemPtr &it) { return it->id == id; });
+    if (found == m_doc->extra.end()) return QString();
+    endTextEdit();
+    beginChange(tr("Place Extra Content"));
+    const ItemPtr it = *found;
+    m_doc->extra.erase(found);
+    // As wide as it was, but no wider than the text area; a picture no longer than four inches.
+    const QSizeF page = surfaceSize();
+    const QRectF area = QRectF(QPointF(0, 0), page).marginsRemoved(m_doc->setup.margins);
+    QSizeF size = it->rect.size();
+    double k = std::min(1.0, area.width() / std::max(1.0, size.width()));
+    if (it->type() == ItemType::Picture) k = std::min({k, 288.0 / std::max(1.0, std::max(size.width(), size.height())), area.height() / std::max(1.0, size.height())});
+    size *= k;
+    QPointF topLeft;
+    if (at) {
+        topLeft = *at;
+    } else {
+        // Near the middle, and clear of what an earlier one placed there.
+        topLeft = QPointF((page.width() - size.width()) / 2, (page.height() - size.height()) / 2);
+        for (bool taken = true; taken && topLeft.x() + size.width() + 18 < page.width() && topLeft.y() + size.height() + 18 < page.height();) {
+            taken = false;
+            for (const auto &other : surfaceItems())
+                if (std::abs(other->rect.left() - topLeft.x()) < 1 && std::abs(other->rect.top() - topLeft.y()) < 1) taken = true;
+            if (taken) topLeft += QPointF(18, 18);
+        }
+    }
+    it->scaleInto(it->rect, QRectF(topLeft, size));
+    surfaceItems().push_back(it);
+    if (it->type() == ItemType::Text) {
+        auto *t = static_cast<TextItem *>(it.get());
+        t->autofit = TextItem::GrowBox;
+        autoGrowText(t);
+    }
+    m_sel = QStringList{it->id};
+    endChange();
+    Q_EMIT selectionChanged();
+    return it->id;
+}
+
+void Editor::discardExtra(const QString &id)
+{
+    const auto found = std::find_if(m_doc->extra.begin(), m_doc->extra.end(), [&](const ItemPtr &it) { return it->id == id; });
+    if (found == m_doc->extra.end()) return;
+    beginChange(tr("Discard Extra Content"));
+    m_doc->extra.erase(found);
+    const QSet<QString> used = m_doc->storiesInUse();
+    for (const auto &sid : m_doc->stories.keys())
+        if (!used.contains(sid)) m_doc->removeStory(sid);
+    endChange();
+}
+
 // ---------- pages ----------
 int Editor::insertPages(int after, int count, bool duplicate, bool oneTextBox, const QString &masterId)
 {

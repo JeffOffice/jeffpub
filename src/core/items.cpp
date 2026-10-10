@@ -103,7 +103,7 @@ void Item::rotateAround(double deg, const QPointF &c)
 void Item::copyBase(const Item &o)
 {
     id = newId();
-    name = o.name; altText = o.altText; hyperlink = o.hyperlink;
+    name = o.name; role = o.role; altText = o.altText; hyperlink = o.hyperlink;
     rect = o.rect; rotation = o.rotation; flipH = o.flipH; flipV = o.flipV; locked = o.locked;
     fill = o.fill; stroke = o.stroke; fx = o.fx; wrap = o.wrap;
 }
@@ -114,6 +114,7 @@ QJsonObject Item::toJson() const
     o["type"] = QString::fromLatin1(kTypeKeys[int(type())]);
     o["id"] = id;
     if (!name.isEmpty()) o["name"] = name;
+    if (!role.isEmpty()) o["role"] = role;
     if (!altText.isEmpty()) o["alt"] = altText;
     if (!hyperlink.isEmpty()) o["link"] = hyperlink;
     o["rect"] = rectJson(rect);
@@ -132,6 +133,7 @@ void Item::fromJson(const QJsonObject &o)
 {
     id = o["id"].toString(id);
     name = o["name"].toString();
+    role = o["role"].toString();
     altText = o["alt"].toString();
     hyperlink = o["link"].toString();
     rect = rectFrom(o["rect"]);

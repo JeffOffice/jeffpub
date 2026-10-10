@@ -148,7 +148,8 @@
     ]},
     {"name": "Page Design", "keytip": "P", "groups": [
       {"name": "Template", "keytip": "ZT", "items": [
-        {"large": "pd.changeTemplate", "keytip": "CT"}
+        {"large": "pd.changeTemplate", "keytip": "CT"},
+        {"small": "pd.extraContent", "keytip": "EC"}
       ]},
       {"name": "Page Setup", "keytip": "ZS", "launcher": "pageSetup", "launcherTip": "Page Setup", "launcherKeytip": "PU", "items": [
         {"large": {"id": "ribbon.pageMargins", "text": "Margins", "icon": "square-dashed-bottom"}, "keytip": "MG", "menu": [

@@ -54,6 +54,10 @@ void dateTimeDialog(QWidget *p, Editor *ed);
 void hyperlinkDialog(QWidget *p, Editor *ed);
 void bookmarkDialog(QWidget *p, Editor *ed);
 void businessInfoDialog(QWidget *p, Editor *ed);
+// Change Template, after a design is chosen: 1 to apply it to the current
+// publication, 2 to make a new publication with this one's text and graphics
+// in it, 0 when cancelled.
+int changeTemplateDialog(QWidget *p);
 void colorSchemeDialog(QWidget *p, Editor *ed);
 void fontSchemeDialog(QWidget *p, Editor *ed);
 bool fillEffectsDialog(QWidget *p, Editor *ed, Fill &fill, const QString &title = QString());

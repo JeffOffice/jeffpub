@@ -209,6 +209,9 @@ public:
     QVector<std::shared_ptr<MasterPage>> masters;
     QVector<std::shared_ptr<Page>> pages;
     ItemList scratch;
+    // Extra Content: the stories and pictures Change Template found no place
+    // for in the new design, until they are placed on a page or discarded.
+    ItemList extra;
     QMap<QString, std::shared_ptr<Story>> stories;
     QMap<QString, ImageData> images;
     ColorScheme colors;

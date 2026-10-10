@@ -1068,6 +1068,7 @@ void MainWindow::refreshUi()
     act("edit.redo")->setEnabled(ed->undoStack()->canRedo());
     act("edit.undo")->setToolTip(tr("Undo %1 (Ctrl+Z)").arg(ed->undoStack()->undoText()));
     act("edit.redo")->setToolTip(tr("Redo %1 (Ctrl+Y)").arg(ed->undoStack()->redoText()));
+    act("pd.extraContent")->setEnabled(!d->extra.empty());
     for (const char *id : {"edit.cut", "edit.copy", "edit.duplicate", "edit.delete"}) act(id)->setEnabled(sel || (editing && ed->cursor().hasSelection()));
     for (const char *id : {"arr.front", "arr.forward", "arr.backward", "arr.back", "arr.rotR", "arr.rotL", "arr.flipH", "arr.flipV", "obj.format", "obj.lock"})
         act(id)->setEnabled(sel);

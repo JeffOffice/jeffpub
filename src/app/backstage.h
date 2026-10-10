@@ -7,6 +7,7 @@
 #include <QWidget>
 
 class QAbstractButton;
+class QButtonGroup;
 class QStackedWidget;
 
 class QFrame;
@@ -21,7 +22,7 @@ class Backstage : public QWidget {
 public:
     explicit Backstage(MainWindow *win);
     void showPage(const QString &name);
-    QString currentPage() const;   // "info", "new", "print"...
+    QString currentPage() const;   // "info", "new", "change", "print"...
 
 Q_SIGNALS:
     void closeRequested();
@@ -31,7 +32,9 @@ protected:
 
 private:
     QWidget *buildInfo();
-    QWidget *buildNew();
+    // The gallery of designs: for a new publication, or, with `change`, for
+    // Change Template (the open publication's text and pictures move into it).
+    QWidget *buildNew(bool change = false);
     QWidget *buildOpen();
     QWidget *buildPrint();
     QWidget *buildShare();
@@ -43,6 +46,7 @@ private:
     QFrame *m_side = nullptr;
     QLabel *m_version = nullptr;
     QHash<QString, QAbstractButton *> m_navItems;
+    QButtonGroup *m_navGroup = nullptr;
     QStackedWidget *m_stack;
     QHash<QString, int> m_index;
     // New page thumbnails made so far, by template id, all made with the

@@ -2,6 +2,7 @@
 
 #include "core/presets.h"
 #include "render/textart.h"
+#include "templates/changetemplate.h"
 #include "text/textprops.h"
 
 #include <QBuffer>
@@ -425,9 +426,11 @@ std::unique_ptr<Document> base(const TemplateOptions &o, QSizeF size, int pages,
 {
     auto d = Document::blank(size, sizeName.isEmpty() ? QStringLiteral("Custom") : sizeName, pages);
     const ColorScheme *cs = findColorScheme(o.colorScheme.isEmpty() ? defScheme : o.colorScheme);
-    if (cs) d->colors = *cs;
+    if (o.colors) d->colors = *o.colors;
+    else if (cs) d->colors = *cs;
     const FontScheme *fs = findFontScheme(o.fontScheme.isEmpty() ? defFonts : o.fontScheme);
-    if (fs) d->fonts = *fs;
+    if (o.fonts) d->fonts = *o.fonts;
+    else if (fs) d->fonts = *fs;
     BusinessInfo biz = o.business;
     if (biz.name.isEmpty()) {
         biz.name = QCoreApplication::translate("Templates", "Riverbend Community Arts");
@@ -726,7 +729,7 @@ std::unique_ptr<Document> greetingCard(const TemplateOptions &o, int variant)
     b.onPage(2);
     b.text(QRectF(36, ps.height() / 2 - 60, ps.width() - 72, 120),
            {C(variant == 0 ? QCoreApplication::translate("Templates", "Wishing you a year full of good surprises.") : QCoreApplication::translate("Templates", "Your kindness meant more than you know."), 16, Accent1, 1, true),
-            C(QStringLiteral("— {biz:person}"), 11, Main, 1)}, VAlign::Middle);
+            C(QStringLiteral("— {biz:person}"), 11, Main, 1)}, VAlign::Middle)->role = role::Body;
     b.onPage(3);
     b.text(QRectF(36, ps.height() - 70, ps.width() - 72, 36), {C(QCoreApplication::translate("Templates", "Made with JeffPub"), 8, Accent4, 1)}, VAlign::Bottom);
     return d;
@@ -863,7 +866,7 @@ std::unique_ptr<Document> invitation(const TemplateOptions &o)
     b.text(QRectF(28, ps.height() * 0.44, ps.width() - 56, 70), {C(QCoreApplication::translate("Templates", "You're Invited"), 34, Accent1, 1, true)});
     b.text(QRectF(36, ps.height() * 0.56, ps.width() - 72, 160),
            {C(QCoreApplication::translate("Templates", "to an evening of music and dessert"), 12, Main, 1), C(QCoreApplication::translate("Templates", "Saturday, the twentieth of June"), 13, Accent1, 1, false, 700),
-            C(QCoreApplication::translate("Templates", "seven o'clock in the evening"), 12, Main, 1), C(QStringLiteral("{biz:address:oneline}"), 11, Main, 1), C(QCoreApplication::translate("Templates", "Kindly reply to {biz:email}"), 9, Accent4, 1)});
+            C(QCoreApplication::translate("Templates", "seven o'clock in the evening"), 12, Main, 1), C(QStringLiteral("{biz:address:oneline}"), 11, Main, 1), C(QCoreApplication::translate("Templates", "Kindly reply to {biz:email}"), 9, Accent4, 1)})->role = role::Date;
     return d;
 }
 
@@ -1214,10 +1217,10 @@ std::unique_ptr<Document> giftCertificateClassic(const TemplateOptions &o)
     auto border = b.shape("rect", QRectF(10, 10, ps.width() - 20, ps.height() - 20), Fill::none(), Stroke::line(ColorRef::scheme(Accent1), 5));
     border->stroke.compound = Stroke::Triple;
     b.shape("rect", QRectF(ps.width() * 0.68, 10, ps.width() * 0.32 - 10, ps.height() - 20), Fill::solid(ColorRef::scheme(Accent1)));
-    b.text(QRectF(30, 26, ps.width() * 0.6, 50), {C(QCoreApplication::translate("Templates", "GIFT CERTIFICATE"), 24, Accent1, 0, true)});
+    b.text(QRectF(30, 26, ps.width() * 0.6, 50), {C(QCoreApplication::translate("Templates", "GIFT CERTIFICATE"), 24, Accent1, 0, true)})->role = role::Title;
     auto f = b.text(QRectF(30, 84, ps.width() * 0.6, 90), {C(QCoreApplication::translate("Templates", "Presented to\t"), 11, Main, 0), C(QCoreApplication::translate("Templates", "From\t"), 11, Main, 0), C(QCoreApplication::translate("Templates", "Valid until\t"), 11, Main, 0)});
     dotLeaders(*d, *f, ps.width() * 0.6 - 10, QStringLiteral("_"));
-    b.text(QRectF(ps.width() * 0.68 + 10, 40, ps.width() * 0.32 - 30, 140), {W(QStringLiteral("$100"), 38, 1, true), W(QStringLiteral("{biz:name}"), 10, 1, false, 700), W(QStringLiteral("{biz:phone}"), 8, 1)}, VAlign::Middle);
+    b.text(QRectF(ps.width() * 0.68 + 10, 40, ps.width() * 0.32 - 30, 140), {W(QStringLiteral("$100"), 38, 1, true), W(QStringLiteral("{biz:name}"), 10, 1, false, 700), W(QStringLiteral("{biz:phone}"), 8, 1)}, VAlign::Middle)->role = role::Label;
     b.text(QRectF(30, ps.height() - 42, ps.width() * 0.6, 20), {C(QCoreApplication::translate("Templates", "No. 0001 · Not redeemable for cash"), 7.5, Accent4, 0)});
     return d;
 }
@@ -1232,7 +1235,7 @@ std::unique_ptr<Document> invitationParty(const TemplateOptions &o)
     b.text(QRectF(40, 96, ps.width() - 80, 110), {C(QCoreApplication::translate("Templates", "Let's"), 26, Accent2, 1, true), C(QCoreApplication::translate("Templates", "Celebrate!"), 40, Accent1, 1, true)});
     b.text(QRectF(46, 220, ps.width() - 92, 190),
            {C(QCoreApplication::translate("Templates", "Join us for a birthday party"), 13, Main, 1), C(QCoreApplication::translate("Templates", "Saturday, August 8"), 15, Accent1, 1, false, 700), C(QCoreApplication::translate("Templates", "2:00 – 5:00 PM"), 13, Main, 1),
-            C(QStringLiteral("{biz:address:oneline}"), 11, Main, 1), C(QCoreApplication::translate("Templates", "RSVP {biz:phone}"), 10, Accent4, 1)});
+            C(QStringLiteral("{biz:address:oneline}"), 11, Main, 1), C(QCoreApplication::translate("Templates", "RSVP {biz:phone}"), 10, Accent4, 1)})->role = role::Date;
     return d;
 }
 
@@ -1448,13 +1451,13 @@ std::unique_ptr<Document> fortuneTeller(const TemplateOptions &o)
         tri->stroke = Stroke::none();
         b.pg->items.push_back(tri);
         const QPointF tc = (a + m1 + m0) / 3;
-        b.text(QRectF(tc.x() - 50, tc.y() - 12, 100, 24), {C(QCoreApplication::translate("Templates", colorNames[k]), 12, Main, 1, true, 700)}, VAlign::Middle);
+        b.text(QRectF(tc.x() - 50, tc.y() - 12, 100, 24), {C(QCoreApplication::translate("Templates", colorNames[k]), 12, Main, 1, true, 700)}, VAlign::Middle)->role = role::Label;
     }
     // Numbers in the middle ring, and fold lines.
     for (int k = 0; k < 8; ++k) {
         const double a = M_PI / 8 + k * M_PI / 4;
         const QPointF p = ctr + QPointF(std::cos(a), std::sin(a)) * side * 0.27;
-        b.text(QRectF(p.x() - 20, p.y() - 14, 40, 28), {C(QString::number(k + 1), 18, Main, 1, true, 700)}, VAlign::Middle);
+        b.text(QRectF(p.x() - 20, p.y() - 14, 40, 28), {C(QString::number(k + 1), 18, Main, 1, true, 700)}, VAlign::Middle)->role = role::Label;
     }
     auto fold = [&](QPointF a, QPointF z) { auto l = b.line(a, z, ColorRef::scheme(Main, 50), 0.75); l->stroke.dash = Stroke::DashLine; };
     fold(sq.topLeft(), sq.bottomRight());
@@ -1467,11 +1470,23 @@ std::unique_ptr<Document> fortuneTeller(const TemplateOptions &o)
     return d;
 }
 
+// Every design comes out with its boxes tagged for Change Template.
+QVector<TemplateInfo> tagged(QVector<TemplateInfo> list)
+{
+    for (TemplateInfo &t : list)
+        t.build = [make = t.build](const TemplateOptions &o) {
+            auto d = make(o);
+            tagRoles(*d);
+            return d;
+        };
+    return list;
+}
+
 } // namespace
 
 const QVector<TemplateInfo> &templates()
 {
-    static const QVector<TemplateInfo> list = {
+    static const QVector<TemplateInfo> list = tagged({
         {"flyer-event", QCoreApplication::translate("Templates", "Flyers"), QCoreApplication::translate("Templates", "Event Flyer"),
          QCoreApplication::translate("Templates", "Bold top artwork, event details and a starburst callout."), flyerEvent, {}},
         {"flyer-sale", QCoreApplication::translate("Templates", "Flyers"), QCoreApplication::translate("Templates", "Sale Flyer"),
@@ -1568,7 +1583,7 @@ const QVector<TemplateInfo> &templates()
          QCoreApplication::translate("Templates", "Gradient side panel."), complimentsModern, {"logo"}},
         {"fortune-teller", QCoreApplication::translate("Templates", "Paper Folding Projects"), QCoreApplication::translate("Templates", "Fortune Teller"),
          QCoreApplication::translate("Templates", "Origami fortune teller with colors and numbers."), fortuneTeller, {}},
-    };
+    });
     return list;
 }
 
