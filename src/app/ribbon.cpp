@@ -417,18 +417,18 @@ void RibbonTab::popUp(int i)
 
 // ---------------- header ----------------
 // One control in the ribbon's top row: the File button, a tab, or the
-// chevron that collapses the ribbon. Drawn as pills, but real controls:
+// chevron that collapses the ribbon, or Help's "?". Drawn as pills, but real controls:
 // the keyboard reaches them and screen readers see them. Only the current
 // tab takes the focus with Tab; the arrow keys move along the tabs and
 // switch to each (as tab lists do).
 class HeaderButton : public QAbstractButton {
 public:
-    enum Kind { File, Tab, Collapse };
+    enum Kind { File, Tab, Collapse, Help };
     HeaderButton(Kind k, Ribbon *r, int tab, QWidget *parent) : QAbstractButton(parent), m_kind(k), m_r(r), m_tab(tab)
     {
         setAttribute(Qt::WA_Hover);
         setFocusPolicy(k == Tab ? Qt::NoFocus : Qt::TabFocus);
-        setObjectName(k == File ? QStringLiteral("jpRibbonFile") : k == Tab ? QStringLiteral("jpRibbonTab") : QStringLiteral("jpRibbonCollapse"));
+        setObjectName(k == File ? QStringLiteral("jpRibbonFile") : k == Tab ? QStringLiteral("jpRibbonTab") : k == Help ? QStringLiteral("jpRibbonHelp") : QStringLiteral("jpRibbonCollapse"));
         if (k == Tab) setProperty("jpOwnArrows", true);   // they move along the tabs
         if (k == File) {
             setText(QCoreApplication::translate("Ribbon", "File"));
@@ -438,6 +438,7 @@ public:
         connect(this, &QAbstractButton::clicked, this, [this] {
             if (m_kind == File) Q_EMIT m_r->fileClicked();
             else if (m_kind == Collapse) m_r->setMinimized(!m_r->m_minimized);
+            else if (m_kind == Help) Q_EMIT m_r->helpClicked();
             else {
                 if (m_r->m_minimized) m_r->setMinimized(false);
                 m_r->showTab(m_r->m_tabs[m_tab].page);
@@ -484,6 +485,23 @@ protected:
             const QPointF c(r.right() - 12, r.center().y() + 0.5);
             p.setPen(QPen(fg, 1.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
             p.drawPolyline(QPolygonF({c + QPointF(-3, -1.5), c + QPointF(0, 1.5), c + QPointF(3, -1.5)}));
+            return;
+        }
+        if (m_kind == Help) {
+            if (hot) {
+                p.setPen(Qt::NoPen);
+                p.setBrush(dark() ? QColor(255, 255, 255, 18) : QColor(0, 0, 0, 12));
+                p.drawRoundedRect(r, 6, 6);
+            }
+            const QRectF c(width() / 2.0 - 8, height() / 2.0 - 8, 16, 16);
+            p.setPen(QPen(mutedText(), 1.4));
+            p.setBrush(Qt::NoBrush);
+            p.drawEllipse(c);
+            QFont qf = font();
+            qf.setBold(true);
+            qf.setPixelSize(11);
+            p.setFont(qf);
+            p.drawText(c, Qt::AlignCenter, QStringLiteral("?"));
             return;
         }
         if (m_kind == Collapse) {
@@ -588,10 +606,15 @@ public:
         setFixedHeight(50);   // room for a small gap under the tab pills
         m_file = new HeaderButton(HeaderButton::File, r, -1, this);
         m_collapse = new HeaderButton(HeaderButton::Collapse, r, -1, this);
+        m_help = new HeaderButton(HeaderButton::Help, r, -1, this);
+        m_help->setAccessibleName(QCoreApplication::translate("Ribbon", "Help"));
+        m_help->setAccessibleDescription(QCoreApplication::translate("Ribbon", "Opens Help: how to do things in JeffPub, and a search that finds commands too."));
+        m_help->setWhatsThis(m_help->accessibleDescription());
+        m_help->setToolTip(QCoreApplication::translate("Ribbon", "Help (F1)"));
     }
     QVector<QToolButton *> qatButtons;
     QVector<HeaderButton *> tabButtons;
-    HeaderButton *m_file, *m_collapse;
+    HeaderButton *m_file, *m_collapse, *m_help;
 
     int qatWidth() const
     {
@@ -641,6 +664,8 @@ public:
             b->update();
         }
         m_collapse->setGeometry(width() - 30, 18, 28, 26);
+        m_help->setGeometry(width() - 60, 18, 28, 26);
+        m_collapse->setToolTip(m_r->m_minimized ? QCoreApplication::translate("Ribbon", "Expand the Ribbon (Ctrl+F1)") : QCoreApplication::translate("Ribbon", "Collapse the Ribbon (Ctrl+F1)"));
         m_collapse->setAccessibleName(m_r->m_minimized ? QCoreApplication::translate("Ribbon", "Expand the Ribbon") : QCoreApplication::translate("Ribbon", "Collapse the Ribbon"));
         m_collapse->setAccessibleDescription(m_r->m_minimized ? QCoreApplication::translate("Ribbon", "Shows the ribbon's commands again.")
                                                               : QCoreApplication::translate("Ribbon", "Shows only the tab names, leaving more room for the page."));

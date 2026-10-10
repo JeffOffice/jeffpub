@@ -1,4 +1,5 @@
 #include "app/mainwindow.h"
+#include "app/help.h"
 #include "app/recovery.h"
 #include "app/keytips.h"
 #include <QComboBox>
@@ -129,6 +130,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     connect(m_backstage, &Backstage::closeRequested, this, &MainWindow::hideBackstage);
     m_keyTips = new KeyTips(this, m_ribbon, [this] { showBackstage(); });
     connect(m_ribbon, &Ribbon::fileClicked, this, [this] { showBackstage(); });
+    connect(m_ribbon, &Ribbon::helpClicked, this, [this] { act(QStringLiteral("help.show"))->trigger(); });
     connect(m_ribbon, &Ribbon::leaveRequested, this, [this] { m_canvas->setFocus(Qt::OtherFocusReason); });
     // F6 and Shift+F6 move the keyboard between the window's parts: the
     // ribbon, the page thumbnails, and the page.
@@ -272,7 +274,71 @@ bool MainWindow::eventFilter(QObject *o, QEvent *e)
         auto *ke = static_cast<QKeyEvent *>(e);
         if (ke->key() == Qt::Key_Escape) { hideBackstage(); return true; }
     }
+    // F1 in one of this window's dialogs: help on that dialog. (The window's
+    // own F1 is a command, which a dialog holding the window keeps from it.)
+    if (e->type() == QEvent::KeyPress && static_cast<QKeyEvent *>(e)->matches(QKeySequence::HelpContents)) {
+        auto *w = qobject_cast<QWidget *>(o);
+        QWidget *dlg = w ? w->window() : nullptr;
+        if (dlg && dlg != this && qobject_cast<QDialog *>(dlg) && !qobject_cast<HelpWindow *>(dlg)) {
+            bool ours = false;
+            for (QWidget *p = dlg->parentWidget(); p; p = p->parentWidget()) ours |= p == this;
+            if (ours) {
+                QString title = dlg->windowTitle();
+                title.remove(QStringLiteral(" - JeffPub"));
+                QString topic = help::contextTopic(QStringLiteral("dialog:") + title);
+                if (topic.isEmpty()) topic = help::searchTopics(title).value(0);
+                showHelpOver(dlg, topic);
+                return true;
+            }
+        }
+    }
     return QMainWindow::eventFilter(o, e);
+}
+
+HelpView *MainWindow::helpView() const { return m_task->findChild<HelpView *>(); }
+
+void MainWindow::showHelp(const QString &topicIn)
+{
+    const QString topic = topicIn.isEmpty() ? QStringLiteral("index") : topicIn;
+    if (m_backstage->isVisible()) {
+        showHelpOver(this, topic);
+        return;
+    }
+    showTaskPane(QStringLiteral("help"));
+    if (HelpView *v = helpView()) {
+        v->showTopic(topic);
+        v->focusTopic();
+    }
+}
+
+HelpWindow *MainWindow::showHelpOver(QWidget *owner, const QString &topic)
+{
+    // One per owner, reused while it's open.
+    auto *w = owner->findChild<HelpWindow *>(QString(), Qt::FindDirectChildrenOnly);
+    if (!w) w = new HelpWindow(this, owner);
+    w->view()->showTopic(topic.isEmpty() ? QStringLiteral("index") : topic);
+    w->show();
+    w->raise();
+    w->activateWindow();
+    w->view()->focusTopic();
+    return w;
+}
+
+QString MainWindow::helpContext() const
+{
+    QWidget *f = QApplication::focusWidget();
+    auto inside = [f](const QWidget *w) { return f && w && (f == w || w->isAncestorOf(f)); };
+    QString key;
+    if (m_backstage->isVisible()) key = QStringLiteral("file:") + m_backstage->currentPage();
+    else if (inside(m_ribbon)) {
+        for (int i = 0; i < m_ribbon->tabCount(); ++i)
+            if (m_ribbon->tabPage(i) == m_ribbon->current()) key = QStringLiteral("tab:") + m_ribbon->tabName(i);
+    } else if (inside(m_task) && m_task->isVisible()) key = QStringLiteral("pane:") + m_task->current();
+    else if (const Item *it = m_ed->single()) {
+        static const char *kinds[] = {"text", "picture", "shape", "line", "table", "textart", "group"};
+        key = QStringLiteral("item:") + QLatin1String(kinds[int(it->type())]);
+    } else if (!m_ed->selection().isEmpty()) key = QStringLiteral("item:several");
+    return key.isEmpty() ? QString() : help::contextTopic(key);
 }
 
 void MainWindow::showBackstage(const QString &page)

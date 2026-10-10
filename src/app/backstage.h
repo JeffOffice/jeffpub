@@ -21,6 +21,7 @@ class Backstage : public QWidget {
 public:
     explicit Backstage(MainWindow *win);
     void showPage(const QString &name);
+    QString currentPage() const;   // "info", "new", "print"...
 
 Q_SIGNALS:
     void closeRequested();

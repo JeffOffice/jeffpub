@@ -31,6 +31,8 @@ class RibbonTab;
 class PagesPane;
 class TaskPane;
 class Backstage;
+class HelpView;
+class HelpWindow;
 class FontCombo;
 class SizeCombo;
 class ColorButton;
@@ -46,6 +48,7 @@ public:
 
     Editor *editor() const { return m_ed; }
     Canvas *canvas() const { return m_canvas; }
+    Ribbon *ribbon() const { return m_ribbon; }
     QAction *act(const QString &id) const;
     // What went wrong building the ribbon from ribbon.json (empty when nothing did).
     QString ribbonError() const { return m_ribbonError; }
@@ -107,6 +110,15 @@ public:
     void hideBackstage();
     void showTaskPane(const QString &name);
     void hideTaskPane();
+    // Help on a topic ("index", the contents, when empty): in the Help pane,
+    // or in a window of its own over the File page, which covers the pane.
+    void showHelp(const QString &topic = QString());
+    // The topic for what is being done now: the ribbon tab, task pane or
+    // File page the keyboard is in, else the selected object (empty: none).
+    QString helpContext() const;
+    HelpView *helpView() const;
+    // Help over a dialog, which blocks the window and so its Help pane.
+    HelpWindow *showHelpOver(QWidget *owner, const QString &topic);
     QString currentTaskPane() const;
     QImage pageThumbnail(int page, int maxSide);
     void insertPictureFromFile(const QString &replaceItemId = QString(), const QPointF &at = QPointF(-1, -1));

@@ -3713,6 +3713,29 @@ Or save to a folder that isn&apos;t protected.</source>
     </message>
 </context>
 <context>
+    <name>Help</name>
+    <message>
+        <location filename="../src/app/help.cpp" line="+240"/>
+        <source>Quick Access Toolbar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>Command</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Keys</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>On the ribbon</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>IconPicker</name>
     <message>
         <location filename="../src/app/iconpicker.cpp" line="+80"/>
@@ -3994,6 +4017,11 @@ Open them with your email program to send.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Open Help on a topic (for screenshots).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+2"/>
         <source>Publications to open.</source>
         <translation type="unfinished"></translation>
@@ -4002,7 +4030,7 @@ Open them with your email program to send.</source>
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../src/app/mainwindow.cpp" line="+595"/>
+        <location filename="../src/app/mainwindow.cpp" line="+661"/>
         <source>A picture on page %1 has low resolution (%2 ppi; printers ask for 300).</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5574,7 +5602,7 @@ Download it from %2 now? (%3, once.)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Home</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5994,12 +6022,28 @@ Download it from %2 now? (%3, once.)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+152"/>
+        <location line="+170"/>
         <source>Ribbon tabs</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+5"/>
+        <location filename="../src/app/ribbon_strings.cpp" line="-82"/>
+        <source>Help</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Opens Help: how to do things in JeffPub, and a search that finds commands too.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Help (F1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+41"/>
         <source>Ribbon tab</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6009,7 +6053,17 @@ Download it from %2 now? (%3, once.)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+14"/>
+        <source>Expand the Ribbon (Ctrl+F1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Collapse the Ribbon (Ctrl+F1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Expand the Ribbon</source>
         <translation type="unfinished"></translation>
     </message>
@@ -8218,12 +8272,12 @@ Desktop publishing</source>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+585"/>
+        <location line="+587"/>
         <source>Open</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-584"/>
+        <location line="-586"/>
         <source>This publication</source>
         <translation type="unfinished"></translation>
     </message>
@@ -8239,31 +8293,31 @@ Desktop publishing</source>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+678"/>
+        <location line="+680"/>
         <location line="+3"/>
         <source>Print</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-681"/>
-        <location line="+1007"/>
+        <location line="-683"/>
+        <location line="+1009"/>
         <source>Export</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1006"/>
-        <location line="+981"/>
+        <location line="-1008"/>
+        <location line="+983"/>
         <source>Share</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-981"/>
-        <location line="+101"/>
+        <location line="-983"/>
+        <location line="+103"/>
         <source>Properties</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-101"/>
+        <location line="-103"/>
         <source>Close</source>
         <translation type="unfinished"></translation>
     </message>
@@ -8274,17 +8328,17 @@ Desktop publishing</source>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+1052"/>
+        <location line="+1054"/>
         <source>About</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1030"/>
+        <location line="-1032"/>
         <source>Version %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+87"/>
+        <location line="+89"/>
         <source>This publication hasn&apos;t been saved yet.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9142,7 +9196,7 @@ Desktop publishing</source>
 <context>
     <name>jp::CatalogPane</name>
     <message>
-        <location filename="../src/app/taskpane.cpp" line="+583"/>
+        <location filename="../src/app/taskpane.cpp" line="+585"/>
         <source>Choose the list of products or items (a spreadsheet, a CSV file or a list you type).</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9894,9 +9948,113 @@ Effective resolution: %4 ppi</source>
     </message>
 </context>
 <context>
+    <name>jp::HelpView</name>
+    <message>
+        <location filename="../src/app/help.cpp" line="+67"/>
+        <source>Back</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back to the topic before</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Forward</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Forward again</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Contents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Help&apos;s contents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Search Help and commands</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+1"/>
+        <source>Search Help</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Type what you want to do. Down goes to the topics and commands found, and Enter opens or runs the first.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Type what you want to do. Down goes to the topics found, and Enter opens the first.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Search results</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Help topic</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+55"/>
+        <source># Not found
+
+There is no help topic called &quot;%1&quot;.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>Help topics</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Commands</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>%1  (%2)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1, not available now</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Nothing found. Try other words, or open the contents.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>jp::HelpWindow</name>
+    <message>
+        <location line="+43"/>
+        <source>Help</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>jp::MailMergePane</name>
     <message>
-        <location line="+36"/>
+        <location filename="../src/app/taskpane.cpp" line="+36"/>
         <source>Create recipient list</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9965,8 +10123,8 @@ Source: %3</source>
 <context>
     <name>jp::MainWindow</name>
     <message>
-        <location filename="../src/app/mainwindow.cpp" line="-980"/>
-        <location filename="../src/app/mainwindow_actions.cpp" line="+602"/>
+        <location filename="../src/app/mainwindow.cpp" line="-1044"/>
+        <location filename="../src/app/mainwindow_actions.cpp" line="+604"/>
         <source>%1 (%2)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9981,7 +10139,7 @@ Source: %3</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+60"/>
+        <location line="+124"/>
         <location line="+17"/>
         <location line="+161"/>
         <location filename="../src/app/mainwindow_actions.cpp" line="-460"/>
@@ -12945,6 +13103,66 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+5"/>
+        <source>Help</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Help (F1): how to do things in JeffPub, and a search that finds commands too.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Contact Support</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Contact Support: report a problem on JeffPub&apos;s GitHub page (a free GitHub account is needed).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Feedback</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Feedback: suggest an idea for JeffPub on its GitHub page (a free GitHub account is needed).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Keyboard Shortcuts</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Keyboard Shortcuts: every command&apos;s keys, and how to use JeffPub without a mouse.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>What&apos;s New</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>What&apos;s New: this version&apos;s release notes, on JeffPub&apos;s GitHub page.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Collapse the Ribbon</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Collapse the Ribbon (Ctrl+F1): only the tab names show, leaving more room for the page. Again to show it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../src/app/mainwindow_ribbon.cpp" line="-233"/>
         <source>Font Color</source>
         <translation type="unfinished"></translation>
@@ -13405,7 +13623,7 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
 <context>
     <name>jp::RibbonGroup</name>
     <message>
-        <location line="-453"/>
+        <location line="-478"/>
         <source>%1 Settings</source>
         <translation type="unfinished"></translation>
     </message>
@@ -13459,7 +13677,7 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
 <context>
     <name>jp::TaskPane</name>
     <message>
-        <location filename="../src/app/taskpane.cpp" line="-773"/>
+        <location filename="../src/app/taskpane.cpp" line="-774"/>
         <source>Close</source>
         <translation type="unfinished"></translation>
     </message>
@@ -13504,7 +13722,12 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+762"/>
+        <location line="+1"/>
+        <source>Help</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+763"/>
         <source>Find free, openly licensed pictures in these libraries. Check each picture&apos;s license, download it, then use Insert &gt; Pictures or drag the file onto the page.</source>
         <translation type="unfinished"></translation>
     </message>

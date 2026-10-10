@@ -15,6 +15,8 @@
 #include "app/toc.h"
 
 #include "app/dialogs.h"
+#include "app/help.h"
+#include "app/ribbon.h"
 #include "app/icons.h"
 #include "app/settings.h"
 #include "app/taskpane.h"
@@ -1402,6 +1404,20 @@ void MainWindow::createActions()
             ed->forEachSelected(tr("Align Text"), [i](Item *it) { if (auto *w = dynamic_cast<TextArtItem *>(it)) w->align = i; });
         });
     }
+    // ---------------- Help ----------------
+    auto described = [](QAction *a, const QString &tip) { a->setToolTip(tip); return a; };
+    described(mk("help.show", tr("Help"), "circle-help", QKeySequence::HelpContents, [this] { showHelp(helpContext()); }),
+              tr("Help (F1): how to do things in JeffPub, and a search that finds commands too."));
+    described(mk("help.support", tr("Contact Support"), "headset", QKeySequence(), [] { help::openUrl(help::supportUrl()); }),
+              tr("Contact Support: report a problem on JeffPub's GitHub page (a free GitHub account is needed)."));
+    described(mk("help.feedback", tr("Feedback"), "smile", QKeySequence(), [] { help::openUrl(help::feedbackUrl()); }),
+              tr("Feedback: suggest an idea for JeffPub on its GitHub page (a free GitHub account is needed)."));
+    described(mk("help.shortcuts", tr("Keyboard Shortcuts"), "keyboard", QKeySequence(), [this] { showHelp(QStringLiteral("keyboard")); }),
+              tr("Keyboard Shortcuts: every command's keys, and how to use JeffPub without a mouse."));
+    described(mk("help.whatsNew", tr("What's New"), "sparkles", QKeySequence(), [] { help::openUrl(help::whatsNewUrl()); }),
+              tr("What's New: this version's release notes, on JeffPub's GitHub page."));
+    described(mk("view.collapseRibbon", tr("Collapse the Ribbon"), "chevron-up", QKeySequence(Qt::CTRL | Qt::Key_F1), [this] { m_ribbon->setMinimized(!m_ribbon->isMinimized()); }),
+              tr("Collapse the Ribbon (Ctrl+F1): only the tab names show, leaving more room for the page. Again to show it."));
 }
 
 } // namespace jp

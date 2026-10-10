@@ -51,6 +51,7 @@
     QT_TRANSLATE_NOOP("Ribbon", "Guides"),
     QT_TRANSLATE_NOOP("Ribbon", "Header & Footer"),
     QT_TRANSLATE_NOOP("Ribbon", "Height"),
+    QT_TRANSLATE_NOOP("Ribbon", "Help"),
     QT_TRANSLATE_NOOP("Ribbon", "Home"),
     QT_TRANSLATE_NOOP("Ribbon", "Hyphenation"),
     QT_TRANSLATE_NOOP("Ribbon", "Illustrations"),

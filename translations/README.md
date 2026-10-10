@@ -21,3 +21,9 @@ language.
 - The ribbon's labels come from `resources/ribbon.json`; they are listed for
   translators in `src/app/ribbon_strings.cpp`, which a test keeps in step
   with the file.
+- Help's topics are Markdown files in `resources/help/en/`, one per topic.
+  To translate them, copy the folder to `resources/help/<language>/` (the
+  same name as the `.ts` file's, such as `de` or `pt_BR`) and translate
+  each file, keeping its name, its links, and its `<!-- keywords: -->`
+  line (translate the keywords too). A topic left untranslated shows in
+  English. Then run `python3 tools/help_files.py` to build them in.

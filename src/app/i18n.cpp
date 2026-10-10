@@ -18,7 +18,21 @@ QStringList availableUiLanguages()
     return out;
 }
 
+namespace {
+QString s_language = QStringLiteral("en");
+QString installTranslationsFor();
+}
+
+QString currentUiLanguage() { return s_language; }
+
 QString installTranslations()
+{
+    s_language = installTranslationsFor();
+    return s_language;
+}
+
+namespace {
+QString installTranslationsFor()
 {
     // A translator's own file, to see it in place before it's built in:
     // JEFFPUB_TRANSLATION=/path/to/jeffpub_xx.qm.
@@ -60,5 +74,6 @@ QString installTranslations()
         }
     return lang;
 }
+} // namespace
 
 } // namespace jp

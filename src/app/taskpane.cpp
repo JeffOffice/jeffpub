@@ -2,6 +2,7 @@
 
 #include "app/appfuncs.h"
 #include "app/dialogs.h"
+#include "app/help.h"
 #include "app/icons.h"
 #include "app/mainwindow.h"
 #include "app/settings.h"
@@ -74,6 +75,7 @@ void TaskPane::open(const QString &nameIn)
     else if (name == "research") title = tr("Research");
     else if (name == "online") title = tr("Online Pictures");
     else if (name == "catalog") title = tr("Catalog Merge");
+    else if (name == "help") title = tr("Help");
     m_title->setText(title);
     if (nameIn == "replace") if (auto *e = m_panes[name]->findChild<QLineEdit *>("replace")) e->setFocus();
     refresh();
@@ -832,6 +834,7 @@ QWidget *TaskPane::create(const QString &name)
     if (name == "mailmerge") return new MailMergePane(m_win);
     if (name == "catalog") return new CatalogPane(m_win);
     if (name == "research") return new ResearchPane(m_win);
+    if (name == "help") return new HelpView(m_win);
     if (name == "online") {
         auto *w = new QWidget();
         auto *v = new QVBoxLayout(w);

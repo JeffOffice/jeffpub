@@ -1,6 +1,6 @@
 # Feature list
 
-The features a complete desktop publishing program needs, and where JeffPub stands on each. A box is checked only when the feature works in JeffPub. Last reviewed October 6, 2026.
+The features a complete desktop publishing program needs, and where JeffPub stands on each. A box is checked only when the feature works in JeffPub. Last reviewed October 9, 2026.
 
 Legend: `[x]` done · `[ ]` not yet · `[~]` partial (the note says what's missing) · **(alt)** the usual way to do this depends on a proprietary online service, so JeffPub provides an open replacement with the same purpose.
 
@@ -121,6 +121,12 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 - [x] Show: Boundaries, Guides, Fields, Rulers, Page Navigation, Scratch Area, Baselines, Graphics Manager
 - [x] Zoom: zoom box, 100%, Whole Page, Page Width, Selected Objects, and Ctrl+mouse-wheel
 - [x] Window: New Window, Arrange All, Cascade, Switch Windows
+- [x] Collapse the Ribbon with Ctrl+F1, as well as with its chevron or a double-click on a tab
+
+## Help tab
+- [x] Help (F1, or the "?" beside the ribbon's collapse button) **(alt: built in and working offline, instead of web pages)**: a Help pane of 50 topics in plain language, with a contents page, links between topics, Back and Forward, and a search that finds topics and also commands, which it runs; F1 opens the topic for what you're doing (the ribbon tab, the task pane, the File page, the dialog, or the selected object), over a dialog in a window of its own
+- [x] Contact Support and Feedback **(alt: JeffPub's GitHub pages for reporting a problem or suggesting an idea, with the version filled in)**
+- [x] Keyboard Shortcuts (a table of every command's keys, made from the commands themselves) and What's New (this version's release notes)
 
 ## Master Page tab (while editing master pages)
 - [x] Add Master Page, Duplicate, Rename, Delete, Two-Page Master, Apply To, Close Master Page
@@ -215,7 +221,7 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 - [x] Light and dark interface themes, switched in File > Options at once (no restart), and following the system's setting while set to
 - [x] Windows high contrast mode: the system's colors throughout, applied as it's turned on or off
 - [x] Standard desktop publishing keyboard shortcuts (Ctrl+B, Ctrl+Shift+>, F9, Ctrl+Shift+L, Ctrl+M, Ctrl+Shift+N, and others)
-- [x] KeyTips: press Alt and letters appear on the ribbon; type a tab's letter, then a command's, to use it without the mouse
+- [x] KeyTips: press Alt and letters appear on the ribbon (the same letters as Microsoft Publisher's for the tabs and the File button); type a tab's letter, then a command's, to use it without the mouse
 - [x] The ribbon by keyboard: Tab and the arrow keys move among its tabs and controls, with a visible focus ring; Escape returns to the page; F6 moves between the ribbon, the page thumbnails, and the page
 - [x] Screen readers (Narrator and others): every control in the window (the ribbon's tabs, buttons, galleries, and color buttons, the page list, the page, and the status bar) has a name and a description, checked by tests for every control and with Windows' own screen reader interface
 - [x] Translatable: the program's text (2,566 strings) is ready for translation with Qt Linguist, with a display language choice in File > Options; no translations yet (see translations/README.md)

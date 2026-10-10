@@ -58,7 +58,8 @@ int main(int argc, char **argv)
     QCommandLineOption pdfaOpt(QStringLiteral("pdfa"), QCoreApplication::translate("Main", "With --export-pdf: write PDF/A-1b for archiving."));
     QCommandLineOption tabOpt(QStringLiteral("tab"), QCoreApplication::translate("Main", "Open on a ribbon tab (for screenshots)."), QStringLiteral("name"));
     QCommandLineOption stageOpt(QStringLiteral("backstage"), QCoreApplication::translate("Main", "Open on a File page."), QStringLiteral("page"));
-    cli.addOptions({shotOpt, sizeOpt, templOpt, stageOpt, pdfOpt, pdfaOpt, tabOpt});
+    QCommandLineOption helpTopicOpt(QStringLiteral("help-topic"), QCoreApplication::translate("Main", "Open Help on a topic (for screenshots)."), QStringLiteral("id"));
+    cli.addOptions({shotOpt, sizeOpt, templOpt, stageOpt, pdfOpt, pdfaOpt, tabOpt, helpTopicOpt});
     cli.addPositionalArgument(QStringLiteral("files"), QCoreApplication::translate("Main", "Publications to open."), QStringLiteral("[files...]"));
     cli.process(app);
 
@@ -104,6 +105,7 @@ int main(int argc, char **argv)
         if (cli.isSet(tabOpt))
             if (auto *r = w->findChild<jp::Ribbon *>())
                 if (jp::RibbonTab *t = r->tab(cli.value(tabOpt))) r->showTab(t);
+        if (cli.isSet(helpTopicOpt)) w->showHelp(cli.value(helpTopicOpt));
         const QString out = cli.value(shotOpt);
         // Let layouts, fonts and the first paint settle before grabbing.
         QTimer::singleShot(600, w, [w, out] {

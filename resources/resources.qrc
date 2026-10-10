@@ -1547,4 +1547,57 @@
     <file>icon-tags.txt</file>
     <file>ribbon.json</file>
   </qresource>
+  <qresource prefix="/help">
+    <file alias="context.json">help/context.json</file>
+    <file alias="en/accessibility.md">help/en/accessibility.md</file>
+    <file alias="en/arrange.md">help/en/arrange.md</file>
+    <file alias="en/color-schemes.md">help/en/color-schemes.md</file>
+    <file alias="en/create.md">help/en/create.md</file>
+    <file alias="en/design-checker.md">help/en/design-checker.md</file>
+    <file alias="en/export.md">help/en/export.md</file>
+    <file alias="en/find-replace.md">help/en/find-replace.md</file>
+    <file alias="en/formatting-text.md">help/en/formatting-text.md</file>
+    <file alias="en/guides.md">help/en/guides.md</file>
+    <file alias="en/index.md">help/en/index.md</file>
+    <file alias="en/insert-objects.md">help/en/insert-objects.md</file>
+    <file alias="en/keyboard.md">help/en/keyboard.md</file>
+    <file alias="en/linked-text.md">help/en/linked-text.md</file>
+    <file alias="en/lists-tabs.md">help/en/lists-tabs.md</file>
+    <file alias="en/mail-merge.md">help/en/mail-merge.md</file>
+    <file alias="en/master-pages.md">help/en/master-pages.md</file>
+    <file alias="en/open-save.md">help/en/open-save.md</file>
+    <file alias="en/options.md">help/en/options.md</file>
+    <file alias="en/page-setup.md">help/en/page-setup.md</file>
+    <file alias="en/pages.md">help/en/pages.md</file>
+    <file alias="en/pdf.md">help/en/pdf.md</file>
+    <file alias="en/pictures.md">help/en/pictures.md</file>
+    <file alias="en/printing.md">help/en/printing.md</file>
+    <file alias="en/proofing.md">help/en/proofing.md</file>
+    <file alias="en/pub-files.md">help/en/pub-files.md</file>
+    <file alias="en/recover.md">help/en/recover.md</file>
+    <file alias="en/references.md">help/en/references.md</file>
+    <file alias="en/shapes.md">help/en/shapes.md</file>
+    <file alias="en/start.md">help/en/start.md</file>
+    <file alias="en/styles.md">help/en/styles.md</file>
+    <file alias="en/support.md">help/en/support.md</file>
+    <file alias="en/tab-file.md">help/en/tab-file.md</file>
+    <file alias="en/tab-help.md">help/en/tab-help.md</file>
+    <file alias="en/tab-home.md">help/en/tab-home.md</file>
+    <file alias="en/tab-insert.md">help/en/tab-insert.md</file>
+    <file alias="en/tab-mailings.md">help/en/tab-mailings.md</file>
+    <file alias="en/tab-master-page.md">help/en/tab-master-page.md</file>
+    <file alias="en/tab-page-design.md">help/en/tab-page-design.md</file>
+    <file alias="en/tab-picture-format.md">help/en/tab-picture-format.md</file>
+    <file alias="en/tab-review.md">help/en/tab-review.md</file>
+    <file alias="en/tab-shape-format.md">help/en/tab-shape-format.md</file>
+    <file alias="en/tab-table.md">help/en/tab-table.md</file>
+    <file alias="en/tab-text-art.md">help/en/tab-text-art.md</file>
+    <file alias="en/tab-text-box.md">help/en/tab-text-box.md</file>
+    <file alias="en/tab-view.md">help/en/tab-view.md</file>
+    <file alias="en/tables.md">help/en/tables.md</file>
+    <file alias="en/text-art.md">help/en/text-art.md</file>
+    <file alias="en/text-boxes.md">help/en/text-boxes.md</file>
+    <file alias="en/window.md">help/en/window.md</file>
+    <file alias="en/wrap.md">help/en/wrap.md</file>
+  </qresource>
 </RCC>

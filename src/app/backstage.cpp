@@ -496,6 +496,8 @@ void Backstage::rebuild(const QString &name)
     old->deleteLater();
 }
 
+QString Backstage::currentPage() const { return m_index.key(m_stack->currentIndex()); }
+
 void Backstage::showPage(const QString &name)
 {
     rebuild(name);

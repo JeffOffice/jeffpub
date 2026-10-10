@@ -16,4 +16,7 @@ QStringList availableUiLanguages();
 // language in use ("en" when none applies).
 QString installTranslations();
 
+// The language installTranslations() chose ("en" until it has run).
+QString currentUiLanguage();
+
 } // namespace jp

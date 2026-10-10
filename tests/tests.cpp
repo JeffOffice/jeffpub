@@ -42,6 +42,7 @@
 #include "app/recovery.h"
 #include "app/i18n.h"
 #include "app/keytips.h"
+#include "app/help.h"
 #include "app/focusring.h"
 #include "app/keyboardnav.h"
 #include "app/pagespane.h"
@@ -91,6 +92,8 @@
 #include <QLockFile>
 #include <QStyleHints>
 #include <QSignalSpy>
+#include <QUrlQuery>
+#include <QToolButton>
 #include <QSlider>
 #include <QAccessible>
 #include <QGridLayout>
@@ -1368,7 +1371,7 @@ private Q_SLOTS:
             else QVERIFY2(r->tabKeytip(i).size() == 1, qPrintable(r->tabName(i)));
         }
         check(top, QStringLiteral("File, Quick Access and tabs"));
-        QCOMPARE(r->tabCount(), 6 + contextual.size());
+        QCOMPARE(r->tabCount(), 7 + contextual.size());   // Home, Insert, Page Design, Mailings, Review, View, Help
         QCOMPARE(r->tabKeytip(0), QStringLiteral("H"));
         QCOMPARE(r->tabKeytip(1), QStringLiteral("N"));
 
@@ -1619,6 +1622,199 @@ private Q_SLOTS:
         QCOMPARE(pages->item(0)->data(Qt::AccessibleTextRole).toString(), QStringLiteral("Page 1"));
     }
 
+    // Help's topics are all built in, each has a title and search words,
+    // every link and F1 context leads to a topic, the contents lists them
+    // all, and none names another company's products.
+    void helpTopicsAreComplete()
+    {
+        const QString src = QStringLiteral(JP_TEST_DATA "/../../resources/help");
+        QStringList onDisk, built;
+        for (QDirIterator it(src, QDir::Files, QDirIterator::Subdirectories); it.hasNext();) onDisk << QDir(src).relativeFilePath(it.next());
+        for (QDirIterator it(QStringLiteral(":/help"), QDir::Files, QDirIterator::Subdirectories); it.hasNext();) built << it.next().mid(7);
+        onDisk.sort();
+        built.sort();
+        QCOMPARE(built, onDisk);   // resources.qrc lists every file in resources/help
+        const QStringList ids = jp::help::topicIds();
+        QVERIFY2(ids.size() >= 45, qPrintable(QString::number(ids.size())));
+        static const QRegularExpression link(QStringLiteral("\\]\\(([^)]+)\\)"));
+        static const QRegularExpression banned(QStringLiteral("\\b(Microsoft|Publisher|Office)\\b"));
+        const jp::help::Topic contents = jp::help::topic(QStringLiteral("index"));
+        QStringList problems;
+        for (const QString &id : ids) {
+            const jp::help::Topic t = jp::help::topic(id);
+            if (t.title.isEmpty()) problems << id + QStringLiteral(": no title");
+            if (t.keywords.isEmpty()) problems << id + QStringLiteral(": no keywords");
+            if (const auto m = banned.match(t.markdown); m.hasMatch()) problems << id + QStringLiteral(": says ") + m.captured(1);
+            for (auto m = link.globalMatch(t.markdown); m.hasNext();) {
+                const QString target = m.next().captured(1);
+                if (!target.startsWith(QLatin1String("https://")) && !ids.contains(target)) problems << id + QStringLiteral(": link to ") + target;
+            }
+            if (id != QLatin1String("index") && !contents.markdown.contains(QStringLiteral("](%1)").arg(id))) problems << id + QStringLiteral(": not in the contents");
+            QTextDocument doc;
+            doc.setMarkdown(jp::help::displayMarkdown(t, nullptr), QTextDocument::MarkdownDialectGitHub);
+            if (doc.toPlainText().trimmed().size() < 100) problems << id + QStringLiteral(": nearly empty");
+        }
+        QFile cf(src + QStringLiteral("/context.json"));
+        QVERIFY(cf.open(QIODevice::ReadOnly));
+        const QJsonObject context = QJsonDocument::fromJson(cf.readAll()).object();
+        for (auto it = context.begin(); it != context.end(); ++it)
+            if (!ids.contains(it.value().toString())) problems << QStringLiteral("context %1: no topic %2").arg(it.key(), it.value().toString());
+        jp::MainWindow w;
+        for (int i = 0; i < w.ribbon()->tabCount(); ++i)
+            if (jp::help::contextTopic(QStringLiteral("tab:") + w.ribbon()->tabName(i)).isEmpty()) problems << QStringLiteral("no topic for the tab ") + w.ribbon()->tabName(i);
+        QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QStringLiteral("; "))));
+        // The keyboard topic's table comes from the commands themselves.
+        const QString keys = jp::help::displayMarkdown(jp::help::topic(QStringLiteral("keyboard")), &w);
+        QVERIFY(!keys.contains(QLatin1String("<!--")));
+        const QString save = QKeySequence(QKeySequence::Save).toString(QKeySequence::NativeText);
+        QVERIFY2(keys.contains(QStringLiteral("| Save | %1 | Quick Access Toolbar |").arg(save)), qPrintable(keys.right(3000)));
+        QVERIFY(keys.contains(QStringLiteral("| Collapse the Ribbon | %1 |").arg(QKeySequence(Qt::CTRL | Qt::Key_F1).toString(QKeySequence::NativeText))));
+    }
+
+    // F1 opens help on what is being done: the contents from the page, a
+    // tab's topic from the ribbon, an object's topic when one is selected,
+    // and a window of its own over the File page and over dialogs.
+    void helpFollowsWhatYouAreDoing()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        QVERIFY(QTest::qWaitForWindowActive(&w));
+        w.canvas()->setFocus();
+        QTest::keyClick(w.canvas(), Qt::Key_F1);
+        jp::HelpView *v = w.helpView();
+        QVERIFY(v && v->isVisible());
+        QCOMPARE(w.currentTaskPane(), QStringLiteral("help"));
+        QCOMPARE(v->currentTopic(), QStringLiteral("index"));
+        QVERIFY(v->browser()->toPlainText().contains(QLatin1String("Getting started")));
+        // From the ribbon: the tab's topic.
+        jp::Ribbon *r = w.ribbon();
+        r->showTab(r->tab(QStringLiteral("Insert")));
+        r->focusCurrentTab();
+        QTest::keyClick(QApplication::focusWidget(), Qt::Key_F1);
+        QCOMPARE(v->currentTopic(), QStringLiteral("tab-insert"));
+        // A selected text box: text boxes.
+        jp::Editor *ed = w.editor();
+        ed->addItem(ed->newTextBox(QRectF(72, 72, 300, 100), QStringLiteral("Hello")));
+        QVERIFY(ed->single());
+        w.canvas()->setFocus();
+        QTest::keyClick(w.canvas(), Qt::Key_F1);
+        QCOMPARE(v->currentTopic(), QStringLiteral("text-boxes"));
+        // The "?" beside the collapse chevron opens it too.
+        w.hideTaskPane();
+        auto *qmark = r->findChild<QAbstractButton *>(QStringLiteral("jpRibbonHelp"));
+        QVERIFY(qmark && qmark->isVisible());
+        QCOMPARE(qmark->accessibleName(), QStringLiteral("Help"));
+        qmark->click();
+        QCOMPARE(w.currentTaskPane(), QStringLiteral("help"));
+        // Over the File page, whose print page covers the pane: a window.
+        w.showBackstage(QStringLiteral("print"));
+        QTest::keyClick(QApplication::focusWidget(), Qt::Key_F1);
+        auto *hw = w.findChild<jp::HelpWindow *>(QString(), Qt::FindDirectChildrenOnly);
+        QVERIFY(hw && hw->isVisible());
+        QCOMPARE(hw->view()->currentTopic(), QStringLiteral("printing"));
+        hw->close();
+        QTRY_VERIFY(!w.findChild<jp::HelpWindow *>());   // closing deletes it
+        w.hideBackstage();
+        // Over a dialog: a window of the dialog's own, on its topic. (Dialogs
+        // are modal, as exec() makes them, which keeps the window's own F1 off.)
+        QDialog dlg(&w);
+        dlg.setWindowModality(Qt::ApplicationModal);
+        dlg.setWindowTitle(QStringLiteral("Mail Merge"));
+        auto *field = new QLineEdit(&dlg);
+        dlg.show();
+        QVERIFY(QTest::qWaitForWindowActive(&dlg));
+        field->setFocus();
+        QTest::keyClick(field, Qt::Key_F1);
+        auto *over = dlg.findChild<jp::HelpWindow *>();
+        QVERIFY(over);
+        QCOMPARE(over->view()->currentTopic(), QStringLiteral("mail-merge"));
+        // There it finds topics only: commands can't run under a dialog.
+        over->view()->search(QStringLiteral("text box"));
+        bool command = false;
+        for (int i = 0; i < over->view()->results()->count(); ++i) command |= over->view()->results()->item(i)->text() == QLatin1String("Commands");
+        QVERIFY(!command);
+    }
+
+    // The search box finds topics (ignoring "how do I") and commands, and
+    // runs a command; links move between topics, Back and Forward return,
+    // and web links go to the browser.
+    void helpSearchFindsTopicsAndCommands()
+    {
+        jp::MainWindow w;
+        w.show();
+        QVERIFY(QTest::qWaitForWindowActive(&w));
+        w.showHelp();
+        jp::HelpView *v = w.helpView();
+        QVERIFY(v);
+        auto texts = [v] {
+            QStringList t;
+            for (int i = 0; i < v->results()->count(); ++i) t << v->results()->item(i)->text();
+            return t;
+        };
+        QCOMPARE(jp::help::searchTopics(QStringLiteral("how do I print")).value(0), QStringLiteral("printing"));
+        QCOMPARE(jp::help::searchTopics(QStringLiteral("textbox")).value(0), QStringLiteral("text-boxes"));
+        QVERIFY(jp::help::searchTopics(QStringLiteral("zzqxv")).isEmpty());
+        v->search(QStringLiteral("text box"));
+        QVERIFY(v->results()->isVisible() && !v->browser()->isVisible());
+        const QStringList found = texts();
+        QVERIFY2(found.contains(QStringLiteral("Help topics")) && found.contains(QStringLiteral("Commands")), qPrintable(found.join(QStringLiteral(" / "))));
+        QListWidgetItem *draw = nullptr;
+        for (int i = 0; i < v->results()->count(); ++i)
+            if (v->results()->item(i)->text().startsWith(QLatin1String("Draw Text Box  (Home > "))) draw = v->results()->item(i);
+        QVERIFY2(draw, qPrintable(found.join(QStringLiteral(" / "))));
+        QSignalSpy ran(w.act(QStringLiteral("ins.textbox")), &QAction::triggered);
+        QTest::keyClick(v->searchBox(), Qt::Key_Down);
+        QCOMPARE(QApplication::focusWidget(), v->results());
+        v->results()->setCurrentItem(draw);
+        QTest::keyClick(v->results(), Qt::Key_Return);
+        QCOMPARE(ran.count(), 1);
+        v->search(QStringLiteral("zzqxv"));
+        QCOMPARE(texts(), QStringList{QStringLiteral("Nothing found. Try other words, or open the contents.")});
+        // Enter in the search box opens the first topic.
+        v->search(QStringLiteral("mail merge"));
+        QTest::keyClick(v->searchBox(), Qt::Key_Return);
+        QCOMPARE(v->currentTopic(), QStringLiteral("mail-merge"));
+        QVERIFY(v->browser()->isVisible() && v->searchBox()->text().isEmpty());
+        // Links: a topic, Back, Forward, and a web page.
+        Q_EMIT v->browser()->anchorClicked(QUrl(QStringLiteral("linked-text")));
+        QCOMPARE(v->currentTopic(), QStringLiteral("linked-text"));
+        auto button = [v](const QString &name) {
+            for (auto *b : v->findChildren<QToolButton *>())
+                if (b->accessibleName() == name) return b;
+            return static_cast<QToolButton *>(nullptr);
+        };
+        QVERIFY(button(QStringLiteral("Back"))->isEnabled());
+        button(QStringLiteral("Back"))->click();
+        QCOMPARE(v->currentTopic(), QStringLiteral("mail-merge"));
+        button(QStringLiteral("Forward"))->click();
+        QCOMPARE(v->currentTopic(), QStringLiteral("linked-text"));
+        button(QStringLiteral("Contents"))->click();
+        QCOMPARE(v->currentTopic(), QStringLiteral("index"));
+        QList<QUrl> opened;
+        const auto keep = jp::help::openUrl;
+        jp::help::openUrl = [&opened](const QUrl &u) { opened << u; return true; };
+        Q_EMIT v->browser()->anchorClicked(QUrl(QStringLiteral("https://github.com/JeffOffice/jeffpub")));
+        QCOMPARE(v->currentTopic(), QStringLiteral("index"));
+        // The Help tab's web pages: a problem report and an idea carry the
+        // version; What's New is this version's release.
+        w.act(QStringLiteral("help.support"))->trigger();
+        w.act(QStringLiteral("help.feedback"))->trigger();
+        w.act(QStringLiteral("help.whatsNew"))->trigger();
+        jp::help::openUrl = keep;
+        QCOMPARE(opened.size(), 4);
+        QCOMPARE(opened[1].toString(QUrl::RemoveQuery), QStringLiteral("https://github.com/JeffOffice/jeffpub/issues/new"));
+        QVERIFY(QUrlQuery(opened[1]).queryItemValue(QStringLiteral("body"), QUrl::FullyDecoded).contains(QStringLiteral("JeffPub " JP_VERSION " on ")));
+        QCOMPARE(QUrlQuery(opened[2]).queryItemValue(QStringLiteral("labels")), QStringLiteral("enhancement"));
+        QCOMPARE(opened[3].toString(), QStringLiteral("https://github.com/JeffOffice/jeffpub/releases/tag/v" JP_VERSION));
+        // Ctrl+F1 collapses the ribbon and brings it back, as there.
+        QVERIFY(!w.ribbon()->isMinimized());
+        QTest::keyClick(&w, Qt::Key_F1, Qt::ControlModifier);
+        QVERIFY(w.ribbon()->isMinimized());
+        QTest::keyClick(&w, Qt::Key_F1, Qt::ControlModifier);
+        QVERIFY(!w.ribbon()->isMinimized());
+    }
+
     // KeyTips: Alt shows letters on the top row, a tab's letter opens it and
     // shows its controls' letters, a control's letters use it; Escape steps
     // back; Alt held while typing goes straight there; a click ends it.
@@ -1639,7 +1835,12 @@ private Q_SLOTS:
         QTest::keyPress(&w, Qt::Key_Alt);
         QTest::keyRelease(&w, Qt::Key_Alt);
         QCOMPARE(kt->level(), jp::KeyTips::Top);
-        for (const char *k : {"F", "H", "N", "G", "1"}) QVERIFY2(keys().contains(QLatin1String(k)), qPrintable(keys().join(QLatin1Char(' '))));
+        // The other program's letters (its 2021 version): File F, Home H,
+        // Insert N, Page Design P, Mailings M, Review R, View W, Help Y,
+        // and the Quick Access Toolbar's buttons numbered.
+        QStringList top = keys();
+        top.sort();
+        QCOMPARE(top.join(QLatin1Char(' ')), QStringLiteral("1 2 3 4 F H M N P R W Y"));
         QTest::keyClick(&w, Qt::Key_H);
         QCOMPARE(kt->level(), jp::KeyTips::InTab);
         QCOMPARE(r->current(), r->tab(QStringLiteral("Home")));
@@ -1668,7 +1869,7 @@ private Q_SLOTS:
         QCOMPARE(kt->level(), jp::KeyTips::Off);
         // Alt held while typing: straight to the tab.
         QTest::keyPress(&w, Qt::Key_Alt);
-        QTest::keyClick(&w, Qt::Key_G, Qt::AltModifier);
+        QTest::keyClick(&w, Qt::Key_P, Qt::AltModifier);
         QTest::keyRelease(&w, Qt::Key_Alt);
         QCOMPARE(r->current(), r->tab(QStringLiteral("Page Design")));
         QCOMPARE(kt->level(), jp::KeyTips::InTab);

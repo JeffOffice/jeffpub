@@ -146,7 +146,7 @@
           "ins.pageNumber", "ins.pageCount", "ins.pageNumberFormat"]}
       ]}
     ]},
-    {"name": "Page Design", "keytip": "G", "groups": [
+    {"name": "Page Design", "keytip": "P", "groups": [
       {"name": "Template", "keytip": "ZT", "items": [
         {"large": "pd.changeTemplate", "keytip": "CT"}
       ]},
@@ -254,6 +254,15 @@
       ]},
       {"name": "Tools", "keytip": "ZT", "items": [
         {"large": "view.measurement", "keytip": "ME"}
+      ]}
+    ]},
+    {"name": "Help", "keytip": "Y", "groups": [
+      {"name": "Help", "keytip": "ZH", "items": [
+        {"large": "help.show", "keytip": "H"},
+        {"large": "help.support", "keytip": "C"},
+        {"large": "help.feedback", "keytip": "K"},
+        {"large": "help.shortcuts", "keytip": "S"},
+        {"large": "help.whatsNew", "keytip": "W"}
       ]}
     ]},
     {"name": "Master Page", "keytip": "JM", "context": "Master Page", "color": "masterPage", "groups": [

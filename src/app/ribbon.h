@@ -126,6 +126,7 @@ public:
 
 Q_SIGNALS:
     void fileClicked();
+    void helpClicked();       // the "?" beside the collapse chevron
     void tabChanged();
     void leaveRequested();    // Escape: back to the page
 
