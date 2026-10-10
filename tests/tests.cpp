@@ -2947,6 +2947,22 @@ private Q_SLOTS:
 
     // A table with no rows or no columns (a crafted file) has no cell to look
     // up; asking for one reads nothing.
+    // A damaged file's span as large as an int holds is cut to the table: the
+    // cell covers the rows there are (the sum overflowed and gave it none).
+    void hugeCellSpansStayInTheTable()
+    {
+        QJsonObject cell{{"story", "s"}, {"rs", 2147483647}, {"cs", 2147483647}, {"margins", QJsonArray{0, 0, 0, 0}}};
+        QJsonObject o{{"type", "table"}, {"rows", 2}, {"cols", 2}, {"colW", QJsonArray{50, 60}}, {"rowH", QJsonArray{20, 30}},
+                      {"cells", QJsonArray{cell, QJsonObject{{"story", "a"}}, QJsonObject{{"story", "b"}}, QJsonObject{{"story", "c"}}}}};
+        jp::TableItem t;
+        t.fromJson(o);
+        QCOMPARE(t.cell(0, 0).rowSpan, 2);
+        QCOMPARE(t.cell(0, 0).colSpan, 2);
+        QCOMPARE(t.cellRect(0, 0), QRectF(0, 0, 110, 50));
+        t.cell(1, 1).rowSpan = std::numeric_limits<int>::max();   // whatever a cell says, the sum stays in the table
+        QCOMPARE(t.cellRect(1, 1), QRectF(50, 20, 60, 30));
+    }
+
     void emptyTableHasNoCellToFind()
     {
         for (const auto &size : {std::pair<int, int>{0, 0}, {0, 3}, {2, 0}}) {

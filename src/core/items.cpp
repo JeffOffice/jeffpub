@@ -525,8 +525,9 @@ QRectF TableItem::cellRect(int r, int c) const
     for (int i = 0; i < r; ++i) y += rowH[i];
     const auto &cl = cell(r, c);
     double w = 0, h = 0;
-    for (int i = c; i < std::min(cols, c + cl.colSpan); ++i) w += colW[i];
-    for (int i = r; i < std::min(rows, r + cl.rowSpan); ++i) h += rowH[i];
+    // Spans are counted from the cell and cut at the table's edge (c + span could overflow).
+    for (int i = c; i < cols && i - c < cl.colSpan; ++i) w += colW[i];
+    for (int i = r; i < rows && i - r < cl.rowSpan; ++i) h += rowH[i];
     return QRectF(x, y, w, h);
 }
 
@@ -655,8 +656,8 @@ void TableItem::fromJson(const QJsonObject &o)
         TableCell c;
         c.storyId = co["story"].toString();
         c.fill = Fill::fromJson(co["fill"].toObject());
-        c.rowSpan = co["rs"].toInt(1);
-        c.colSpan = co["cs"].toInt(1);
+        c.rowSpan = std::clamp(co["rs"].toInt(1), 1, std::max(1, rows));   // a damaged file's span stops at the table
+        c.colSpan = std::clamp(co["cs"].toInt(1), 1, std::max(1, cols));
         c.covered = co["covered"].toBool();
         c.diagonal = co["diag"].toInt();
         c.valign = VAlign(co["valign"].toInt());
