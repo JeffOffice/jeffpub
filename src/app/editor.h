@@ -198,7 +198,8 @@ public:
     void clearCharProperty(int prop, const QString &label);
     void toggleBold();
     void toggleItalic();
-    void toggleUnderline(QTextCharFormat::UnderlineStyle style = QTextCharFormat::SingleUnderline);
+    // kind: tp::UnderlineKind flags (double, words only, thick).
+    void toggleUnderline(QTextCharFormat::UnderlineStyle style = QTextCharFormat::SingleUnderline, int kind = 0);
     void toggleStrike();
     void toggleScript(bool super);
     void setFontFamily(const QString &f);
@@ -214,7 +215,9 @@ public:
     void setLineSpacing(int type, double value);
     void setParagraphSpacing(double before, double after);
     void changeIndent(int dir);
-    void setList(int kind, int format = 0, const QString &bullet = QString(), int start = 1);   // kind 0 none, 1 bullets, 2 numbers
+    // kind 0 none, 1 bullets, 2 numbers; indent: from the bullet to the text
+    // (Indent list by), or below 0 for at least the usual 18 points.
+    void setList(int kind, int format = 0, const QString &bullet = QString(), int start = 1, double indent = -1);
     void applyStyle(const QString &name);
     void setDropCap(int lines, int chars = 1, const QString &font = QString());
     void insertText(const QString &t);

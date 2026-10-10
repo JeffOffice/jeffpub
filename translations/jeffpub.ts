@@ -459,12 +459,12 @@ Back page story	4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1174"/>
+        <location line="+1203"/>
         <source>Format Painter</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-721"/>
+        <location line="-750"/>
         <source>Create Text Box Link</source>
         <translation type="unfinished"></translation>
     </message>
@@ -560,7 +560,12 @@ Back page story	4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+448"/>
+        <location line="+60"/>
+        <source>Release to swap the pictures</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+417"/>
         <source>Copy Text</source>
         <translation type="unfinished"></translation>
     </message>
@@ -727,7 +732,7 @@ Back page story	4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/core/document.cpp" line="+214"/>
+        <location filename="../src/core/document.cpp" line="+219"/>
         <source>Organization Name</source>
         <translation type="unfinished"></translation>
     </message>
@@ -896,12 +901,12 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+750"/>
+        <location line="+774"/>
         <source>Custom</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-727"/>
+        <location line="-751"/>
         <source>Portrait</source>
         <translation type="unfinished"></translation>
     </message>
@@ -922,20 +927,20 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+837"/>
-        <location line="+1407"/>
+        <location line="+861"/>
+        <location line="+1448"/>
         <source>Width:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-2243"/>
-        <location line="+835"/>
-        <location line="+1409"/>
+        <location line="-2308"/>
+        <location line="+859"/>
+        <location line="+1450"/>
         <source>Height:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-2243"/>
+        <location line="-2308"/>
         <source>Orientation:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -956,12 +961,12 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+893"/>
+        <location line="+917"/>
         <source>Top margin:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-892"/>
+        <location line="-916"/>
         <source>Horizontal gap:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1035,12 +1040,12 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+2008"/>
+        <location line="+2073"/>
         <source>Name:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1994"/>
+        <location line="-2059"/>
         <location line="+33"/>
         <source>Page Size</source>
         <translation type="unfinished"></translation>
@@ -1057,24 +1062,24 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+5"/>
-        <location line="+1151"/>
+        <location line="+1175"/>
         <source>New…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1151"/>
+        <location line="-1175"/>
         <source>Edit…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+367"/>
-        <location line="+784"/>
+        <location line="+387"/>
+        <location line="+788"/>
         <source>Delete</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1151"/>
+        <location line="-1175"/>
         <source>Use This Size</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1091,18 +1096,18 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+713"/>
+        <location line="+737"/>
         <source>Columns:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-712"/>
-        <location line="+713"/>
+        <location line="-736"/>
+        <location line="+737"/>
         <source>Column spacing:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-712"/>
+        <location line="-736"/>
         <source>Rows:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1154,30 +1159,30 @@ Back page story	4</source>
     </message>
     <message>
         <location line="-68"/>
-        <location line="+249"/>
+        <location line="+269"/>
         <source>Add</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-249"/>
+        <location line="-269"/>
         <source>Move</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1746"/>
+        <location line="+1784"/>
         <source>Position:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1740"/>
-        <location line="+374"/>
-        <location line="+1452"/>
+        <location line="-1778"/>
+        <location line="+398"/>
+        <location line="+1493"/>
         <source>Remove</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1826"/>
+        <location line="-1891"/>
         <source>Remove All</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1228,114 +1233,114 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+10"/>
-        <location line="+70"/>
-        <location line="+17"/>
+        <location line="+91"/>
+        <location line="+16"/>
         <location line="+1"/>
         <source>Font</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-79"/>
+        <location line="-99"/>
         <source>Regular</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+1343"/>
+        <location line="+1367"/>
         <location line="+100"/>
         <source>Italic</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1443"/>
-        <location line="+1341"/>
+        <location line="-1467"/>
+        <location line="+1365"/>
         <location line="+102"/>
         <source>Bold</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1443"/>
+        <location line="-1467"/>
         <source>Bold Italic</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
-        <location line="+1423"/>
+        <location line="+10"/>
+        <location line="+1444"/>
         <location line="+2"/>
         <source>(none)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1425"/>
-        <location line="+92"/>
-        <location line="+359"/>
+        <location line="-1445"/>
+        <location line="+108"/>
+        <location line="+363"/>
         <source>Single</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-451"/>
+        <location line="-470"/>
         <source>Words only</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+0"/>
-        <location line="+451"/>
+        <location line="+1"/>
+        <location line="+469"/>
         <source>Double</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-451"/>
+        <location line="-467"/>
         <source>Dotted</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>Dashed</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+3"/>
         <source>Wave</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
-        <location line="+285"/>
+        <location line="+12"/>
+        <location line="+288"/>
         <location line="+468"/>
         <location line="+582"/>
-        <location line="+111"/>
+        <location line="+125"/>
         <source>Font:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1444"/>
+        <location line="-1461"/>
         <source>Font style:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1333"/>
-        <location line="+110"/>
+        <location line="+1336"/>
+        <location line="+124"/>
         <source>Size:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1441"/>
+        <location line="-1458"/>
         <source>Underline:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+278"/>
+        <location line="+281"/>
         <location line="+282"/>
         <location line="+733"/>
-        <location line="+151"/>
-        <location line="+315"/>
+        <location line="+165"/>
+        <location line="+342"/>
         <source>Color:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1756"/>
+        <location line="-1800"/>
         <source>Effects</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1366,14 +1371,14 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+1271"/>
+        <location line="+1274"/>
         <location line="+2"/>
         <location line="+20"/>
         <source>Shadow</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1292"/>
+        <location line="-1295"/>
         <source>Outline</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1393,7 +1398,7 @@ Back page story	4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="+47"/>
         <location line="+133"/>
         <source>Paragraph</source>
         <translation type="unfinished"></translation>
@@ -1401,26 +1406,26 @@ Back page story	4</source>
     <message>
         <location line="-128"/>
         <location line="+63"/>
-        <location line="+1294"/>
+        <location line="+1298"/>
         <source>Left</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1357"/>
+        <location line="-1361"/>
         <location line="+63"/>
-        <location line="+1294"/>
+        <location line="+1298"/>
         <source>Center</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1357"/>
+        <location line="-1361"/>
         <location line="+63"/>
-        <location line="+1294"/>
+        <location line="+1298"/>
         <source>Right</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1357"/>
+        <location line="-1361"/>
         <source>Justified</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1451,29 +1456,29 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+219"/>
+        <location line="+223"/>
         <source>Left to right</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-219"/>
+        <location line="-223"/>
         <source>Right to left</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1350"/>
+        <location line="+1368"/>
         <source>Alignment:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1349"/>
-        <location line="+222"/>
+        <location line="-1367"/>
+        <location line="+226"/>
         <source>Direction:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-221"/>
+        <location line="-225"/>
         <source>Left indent:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1489,24 +1494,24 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+1346"/>
+        <location line="+1364"/>
         <source>Space before:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1345"/>
-        <location line="+1346"/>
+        <location line="-1363"/>
+        <location line="+1364"/>
         <source>Space after:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1342"/>
-        <location line="+1779"/>
+        <location line="-1360"/>
+        <location line="+1824"/>
         <source>Line spacing:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1777"/>
+        <location line="-1822"/>
         <source>Indents and Spacing</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1557,7 +1562,7 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+302"/>
+        <location line="+306"/>
         <location line="+39"/>
         <location line="+68"/>
         <location line="+88"/>
@@ -1565,7 +1570,7 @@ Back page story	4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-497"/>
+        <location line="-501"/>
         <source>Dot</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1615,17 +1620,37 @@ Back page story	4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+22"/>
         <source>Indent list by:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-18"/>
         <source>Bullets</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-257"/>
+        <source>Thick</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Dot dash</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Dot dot dash</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Double wave</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+258"/>
         <source>Format:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1640,7 +1665,7 @@ Back page story	4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+20"/>
         <location line="+35"/>
         <location line="+4"/>
         <source>Drop Cap</source>
@@ -1894,12 +1919,12 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+1408"/>
+        <location line="+1449"/>
         <source>Rotation:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1406"/>
+        <location line="-1447"/>
         <source>Size</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1940,18 +1965,18 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+1388"/>
+        <location line="+1429"/>
         <source>Horizontal position:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1387"/>
-        <location line="+1388"/>
+        <location line="-1428"/>
+        <location line="+1429"/>
         <source>Vertical position:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1387"/>
+        <location line="-1428"/>
         <source>Wrapping style:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2243,12 +2268,12 @@ Back page story	4</source>
     <message>
         <location line="-24"/>
         <location line="+121"/>
-        <location line="+1146"/>
+        <location line="+1187"/>
         <source>Click in a text box first.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1261"/>
+        <location line="-1302"/>
         <location line="+5"/>
         <source>Insert Symbol</source>
         <translation type="unfinished"></translation>
@@ -2821,12 +2846,12 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+779"/>
+        <location line="+820"/>
         <source>Base color:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-778"/>
+        <location line="-819"/>
         <source>Tint (left) or shade (right):</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2909,18 +2934,18 @@ Back page story	4</source>
     <message>
         <location line="+24"/>
         <location line="+5"/>
-        <location line="+58"/>
+        <location line="+72"/>
         <source>New Style</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-58"/>
-        <location line="+58"/>
+        <location line="-72"/>
+        <location line="+72"/>
         <source>Modify Style</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-50"/>
+        <location line="-64"/>
         <source>Character style (applies to selected text only)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2935,7 +2960,7 @@ Back page story	4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+17"/>
         <source>Style name:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3192,11 +3217,28 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+3"/>
+        <location line="+51"/>
         <source>Number format:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+41"/>
+        <location line="-11"/>
+        <location line="+18"/>
+        <source>Page Number Format</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-6"/>
+        <source>Start numbering at:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>This changes every page number in the publication. A page number given its own format keeps it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <location line="+145"/>
         <source>Properties</source>
         <translation type="unfinished"></translation>
@@ -3691,7 +3733,7 @@ Back page story	4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/io/pubexport.cpp" line="+2187"/>
+        <location filename="../src/io/pubexport.cpp" line="+2201"/>
         <source>%1 object(s) couldn&apos;t be saved to .pub</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3916,7 +3958,7 @@ Open them with your email program to send.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1005"/>
+        <location line="+1010"/>
         <source>A %1 picture could not be displayed.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5218,7 +5260,7 @@ Download it from %2 now? (%3, once.)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+268"/>
+        <location line="+291"/>
         <source>Fill: Main</source>
         <translation type="unfinished"></translation>
     </message>
@@ -8134,7 +8176,7 @@ Desktop publishing</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/text/textengine.cpp" line="+92"/>
+        <location filename="../src/text/textengine.cpp" line="+103"/>
         <source>«Greeting Line»</source>
         <translation type="unfinished"></translation>
     </message>
@@ -8164,7 +8206,7 @@ Desktop publishing</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1909"/>
+        <location line="+1972"/>
         <source>Notes</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9461,7 +9503,7 @@ Source: %3</source>
     </message>
     <message>
         <location line="+108"/>
-        <location filename="../src/app/editor_text.cpp" line="+515"/>
+        <location filename="../src/app/editor_text.cpp" line="+517"/>
         <location line="+72"/>
         <location line="+21"/>
         <location line="+87"/>
@@ -9635,7 +9677,7 @@ Source: %3</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/editor_text.cpp" line="-532"/>
+        <location filename="../src/app/editor_text.cpp" line="-534"/>
         <source>Bold</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9645,7 +9687,7 @@ Source: %3</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
         <source>Underline</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9754,7 +9796,7 @@ Source: %3</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+55"/>
+        <location line="+56"/>
         <source>Apply Style</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10135,7 +10177,7 @@ Source: %3</source>
     <name>jp::MainWindow</name>
     <message>
         <location filename="../src/app/mainwindow.cpp" line="-1050"/>
-        <location filename="../src/app/mainwindow_actions.cpp" line="+601"/>
+        <location filename="../src/app/mainwindow_actions.cpp" line="+596"/>
         <source>%1 (%2)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10153,7 +10195,7 @@ Source: %3</source>
         <location line="+130"/>
         <location line="+17"/>
         <location line="+161"/>
-        <location filename="../src/app/mainwindow_actions.cpp" line="-457"/>
+        <location filename="../src/app/mainwindow_actions.cpp" line="-452"/>
         <source>Open</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10281,7 +10323,7 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     <message>
         <location line="+9"/>
         <location line="+7"/>
-        <location filename="../src/app/mainwindow_actions.cpp" line="+507"/>
+        <location filename="../src/app/mainwindow_actions.cpp" line="+502"/>
         <source>Delete</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10320,7 +10362,7 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
         <location line="+44"/>
         <location line="+62"/>
         <location line="+16"/>
-        <location filename="../src/app/mainwindow_actions.cpp" line="-503"/>
+        <location filename="../src/app/mainwindow_actions.cpp" line="-498"/>
         <source>Create PDF</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10417,7 +10459,7 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     <message>
         <location line="+0"/>
         <location filename="../src/app/mainwindow_actions.cpp" line="-10"/>
-        <location line="+535"/>
+        <location line="+530"/>
         <source>All Files (*)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10500,8 +10542,8 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
         <location line="+18"/>
         <location line="+8"/>
         <location line="+4"/>
-        <location filename="../src/app/mainwindow_actions.cpp" line="-524"/>
-        <location line="+1071"/>
+        <location filename="../src/app/mainwindow_actions.cpp" line="-519"/>
+        <location line="+1076"/>
         <source>Save as Picture</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10601,7 +10643,7 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="+21"/>
-        <location filename="../src/app/mainwindow_actions.cpp" line="-1070"/>
+        <location filename="../src/app/mainwindow_actions.cpp" line="-1075"/>
         <source>Save as Web Page</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10619,7 +10661,7 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     <message>
         <location line="-25"/>
         <location line="+11"/>
-        <location filename="../src/app/mainwindow_actions.cpp" line="+955"/>
+        <location filename="../src/app/mainwindow_actions.cpp" line="+960"/>
         <source>Change Picture</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10646,7 +10688,7 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     <message>
         <location line="+15"/>
         <location line="+33"/>
-        <location filename="../src/app/mainwindow_actions.cpp" line="-109"/>
+        <location filename="../src/app/mainwindow_actions.cpp" line="-119"/>
         <location line="+10"/>
         <source>Text Fit</source>
         <translation type="unfinished"></translation>
@@ -10671,7 +10713,7 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/mainwindow_actions.cpp" line="-369"/>
+        <location filename="../src/app/mainwindow_actions.cpp" line="-364"/>
         <source>New</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10687,12 +10729,12 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+181"/>
+        <location line="+176"/>
         <source>Publications (*.jpub *.pub)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-181"/>
+        <location line="-176"/>
         <source>JeffPub Publications (*.jpub)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10754,12 +10796,12 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+478"/>
+        <location line="+473"/>
         <source>Duplicate</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-477"/>
+        <location line="-472"/>
         <source>Delete Object</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10810,12 +10852,12 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+153"/>
+        <location line="+148"/>
         <source>Pictures</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-152"/>
+        <location line="-147"/>
         <location filename="../src/app/mainwindow_ribbon.cpp" line="-610"/>
         <location line="+1"/>
         <source>Shapes</source>
@@ -10828,13 +10870,13 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+161"/>
+        <location line="+156"/>
         <location filename="../src/app/mainwindow_ribbon.cpp" line="+136"/>
         <source>Text Art</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-159"/>
+        <location line="-154"/>
         <source>Select All %1</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10869,7 +10911,7 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+1"/>
         <source>Dotted Underline</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10916,12 +10958,12 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     <message>
         <location line="+1"/>
         <location line="+3"/>
-        <location line="+857"/>
+        <location line="+867"/>
         <source>Small Caps</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-855"/>
+        <location line="-865"/>
         <location line="+3"/>
         <source>All Caps</source>
         <translation type="unfinished"></translation>
@@ -10958,38 +11000,38 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+1123"/>
+        <location line="+1146"/>
         <source>Very Tight</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1123"/>
+        <location line="-1146"/>
         <location line="+252"/>
-        <location line="+871"/>
+        <location line="+894"/>
         <source>Tight</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1123"/>
+        <location line="-1146"/>
         <location line="+389"/>
-        <location line="+734"/>
+        <location line="+757"/>
         <source>Normal</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1123"/>
-        <location line="+1123"/>
+        <location line="-1146"/>
+        <location line="+1146"/>
         <source>Loose</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1123"/>
-        <location line="+1123"/>
+        <location line="-1146"/>
+        <location line="+1146"/>
         <source>Very Loose</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1117"/>
+        <location line="-1140"/>
         <source>Character Spacing</source>
         <translation type="unfinished"></translation>
     </message>
@@ -11018,13 +11060,13 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
         <location line="+219"/>
         <location line="+87"/>
         <location line="+76"/>
-        <location line="+369"/>
+        <location line="+370"/>
         <location filename="../src/app/mainwindow_ribbon.cpp" line="+143"/>
         <source>None</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-750"/>
+        <location line="-751"/>
         <source>Bullets and Numbering…</source>
         <translation type="unfinished"></translation>
     </message>
@@ -11061,12 +11103,12 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="-190"/>
-        <location line="+1095"/>
+        <location line="+1118"/>
         <source>Center</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1094"/>
+        <location line="-1117"/>
         <location line="+191"/>
         <source>Align Right</source>
         <translation type="unfinished"></translation>
@@ -11242,7 +11284,7 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="+2"/>
-        <source>This publication has no table of contents yet: Insert &gt; Table of Contents adds one.</source>
+        <source>This publication has no table of contents yet: Insert &gt; References &gt; Table of Contents adds one.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -11652,41 +11694,42 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="+6"/>
-        <location line="+445"/>
+        <location line="+446"/>
         <source>Narrow</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-445"/>
-        <location line="+445"/>
+        <location line="-446"/>
+        <location line="+446"/>
         <source>Moderate</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-445"/>
-        <location line="+445"/>
+        <location line="-446"/>
+        <location line="+446"/>
         <source>Wide</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-445"/>
+        <location line="-446"/>
         <source>Extra Wide</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+446"/>
+        <location line="+447"/>
         <location line="+1"/>
         <source>Margins</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-444"/>
+        <location line="-445"/>
+        <location line="+437"/>
         <source>Custom Margins…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-436"/>
         <source>Create New Page Size…</source>
         <translation type="unfinished"></translation>
     </message>
@@ -12323,7 +12366,7 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
     <message>
         <location line="+4"/>
         <location line="+10"/>
-        <location line="+263"/>
+        <location line="+273"/>
         <location line="+1"/>
         <location filename="../src/app/mainwindow_ribbon.cpp" line="-82"/>
         <location line="+60"/>
@@ -12331,7 +12374,7 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-272"/>
+        <location line="-282"/>
         <source>Picture Fill…</source>
         <translation type="unfinished"></translation>
     </message>
@@ -12363,24 +12406,24 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
     </message>
     <message>
         <location line="+0"/>
-        <location line="+147"/>
+        <location line="+157"/>
         <location filename="../src/app/mainwindow_ribbon.cpp" line="-39"/>
         <source>Outline</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-146"/>
+        <location line="-156"/>
         <source>More Lines…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+142"/>
+        <location line="+152"/>
         <source>Shadow</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-134"/>
+        <location line="-144"/>
         <source>No Shadow</source>
         <translation type="unfinished"></translation>
     </message>
@@ -12593,7 +12636,12 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+13"/>
+        <source>Cell Margins</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Create Link</source>
         <translation type="unfinished"></translation>
     </message>
@@ -12909,7 +12957,7 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+15"/>
         <source>Insert Above</source>
         <translation type="unfinished"></translation>
     </message>
@@ -12941,27 +12989,37 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Delete Rows</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
+        <source>Click in the row to delete, then choose Delete Rows. Delete Table removes the whole table.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Delete Row</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Delete Columns</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Delete Column</source>
+        <location line="+1"/>
+        <source>Click in the column to delete, then choose Delete Columns. Delete Table removes the whole table.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>Delete Column</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Delete Table</source>
         <translation type="unfinished"></translation>
     </message>

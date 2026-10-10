@@ -224,12 +224,7 @@ void MainWindow::createActions()
     mk("fmt.bold", tr("Bold"), "bold", QKeySequence::Bold, [ed] { ed->toggleBold(); }, true);
     mk("fmt.italic", tr("Italic"), "italic", QKeySequence::Italic, [ed] { ed->toggleItalic(); }, true);
     mk("fmt.underline", tr("Underline"), "underline", QKeySequence::Underline, [ed] { ed->toggleUnderline(); }, true);
-    mk("fmt.underlineDouble", tr("Double Underline"), "", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_D), [ed] {
-        QTextCharFormat f;
-        f.setUnderlineStyle(QTextCharFormat::SingleUnderline);
-        f.setProperty(QTextFormat::UserProperty + 60, true);
-        ed->toggleUnderline();
-    });
+    mk("fmt.underlineDouble", tr("Double Underline"), "", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_D), [ed] { ed->toggleUnderline(QTextCharFormat::SingleUnderline, 1); });
     mk("fmt.underlineDotted", tr("Dotted Underline"), "", QKeySequence(), [ed] { ed->toggleUnderline(QTextCharFormat::DotLine); });
     mk("fmt.underlineDash", tr("Dashed Underline"), "", QKeySequence(), [ed] { ed->toggleUnderline(QTextCharFormat::DashUnderline); });
     mk("fmt.underlineWave", tr("Wavy Underline"), "", QKeySequence(), [ed] { ed->toggleUnderline(QTextCharFormat::WaveUnderline); });
@@ -386,7 +381,7 @@ void MainWindow::createActions()
     });
     mk("ins.updateToc", tr("Update Table"), "refresh-cw", QKeySequence(), [this] {
         if (!updateTablesOfContents(m_ed))
-            statusBar()->showMessage(tr("This publication has no table of contents yet: Insert > Table of Contents adds one."), 6000);
+            statusBar()->showMessage(tr("This publication has no table of contents yet: Insert > References > Table of Contents adds one."), 6000);
     });
     mk("ins.datetime", tr("Date & Time"), "calendar-clock", QKeySequence(), [this] { dateTimeDialog(this, m_ed); });
     mk("ins.object", tr("Object"), "paperclip", QKeySequence(), [this] {
@@ -424,7 +419,7 @@ void MainWindow::createActions()
         else pageNumberDialog(this, m_ed);
     });
     mk("ins.pageCount", tr("Insert Page Count"), "", QKeySequence(), [ed] { ed->insertField(QStringLiteral("pages")); });
-    mk("ins.pageNumberFormat", tr("Format Page Numbers…"), "", QKeySequence(), [this] { pageNumberDialog(this, m_ed); });
+    mk("ins.pageNumberFormat", tr("Format Page Numbers…"), "", QKeySequence(), [this] { pageNumberFormatDialog(this, m_ed); });
     for (const QString &k : BusinessInfo::keys()) {
         mk("biz." + k, BusinessInfo::label(k), "", QKeySequence(), [this, k] {
             if (m_ed->isEditingText()) { m_ed->insertField("biz:" + k); return; }
@@ -1039,6 +1034,7 @@ void MainWindow::createActions()
            });
     }
     mk("cols.more", tr("More Columns…"), "", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 3); });
+    mk("tb.customMargins", tr("Custom Margins…"), "", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 3); });   // the Text Box tab: margins and columns
     struct BoxMargin { const char *id; QString name; double pts; };
     const BoxMargin tbMargins[] = {{"None", tr("None"), 0}, {"Narrow", tr("Narrow"), 2.88}, {"Moderate", tr("Moderate"), 7.2}, {"Wide", tr("Wide"), 14.4}};
     for (const auto &m : tbMargins) {
@@ -1047,6 +1043,15 @@ void MainWindow::createActions()
             Item *it = ed->isEditingText() ? ed->doc()->item(ed->textTarget().itemId) : ed->single();
             if (auto *t = dynamic_cast<TextItem *>(it)) ed->change(tr("Margins"), [t, v] { t->insets = QMarginsF(v, v, v, v); });
             else if (auto *s = dynamic_cast<ShapeItem *>(it)) ed->change(tr("Margins"), [s, v] { s->insets = QMarginsF(v, v, v, v); });
+            else if (auto *tb = dynamic_cast<TableItem *>(it)) {
+                // The cell the text cursor is in, or with the table selected, every cell.
+                const int r = ed->isEditingText() ? ed->textTarget().row : -1, c = ed->isEditingText() ? ed->textTarget().col : -1;
+                ed->change(tr("Cell Margins"), [tb, v, r, c] {
+                    for (int rr = 0; rr < tb->rows; ++rr)
+                        for (int cc = 0; cc < tb->cols; ++cc)
+                            if (r < 0 || (rr == r && cc == c)) tb->cell(rr, cc).margins = QMarginsF(v, v, v, v);
+                });
+            }
         });
     }
     mk("tb.link", tr("Create Link"), "link-2", QKeySequence(), [ed] {
@@ -1252,21 +1257,34 @@ void MainWindow::createActions()
     mk("obj.transparency", tr("Transparency…"), "blend", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 4); });
 
     // ---------------- Tables ----------------
+    // A row and column command: on the cell the text cursor is in, or with the
+    // whole table selected, -1 (callers choose: the ends to insert at, and
+    // nothing to delete).
     auto tableEdit = [this](const QString &label, const std::function<void(TableItem *, int, int)> &fn) {
         TableItem *t = selTable(m_ed);
         if (!t) return;
-        const int r = m_ed->isEditingText() ? m_ed->textTarget().row : 0;
-        const int c = m_ed->isEditingText() ? m_ed->textTarget().col : 0;
+        const int r = m_ed->isEditingText() ? m_ed->textTarget().row : -1;
+        const int c = m_ed->isEditingText() ? m_ed->textTarget().col : -1;
         m_ed->endTextEdit();
         m_ed->change(label, [&] { fn(t, r, c); });
         m_ed->select(t->id);
     };
-    mk("tbl.insAbove", tr("Insert Above"), "between-horizontal-end", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Row"), [this](TableItem *t, int r, int) { tableInsertRow(m_ed, t, r); }); });
-    mk("tbl.insBelow", tr("Insert Below"), "between-horizontal-start", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Row"), [this](TableItem *t, int r, int) { tableInsertRow(m_ed, t, r + 1); }); });
-    mk("tbl.insLeft", tr("Insert Left"), "between-vertical-end", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Column"), [this](TableItem *t, int, int c) { tableInsertCol(m_ed, t, c); }); });
-    mk("tbl.insRight", tr("Insert Right"), "between-vertical-start", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Column"), [this](TableItem *t, int, int c) { tableInsertCol(m_ed, t, c + 1); }); });
-    mk("tbl.delRow", tr("Delete Rows"), "", QKeySequence(), [tableEdit] { tableEdit(tr("Delete Row"), [](TableItem *t, int r, int) { tableDeleteRow(t, r); }); });
-    mk("tbl.delCol", tr("Delete Columns"), "", QKeySequence(), [tableEdit] { tableEdit(tr("Delete Column"), [](TableItem *t, int, int c) { tableDeleteCol(t, c); }); });
+    mk("tbl.insAbove", tr("Insert Above"), "between-horizontal-end", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Row"), [this](TableItem *t, int r, int) { tableInsertRow(m_ed, t, std::max(0, r)); }); });
+    mk("tbl.insBelow", tr("Insert Below"), "between-horizontal-start", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Row"), [this](TableItem *t, int r, int) { tableInsertRow(m_ed, t, r < 0 ? t->rows : r + 1); }); });
+    mk("tbl.insLeft", tr("Insert Left"), "between-vertical-end", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Column"), [this](TableItem *t, int, int c) { tableInsertCol(m_ed, t, std::max(0, c)); }); });
+    mk("tbl.insRight", tr("Insert Right"), "between-vertical-start", QKeySequence(), [this, tableEdit] { tableEdit(tr("Insert Column"), [this](TableItem *t, int, int c) { tableInsertCol(m_ed, t, c < 0 ? t->cols : c + 1); }); });
+    auto needCell = [this](const QString &what) {
+        if (selTable(m_ed) && !m_ed->isEditingText()) { Q_EMIT m_ed->status(what); return true; }
+        return false;
+    };
+    mk("tbl.delRow", tr("Delete Rows"), "", QKeySequence(), [tableEdit, needCell, this] {
+        if (needCell(tr("Click in the row to delete, then choose Delete Rows. Delete Table removes the whole table."))) return;
+        tableEdit(tr("Delete Row"), [](TableItem *t, int r, int) { tableDeleteRow(t, r); });
+    });
+    mk("tbl.delCol", tr("Delete Columns"), "", QKeySequence(), [tableEdit, needCell, this] {
+        if (needCell(tr("Click in the column to delete, then choose Delete Columns. Delete Table removes the whole table."))) return;
+        tableEdit(tr("Delete Column"), [](TableItem *t, int, int c) { tableDeleteCol(t, c); });
+    });
     mk("tbl.delTable", tr("Delete Table"), "", QKeySequence(), [this] {
         if (TableItem *t = selTable(m_ed)) { m_ed->endTextEdit(); m_ed->deleteItems({t->id}); }
     });

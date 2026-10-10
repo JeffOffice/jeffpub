@@ -161,9 +161,12 @@ GridGuides GridGuides::fromJson(const QJsonObject &o)
 
 QJsonObject PageSetup::toJson() const
 {
-    return {{"size", sizeJ(size)}, {"margins", margJ(margins)}, {"sizeName", sizeName}, {"layout", int(layout)}, {"fold", int(fold)},
-            {"sheet", sizeJ(sheet)}, {"gridRows", gridRows}, {"gridCols", gridCols}, {"gapH", gapH}, {"gapV", gapV},
-            {"sideMargin", sideMargin}, {"topMargin", topMargin}};
+    QJsonObject o{{"size", sizeJ(size)}, {"margins", margJ(margins)}, {"sizeName", sizeName}, {"layout", int(layout)}, {"fold", int(fold)},
+                  {"sheet", sizeJ(sheet)}, {"gridRows", gridRows}, {"gridCols", gridCols}, {"gapH", gapH}, {"gapV", gapV},
+                  {"sideMargin", sideMargin}, {"topMargin", topMargin}};
+    if (firstPageNumber != 1) o["firstPageNumber"] = firstPageNumber;
+    if (!pageNumberFormat.isEmpty()) o["pageNumberFormat"] = pageNumberFormat;
+    return o;
 }
 PageSetup PageSetup::fromJson(const QJsonObject &o)
 {
@@ -181,6 +184,8 @@ PageSetup PageSetup::fromJson(const QJsonObject &o)
     s.gridCols = o["gridCols"].toInt(1);
     s.gapH = o["gapH"].toDouble();
     s.gapV = o["gapV"].toDouble();
+    s.firstPageNumber = std::clamp(o["firstPageNumber"].toInt(1), 1, 99999);
+    s.pageNumberFormat = o["pageNumberFormat"].toString();
     s.sideMargin = o["sideMargin"].toDouble();
     s.topMargin = o["topMargin"].toDouble();
     return s;
@@ -709,6 +714,27 @@ const TextStyle *Document::style(const QString &name) const
     for (const auto &s : styles)
         if (s.name == name) return &s;
     return nullptr;
+}
+
+TextStyle Document::resolvedStyle(const QString &name) const
+{
+    const TextStyle *s = style(name);
+    if (!s) return TextStyle();
+    // The chain from the style to its furthest base, stopping at a loop.
+    QVector<const TextStyle *> chain{s};
+    while (chain.size() < 16 && !chain.last()->basedOn.isEmpty()) {
+        const TextStyle *b = style(chain.last()->basedOn);
+        if (!b || chain.contains(b)) break;
+        chain << b;
+    }
+    TextStyle out = *s;
+    out.chr = QTextCharFormat();
+    out.blk = QTextBlockFormat();
+    for (auto it = chain.crbegin(); it != chain.crend(); ++it) {
+        tp::setProperties(out.chr, (*it)->chr);
+        tp::setProperties(out.blk, (*it)->blk);
+    }
+    return out;
 }
 
 static QJsonObject pageBaseJ(const PageBase &p)

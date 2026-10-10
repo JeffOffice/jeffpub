@@ -91,6 +91,11 @@ struct PageSetup {
     QSizeF sheet{612, 792};
     int gridRows = 1, gridCols = 1;
     double gapH = 0, gapV = 0, sideMargin = 0, topMargin = 0;
+    // Format Page Numbers: the first page's number, and the style of the page
+    // numbers that don't choose one: "" 1 2 3, "alpha" a b c, "ALPHA" A B C,
+    // "roman" i ii iii, "ROMAN" I II III.
+    int firstPageNumber = 1;
+    QString pageNumberFormat;
     QJsonObject toJson() const;
     static PageSetup fromJson(const QJsonObject &o);
 };
@@ -252,6 +257,9 @@ public:
 
     // styles and info
     const TextStyle *style(const QString &name) const;
+    // A style with what it doesn't set taken from the style it's based on
+    // (and that one's, and so on). A null name when there is no such style.
+    TextStyle resolvedStyle(const QString &name) const;
     BusinessInfo &business() { return biz[std::clamp(bizCurrent, 0, int(biz.size()) - 1)]; }
     const BusinessInfo &business() const { return biz[std::clamp(bizCurrent, 0, int(biz.size()) - 1)]; }
 

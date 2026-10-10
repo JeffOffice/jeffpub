@@ -323,11 +323,18 @@ void fillUnderline(librevenge::RVNGPropertyList &props, const Underline underlin
   case Underline::ThickDash:
   case Underline::ThickDotDash:
   case Underline::ThickDotDotDash:
+  case Underline::ThickLongDash:
     props.insert("style:text-underline-width", "bold");
     break;
   default:
     props.insert("style:text-underline-width", "auto");
     break;
+  }
+
+  // JeffPub: words only (ODF's underline mode), which went as a plain underline.
+  if (underline == Underline::WordsOnly)
+  {
+    props.insert("style:text-underline-mode", "skip-white-space");
   }
 
   switch (underline)

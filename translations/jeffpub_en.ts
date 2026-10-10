@@ -4,7 +4,7 @@
 <context>
     <name>Dialogs</name>
     <message numerus="yes">
-        <location filename="../../src/app/dialogs.cpp" line="+2685"/>
+        <location filename="../../src/app/dialogs.cpp" line="+2750"/>
         <source>Added %n page(s) for the rest of the text.</source>
         <translation>
             <numerusform>Added %n page for the rest of the text.</numerusform>

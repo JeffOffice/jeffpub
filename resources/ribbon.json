@@ -307,7 +307,7 @@
         {"large": {"id": "ribbon.columns", "text": "Columns", "icon": "columns-2"}, "keytip": "CO", "menu": [
           "cols.1", "cols.2", "cols.3", "cols.4", "-", "cols.more"]},
         {"large": {"id": "ribbon.textBoxMargins", "text": "Margins", "icon": "square-dashed"}, "keytip": "MG", "menu": [
-          "tbmargin.None", "tbmargin.Narrow", "tbmargin.Moderate", "tbmargin.Wide", "-", "cols.more"]}
+          "tbmargin.None", "tbmargin.Narrow", "tbmargin.Moderate", "tbmargin.Wide", "-", "tb.customMargins"]}
       ]},
       {"name": "Linking", "keytip": "ZK", "items": [
         {"large": "tb.link", "keytip": "CL"},

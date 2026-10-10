@@ -42,7 +42,7 @@ A header is text at the top of every page. A footer is text at the bottom.
 3. Clear **Show page number on first page** if you do not want a number on a cover. JeffPub then makes a second master for page 1.
 4. Click **OK**.
 
-The number box goes on the master your current page uses, so it shows on every page that uses it. If your cursor is in a text box, **Page Number** (or Alt+Shift+P) puts the number there instead. The arrow beside the button offers **Insert Page Count**, for "Page 2 of 8", and **Format Page Numbers…**, which opens the same **Page Number** window.
+The number box goes on the master your current page uses, so it shows on every page that uses it. If your cursor is in a text box, **Page Number** (or Alt+Shift+P) puts the number there instead. The arrow beside the button offers **Insert Page Count**, for "Page 2 of 8", and **Format Page Numbers…**, which sets how every page number in the publication looks (1, 2, 3; a, b, c; A, B, C; i, ii, iii; or I, II, III) and the number the first page starts at. For example, a book whose first page is page 5 starts numbering at 5.
 
 ## Related
 

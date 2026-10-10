@@ -304,6 +304,271 @@ private Q_SLOTS:
         for (auto it = back->images.cbegin(); it != back->images.cend(); ++it) QCOMPARE(it->format, QStringLiteral("jpg"));
     }
 
+    // Underlines keep their kind: Double Underline (Ctrl+Shift+D) made a
+    // single one, and the Font dialog's Words only and Double did too; .pub
+    // files kept only single ones, both opening and saving.
+    void underlineKindsKept()
+    {
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        auto box = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 72, 400, 200), QStringLiteral("one two\nthree four\nfive six\nseven eight\nnine ten")));
+        ed->addItem(box);
+        auto runFormat = [&](int block) {
+            QTextCursor c(ed->doc()->storyDoc(box->storyId)->findBlockByNumber(block));
+            c.movePosition(QTextCursor::NextCharacter);
+            return c.charFormat();
+        };
+        auto selectBlock = [&](int block) {
+            ed->beginTextEdit(box->id);
+            QTextCursor c(ed->editDoc()->findBlockByNumber(block));
+            c.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+            ed->setCursor(c);
+        };
+        selectBlock(0);
+        w.act(QStringLiteral("fmt.underlineDouble"))->trigger();
+        ed->endTextEdit();
+        QCOMPARE(runFormat(0).underlineStyle(), QTextCharFormat::SingleUnderline);
+        QCOMPARE(runFormat(0).intProperty(jp::tp::UnderlineKind), 1);
+        const struct { int block; QTextCharFormat::UnderlineStyle style; int kind; } want[] = {
+            {1, QTextCharFormat::SingleUnderline, 2}, {2, QTextCharFormat::DotLine, 4}, {3, QTextCharFormat::DashDotLine, 0}, {4, QTextCharFormat::WaveUnderline, 1}};
+        for (const auto &u : want) {
+            selectBlock(u.block);
+            ed->toggleUnderline(u.style, u.kind);
+            ed->endTextEdit();
+        }
+        QCOMPARE(runFormat(1).intProperty(jp::tp::UnderlineKind), 2);
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) {
+            QString e;
+            jp::savePublication(*ed->doc(), qEnvironmentVariable("JP_SHOT_DIR") + QStringLiteral("/underlines.jpub"), QImage(), &e);
+        }
+        // Through a .pub file and back.
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("underlines.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*ed->doc(), path, &err), qPrintable(err));
+        auto back = jp::importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QTextDocument *story = nullptr;
+        for (auto it = back->stories.cbegin(); it != back->stories.cend(); ++it)
+            if ((*it)->doc->toPlainText().startsWith(QLatin1String("one two"))) story = (*it)->doc.get();
+        QVERIFY(story);
+        auto backFormat = [&](int block) {
+            QTextCursor c(story->findBlockByNumber(block));
+            c.movePosition(QTextCursor::NextCharacter);
+            return c.charFormat();
+        };
+        QCOMPARE(backFormat(0).intProperty(jp::tp::UnderlineKind), 1);
+        QCOMPARE(backFormat(1).intProperty(jp::tp::UnderlineKind), 2);
+        QCOMPARE(backFormat(2).underlineStyle(), QTextCharFormat::DotLine);
+        QCOMPARE(backFormat(2).intProperty(jp::tp::UnderlineKind), 4);
+        QCOMPARE(backFormat(3).underlineStyle(), QTextCharFormat::DashDotLine);
+        QCOMPARE(backFormat(4).underlineStyle(), QTextCharFormat::WaveUnderline);
+        QCOMPARE(backFormat(4).intProperty(jp::tp::UnderlineKind), 1);
+    }
+
+    // Bullets and Numbering's "Indent list by" sets the list's indent (it
+    // was ignored), and a style takes what it doesn't set from the style
+    // it's based on (Based on was saved but never used).
+    void listIndentAndBasedOn()
+    {
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        auto box = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 72, 400, 200), QStringLiteral("first\nsecond")));
+        ed->addItem(box);
+        ed->beginTextEdit(box->id, 0);
+        double shown = -1;
+        QTimer::singleShot(0, [&shown] {
+            auto *d = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            if (!d) return;
+            if (auto *indent = d->findChild<QDoubleSpinBox *>(QStringLiteral("indent"))) {
+                shown = indent->value();
+                indent->setValue(36);
+            }
+            d->accept();   // whatever was found, so a failure can't leave it open
+        });
+        w.act(QStringLiteral("para.bulletsDialog"))->trigger();
+        QCOMPARE(shown, 18.0);
+        QTextBlockFormat bf = ed->editDoc()->firstBlock().blockFormat();
+        QCOMPARE(bf.leftMargin(), 36.0);
+        QCOMPARE(bf.textIndent(), -36.0);
+        QVERIFY(ed->editDoc()->firstBlock().textList());
+        ed->endTextEdit();
+        // A base style with line spacing the dialog doesn't show; one based on it with a size.
+        jp::TextStyle base;
+        base.name = QStringLiteral("Base");
+        base.blk.setLineHeight(150, QTextBlockFormat::ProportionalHeight);
+        base.chr.setFontItalic(true);
+        jp::TextStyle child;
+        child.name = QStringLiteral("Child");
+        child.basedOn = QStringLiteral("Base");
+        child.chr.setFontPointSize(20);
+        ed->doc()->styles << base << child;
+        const jp::TextStyle r = ed->doc()->resolvedStyle(QStringLiteral("Child"));
+        QCOMPARE(r.chr.fontPointSize(), 20.0);
+        QVERIFY(r.chr.fontItalic());
+        QCOMPARE(r.blk.lineHeight(), 150.0);
+        ed->beginTextEdit(box->id, 0);
+        ed->applyStyle(QStringLiteral("Child"));
+        const QTextBlock b = ed->editDoc()->firstBlock();
+        QCOMPARE(b.blockFormat().lineHeight(), 150.0);
+        QTextCursor c(b);
+        c.movePosition(QTextCursor::NextCharacter);
+        QVERIFY(c.charFormat().fontItalic());
+        QCOMPARE(c.charFormat().fontPointSize(), 20.0);
+        ed->endTextEdit();
+        // A loop of bases ends.
+        ed->doc()->styles[ed->doc()->styles.size() - 2].basedOn = QStringLiteral("Child");
+        QCOMPARE(ed->doc()->resolvedStyle(QStringLiteral("Child")).chr.fontPointSize(), 20.0);
+    }
+
+    // Text Art's Word Justify widens the spaces and Letter Justify the gaps
+    // between letters (Word Justify was left-aligned, and Letter Justify
+    // stretched the letters, which is Stretch Justify).
+    void textArtJustify()
+    {
+        jp::TextArtItem w;
+        w.text = QStringLiteral("ab cd\nabcdefghijklmnopqrstuv");
+        w.font = QStringLiteral("DejaVu Sans");
+        // The top line's ink: how much there is, and how far it reaches.
+        auto topLine = [&](int align) {
+            w.align = align;
+            const QPainterPath path = jp::textArtPath(w, QSizeF(600, 200));
+            QImage img(600, 100, QImage::Format_Grayscale8);
+            img.fill(255);
+            QPainter p(&img);
+            p.setRenderHint(QPainter::Antialiasing);
+            p.fillPath(path, Qt::black);
+            p.end();
+            int ink = 0, right = 0;
+            for (int y = 0; y < img.height(); ++y)
+                for (int x = 0; x < img.width(); ++x)
+                    if (img.pixelColor(x, y).value() < 128) { ++ink; right = std::max(right, x); }
+            return std::make_pair(ink, right);
+        };
+        const auto left = topLine(0), word = topLine(3), letter = topLine(4), stretch = topLine(5);
+        QVERIFY2(left.second < 300, qPrintable(QString::number(left.second)));
+        for (const auto &j : {word, letter, stretch}) QVERIFY2(j.second > 540, qPrintable(QString::number(j.second)));
+        // Moved, not widened: as much ink as left-aligned; stretched letters have far more.
+        QVERIFY2(std::abs(word.first - left.first) < left.first / 20, qPrintable(QStringLiteral("%1 %2").arg(word.first).arg(left.first)));
+        QVERIFY2(std::abs(letter.first - left.first) < left.first / 20, qPrintable(QStringLiteral("%1 %2").arg(letter.first).arg(left.first)));
+        QVERIFY2(stretch.first > left.first * 1.5, qPrintable(QStringLiteral("%1 %2").arg(stretch.first).arg(left.first)));
+    }
+
+    // With the whole table selected, Insert Below adds at the bottom (it
+    // added above the first row) and Delete Rows asks for a row (it deleted
+    // the first); Cell Margins changes table cells (it did nothing).
+    void tableCommandsWithTheTableSelected()
+    {
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        auto t = std::static_pointer_cast<jp::TableItem>(ed->newTable(QRectF(72, 72, 288, 72), 2, 2));
+        ed->addItem(t);
+        ed->doc()->storyDoc(t->cell(0, 0).storyId)->setPlainText(QStringLiteral("top"));
+        ed->select(t->id);
+        w.act(QStringLiteral("tbl.insBelow"))->trigger();
+        QCOMPARE(t->rows, 3);
+        QCOMPARE(ed->doc()->storyDoc(t->cell(0, 0).storyId)->toPlainText(), QStringLiteral("top"));
+        w.act(QStringLiteral("tbl.insRight"))->trigger();
+        QCOMPARE(t->cols, 3);
+        QCOMPARE(ed->doc()->storyDoc(t->cell(0, 0).storyId)->toPlainText(), QStringLiteral("top"));
+        w.act(QStringLiteral("tbl.delRow"))->trigger();
+        w.act(QStringLiteral("tbl.delCol"))->trigger();
+        QCOMPARE(t->rows, 3);
+        QCOMPARE(t->cols, 3);
+        w.act(QStringLiteral("tbmargin.Wide"))->trigger();
+        for (const auto &c : t->cells) QCOMPARE(c.margins, QMarginsF(14.4, 14.4, 14.4, 14.4));
+        ed->beginTextEdit(t->id, 0, 1, 1);
+        w.act(QStringLiteral("tbmargin.None"))->trigger();
+        QCOMPARE(t->cell(1, 1).margins, QMarginsF());
+        QCOMPARE(t->cell(0, 0).margins, QMarginsF(14.4, 14.4, 14.4, 14.4));
+        // In a cell, Delete Rows deletes that row.
+        w.act(QStringLiteral("tbl.delRow"))->trigger();
+        QCOMPARE(t->rows, 2);
+    }
+
+    // A picture dragged onto another swaps with it, as the scratch area's
+    // message says (nothing did): the dragged frame goes back, and the two
+    // pictures trade frames.
+    void pictureDroppedOnPictureSwaps()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        jp::Editor *ed = w.editor();
+        auto picture = [&](const QColor &c, const QRectF &r) {
+            QImage img(40, 40, QImage::Format_RGB32);
+            img.fill(c);
+            QByteArray png;
+            QBuffer buf(&png);
+            buf.open(QIODevice::WriteOnly);
+            img.save(&buf, "PNG");
+            auto p = std::make_shared<jp::PictureItem>();
+            p->imageId = ed->doc()->addImage(png, "png");
+            p->rect = r;
+            p->imgRect = QRectF(QPointF(0, 0), r.size());
+            ed->addItem(p);
+            return p;
+        };
+        auto red = picture(Qt::red, QRectF(72, 72, 144, 144));
+        auto blue = picture(Qt::blue, QRectF(300, 300, 144, 144));
+        const QString redImage = red->imageId, blueImage = blue->imageId;
+        jp::Canvas *cv = w.canvas();
+        QTest::qWait(50);
+        const QPoint a = cv->pageToView(red->rect.center()).toPoint(), b = cv->pageToView(blue->rect.center()).toPoint();
+        QTest::mousePress(cv->viewport(), Qt::LeftButton, Qt::NoModifier, a);
+        for (int k = 1; k <= 4; ++k) {
+            const QPoint at = a + (b - a) * k / 4;
+            QMouseEvent mv(QEvent::MouseMove, QPointF(at), cv->viewport()->mapToGlobal(QPointF(at)), Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(cv->viewport(), &mv);
+        }
+        QTest::mouseRelease(cv->viewport(), Qt::LeftButton, Qt::NoModifier, b);
+        QCOMPARE(red->rect, QRectF(72, 72, 144, 144));   // back where it was
+        QCOMPARE(red->imageId, blueImage);
+        QCOMPARE(blue->imageId, redImage);
+        ed->undo();   // undo makes the objects afresh
+        QCOMPARE(static_cast<jp::PictureItem *>(ed->doc()->item(red->id))->imageId, redImage);
+    }
+
+    // Format Page Numbers sets the numbers' style and the first page's number
+    // (it opened Insert Page Number, which added another number box).
+    void formatPageNumbers()
+    {
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        ed->insertPages(0, 2, false, false);
+        ed->setCurrentPage(0);
+        auto box = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 72, 200, 40)));
+        ed->addItem(box);
+        ed->beginTextEdit(box->id, 0);
+        ed->insertField(QStringLiteral("page"));
+        ed->endTextEdit();
+        const int itemsBefore = int(ed->doc()->pages[0]->items.size());
+        jp::FrameSpec spec = jp::Renderer::frameSpec(*ed->doc(), *box, 1, jp::RenderOptions());
+        const QString keyBefore = spec.ctx.key();
+        QCOMPARE(spec.ctx.resolve(QStringLiteral("page")), QStringLiteral("1"));
+        QTimer::singleShot(0, [] {
+            auto *d = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            if (!d) return;
+            if (auto *f = d->findChild<QComboBox *>(QStringLiteral("format"))) f->setCurrentIndex(3);   // i, ii, iii
+            if (auto *s = d->findChild<QSpinBox *>(QStringLiteral("start"))) s->setValue(4);
+            d->accept();
+        });
+        w.act(QStringLiteral("ins.pageNumberFormat"))->trigger();
+        QCOMPARE(int(ed->doc()->pages[0]->items.size()), itemsBefore);   // no new box
+        spec = jp::Renderer::frameSpec(*ed->doc(), *box, 1, jp::RenderOptions());
+        QCOMPARE(spec.ctx.resolve(QStringLiteral("page")), QStringLiteral("iv"));
+        QCOMPARE(spec.ctx.resolve(QStringLiteral("page:ROMAN")), QStringLiteral("IV"));   // its own style stays
+        QVERIFY(spec.ctx.key() != keyBefore);   // laid out again
+        ed->doc()->setup.pageNumberFormat = QStringLiteral("ALPHA");
+        spec.ctx.pageNumber = 26;   // number 29 (from 4): past Z the letters go round again, doubled
+        QCOMPARE(spec.ctx.resolve(QStringLiteral("page")), QStringLiteral("CC"));
+        // Kept in the file.
+        const jp::PageSetup back = jp::PageSetup::fromJson(ed->doc()->setup.toJson());
+        QCOMPARE(back.firstPageNumber, 4);
+        QCOMPARE(back.pageNumberFormat, QStringLiteral("ALPHA"));
+    }
+
     // A file whose style names point outside their section (made from
     // JeffPub's own styles sample): it still opens with all its text,
     // losing only the damaged names.
@@ -4274,18 +4539,21 @@ private Q_SLOTS:
         const bool wasOn = telemetry::enabled();
         const QVariant minutes = Settings::get().value(QStringLiteral("save/autoRecoverMinutes"));
         telemetry::setEnabled(false);
-        QTimer::singleShot(0, [] {
+        int statsShown = -1;
+        QTimer::singleShot(0, [&statsShown] {
             auto *d = qobject_cast<QDialog *>(QApplication::activeModalWidget());
-            QVERIFY(d);
+            if (!d) return;
             auto *stats = d->findChild<QCheckBox *>(QStringLiteral("stats"));
             auto *spin = d->findChild<QSpinBox *>(QStringLiteral("autoRecoverMinutes"));
-            QVERIFY(stats && spin);
-            QVERIFY(!stats->isChecked());
-            stats->setChecked(true);
-            spin->setValue(3);
-            d->accept();
+            if (stats && spin) {
+                statsShown = stats->isChecked();
+                stats->setChecked(true);
+                spin->setValue(3);
+            }
+            d->accept();   // whatever was found, so a failure can't leave it open
         });
         w.act(QStringLiteral("file.options"))->trigger();
+        QCOMPARE(statsShown, 0);
         QVERIFY(telemetry::enabled());
         QCOMPARE(w.autoRecoverInterval(), 3 * 60 * 1000);
         telemetry::setEnabled(wasOn);

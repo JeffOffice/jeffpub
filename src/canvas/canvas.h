@@ -189,6 +189,7 @@ private:
     QElapsedTimer m_clickTimer;
     QPointF m_lastClickView;
     bool m_copyDrag = false;
+    QString m_swapTarget;                // a picture the dragged picture would swap with
 };
 
 } // namespace jp

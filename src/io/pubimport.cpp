@@ -582,9 +582,14 @@ public:
         if (!ut.isEmpty() && ut != "none") {
             QTextCharFormat::UnderlineStyle u = QTextCharFormat::SingleUnderline;
             if (us == "dotted") u = QTextCharFormat::DotLine;
-            else if (us == "dash") u = QTextCharFormat::DashUnderline;
+            else if (us == "dash" || us == "long-dash") u = QTextCharFormat::DashUnderline;
+            else if (us == "dot-dash") u = QTextCharFormat::DashDotLine;
+            else if (us == "dot-dot-dash") u = QTextCharFormat::DashDotDotLine;
             else if (us == "wave") u = QTextCharFormat::WaveUnderline;
             cf.setUnderlineStyle(u);
+            const int kind = (ut == "double" ? 1 : 0) | (str(p["style:text-underline-mode"]) == "skip-white-space" ? 2 : 0)
+                             | (str(p["style:text-underline-width"]) == "bold" ? 4 : 0);
+            if (kind) cf.setProperty(tp::UnderlineKind, kind);
         }
         if (str(p["style:text-line-through-type"]) == "single" || str(p["style:text-line-through-style"]) == "solid") cf.setFontStrikeOut(true);
         const QColor c = color(p["fo:color"]);

@@ -29,7 +29,7 @@ Fills and borders apply to the cell you are in, or to every cell when the whole 
 2. In **Table Layout > Rows & Columns**, click **Insert Above**, **Insert Below**, **Insert Left**, or **Insert Right**.
 3. To remove one, click **Delete** and choose **Delete Rows**, **Delete Columns**, or **Delete Table**.
 
-Click in a cell first. With the whole table selected, these commands act on its first row or column. A table keeps at least one row and one column.
+With the whole table selected, **Insert Above** and **Insert Left** add at the start of the table, and **Insert Below** and **Insert Right** at the end. To delete a row or column, click in it first. A table keeps at least one row and one column.
 
 ## Change sizes
 
@@ -50,7 +50,7 @@ Use the **Table Design** tab.
 - For borders, first pick a **Line Color** and a **Line Weight**. Then click **Borders** and choose **All Borders**, **Outside Borders**, **Inside Borders**, **No Border**, or one side such as **Top Border**.
 - **Diagonals** draws a line across a cell. Choose **Divide Down** or **Divide Up**. **No Division** removes it.
 
-To place text in a cell, use the buttons in **Table Layout > Alignment**: top, middle, or bottom, and left, center, right, or justified.
+To place text in a cell, use the buttons in **Table Layout > Alignment**: top, middle, or bottom, and left, center, right, or justified. **Cell Margins**, also there, sets the space between a cell's edges and its text: **None**, **Narrow**, **Moderate**, or **Wide**. It changes the cell you are in, or every cell when the whole table is selected.
 
 **View Gridlines** in **Table Layout > Table** shows dotted lines around every cell on screen. They do not print.
 

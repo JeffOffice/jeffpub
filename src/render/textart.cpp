@@ -50,6 +50,9 @@ static QPainterPath textOutline(const TextArtItem &w, double *outW, double *outH
     const double lineH = fm.ascent() + fm.descent();
     QVector<double> widths;
     QVector<QPainterPath> linePaths;
+    // Each line's letters where they sit, for justifying by words or letters.
+    struct Glyph { QPainterPath path; double x; bool space; };
+    QVector<QVector<Glyph>> glyphs(lines.size());
     for (int li = 0; li < lines.size(); ++li) {
         const QString &line = lines[li];
         QPainterPath lp;
@@ -82,6 +85,7 @@ static QPainterPath textOutline(const TextArtItem &w, double *outW, double *outH
                     }
                 }
                 lp.addPath(cp.translated(x, 0));
+                glyphs[li].append({cp, x, ch.at(0).isSpace()});
                 x += (spaceEm > 0 && ch == QLatin1String(" ") ? spaceEm * 100 : fm.horizontalAdvance(ch)) * w.spacing;
             }
             widths << x;
@@ -98,10 +102,29 @@ static QPainterPath textOutline(const TextArtItem &w, double *outW, double *outH
         if (w.vertical) path.addPath(linePaths[li].translated(maxW * 0 + li * lineH * 1.1 + lineH / 2, 0));
         else {
             QPainterPath lp = linePaths[li];
-            if ((w.align == 4 || w.align == 5) && widths[li] > 0 && widths[li] < maxW) {
+            const double extra = maxW - widths[li];
+            const auto &g = glyphs[li];
+            if (w.align == 5 && widths[li] > 0 && extra > 0) {
+                // Stretch Justify: the letters themselves widen.
                 QTransform t;
                 t.scale(maxW / widths[li], 1);
                 lp = t.map(lp);
+            } else if ((w.align == 3 || w.align == 4) && extra > 0) {
+                // Word Justify: the spaces between words widen; Letter Justify:
+                // every gap between letters. (Spaces at the ends don't count.)
+                int first = 0, last = int(g.size()) - 1;
+                while (first <= last && g[first].space) ++first;
+                while (last >= first && g[last].space) --last;
+                int gaps = 0;
+                for (int i = first + 1; i <= last; ++i) gaps += w.align == 4 ? 1 : (g[i].space && !g[i - 1].space);
+                if (gaps > 0) {
+                    lp = QPainterPath();
+                    int passed = 0;
+                    for (int i = 0; i < g.size(); ++i) {
+                        if (i > first && i <= last && (w.align == 4 || (g[i].space && !g[i - 1].space))) ++passed;
+                        lp.addPath(g[i].path.translated(g[i].x + extra * passed / gaps, 0));
+                    }
+                }
             }
             path.addPath(lp.translated(dx, li * lineH));
         }

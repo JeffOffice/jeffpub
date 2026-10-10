@@ -14,6 +14,7 @@
 #include <QtMath>
 #include <QGlyphRun>
 #include <QPainter>
+#include <QPainterPath>
 #include <QRegularExpression>
 #include <QRawFont>
 #include <QTextDocument>
@@ -62,13 +63,23 @@ QString FieldContext::resolve(const QString &code) const
     const QString arg = code.section(':', 1);
     if (kind == QLatin1String("footnote") || kind == QLatin1String("endnote")) return noteNumber(doc, kind, arg);
     if (kind == "page") {
+        // Numbered from the publication's first page number, in its style
+        // unless the field names one (Format Page Numbers).
+        const int from = doc ? doc->setup.firstPageNumber - 1 : 0;
+        const QString style = arg.isEmpty() && doc ? doc->setup.pageNumberFormat : arg;
+        auto shown = [&](int n) {
+            if (style == "roman" || style == "ROMAN") { const QString r = toRoman(n); return style == "roman" ? r.toLower() : r; }
+            if (style == "alpha" || style == "ALPHA") {
+                // a ... z, then aa ... zz, as the other program counts.
+                const QString one(QChar((style == "alpha" ? 'a' : 'A') + (n - 1) % 26));
+                return one.repeated((n - 1) / 26 + 1);
+            }
+            return QString::number(n);
+        };
         // The next or previous linked box's page; "#" without one, as in Publisher.
-        if (arg == "next") return nextPage > 0 ? QString::number(nextPage) : QStringLiteral("#");
-        if (arg == "prev") return prevPage > 0 ? QString::number(prevPage) : QStringLiteral("#");
-        if (arg == "roman") return toRoman(pageNumber).toLower();
-        if (arg == "ROMAN") return toRoman(pageNumber);
-        if (arg == "alpha") return QString(QChar('a' + (pageNumber - 1) % 26));
-        return QString::number(pageNumber);
+        if (arg == "next") return nextPage > 0 ? QString::number(nextPage + from) : QStringLiteral("#");
+        if (arg == "prev") return prevPage > 0 ? QString::number(prevPage + from) : QStringLiteral("#");
+        return shown(pageNumber + from);
     }
     if (kind == "pages") return QString::number(pageCount);
     if (kind == "date") return now.date().toString(arg.isEmpty() ? QStringLiteral("MMMM d, yyyy") : arg);
@@ -136,8 +147,10 @@ const QStringList &dateTimeFormats()
 
 QString FieldContext::key() const
 {
-    return QStringLiteral("%1/%2/%3/%4/%5/%6/%7/%8").arg(pageNumber).arg(pageCount).arg(mergeRecord).arg(continuedOnPage).arg(continuedFromPage)
-        .arg(nextPage).arg(prevPage).arg(now.toString("yyyyMMddhhmm"));
+    // With Format Page Numbers' settings, which change every page number.
+    return QStringLiteral("%1/%2/%3/%4/%5/%6/%7/%8/%9").arg(pageNumber).arg(pageCount).arg(mergeRecord).arg(continuedOnPage).arg(continuedFromPage)
+        .arg(nextPage).arg(prevPage).arg(now.toString("yyyyMMddhhmm"))
+        .arg(doc ? QString::number(doc->setup.firstPageNumber) + doc->setup.pageNumberFormat : QString());
 }
 
 QString LayoutEnv::key() const
@@ -155,6 +168,8 @@ QString LayoutEnv::key() const
 // 0.1% and positions within Qt's fixed-point range).
 namespace {
 constexpr double kFine = 8;
+// Layout only: an underline's style while JeffPub draws it (drawUnderline).
+constexpr int kOwnUnderline = QTextFormat::UserProperty + 90;
 
 QFont fineFont(QFont f)
 {
@@ -184,7 +199,63 @@ QTextCharFormat fineFormat(QTextCharFormat cf)
         pen.setWidthF(pen.widthF() * kFine);
         cf.setTextOutline(pen);
     }
+    // Underlines Qt can't draw (double, words only, thick) are drawn here
+    // (drawUnderline): Qt is told of none, and kOwnUnderline keeps the style.
+    if (cf.intProperty(tp::UnderlineKind) && cf.underlineStyle() != QTextCharFormat::NoUnderline) {
+        cf.setProperty(kOwnUnderline, int(cf.underlineStyle()));
+        cf.setUnderlineStyle(QTextCharFormat::NoUnderline);
+    }
     return cf;
+}
+
+// An underline under [s, e) of a fine layout's line, in its units: the
+// format's own style, or the one fineFormat set aside, with its kind.
+void drawUnderline(QPainter *p, const QTextLine &line, int s, int e, const QTextCharFormat &cf, const QBrush &br, const QString &text)
+{
+    const auto style = cf.hasProperty(kOwnUnderline) ? QTextCharFormat::UnderlineStyle(cf.intProperty(kOwnUnderline)) : cf.underlineStyle();
+    if (style == QTextCharFormat::NoUnderline) return;
+    const int kind = cf.intProperty(tp::UnderlineKind);
+    const QFontMetricsF fm(cf.font());
+    QPen up(cf.underlineColor().isValid() ? QBrush(cf.underlineColor()) : br, std::max(1.0, fm.lineWidth()) * ((kind & 4) ? 2 : 1));
+    up.setCapStyle(Qt::FlatCap);
+    switch (style) {
+    case QTextCharFormat::DotLine: up.setStyle(Qt::DotLine); break;
+    case QTextCharFormat::DashUnderline: up.setStyle(Qt::DashLine); break;
+    case QTextCharFormat::DashDotLine: up.setStyle(Qt::DashDotLine); break;
+    case QTextCharFormat::DashDotDotLine: up.setStyle(Qt::DashDotDotLine); break;
+    default: break;
+    }
+    // Words only: under each run of letters, not the spaces between.
+    QVector<QPair<double, double>> spans;
+    if (kind & 2) {
+        int k = s;
+        while (k < e) {
+            while (k < e && text[k].isSpace()) ++k;
+            const int w0 = k;
+            while (k < e && !text[k].isSpace()) ++k;
+            if (k > w0) spans.append({line.cursorToX(w0), line.cursorToX(k)});
+        }
+    } else spans.append({line.cursorToX(s), line.cursorToX(e)});
+    const double y = line.y() + line.ascent() + fm.underlinePos(), gap = up.widthF() * 2;
+    p->save();
+    p->setPen(up);
+    p->setBrush(Qt::NoBrush);
+    for (const auto &sp : spans) {
+        if (style == QTextCharFormat::WaveUnderline) {
+            // A wave about the underline, a little taller than the line is thick.
+            const double amp = std::max(0.75 * kFine, up.widthF()), half = amp * 2;
+            QPainterPath wave(QPointF(sp.first, y));
+            int n = 0;
+            for (double x = sp.first; x < sp.second; x += half, ++n)
+                wave.quadTo(QPointF(x + half / 2, y + (n % 2 ? amp : -amp)), QPointF(std::min(x + half, sp.second), y));
+            p->drawPath(wave);
+            if (kind & 1) p->drawPath(wave.translated(0, amp * 2 + up.widthF()));
+            continue;
+        }
+        p->drawLine(QLineF(sp.first, y, sp.second, y));
+        if (kind & 1) p->drawLine(QLineF(sp.first, y + gap, sp.second, y + gap));   // double
+    }
+    p->restore();
 }
 
 QList<QTextLayout::FormatRange> fineRanges(const QVector<QTextLayout::FormatRange> &ranges)
@@ -1881,6 +1952,16 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
         p->scale(1 / kFine, 1 / kFine);
         if (!B->directGlyphs) {
             B->tl->draw(p, QPointF(0, 0), {}, QRectF(clip.topLeft() * kFine, clip.size() * kFine));
+            for (const auto &r : B->tl->formats()) {
+                if (!r.format.hasProperty(kOwnUnderline)) continue;
+                const QBrush br = r.format.hasProperty(QTextFormat::ForegroundBrush) ? r.format.foreground() : QBrush(Qt::black);
+                for (int i = 0; i < B->lines.size(); ++i) {
+                    if (B->lines[i].frame != frame) continue;
+                    const QTextLine line = B->tl->lineAt(i);
+                    const int s = std::max(r.start, line.textStart()), e = std::min(r.start + r.length, line.textStart() + line.textLength());
+                    if (s < e) drawUnderline(p, line, s, e, r.format, br, B->disp);
+                }
+            }
         } else {
             // Run by run, each in its color; a run drawn taller or shorter
             // is scaled from its baseline (its widths stay as laid out).
@@ -1907,21 +1988,14 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
                     // Lines under, through and over the run, unscaled, where
                     // Qt's own drawing puts them (glyph runs carry none).
                     const QTextCharFormat &cf = r.format;
-                    const bool under = cf.underlineStyle() != QTextCharFormat::NoUnderline, through = cf.fontStrikeOut(), over = cf.fontOverline();
+                    const bool under = cf.underlineStyle() != QTextCharFormat::NoUnderline || cf.hasProperty(kOwnUnderline), through = cf.fontStrikeOut(), over = cf.fontOverline();
                     if (under || through || over) {
                         const QFontMetricsF fm(cf.font());
                         const double x1 = line.cursorToX(s), x2 = line.cursorToX(e);
                         QPen pen(br, std::max(1.0, fm.lineWidth()));
                         pen.setCapStyle(Qt::FlatCap);
                         p->save();
-                        if (under) {
-                            QPen up = pen;
-                            if (cf.underlineColor().isValid()) up.setColor(cf.underlineColor());
-                            if (cf.underlineStyle() == QTextCharFormat::DotLine) up.setStyle(Qt::DotLine);
-                            else if (cf.underlineStyle() == QTextCharFormat::DashUnderline) up.setStyle(Qt::DashLine);
-                            p->setPen(up);
-                            p->drawLine(QLineF(x1, base + fm.underlinePos(), x2, base + fm.underlinePos()));
-                        }
+                        if (under) drawUnderline(p, line, s, e, cf, br, B->disp);
                         p->setPen(pen);
                         if (through) p->drawLine(QLineF(x1, base - fm.strikeOutPos(), x2, base - fm.strikeOutPos()));
                         if (over) p->drawLine(QLineF(x1, base - fm.overlinePos(), x2, base - fm.overlinePos()));

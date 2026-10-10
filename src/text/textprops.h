@@ -42,6 +42,7 @@ enum : int {
     LineSize,                                    // double: layout only, the (Qt) size a run's line spacing counts at
     InlineObject,                                // QString item JSON: an object set in the text, run text is U+FFFC
     GlyphScaleY,                                 // double: layout only, letters drawn this much taller (a stand-in imitating a missing font's height)
+    UnderlineKind,                               // int flags beside the underline's style: 1 double, 2 words only (not under spaces), 4 thick
 
     // block
     StyleName = QTextFormat::UserProperty + 100, // QString paragraph style

@@ -170,12 +170,13 @@ void Editor::toggleItalic()
     mergeCharFormat(f, tr("Italic"));
 }
 
-void Editor::toggleUnderline(QTextCharFormat::UnderlineStyle style)
+void Editor::toggleUnderline(QTextCharFormat::UnderlineStyle style, int kind)
 {
     const QTextCharFormat cur = currentCharFormat();
     QTextCharFormat f;
-    const bool on = cur.underlineStyle() != QTextCharFormat::NoUnderline && cur.underlineStyle() == style;
+    const bool on = cur.underlineStyle() != QTextCharFormat::NoUnderline && cur.underlineStyle() == style && cur.intProperty(tp::UnderlineKind) == kind;
     f.setUnderlineStyle(on ? QTextCharFormat::NoUnderline : style);
+    f.setProperty(tp::UnderlineKind, on ? 0 : kind);
     mergeCharFormat(f, tr("Underline"));
 }
 
@@ -390,7 +391,7 @@ void Editor::changeIndent(int dir)
     Q_EMIT textCursorChanged();
 }
 
-void Editor::setList(int kind, int format, const QString &bullet, int start)
+void Editor::setList(int kind, int format, const QString &bullet, int start, double indent)
 {
     auto targets = formatTargets();
     if (targets.isEmpty()) return;
@@ -429,8 +430,8 @@ void Editor::setList(int kind, int format, const QString &bullet, int start)
         for (QTextBlock b = first; b.isValid(); b = b.next()) {
             if (QTextList *old = b.textList()) old->remove(b);
             QTextBlockFormat bf = b.blockFormat();
-            bf.setLeftMargin(std::max(bf.leftMargin(), 18.0));
-            bf.setTextIndent(-18);
+            bf.setLeftMargin(indent >= 0 ? indent : std::max(bf.leftMargin(), 18.0));
+            bf.setTextIndent(indent >= 0 ? -indent : -18);
             bf.setIndent(0);
             QTextCursor bc(b);
             bc.setBlockFormat(bf);
@@ -445,7 +446,8 @@ void Editor::setList(int kind, int format, const QString &bullet, int start)
 
 void Editor::applyStyle(const QString &name)
 {
-    const TextStyle *s = m_doc->style(name);
+    const TextStyle resolved = m_doc->resolvedStyle(name);   // with what its base style sets
+    const TextStyle *s = resolved.name.isEmpty() ? nullptr : &resolved;
     if (!s) return;
     auto targets = formatTargets();
     if (targets.isEmpty()) return;

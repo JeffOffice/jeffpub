@@ -579,9 +579,30 @@ void fontDialog(QWidget *p, Editor *ed)
     size->setValue(cur.hasProperty(QTextFormat::FontPointSize) ? cur.fontPointSize() : 11);
     auto *color = colorPick(ed, cur.stringProperty(tp::ColorRefP).isEmpty() ? ColorRef::scheme(Main) : ColorRef::fromString(cur.stringProperty(tp::ColorRefP)), false, &dlg.d);
     auto *underline = new QComboBox(&dlg.d);
-    underline->addItems({QCoreApplication::translate("Dialogs", "(none)"), QCoreApplication::translate("Dialogs", "Single"), QCoreApplication::translate("Dialogs", "Words only"), QCoreApplication::translate("Dialogs", "Double"), QCoreApplication::translate("Dialogs", "Dotted"), QCoreApplication::translate("Dialogs", "Dashed"), QCoreApplication::translate("Dialogs", "Wave")});
-    underline->setCurrentIndex(cur.underlineStyle() == QTextCharFormat::NoUnderline ? 0 : cur.underlineStyle() == QTextCharFormat::DotLine ? 4
-                                   : cur.underlineStyle() == QTextCharFormat::DashUnderline ? 5 : cur.underlineStyle() == QTextCharFormat::WaveUnderline ? 6 : 1);
+    // Each choice: Qt's line style and the tp::UnderlineKind flags beside it.
+    struct UnderlineChoice { const char *name; QTextCharFormat::UnderlineStyle style; int kind; };
+    static const UnderlineChoice underlines[] = {
+        {QT_TRANSLATE_NOOP("Dialogs", "(none)"), QTextCharFormat::NoUnderline, 0},
+        {QT_TRANSLATE_NOOP("Dialogs", "Single"), QTextCharFormat::SingleUnderline, 0},
+        {QT_TRANSLATE_NOOP("Dialogs", "Words only"), QTextCharFormat::SingleUnderline, 2},
+        {QT_TRANSLATE_NOOP("Dialogs", "Double"), QTextCharFormat::SingleUnderline, 1},
+        {QT_TRANSLATE_NOOP("Dialogs", "Thick"), QTextCharFormat::SingleUnderline, 4},
+        {QT_TRANSLATE_NOOP("Dialogs", "Dotted"), QTextCharFormat::DotLine, 0},
+        {QT_TRANSLATE_NOOP("Dialogs", "Dashed"), QTextCharFormat::DashUnderline, 0},
+        {QT_TRANSLATE_NOOP("Dialogs", "Dot dash"), QTextCharFormat::DashDotLine, 0},
+        {QT_TRANSLATE_NOOP("Dialogs", "Dot dot dash"), QTextCharFormat::DashDotDotLine, 0},
+        {QT_TRANSLATE_NOOP("Dialogs", "Wave"), QTextCharFormat::WaveUnderline, 0},
+        {QT_TRANSLATE_NOOP("Dialogs", "Double wave"), QTextCharFormat::WaveUnderline, 1},
+    };
+    for (const auto &u : underlines) underline->addItem(QCoreApplication::translate("Dialogs", u.name));
+    // The text's own choice; else the first with its line style.
+    int pick = -1;
+    for (int i = int(std::size(underlines)) - 1; i >= 0; --i)
+        if (underlines[i].style == cur.underlineStyle()) {
+            if (underlines[i].kind == cur.intProperty(tp::UnderlineKind) || cur.underlineStyle() == QTextCharFormat::NoUnderline) { pick = i; break; }
+            pick = i;
+        }
+    underline->setCurrentIndex(std::max(0, pick));
     grid->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "Font:")), 0, 0);
     grid->addWidget(font, 1, 0);
     grid->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "Font style:")), 0, 1);
@@ -639,9 +660,8 @@ void fontDialog(QWidget *p, Editor *ed)
     cf.setFontPointSize(size->value());
     cf.setFontWeight(style->currentIndex() >= 2 ? QFont::Bold : QFont::Normal);
     cf.setFontItalic(style->currentIndex() % 2);
-    static const QTextCharFormat::UnderlineStyle us[] = {QTextCharFormat::NoUnderline, QTextCharFormat::SingleUnderline, QTextCharFormat::SingleUnderline,
-                                                         QTextCharFormat::SingleUnderline, QTextCharFormat::DotLine, QTextCharFormat::DashUnderline, QTextCharFormat::WaveUnderline};
-    cf.setUnderlineStyle(us[underline->currentIndex()]);
+    cf.setUnderlineStyle(underlines[underline->currentIndex()].style);
+    cf.setProperty(tp::UnderlineKind, underlines[underline->currentIndex()].kind);
     cf.setFontStrikeOut(strike->isChecked());
     cf.setVerticalAlignment(sup->isChecked() ? QTextCharFormat::AlignSuperScript : sub->isChecked() ? QTextCharFormat::AlignSubScript : QTextCharFormat::AlignNormal);
     cf.setFontCapitalization(smallcaps->isChecked() ? QFont::SmallCaps : allcaps->isChecked() ? QFont::AllUppercase : QFont::MixedCase);
@@ -823,9 +843,6 @@ void bulletsDialog(QWidget *p, Editor *ed, bool numbering)
         if (ok && !c.isEmpty()) customChar = c.left(2);
     });
     bl->addWidget(custom, 2, 0, 1, 2);
-    auto *indent = measure(18, bw);
-    bl->addWidget(new QLabel(QCoreApplication::translate("Dialogs", "Indent list by:")), 3, 0, 1, 2);
-    bl->addWidget(indent, 3, 2, 1, 2);
     tabs->addTab(bw, QCoreApplication::translate("Dialogs", "Bullets"));
     auto *nw = new QWidget();
     auto *nf = new QFormLayout(nw);
@@ -838,10 +855,17 @@ void bulletsDialog(QWidget *p, Editor *ed, bool numbering)
     tabs->addTab(nw, QCoreApplication::translate("Dialogs", "Numbering"));
     if (numbering) tabs->setCurrentIndex(1);
     dlg.v->addWidget(tabs);
+    // From the bullet or number to the text, for either kind of list; it
+    // starts at the paragraph's own when it is in a list already.
+    const QTextBlockFormat bf = ed->currentBlockFormat();
+    auto *indent = measure(bf.textIndent() < 0 ? -bf.textIndent() : 18, &dlg.d);
+    indent->setObjectName(QStringLiteral("indent"));
+    auto *indentRow = new QFormLayout();
+    indentRow->addRow(QCoreApplication::translate("Dialogs", "Indent list by:"), indent);
+    dlg.v->addLayout(indentRow);
     if (!dlg.exec()) return;
-    if (tabs->currentIndex() == 0) ed->setList(1, 0, customChar.isEmpty() ? chars[group->checkedId()] : customChar);
-    else ed->setList(2, format->currentIndex() + 1, QString(), start->value());
-    Q_UNUSED(indent);
+    if (tabs->currentIndex() == 0) ed->setList(1, 0, customChar.isEmpty() ? chars[group->checkedId()] : customChar, 1, indent->value());
+    else ed->setList(2, format->currentIndex() + 1, QString(), start->value(), indent->value());
 }
 
 // ---------------- Drop Cap ----------------
@@ -2024,6 +2048,20 @@ void styleDialog(QWidget *p, Editor *ed, const QString &styleName)
     align->addItems({QCoreApplication::translate("Dialogs", "Left"), QCoreApplication::translate("Dialogs", "Center"), QCoreApplication::translate("Dialogs", "Right"), QCoreApplication::translate("Dialogs", "Justify")});
     const Qt::Alignment al = s.blk.alignment() & Qt::AlignHorizontal_Mask;
     align->setCurrentIndex(al == Qt::AlignHCenter ? 1 : al == Qt::AlignRight ? 2 : al == Qt::AlignJustify ? 3 : 0);
+    // Choosing a style to base this one on starts it with that style's look.
+    QObject::connect(basedOn, &QComboBox::currentIndexChanged, &dlg.d, [&, doc](int i) {
+        if (i <= 0) return;
+        const TextStyle b = doc->resolvedStyle(basedOn->currentText());
+        if (b.chr.hasProperty(QTextFormat::FontFamilies)) font->setCurrentText(b.chr.fontFamilies().toStringList().value(0));
+        else font->setCurrentIndex(0);
+        if (b.chr.hasProperty(QTextFormat::FontPointSize)) size->setValue(b.chr.fontPointSize());
+        bold->setChecked(b.chr.fontWeight() >= QFont::DemiBold);
+        italic->setChecked(b.chr.fontItalic());
+        before->setValue(b.blk.topMargin());
+        after->setValue(b.blk.bottomMargin());
+        const Qt::Alignment ba = b.blk.alignment() & Qt::AlignHorizontal_Mask;
+        align->setCurrentIndex(ba == Qt::AlignHCenter ? 1 : ba == Qt::AlignRight ? 2 : ba == Qt::AlignJustify ? 3 : 0);
+    });
     form->addRow(QCoreApplication::translate("Dialogs", "Style name:"), name);
     form->addRow(QCoreApplication::translate("Dialogs", "Based on:"), basedOn);
     form->addRow(QCoreApplication::translate("Dialogs", "Style for the next paragraph:"), next);
@@ -2271,6 +2309,33 @@ void pageNumberDialog(QWidget *p, Editor *ed)
             if (!d->master("T")) d->masters << noNum;
             d->pages[0]->masterId = QStringLiteral("T");
         }
+    });
+}
+
+void pageNumberFormatDialog(QWidget *p, Editor *ed)
+{
+    Document *d = ed->doc();
+    Dlg dlg(p, QCoreApplication::translate("Dialogs", "Page Number Format"));
+    auto *form = new QFormLayout();
+    auto *format = new QComboBox(&dlg.d);
+    format->setObjectName(QStringLiteral("format"));
+    const QStringList codes{QString(), QStringLiteral("alpha"), QStringLiteral("ALPHA"), QStringLiteral("roman"), QStringLiteral("ROMAN")};
+    format->addItems({QStringLiteral("1, 2, 3, ..."), QStringLiteral("a, b, c, ..."), QStringLiteral("A, B, C, ..."), QStringLiteral("i, ii, iii, ..."), QStringLiteral("I, II, III, ...")});
+    format->setCurrentIndex(std::max(0, int(codes.indexOf(d->setup.pageNumberFormat))));
+    auto *start = new QSpinBox(&dlg.d);
+    start->setObjectName(QStringLiteral("start"));
+    start->setRange(1, 99999);
+    start->setValue(d->setup.firstPageNumber);
+    form->addRow(QCoreApplication::translate("Dialogs", "Number format:"), format);
+    form->addRow(QCoreApplication::translate("Dialogs", "Start numbering at:"), start);
+    dlg.v->addLayout(form);
+    auto *note = new QLabel(QCoreApplication::translate("Dialogs", "This changes every page number in the publication. A page number given its own format keeps it."), &dlg.d);
+    note->setWordWrap(true);
+    dlg.v->addWidget(note);
+    if (!dlg.exec()) return;
+    ed->change(QCoreApplication::translate("Dialogs", "Page Number Format"), [&] {
+        d->setup.pageNumberFormat = codes[format->currentIndex()];
+        d->setup.firstPageNumber = start->value();
     });
 }
 

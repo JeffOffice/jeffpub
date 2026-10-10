@@ -906,7 +906,21 @@ QVector<B> PubWriter::charBlocks(const QTextCharFormat &f, const QTextCharFormat
     p << rec(0x24, slots, 0x8a);
     if (bold) p << flag(0x37, 0x0a);
     if (italic) p << flag(0x38, 0x0a);
-    if (f.fontUnderline()) p << u16(0x1e, 1, 0x12);   // single underline
+    if (f.underlineStyle() != QTextCharFormat::NoUnderline) {
+        // The file's underline numbers (libmspub's MSPUBParser::getUnderline).
+        const int kind = f.intProperty(tp::UnderlineKind);
+        const bool thick = kind & 4, twice = kind & 1;
+        quint32 code = 1;
+        switch (f.underlineStyle()) {
+        case QTextCharFormat::DotLine: code = thick ? 0x11 : 0x4; break;
+        case QTextCharFormat::DashUnderline: code = thick ? 0x12 : 0x7; break;
+        case QTextCharFormat::DashDotLine: code = thick ? 0x13 : 0x9; break;
+        case QTextCharFormat::DashDotDotLine: code = thick ? 0x14 : 0xa; break;
+        case QTextCharFormat::WaveUnderline: code = twice ? 0x17 : thick ? 0x10 : 0xb; break;
+        default: code = twice ? 0x3 : (kind & 2) ? 0x2 : thick ? 0x6 : 0x1; break;
+        }
+        p << u16(0x1e, code, 0x12);
+    }
     if (f.fontStrikeOut()) p << flag(0x10, 0x0a);
     // Letter spacing: kerning as added space in EMU (0x1B), tracking in
     // tenths of a percent (0x1F).

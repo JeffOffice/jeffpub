@@ -1847,6 +1847,18 @@ void Canvas::mouseMoveEvent(QMouseEvent *e)
         }
         const QRectF nb = m_origBox.translated(delta);
         m_tip = QStringLiteral("%1, %2").arg(st.format(nb.left()), st.format(nb.top()));
+        // One picture dragged over another: they swap when it's let go.
+        m_swapTarget.clear();
+        if (m_orig.size() == 1)
+            if (auto *moved = dynamic_cast<PictureItem *>(d->item(m_orig.constBegin().key())); moved && !moved->imageId.isEmpty()) {
+                const ItemList &l = m_ed->surfaceItems();
+                for (auto it = l.rbegin(); it != l.rend(); ++it)
+                    if ((*it)->id != moved->id && (*it)->bounds().contains(page)) {
+                        if ((*it)->type() == ItemType::Picture) m_swapTarget = (*it)->id;
+                        break;
+                    }
+            }
+        if (!m_swapTarget.isEmpty()) m_tip = QCoreApplication::translate("Canvas", "Release to swap the pictures");
         m_ed->notifyLive();
         return;
     }
@@ -2160,6 +2172,23 @@ void Canvas::mouseReleaseEvent(QMouseEvent *e)
         updateCursorShape(e->position());
         break;
     case Drag::Move: {
+        if (!m_swapTarget.isEmpty() && m_orig.size() == 1) {
+            // Swapped: the dragged frame goes back where it was, and the two
+            // pictures trade frames, each filling its new one.
+            auto *moved = dynamic_cast<PictureItem *>(m_ed->doc()->item(m_orig.constBegin().key()));
+            auto *target = dynamic_cast<PictureItem *>(m_ed->doc()->item(m_swapTarget));
+            m_swapTarget.clear();
+            if (moved && target) {
+                restoreItem(moved, m_orig.constBegin().value());
+                std::swap(moved->imageId, target->imageId);
+                moved->fitImage(m_ed->doc()->imageSize(moved->imageId), true);
+                target->fitImage(m_ed->doc()->imageSize(target->imageId), true);
+                m_ed->endChange();
+                m_ed->select(target->id);
+                break;
+            }
+        }
+        m_swapTarget.clear();
         const QStringList ids = m_orig.keys();
         m_ed->settleScratch(ids);
         m_ed->endChange();
