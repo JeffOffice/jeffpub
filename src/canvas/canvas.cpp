@@ -1954,9 +1954,9 @@ void Canvas::mouseMoveEvent(QMouseEvent *e)
         }
         const QRectF nb = m_origBox.translated(delta);
         m_tip = QStringLiteral("%1, %2").arg(st.format(nb.left()), st.format(nb.top()));
-        // One picture dragged over another: they swap when it's let go.
+        // One picture dragged over another: they swap when it's let go (a copy does not).
         m_swapTarget.clear();
-        if (m_orig.size() == 1)
+        if (m_orig.size() == 1 && !m_copyDrag)
             if (auto *moved = dynamic_cast<PictureItem *>(d->item(m_orig.constBegin().key())); moved && !moved->imageId.isEmpty()) {
                 const ItemList &l = m_ed->surfaceItems();
                 for (auto it = l.rbegin(); it != l.rend(); ++it)
@@ -3044,12 +3044,12 @@ void Canvas::dragMoveEvent(QDragMoveEvent *e) { e->acceptProposedAction(); }
 
 void Canvas::dropEvent(QDropEvent *e)
 {
-    const QPointF page = toPage(viewport()->mapFrom(this, e->position().toPoint()));
+    const QPointF page = toPage(e->position());   // the drop came to the viewport
     if (e->mimeData()->hasFormat(QString::fromLatin1(kExtraContentMime))) {
         // Extra Content dropped on the page.
         const QStringList ids = QString::fromUtf8(e->mimeData()->data(QString::fromLatin1(kExtraContentMime))).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
         m_ed->beginChange(QCoreApplication::translate("Canvas", "Place Extra Content"));
-        QPointF at = toPage(e->position());   // the drop came to the viewport
+        QPointF at = page;
         for (const QString &id : ids) {
             m_ed->placeExtra(id, at);
             at += QPointF(18, 18);

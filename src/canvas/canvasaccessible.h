@@ -9,6 +9,8 @@
 #include <QAccessibleWidget>
 #include <QHash>
 #include <QPointer>
+#include <QStringList>
+#include <memory>
 
 namespace jp {
 
@@ -80,6 +82,12 @@ private:
     Canvas *canvas() const;
     QStringList objectIds() const;
     mutable QHash<QString, QAccessible::Id> m_ids;
+    // The objects' ids, made again only after the publication changes.
+    mutable QStringList m_list;
+    mutable bool m_stale = true;
+    mutable const void *m_listOf = nullptr;   // the list of objects it was made from, and its size then
+    mutable qsizetype m_listSize = -1;
+    std::unique_ptr<QObject> m_watch;
 };
 
 } // namespace jp

@@ -1569,6 +1569,91 @@ private Q_SLOTS:
         QCOMPARE(static_cast<jp::PictureItem *>(ed->doc()->item(red->id))->imageId, redImage);
     }
 
+    // Ctrl+drag copies a picture, and a copy let go over another picture stays
+    // where it was dropped (it swapped, which put the copy back over the
+    // original, and gave the other picture the same image).
+    void pictureCopiedOntoPictureDoesNotSwap()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        jp::Editor *ed = w.editor();
+        auto picture = [&](const QColor &c, const QRectF &r) {
+            QImage img(40, 40, QImage::Format_RGB32);
+            img.fill(c);
+            QByteArray png;
+            QBuffer buf(&png);
+            buf.open(QIODevice::WriteOnly);
+            img.save(&buf, "PNG");
+            auto p = std::make_shared<jp::PictureItem>();
+            p->imageId = ed->doc()->addImage(png, "png");
+            p->rect = r;
+            p->imgRect = QRectF(QPointF(0, 0), r.size());
+            ed->addItem(p);
+            return p;
+        };
+        auto red = picture(Qt::red, QRectF(72, 72, 144, 144));
+        auto blue = picture(Qt::blue, QRectF(300, 300, 144, 144));
+        const QString redImage = red->imageId, blueImage = blue->imageId;
+        jp::Canvas *cv = w.canvas();
+        ed->select(red->id);
+        QTest::qWait(50);
+        const QPoint a = cv->pageToView(red->rect.center()).toPoint(), b = cv->pageToView(blue->rect.center()).toPoint();
+        QTest::mousePress(cv->viewport(), Qt::LeftButton, Qt::ControlModifier, a);
+        for (int k = 1; k <= 4; ++k) {
+            const QPoint at = a + (b - a) * k / 4;
+            QMouseEvent mv(QEvent::MouseMove, QPointF(at), cv->viewport()->mapToGlobal(QPointF(at)), Qt::NoButton, Qt::LeftButton, Qt::ControlModifier);
+            QApplication::sendEvent(cv->viewport(), &mv);
+        }
+        QTest::mouseRelease(cv->viewport(), Qt::LeftButton, Qt::ControlModifier, b);
+        QCOMPARE(red->rect, QRectF(72, 72, 144, 144));   // the original has not moved
+        QCOMPARE(red->imageId, redImage);
+        QCOMPARE(blue->imageId, blueImage);              // and the other picture is as it was
+        QCOMPARE(int(ed->surfaceItems().size()), 3);
+        auto *copy = dynamic_cast<jp::PictureItem *>(ed->single());
+        QVERIFY(copy && copy != red.get() && copy != blue.get());
+        QCOMPARE(copy->imageId, redImage);
+        QVERIFY(copy->rect.center().x() > 250 && copy->rect.center().y() > 250);   // where it was let go
+        ed->undo();   // one step takes the copy back out
+        QCOMPARE(int(ed->surfaceItems().size()), 2);
+    }
+
+    // Text and files dropped on the page land at the pointer, as Extra Content
+    // does (they landed about 27 points up and to the left of it, by the
+    // width of the ruler).
+    void textAndFileDropsLandAtThePointer()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        jp::Editor *ed = w.editor();
+        jp::Canvas *cv = w.canvas();
+        const QPoint at = cv->pageToView(QPointF(300, 250)).toPoint();
+        const QPointF want = cv->toPage(QPointF(at));
+        auto dropOn = [&](QMimeData &md) {
+            QDragEnterEvent enter(at, Qt::CopyAction, &md, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(cv->viewport(), &enter);
+            QVERIFY(enter.isAccepted());
+            QDropEvent drop(QPointF(at), Qt::CopyAction, &md, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(cv->viewport(), &drop);
+            QVERIFY(drop.isAccepted());
+        };
+        QMimeData text;
+        text.setText(QStringLiteral("dropped words"));
+        dropOn(text);
+        auto *box = dynamic_cast<jp::TextItem *>(ed->surfaceItems().back().get());
+        QVERIFY(box);
+        QCOMPARE(box->rect.topLeft(), want);
+        QSignalSpy wanted(cv, &jp::Canvas::insertFilesWanted);
+        QMimeData files;
+        files.setUrls({QUrl::fromLocalFile(QStringLiteral("/nowhere/a picture.png"))});
+        dropOn(files);
+        QCOMPARE(wanted.count(), 1);
+        QCOMPARE(wanted.at(0).at(1).toPointF(), want);
+    }
+
     // Format Page Numbers sets the numbers' style and the first page's number
     // (it opened Insert Page Number, which added another number box).
     void formatPageNumbers()
@@ -1685,238 +1770,6 @@ private Q_SLOTS:
         QCOMPARE(w.editor()->doc()->imageSize(pic->imageId), QSize(30, 20));
     }
 
-    // Save as Building Block's blocks show in Insert > Page Parts, under My
-    // Building Blocks, and insert from there (they were saved where no
-    // gallery looked).
-    void savedBuildingBlocksInsert()
-    {
-        QStandardPaths::setTestModeEnabled(true);   // a test folder, not the real one
-        QDir(jp::userBlocksDir()).removeRecursively();
-        jp::MainWindow w;
-        jp::Editor *ed = w.editor();
-        auto box = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 72, 200, 60), QStringLiteral("Block text")));
-        ed->addItem(box);
-        QTimer::singleShot(0, [] {
-            if (auto *d = qobject_cast<QInputDialog *>(QApplication::activeModalWidget())) {
-                d->setTextValue(QStringLiteral("Pull quote"));
-                d->accept();
-            }
-        });
-        w.act(QStringLiteral("obj.saveBlock"))->trigger();
-        QVERIFY(QFile::exists(QDir(jp::userBlocksDir()).filePath(QStringLiteral("Pull quote.json"))));
-        jp::GalleryButton *pageParts = nullptr;
-        for (auto *g : w.findChildren<jp::GalleryButton *>())
-            if (g->text() == QLatin1String("Page Parts")) pageParts = g;
-        QVERIFY(pageParts);
-        QString id;
-        for (const auto &it : pageParts->items())
-            if (it.tip == QLatin1String("Pull quote") && it.group == QLatin1String("My Building Blocks")) id = it.id;
-        QVERIFY(!id.isEmpty());
-        const int before = int(ed->surfaceItems().size());
-        Q_EMIT pageParts->activated(id);
-        QCOMPARE(int(ed->surfaceItems().size()), before + 1);
-        auto *made = dynamic_cast<jp::TextItem *>(ed->single());
-        QVERIFY(made && made->id != box->id);
-        QCOMPARE(ed->doc()->storyDoc(made->storyId)->toPlainText(), QStringLiteral("Block text"));
-        QDir(jp::userBlocksDir()).removeRecursively();
-        QStandardPaths::setTestModeEnabled(false);
-    }
-
-    // The Master Page tab as the other program has it: Show Header/Footer
-    // goes to the master's header, then its footer; Insert Date and Insert
-    // Time (Alt+Shift+D, Alt+Shift+T) add fields; the Mailings tab hides.
-    // Select Recipients also offers contacts (vCard files). In master view the
-    // Master Page tab comes first, right after File, and is the one showing;
-    // the other contextual tabs stay where they were, and the KeyTips stay
-    // unique.
-    void masterPageTabAsTheOtherProgram()
-    {
-        jp::MainWindow w;
-        jp::Editor *ed = w.editor();
-        jp::Ribbon *r = w.ribbon();
-        auto visible = [r](const QString &name) {
-            for (int i = 0; i < r->tabCount(); ++i)
-                if (r->tabName(i) == name) return r->tabVisible(i);
-            return false;
-        };
-        auto shown = [r] {
-            QStringList names;
-            for (int i = 0; i < r->tabCount(); ++i)
-                if (r->tabVisible(i)) names << r->tabName(i);
-            return names;
-        };
-        const QStringList onThePage = shown();
-        QCOMPARE(onThePage, (QStringList{"Home", "Insert", "Page Design", "Mailings", "Review", "View", "Help"}));
-        QVERIFY(visible(QStringLiteral("Mailings")));
-        w.act(QStringLiteral("mp.showHeaderFooter"))->trigger();
-        QVERIFY(!ed->masterView().isEmpty());
-        QVERIFY(visible(QStringLiteral("Master Page")));
-        QVERIFY(!visible(QStringLiteral("Mailings")));
-        QCOMPARE(shown(), (QStringList{"Master Page", "Home", "Insert", "Page Design", "Review", "View", "Help", "Text Box"}));
-        QCOMPARE(r->current(), r->tab(QStringLiteral("Master Page")));
-        // Screen readers go through the tab buttons in the order the parent holds them: the order shown.
-        int last = -1;
-        for (int i = 0; i < r->tabCount(); ++i) {
-            if (!r->tabVisible(i)) continue;
-            QWidget *b = r->tabButton(i);
-            const int at = b->parentWidget()->children().indexOf(b);
-            QVERIFY2(at > last, qPrintable(r->tabName(i)));
-            last = at;
-        }
-        // Their KeyTips are still all different (Master Page is JM), and the first tab is the one reached by it.
-        QStringList keys{r->fileKeytip()};
-        for (int i = 0; i < r->tabCount(); ++i)
-            if (r->tabVisible(i)) keys << r->tabKeytip(i);
-        QCOMPARE(QSet<QString>(keys.begin(), keys.end()).size(), keys.size());
-        QCOMPARE(keys.mid(0, 3), (QStringList{"F", "JM", "H"}));
-        QVERIFY(ed->isEditingText());
-        const QString header = ed->textTarget().itemId;
-        QCOMPARE(ed->doc()->item(header)->name, QStringLiteral("Header"));
-        w.act(QStringLiteral("ins.date"))->trigger();
-        w.act(QStringLiteral("ins.time"))->trigger();
-        QStringList fields;
-        for (QTextBlock b = ed->editDoc()->begin(); b.isValid(); b = b.next())
-            for (auto it = b.begin(); !it.atEnd(); ++it)
-                if (const QString f = it.fragment().charFormat().stringProperty(jp::tp::Field); !f.isEmpty()) fields << f;
-        QCOMPARE(fields, (QStringList{QStringLiteral("date"), QStringLiteral("time")}));
-        w.act(QStringLiteral("mp.showHeaderFooter"))->trigger();
-        QVERIFY(ed->isEditingText());
-        QCOMPARE(ed->doc()->item(ed->textTarget().itemId)->name, QStringLiteral("Footer"));
-        w.act(QStringLiteral("mp.showHeaderFooter"))->trigger();
-        QCOMPARE(ed->textTarget().itemId, header);
-        QCOMPARE(w.act(QStringLiteral("ins.date"))->shortcut(), QKeySequence(Qt::ALT | Qt::SHIFT | Qt::Key_D));
-        w.act(QStringLiteral("mp.close"))->trigger();
-        QVERIFY(visible(QStringLiteral("Mailings")));
-        QVERIFY(w.act(QStringLiteral("mm.contacts")));
-        // Closed, the tab goes and the others are as they were, Home showing.
-        QCOMPARE(shown(), onThePage);
-        QCOMPARE(r->current(), r->tab(QStringLiteral("Home")));
-        // From another tab, opening master view (Ctrl+M) shows the Master Page tab; a tab picked afterward stays, even as the selection brings other tabs.
-        r->showTab(r->tab(QStringLiteral("View")));
-        w.act(QStringLiteral("view.master"))->trigger();
-        QCOMPARE(shown(), (QStringList{"Master Page", "Home", "Insert", "Page Design", "Review", "View", "Help"}));
-        QCOMPARE(r->current(), r->tab(QStringLiteral("Master Page")));
-        r->showTab(r->tab(QStringLiteral("Insert")));
-        auto note = ed->newTextBox(QRectF(72, 72, 200, 100), QStringLiteral("x"));
-        ed->addItem(note);
-        ed->select(QStringList{note->id});
-        QCOMPARE(shown().first(), QStringLiteral("Master Page"));
-        QVERIFY(visible(QStringLiteral("Text Box")));
-        QCOMPARE(r->current(), r->tab(QStringLiteral("Insert")));
-        w.act(QStringLiteral("view.master"))->trigger();
-        QCOMPARE(shown(), onThePage);
-        // The contextual tabs that come with the selection keep their place, after Help.
-        auto box = ed->newTextBox(QRectF(72, 72, 200, 100), QStringLiteral("y"));
-        ed->addItem(box);
-        ed->select(QStringList{box->id});
-        QCOMPARE(shown(), onThePage + QStringList{"Text Box"});
-    }
-
-    // Increase Indent on list items nests them a level (numbered a., b. under
-    // 1., bulleted with a circle under a dot), and Decrease Indent brings them
-    // back, continuing the outer numbers; saved and opened again the same.
-    void multilevelLists()
-    {
-        jp::MainWindow w;
-        jp::Editor *ed = w.editor();
-        auto box = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 72, 300, 200), QStringLiteral("one\ntwo\nthree\nfour")));
-        ed->addItem(box);
-        auto selectBlocks = [&](int from, int to) {
-            ed->beginTextEdit(box->id);
-            QTextCursor c(ed->editDoc()->findBlockByNumber(from));
-            c.setPosition(ed->editDoc()->findBlockByNumber(to).position(), QTextCursor::KeepAnchor);
-            ed->setCursor(c);
-        };
-        auto markers = [](QTextDocument *d) {
-            QStringList m;
-            for (QTextBlock b = d->begin(); b.isValid(); b = b.next()) m << (b.textList() ? b.textList()->itemText(b) : QString());
-            return m.join(QLatin1Char(' '));
-        };
-        selectBlocks(0, 3);
-        ed->setList(2, 1);
-        QCOMPARE(markers(ed->editDoc()), QStringLiteral("1. 2. 3. 4."));
-        selectBlocks(1, 2);
-        ed->changeIndent(1);
-        QCOMPARE(markers(ed->editDoc()), QStringLiteral("1. a. b. 2."));
-        selectBlocks(2, 2);
-        ed->changeIndent(-1);
-        QCOMPARE(markers(ed->editDoc()), QStringLiteral("1. a. 2. 3."));
-        ed->endTextEdit();
-        QTextDocument copy;
-        jp::storyFromJson(&copy, jp::storyToJson(ed->doc()->storyDoc(box->storyId)));
-        QCOMPARE(markers(&copy), QStringLiteral("1. a. 2. 3."));
-        // Bullets: a circle a level in.
-        selectBlocks(0, 3);
-        ed->setList(1);
-        selectBlocks(1, 1);
-        ed->changeIndent(1);
-        QCOMPARE(ed->editDoc()->findBlockByNumber(1).textList()->format().style(), QTextListFormat::ListCircle);
-        ed->endTextEdit();
-    }
-
-    // A picture field shows each record's picture in the preview, printing,
-    // PDF, and email (only merging to a new publication did).
-    void pictureFieldsShowEachRecord()
-    {
-        QTemporaryDir dir;
-        auto save = [&](const QString &name, const QColor &c) {
-            QImage img(20, 20, QImage::Format_RGB32);
-            img.fill(c);
-            img.save(dir.filePath(name));
-        };
-        save(QStringLiteral("a.png"), Qt::red);
-        save(QStringLiteral("b.png"), Qt::blue);
-        auto doc = jp::Document::blank(QSizeF(200, 200));
-        doc->merge.path = dir.filePath(QStringLiteral("list.csv"));
-        doc->merge.fields = {QStringLiteral("Name"), QStringLiteral("Photo")};
-        doc->merge.rows = {{QStringLiteral("Ann"), QStringLiteral("a.png")}, {QStringLiteral("Bo"), QStringLiteral("b.png")}};
-        doc->merge.include = {true, true};
-        auto pic = std::make_shared<jp::PictureItem>();
-        pic->name = QStringLiteral("merge:Photo");
-        pic->rect = QRectF(50, 50, 100, 100);
-        doc->pages[0]->items.push_back(pic);
-        auto centre = [&](int record) {
-            jp::LayoutCache cache;
-            jp::PaintContext ctx;
-            ctx.doc = doc.get();
-            ctx.cache = &cache;
-            ctx.opt.output = true;
-            ctx.opt.mergeRecord = record;
-            QImage img(200, 200, QImage::Format_RGB32);
-            img.fill(Qt::white);
-            QPainter p(&img);
-            jp::Renderer::paintPage(&p, ctx, 0);
-            p.end();
-            return img.pixelColor(100, 100);
-        };
-        QCOMPARE(centre(0), QColor(Qt::red));
-        QCOMPARE(centre(1), QColor(Qt::blue));
-        QCOMPARE(centre(-1), QColor(Qt::white));   // field codes shown: no record's picture
-    }
-
-    // A run with no letter spacing of its own takes its paragraph style's
-    // (a sign's headline style tightens its letters 87.5% and 3 points; they
-    // came in at normal spacing, 8% wider than Publisher drew them).
-    void styleLetterSpacingFromPub()
-    {
-        auto doc = jp::Document::blank(QSizeF(612, 792));
-        jp::TextStyle st;
-        st.name = QStringLiteral("Tight Headline");
-        st.chr.setProperty(jp::tp::Tracking, 87.5);
-        st.chr.setFontLetterSpacingType(QFont::AbsoluteSpacing);
-        st.chr.setFontLetterSpacing(-3);
-        doc->styles << st;
-        auto box = std::make_shared<jp::TextItem>();
-        box->rect = QRectF(72, 72, 400, 100);
-        box->storyId = doc->createStory();
-        QTextDocument *sd = doc->storyDoc(box->storyId);
-        QTextCursor c(sd);
-        QTextBlockFormat bf;
-        bf.setProperty(jp::tp::StyleName, st.name);
-        c.setBlockFormat(bf);
-        QTextCharFormat cf;
-        cf.setFontPointSize(40);
-        c.insertText(QStringLiteral("Help Wanted"), cf);   // no spacing of its own
     // Clearing the search box and pressing Enter left the old search's small
     // copies on their way, and they were set on list items that had gone (a
     // crash). A new search, with words or without, now ends the old one's
@@ -2203,6 +2056,238 @@ private Q_SLOTS:
         QVERIFY(!shown().contains(QStringLiteral("Downloading")));
     }
 
+    // Save as Building Block's blocks show in Insert > Page Parts, under My
+    // Building Blocks, and insert from there (they were saved where no
+    // gallery looked).
+    void savedBuildingBlocksInsert()
+    {
+        QStandardPaths::setTestModeEnabled(true);   // a test folder, not the real one
+        QDir(jp::userBlocksDir()).removeRecursively();
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        auto box = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 72, 200, 60), QStringLiteral("Block text")));
+        ed->addItem(box);
+        QTimer::singleShot(0, [] {
+            if (auto *d = qobject_cast<QInputDialog *>(QApplication::activeModalWidget())) {
+                d->setTextValue(QStringLiteral("Pull quote"));
+                d->accept();
+            }
+        });
+        w.act(QStringLiteral("obj.saveBlock"))->trigger();
+        QVERIFY(QFile::exists(QDir(jp::userBlocksDir()).filePath(QStringLiteral("Pull quote.json"))));
+        jp::GalleryButton *pageParts = nullptr;
+        for (auto *g : w.findChildren<jp::GalleryButton *>())
+            if (g->text() == QLatin1String("Page Parts")) pageParts = g;
+        QVERIFY(pageParts);
+        QString id;
+        for (const auto &it : pageParts->items())
+            if (it.tip == QLatin1String("Pull quote") && it.group == QLatin1String("My Building Blocks")) id = it.id;
+        QVERIFY(!id.isEmpty());
+        const int before = int(ed->surfaceItems().size());
+        Q_EMIT pageParts->activated(id);
+        QCOMPARE(int(ed->surfaceItems().size()), before + 1);
+        auto *made = dynamic_cast<jp::TextItem *>(ed->single());
+        QVERIFY(made && made->id != box->id);
+        QCOMPARE(ed->doc()->storyDoc(made->storyId)->toPlainText(), QStringLiteral("Block text"));
+        QDir(jp::userBlocksDir()).removeRecursively();
+        QStandardPaths::setTestModeEnabled(false);
+    }
+
+    // The Master Page tab as the other program has it: Show Header/Footer
+    // goes to the master's header, then its footer; Insert Date and Insert
+    // Time (Alt+Shift+D, Alt+Shift+T) add fields; the Mailings tab hides.
+    // Select Recipients also offers contacts (vCard files). In master view the
+    // Master Page tab comes first, right after File, and is the one showing;
+    // the other contextual tabs stay where they were, and the KeyTips stay
+    // unique.
+    void masterPageTabAsTheOtherProgram()
+    {
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        jp::Ribbon *r = w.ribbon();
+        auto visible = [r](const QString &name) {
+            for (int i = 0; i < r->tabCount(); ++i)
+                if (r->tabName(i) == name) return r->tabVisible(i);
+            return false;
+        };
+        auto shown = [r] {
+            QStringList names;
+            for (int i = 0; i < r->tabCount(); ++i)
+                if (r->tabVisible(i)) names << r->tabName(i);
+            return names;
+        };
+        const QStringList onThePage = shown();
+        QCOMPARE(onThePage, (QStringList{"Home", "Insert", "Page Design", "Mailings", "Review", "View", "Help"}));
+        QVERIFY(visible(QStringLiteral("Mailings")));
+        w.act(QStringLiteral("mp.showHeaderFooter"))->trigger();
+        QVERIFY(!ed->masterView().isEmpty());
+        QVERIFY(visible(QStringLiteral("Master Page")));
+        QVERIFY(!visible(QStringLiteral("Mailings")));
+        QCOMPARE(shown(), (QStringList{"Master Page", "Home", "Insert", "Page Design", "Review", "View", "Help", "Text Box"}));
+        QCOMPARE(r->current(), r->tab(QStringLiteral("Master Page")));
+        // Screen readers go through the tab buttons in the order the parent holds them: the order shown.
+        int last = -1;
+        for (int i = 0; i < r->tabCount(); ++i) {
+            if (!r->tabVisible(i)) continue;
+            QWidget *b = r->tabButton(i);
+            const int at = b->parentWidget()->children().indexOf(b);
+            QVERIFY2(at > last, qPrintable(r->tabName(i)));
+            last = at;
+        }
+        // Their KeyTips are still all different (Master Page is JM), and the first tab is the one reached by it.
+        QStringList keys{r->fileKeytip()};
+        for (int i = 0; i < r->tabCount(); ++i)
+            if (r->tabVisible(i)) keys << r->tabKeytip(i);
+        QCOMPARE(QSet<QString>(keys.begin(), keys.end()).size(), keys.size());
+        QCOMPARE(keys.mid(0, 3), (QStringList{"F", "JM", "H"}));
+        QVERIFY(ed->isEditingText());
+        const QString header = ed->textTarget().itemId;
+        QCOMPARE(ed->doc()->item(header)->name, QStringLiteral("Header"));
+        w.act(QStringLiteral("ins.date"))->trigger();
+        w.act(QStringLiteral("ins.time"))->trigger();
+        QStringList fields;
+        for (QTextBlock b = ed->editDoc()->begin(); b.isValid(); b = b.next())
+            for (auto it = b.begin(); !it.atEnd(); ++it)
+                if (const QString f = it.fragment().charFormat().stringProperty(jp::tp::Field); !f.isEmpty()) fields << f;
+        QCOMPARE(fields, (QStringList{QStringLiteral("date"), QStringLiteral("time")}));
+        w.act(QStringLiteral("mp.showHeaderFooter"))->trigger();
+        QVERIFY(ed->isEditingText());
+        QCOMPARE(ed->doc()->item(ed->textTarget().itemId)->name, QStringLiteral("Footer"));
+        w.act(QStringLiteral("mp.showHeaderFooter"))->trigger();
+        QCOMPARE(ed->textTarget().itemId, header);
+        QCOMPARE(w.act(QStringLiteral("ins.date"))->shortcut(), QKeySequence(Qt::ALT | Qt::SHIFT | Qt::Key_D));
+        w.act(QStringLiteral("mp.close"))->trigger();
+        QVERIFY(visible(QStringLiteral("Mailings")));
+        QVERIFY(w.act(QStringLiteral("mm.contacts")));
+        // Closed, the tab goes and the others are as they were, Home showing.
+        QCOMPARE(shown(), onThePage);
+        QCOMPARE(r->current(), r->tab(QStringLiteral("Home")));
+        // From another tab, opening master view (Ctrl+M) shows the Master Page tab; a tab picked afterward stays, even as the selection brings other tabs.
+        r->showTab(r->tab(QStringLiteral("View")));
+        w.act(QStringLiteral("view.master"))->trigger();
+        QCOMPARE(shown(), (QStringList{"Master Page", "Home", "Insert", "Page Design", "Review", "View", "Help"}));
+        QCOMPARE(r->current(), r->tab(QStringLiteral("Master Page")));
+        r->showTab(r->tab(QStringLiteral("Insert")));
+        auto note = ed->newTextBox(QRectF(72, 72, 200, 100), QStringLiteral("x"));
+        ed->addItem(note);
+        ed->select(QStringList{note->id});
+        QCOMPARE(shown().first(), QStringLiteral("Master Page"));
+        QVERIFY(visible(QStringLiteral("Text Box")));
+        QCOMPARE(r->current(), r->tab(QStringLiteral("Insert")));
+        w.act(QStringLiteral("view.master"))->trigger();
+        QCOMPARE(shown(), onThePage);
+        // The contextual tabs that come with the selection keep their place, after Help.
+        auto box = ed->newTextBox(QRectF(72, 72, 200, 100), QStringLiteral("y"));
+        ed->addItem(box);
+        ed->select(QStringList{box->id});
+        QCOMPARE(shown(), onThePage + QStringList{"Text Box"});
+    }
+
+    // Increase Indent on list items nests them a level (numbered a., b. under
+    // 1., bulleted with a circle under a dot), and Decrease Indent brings them
+    // back, continuing the outer numbers; saved and opened again the same.
+    void multilevelLists()
+    {
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        auto box = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 72, 300, 200), QStringLiteral("one\ntwo\nthree\nfour")));
+        ed->addItem(box);
+        auto selectBlocks = [&](int from, int to) {
+            ed->beginTextEdit(box->id);
+            QTextCursor c(ed->editDoc()->findBlockByNumber(from));
+            c.setPosition(ed->editDoc()->findBlockByNumber(to).position(), QTextCursor::KeepAnchor);
+            ed->setCursor(c);
+        };
+        auto markers = [](QTextDocument *d) {
+            QStringList m;
+            for (QTextBlock b = d->begin(); b.isValid(); b = b.next()) m << (b.textList() ? b.textList()->itemText(b) : QString());
+            return m.join(QLatin1Char(' '));
+        };
+        selectBlocks(0, 3);
+        ed->setList(2, 1);
+        QCOMPARE(markers(ed->editDoc()), QStringLiteral("1. 2. 3. 4."));
+        selectBlocks(1, 2);
+        ed->changeIndent(1);
+        QCOMPARE(markers(ed->editDoc()), QStringLiteral("1. a. b. 2."));
+        selectBlocks(2, 2);
+        ed->changeIndent(-1);
+        QCOMPARE(markers(ed->editDoc()), QStringLiteral("1. a. 2. 3."));
+        ed->endTextEdit();
+        QTextDocument copy;
+        jp::storyFromJson(&copy, jp::storyToJson(ed->doc()->storyDoc(box->storyId)));
+        QCOMPARE(markers(&copy), QStringLiteral("1. a. 2. 3."));
+        // Bullets: a circle a level in.
+        selectBlocks(0, 3);
+        ed->setList(1);
+        selectBlocks(1, 1);
+        ed->changeIndent(1);
+        QCOMPARE(ed->editDoc()->findBlockByNumber(1).textList()->format().style(), QTextListFormat::ListCircle);
+        ed->endTextEdit();
+    }
+
+    // A picture field shows each record's picture in the preview, printing,
+    // PDF, and email (only merging to a new publication did).
+    void pictureFieldsShowEachRecord()
+    {
+        QTemporaryDir dir;
+        auto save = [&](const QString &name, const QColor &c) {
+            QImage img(20, 20, QImage::Format_RGB32);
+            img.fill(c);
+            img.save(dir.filePath(name));
+        };
+        save(QStringLiteral("a.png"), Qt::red);
+        save(QStringLiteral("b.png"), Qt::blue);
+        auto doc = jp::Document::blank(QSizeF(200, 200));
+        doc->merge.path = dir.filePath(QStringLiteral("list.csv"));
+        doc->merge.fields = {QStringLiteral("Name"), QStringLiteral("Photo")};
+        doc->merge.rows = {{QStringLiteral("Ann"), QStringLiteral("a.png")}, {QStringLiteral("Bo"), QStringLiteral("b.png")}};
+        doc->merge.include = {true, true};
+        auto pic = std::make_shared<jp::PictureItem>();
+        pic->name = QStringLiteral("merge:Photo");
+        pic->rect = QRectF(50, 50, 100, 100);
+        doc->pages[0]->items.push_back(pic);
+        auto centre = [&](int record) {
+            jp::LayoutCache cache;
+            jp::PaintContext ctx;
+            ctx.doc = doc.get();
+            ctx.cache = &cache;
+            ctx.opt.output = true;
+            ctx.opt.mergeRecord = record;
+            QImage img(200, 200, QImage::Format_RGB32);
+            img.fill(Qt::white);
+            QPainter p(&img);
+            jp::Renderer::paintPage(&p, ctx, 0);
+            p.end();
+            return img.pixelColor(100, 100);
+        };
+        QCOMPARE(centre(0), QColor(Qt::red));
+        QCOMPARE(centre(1), QColor(Qt::blue));
+        QCOMPARE(centre(-1), QColor(Qt::white));   // field codes shown: no record's picture
+    }
+
+    // A run with no letter spacing of its own takes its paragraph style's
+    // (a sign's headline style tightens its letters 87.5% and 3 points; they
+    // came in at normal spacing, 8% wider than Publisher drew them).
+    void styleLetterSpacingFromPub()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        jp::TextStyle st;
+        st.name = QStringLiteral("Tight Headline");
+        st.chr.setProperty(jp::tp::Tracking, 87.5);
+        st.chr.setFontLetterSpacingType(QFont::AbsoluteSpacing);
+        st.chr.setFontLetterSpacing(-3);
+        doc->styles << st;
+        auto box = std::make_shared<jp::TextItem>();
+        box->rect = QRectF(72, 72, 400, 100);
+        box->storyId = doc->createStory();
+        QTextDocument *sd = doc->storyDoc(box->storyId);
+        QTextCursor c(sd);
+        QTextBlockFormat bf;
+        bf.setProperty(jp::tp::StyleName, st.name);
+        c.setBlockFormat(bf);
+        QTextCharFormat cf;
+        cf.setFontPointSize(40);
+        c.insertText(QStringLiteral("Help Wanted"), cf);   // no spacing of its own
         doc->pages[0]->items.push_back(box);
         QTemporaryDir dir;
         const QString path = dir.filePath(QStringLiteral("tight.pub"));
@@ -4636,6 +4721,54 @@ private Q_SLOTS:
         for (int i = 0; i < page->childCount(); ++i)
             if (QAccessibleInterface *c = page->child(i); c && c->object() == nullptr) names << c->text(QAccessible::Name);
         QCOMPARE(names.size(), 2);
+    }
+
+    // A screen reader walks the page child by child; the page's list of
+    // objects is kept until the publication changes (each child() call made the
+    // whole list and looked every object up in the document: 4.9 seconds for
+    // 1,500 objects), and still follows additions, deletions, undo, and pages.
+    void pageObjectListIsKeptBetweenChanges()
+    {
+        jp::MainWindow w;
+        w.resize(1200, 800);
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        jp::Editor *ed = w.editor();
+        jp::Canvas *cv = w.canvas();
+        QAccessibleInterface *page = QAccessible::queryAccessibleInterface(cv);
+        QVERIFY(page);
+        const int own = page->childCount();   // the page's own controls
+        for (int i = 0; i < 1500; ++i) {
+            auto pic = std::make_shared<jp::PictureItem>();
+            pic->rect = QRectF(10 + i % 40, 10 + i / 40, 20, 20);
+            pic->altText = QStringLiteral("Picture %1").arg(i);
+            ed->surfaceItems().push_back(pic);
+        }
+        QElapsedTimer timer;
+        timer.start();
+        for (int i = 0; i < page->childCount(); ++i) QVERIFY(page->child(i));
+        QVERIFY2(timer.elapsed() < 1500, qPrintable(QStringLiteral("walking 1,500 objects took %1 ms").arg(timer.elapsed())));
+        QCOMPARE(page->childCount(), own + 1500);
+        QCOMPARE(page->child(1499)->text(QAccessible::Name), QStringLiteral("Picture: Picture 1499"));
+        // The list follows the publication.
+        auto extra = std::make_shared<jp::PictureItem>();
+        extra->rect = QRectF(300, 300, 20, 20);
+        extra->altText = QStringLiteral("Added");
+        ed->addItem(extra);
+        QCOMPARE(page->childCount(), own + 1501);
+        QCOMPARE(page->child(1500)->text(QAccessible::Name), QStringLiteral("Picture: Added"));
+        ed->undo();
+        QCOMPARE(page->childCount(), own + 1500);
+        ed->redo();
+        QCOMPARE(page->childCount(), own + 1501);
+        ed->select(extra->id);
+        ed->deleteSelection();
+        QCOMPARE(page->childCount(), own + 1500);
+        ed->insertPages(1, 1, false, false);
+        ed->setCurrentPage(1);
+        QCOMPARE(page->childCount(), own);
+        ed->setCurrentPage(0);
+        QCOMPARE(page->childCount(), own + 1500);
     }
 
     // Every task pane's controls have names too (the panes are made when

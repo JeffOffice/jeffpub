@@ -72,7 +72,7 @@ On the **Picture Format** tab, use the **Adjust** group:
 - **Picture Format > Picture Styles > Caption** adds a text box under the picture.
 - Alt text is a short description for people who cannot see the picture, such as screen reader users. Right-click the picture, choose **Format Object…**, open the **Alt Text** tab, and type in **Alternative text**.
 - **Picture Format > Insert > Change Picture** puts another file in the same frame.
-- To trade two pictures, drag one onto the other. When the tip says **Release to swap the pictures**, let go: the pictures change frames, and the frame you dragged goes back where it was. Or hold Shift, click both, and click **Swap**.
+- To trade two pictures, drag one onto the other. When the tip says **Release to swap the pictures**, let go: the pictures change frames, and the frame you dragged goes back where it was. Or hold Shift, click both, and click **Swap**. Hold Ctrl while you drag to copy a picture instead. A copy you let go over another picture stays where you put it, and nothing swaps.
 
 ## See every picture
 

@@ -250,7 +250,12 @@ QString PageObjectAccessible::attributes(int offset, int *startOffset, int *endO
 }
 
 // ---------------- the page ----------------
-CanvasAccessible::CanvasAccessible(Canvas *c) : QAccessibleWidget(c, QAccessible::Client) {}
+CanvasAccessible::CanvasAccessible(Canvas *c) : QAccessibleWidget(c, QAccessible::Client), m_watch(new QObject)
+{
+    Editor *ed = c->editor();
+    for (auto changed : {&Editor::changed, &Editor::pageChanged, &Editor::viewChanged, &Editor::documentReplaced})
+        QObject::connect(ed, changed, m_watch.get(), [this] { m_stale = true; });
+}
 
 CanvasAccessible::~CanvasAccessible()
 {
@@ -261,16 +266,25 @@ Canvas *CanvasAccessible::canvas() const { return static_cast<Canvas *>(widget()
 
 QStringList CanvasAccessible::objectIds() const
 {
-    QStringList ids;
-    for (const ItemPtr &it : canvas()->editor()->surfaceItems()) ids << it->id;
-    // Objects gone from the page let their interfaces go.
+    // A screen reader asks for the children one at a time: the list is made
+    // when the publication has changed (or the page's objects were added to
+    // without a signal), not for each child.
+    const ItemList &items = canvas()->editor()->surfaceItems();
+    if (!m_stale && m_listOf == &items && m_listSize == qsizetype(items.size())) return m_list;
+    m_list.clear();
+    for (const ItemPtr &it : items) m_list << it->id;
+    // Objects gone from the document let their interfaces go.
+    const QSet<QString> onPage(m_list.cbegin(), m_list.cend());
     for (auto it = m_ids.begin(); it != m_ids.end();) {
-        if (!canvas()->editor()->doc()->item(it.key())) {
+        if (!onPage.contains(it.key()) && !canvas()->editor()->doc()->item(it.key())) {
             QAccessible::deleteAccessibleInterface(it.value());
             it = m_ids.erase(it);
         } else ++it;
     }
-    return ids;
+    m_stale = false;
+    m_listOf = &items;
+    m_listSize = qsizetype(items.size());
+    return m_list;
 }
 
 PageObjectAccessible *CanvasAccessible::objectInterface(const QString &id) const
