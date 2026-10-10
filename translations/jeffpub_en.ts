@@ -15,7 +15,7 @@
 <context>
     <name>Dialogs</name>
     <message numerus="yes">
-        <location filename="../../src/app/dialogs.cpp" line="+2755"/>
+        <location filename="../../src/app/dialogs.cpp" line="+2847"/>
         <source>Added %n page(s) for the rest of the text.</source>
         <translation>
             <numerusform>Added %n page for the rest of the text.</numerusform>
@@ -26,7 +26,7 @@
 <context>
     <name>jp::OnlinePicturesPane</name>
     <message numerus="yes">
-        <location filename="../../src/app/onlinepictures.cpp" line="+211"/>
+        <location filename="../../src/app/onlinepictures.cpp" line="+283"/>
         <source>%n picture(s) found. Choose one to see its license.</source>
         <translation>
             <numerusform>%n picture found. Choose it to see its license.</numerusform>
