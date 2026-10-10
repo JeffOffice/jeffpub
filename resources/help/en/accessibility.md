@@ -5,7 +5,9 @@ JeffPub is built so that people who use screen readers, the keyboard, or high-co
 
 ## Screen readers
 
-A **screen reader** is a program that reads the screen aloud. JeffPub works with screen readers such as Narrator on Windows. Every control has a name and a description. This includes the ribbon's tabs, buttons, galleries, and color buttons, the Pages list, the page, and the status bar.
+A **screen reader** is a program that reads the screen aloud. JeffPub works with screen readers such as Narrator on Windows. Every control has a name and a description. This includes the ribbon's tabs, buttons, galleries, and color buttons, the Pages list, the page, the task panes, and the status bar.
+
+The objects on the page are read too. On the page, press **Tab** to select the next object: the screen reader says what kind it is and what it holds, such as "Text box: Spring sale" or "Picture: a red barn", then where it is and how big. A picture without alt text is read as "Picture, no alt text", so you know which ones still need it. Press **Enter** to type in a text box; the screen reader can then read its text, the line or word the cursor is on, and what you select.
 
 - The Pages list reads each page as "Page 1", "Page 2", and so on. If you gave a page a name, the name follows, as in "Page 3, Cover".
 - The page area is called "Page". Its description tells you the keys to use: Tab selects the next object, the arrow keys move it, Enter edits its text, and Delete removes it.

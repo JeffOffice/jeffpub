@@ -69,6 +69,10 @@ public:
     Ruler *vRuler() const { return m_vRuler; }
     void setRulersVisible(bool on);
     QRectF caretViewRect() const;
+    // For screen readers: a rectangle of the page on the screen, and where
+    // the character at `pos` of the text being typed is.
+    QRect screenRect(const QRectF &pageRect) const;
+    QRect caretScreenRect(int pos) const;
 
 Q_SIGNALS:
     void zoomChanged(double zoom);
@@ -95,6 +99,10 @@ protected:
     // Tab is the page's own (a tab character, or the next object), never a
     // move to another control: F6 leaves the page.
     bool focusNextPrevChild(bool) override { return false; }
+    // Tells screen readers what has the focus (the page or its selected
+    // object) and, while typing, that the text or cursor changed.
+    void announceFocus();
+    void announceText(bool changed);
     void inputMethodEvent(QInputMethodEvent *e) override;
     QVariant inputMethodQuery(Qt::InputMethodQuery q) const override;
     void focusInEvent(QFocusEvent *e) override;

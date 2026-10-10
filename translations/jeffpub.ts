@@ -439,7 +439,7 @@ Back page story	4</source>
 <context>
     <name>Canvas</name>
     <message>
-        <location filename="../src/canvas/canvas.cpp" line="+108"/>
+        <location filename="../src/canvas/canvas.cpp" line="+112"/>
         <source>Page</source>
         <translation type="unfinished"></translation>
     </message>
@@ -449,7 +449,7 @@ Back page story	4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+310"/>
+        <location line="+314"/>
         <source>Catalog area: %1 per page</source>
         <translation type="unfinished"></translation>
     </message>
@@ -588,7 +588,7 @@ Back page story	4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+113"/>
+        <location line="+159"/>
         <source>Add Ruler Guide</source>
         <translation type="unfinished"></translation>
     </message>
@@ -600,6 +600,84 @@ Back page story	4</source>
     <message>
         <location line="+4"/>
         <source>Indent</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/canvas/canvasaccessible.cpp" line="+75"/>
+        <source>Empty text box</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Text box: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Picture, no alt text</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Picture: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Shape</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+1"/>
+        <source>%1: %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Line</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Line: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Table, %1 rows by %2 columns</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Text art: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>Group of %n object(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>%1 from the left and %2 from the top, %3 wide and %4 tall.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Turned %1 degrees.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Typing in it. Escape stops typing and keeps it selected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Selected. The arrow keys move it, Enter types in it, and Delete removes it.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

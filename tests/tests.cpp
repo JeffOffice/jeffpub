@@ -2362,6 +2362,82 @@ private Q_SLOTS:
         QVERIFY(!w.ribbon()->isMinimized());
     }
 
+    // Screen readers see the page's objects: each is a child of the page,
+    // named by its kind and its text or alt text; the selected one is the
+    // focus (so Tab is read out object by object); while typing, its text,
+    // cursor, and selection can be read. (The page was one item, "Page".)
+    void pageObjectsForScreenReaders()
+    {
+        jp::MainWindow w;
+        w.resize(1200, 800);
+        w.show();
+        QVERIFY(QTest::qWaitForWindowActive(&w));
+        jp::Editor *ed = w.editor();
+        jp::Canvas *cv = w.canvas();
+        auto box = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 72, 300, 60), QStringLiteral("Spring sale")));
+        ed->addItem(box);
+        auto pic = std::make_shared<jp::PictureItem>();
+        pic->rect = QRectF(72, 200, 144, 144);
+        pic->altText = QStringLiteral("A red barn");
+        ed->addItem(pic);
+        auto bare = std::make_shared<jp::PictureItem>();
+        bare->rect = QRectF(300, 200, 72, 72);
+        ed->addItem(bare);
+        cv->setFocus();
+        QAccessibleInterface *page = QAccessible::queryAccessibleInterface(cv);
+        QVERIFY(page);
+        QCOMPARE(page->text(QAccessible::Name), QStringLiteral("Page"));
+        QStringList names;
+        for (int i = 0; i < page->childCount(); ++i)
+            if (QAccessibleInterface *c = page->child(i); c && c->object() == nullptr) names << c->text(QAccessible::Name);
+        QCOMPARE(names, (QStringList{QStringLiteral("Text box: Spring sale"), QStringLiteral("Picture: A red barn"), QStringLiteral("Picture, no alt text")}));
+        // Tab selects each object, and the selected one is the focus.
+        ed->clearSelection();
+        QVERIFY(!page->focusChild());
+        QTest::keyClick(cv, Qt::Key_Tab);
+        QAccessibleInterface *f = page->focusChild();
+        QVERIFY(f);
+        QCOMPARE(f->text(QAccessible::Name), QStringLiteral("Text box: Spring sale"));
+        QCOMPARE(f->role(), QAccessible::EditableText);
+        QVERIFY(f->state().focused && f->state().selected);
+        QVERIFY(f->text(QAccessible::Description).contains(QStringLiteral("from the left")));
+        QCOMPARE(page->indexOfChild(f), 0);
+        QVERIFY(f->rect().width() > 0 && cv->rect().translated(cv->mapToGlobal(QPoint(0, 0))).intersects(f->rect()));
+        QTest::keyClick(cv, Qt::Key_Tab);
+        QCOMPARE(page->focusChild()->text(QAccessible::Name), QStringLiteral("Picture: A red barn"));
+        QCOMPARE(page->focusChild()->role(), QAccessible::Graphic);
+        QVERIFY(!f->state().focused);
+        // Typing: the text, the cursor, and the selection.
+        ed->select(box->id);
+        QTest::keyClick(cv, Qt::Key_Return);
+        QVERIFY(ed->isEditingText());
+        f = page->focusChild();
+        QAccessibleTextInterface *t = f->textInterface();
+        QVERIFY(t);
+        QCOMPARE(t->text(0, t->characterCount()), QStringLiteral("Spring sale"));
+        t->setCursorPosition(7);
+        QCOMPARE(ed->cursor().position(), 7);
+        QCOMPARE(t->cursorPosition(), 7);
+        t->setSelection(0, 0, 6);
+        QCOMPARE(ed->cursor().selectedText(), QStringLiteral("Spring"));
+        int a = -1, b = -1;
+        t->selection(0, &a, &b);
+        QCOMPARE(a, 0);
+        QCOMPARE(b, 6);
+        QVERIFY(t->characterRect(3).isValid());
+        QTest::keyClick(cv, Qt::Key_End);
+        QTest::keyClicks(cv, QStringLiteral("!"));
+        QCOMPARE(t->text(0, t->characterCount()), QStringLiteral("Spring sale!"));
+        // An object deleted goes from the list.
+        QTest::keyClick(cv, Qt::Key_Escape);
+        ed->select(bare->id);
+        ed->deleteSelection();
+        names.clear();
+        for (int i = 0; i < page->childCount(); ++i)
+            if (QAccessibleInterface *c = page->child(i); c && c->object() == nullptr) names << c->text(QAccessible::Name);
+        QCOMPARE(names.size(), 2);
+    }
+
     // Every task pane's controls have names too (the panes are made when
     // first opened, so windowControlsAreNamed doesn't see them).
     void taskPaneControlsAreNamed()

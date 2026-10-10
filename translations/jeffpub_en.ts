@@ -2,6 +2,17 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="en">
 <context>
+    <name>Canvas</name>
+    <message numerus="yes">
+        <location filename="../../src/canvas/canvasaccessible.cpp" line="+95"/>
+        <source>Group of %n object(s)</source>
+        <translation>
+            <numerusform>Group of %n object</numerusform>
+            <numerusform>Group of %n objects</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
     <name>Dialogs</name>
     <message numerus="yes">
         <location filename="../../src/app/dialogs.cpp" line="+2755"/>

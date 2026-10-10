@@ -1,4 +1,7 @@
 #include "canvas/canvas.h"
+#include "canvas/canvasaccessible.h"
+
+#include <QAccessible>
 #include "app/icons.h"
 
 #include "app/settings.h"
@@ -105,6 +108,7 @@ Canvas::Canvas(Editor *ed, QWidget *parent) : QAbstractScrollArea(parent), m_ed(
     viewport()->setMouseTracking(true);
     viewport()->setAttribute(Qt::WA_OpaquePaintEvent);
     setFocusPolicy(Qt::StrongFocus);
+    installCanvasAccessibility();
     setAccessibleName(QCoreApplication::translate("Canvas", "Page"));
     setAccessibleDescription(QCoreApplication::translate("Canvas", "Tab selects the next object, the arrow keys move it, Enter edits its text, and Delete removes it. F6 goes to the ribbon."));
     setAttribute(Qt::WA_InputMethodEnabled);
@@ -127,6 +131,10 @@ Canvas::Canvas(Editor *ed, QWidget *parent) : QAbstractScrollArea(parent), m_ed(
     };
     connect(ed, &Editor::changed, this, refresh);
     connect(ed, &Editor::selectionChanged, this, refresh);
+    // Screen readers follow the selection, and the text while typing.
+    connect(ed, &Editor::selectionChanged, this, &Canvas::announceFocus);
+    connect(ed, &Editor::textCursorChanged, this, [this] { announceText(false); });
+    connect(ed, &Editor::changed, this, [this] { announceText(true); });
     connect(ed, &Editor::viewChanged, this, refresh);
     connect(ed, &Editor::toolChanged, this, [this] { updateCursorShape(mapFromGlobal(QCursor::pos())); });
     connect(ed, &Editor::pageChanged, this, [this] {
@@ -2830,6 +2838,52 @@ void Canvas::focusInEvent(QFocusEvent *e)
 {
     QAbstractScrollArea::focusInEvent(e);
     if (m_ed->isEditingText()) m_caretTimer.start();
+    announceFocus();   // the selected object, not just "Page"
+}
+
+QRect Canvas::screenRect(const QRectF &pageRect) const
+{
+    const QRectF v(pageToView(pageRect.topLeft()), pageToView(pageRect.bottomRight()));
+    return QRect(viewport()->mapToGlobal(v.normalized().topLeft().toPoint()), v.normalized().size().toSize());
+}
+
+QRect Canvas::caretScreenRect(int pos) const
+{
+    QLineF line;
+    QString frame;
+    if (!caretInfo(&line, &frame, pos)) return QRect();
+    const QRectF v = QRectF(pageToView(line.p1()), pageToView(line.p2())).normalized().adjusted(-1, 0, 1, 0);
+    return QRect(viewport()->mapToGlobal(v.topLeft().toPoint()), v.size().toSize());
+}
+
+void Canvas::announceFocus()
+{
+    if (!QAccessible::isActive() || !hasFocus()) return;
+    auto *page = static_cast<CanvasAccessible *>(QAccessible::queryAccessibleInterface(this));
+    if (!page) return;
+    if (QAccessibleInterface *obj = page->focusChild()) {
+        QAccessibleEvent sel(obj, QAccessible::Selection);
+        QAccessible::updateAccessibility(&sel);
+        QAccessibleEvent focus(obj, QAccessible::Focus);
+        QAccessible::updateAccessibility(&focus);
+    } else {
+        QAccessibleEvent focus(this, QAccessible::Focus);
+        QAccessible::updateAccessibility(&focus);
+    }
+}
+
+void Canvas::announceText(bool changed)
+{
+    if (!QAccessible::isActive() || !hasFocus() || !m_ed->isEditingText()) return;
+    auto *page = static_cast<CanvasAccessible *>(QAccessible::queryAccessibleInterface(this));
+    PageObjectAccessible *obj = page ? page->objectInterface(m_ed->textTarget().itemId) : nullptr;
+    if (!obj) return;
+    if (changed) {
+        QAccessibleTextUpdateEvent ev(obj, 0, QString(), QString());
+        QAccessible::updateAccessibility(&ev);
+    }
+    QAccessibleTextCursorEvent ev(obj, m_ed->cursor().position());
+    QAccessible::updateAccessibility(&ev);
 }
 
 void Canvas::focusOutEvent(QFocusEvent *e)
