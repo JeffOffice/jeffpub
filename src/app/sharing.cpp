@@ -100,23 +100,32 @@ void emailAsAttachment(QWidget *parent, Editor *ed, const QString &format)
 
 QString userBlocksDir() { return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/BuildingBlocks"); }
 
-void packForPrinter(MainWindow *win, const QString &dir)
+bool packForPrinter(MainWindow *win, const QString &dir, QString *error)
 {
     Editor *ed = win->editor();
     const QString base = QDir(dir).filePath(ed->displayName());
     // The commercial press PDF: full-resolution pictures, printer's marks and bleeds.
     MainWindow::PdfSettings s;
     s.preset = MainWindow::PdfSettings::CommercialPress;
-    win->exportPdfTo(base + ".pdf", s);
-    QString err;
-    savePublication(*ed->doc(), base + ".jpub", win->pageThumbnail(0, 256), &err, true);
-    QFile readme(QDir(dir).filePath("README-for-printer.txt"));
-    if (readme.open(QIODevice::WriteOnly)) {
-        readme.write(QStringLiteral("Publication: %1\nPage size: %2 x %3 inches, %4 pages\nThe PDF has crop, bleed, and registration marks, color bars, and job information outside the page.\n"
-                                    "PDF fonts are embedded. Pictures are at full resolution.\n")
-                         .arg(ed->displayName()).arg(ed->doc()->pageSize().width() / 72, 0, 'f', 3).arg(ed->doc()->pageSize().height() / 72, 0, 'f', 3)
-                         .arg(ed->doc()->pages.size()).toUtf8());
+    if (!win->exportPdfTo(base + ".pdf", s)) {
+        if (error) *error = QCoreApplication::translate("Sharing", "JeffPub couldn't save the PDF in %1.").arg(QDir::toNativeSeparators(dir));
+        return false;
     }
+    QString err;
+    if (!savePublication(*ed->doc(), base + ".jpub", win->pageThumbnail(0, 256), &err, true)) {
+        if (error) *error = QCoreApplication::translate("Sharing", "JeffPub couldn't save the publication in %1.\n%2").arg(QDir::toNativeSeparators(dir), err);
+        return false;
+    }
+    QFile readme(QDir(dir).filePath("README-for-printer.txt"));
+    const QByteArray note = QStringLiteral("Publication: %1\nPage size: %2 x %3 inches, %4 pages\nThe PDF has crop, bleed, and registration marks, color bars, and job information outside the page.\n"
+                                           "PDF fonts are embedded. Pictures are at full resolution.\n")
+                                .arg(ed->displayName()).arg(ed->doc()->pageSize().width() / 72, 0, 'f', 3).arg(ed->doc()->pageSize().height() / 72, 0, 'f', 3)
+                                .arg(ed->doc()->pages.size()).toUtf8();
+    if (!readme.open(QIODevice::WriteOnly) || readme.write(note) != note.size()) {
+        if (error) *error = QCoreApplication::translate("Sharing", "JeffPub couldn't save the note for your printer in %1.").arg(QDir::toNativeSeparators(dir));
+        return false;
+    }
+    return true;
 }
 
 void packAndGo(QWidget *parent, MainWindow *win, bool forPrinter)
@@ -125,7 +134,11 @@ void packAndGo(QWidget *parent, MainWindow *win, bool forPrinter)
     if (forPrinter) {
         const QString dir = QFileDialog::getExistingDirectory(parent, QCoreApplication::translate("Sharing", "Save for a Commercial Printer"));
         if (dir.isEmpty()) return;
-        packForPrinter(win, dir);
+        QString err;
+        if (!packForPrinter(win, dir, &err)) {
+            QMessageBox::warning(parent, QCoreApplication::translate("Sharing", "Pack and Go"), err);
+            return;
+        }
         QMessageBox::information(parent, QCoreApplication::translate("Sharing", "Pack and Go"), QCoreApplication::translate("Sharing", "Saved the PDF and publication for your printer in %1.").arg(dir));
         return;
     }

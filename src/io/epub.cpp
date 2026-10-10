@@ -358,8 +358,7 @@ void Book::picture(const PictureItem &pic)
     }
     const double widthPct = std::clamp(pic.rect.width() / std::max(1.0, m_doc.pageSize().width()) * 100 * 1.25, 20.0, 100.0);
     current().body += QStringLiteral("<figure><img src=\"%1\" alt=\"%2\" style=\"width: %3%\"/></figure>\n")
-                          .arg(pictures.value(key).href, xml(pic.altText.simplified()))
-                          .arg(qRound(widthPct));
+                          .arg(pictures.value(key).href, xml(pic.altText.simplified()), QString::number(qRound(widthPct)));
 }
 
 void Book::table(const TableItem &t)
@@ -514,7 +513,10 @@ bool exportFixedEpub(const Document &doc, const QString &path, const QVector<Fix
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\">\n"
             "<rootfiles><rootfile full-path=\"OEBPS/content.opf\" media-type=\"application/oebps-package+xml\"/></rootfiles>\n</container>\n",
             true);
-    QString manifest = QStringLiteral("<item id=\"nav\" href=\"nav.xhtml\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>\n");
+    // The contents page links the style sheet, so it is in the book and listed.
+    zip.add(QStringLiteral("OEBPS/style.css"), styleSheet(), true);
+    QString manifest = QStringLiteral("<item id=\"nav\" href=\"nav.xhtml\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>\n"
+                                      "<item id=\"css\" href=\"style.css\" media-type=\"text/css\"/>\n");
     QString spine;
     if (!opt.cover.isNull()) {
         QByteArray jpg;
@@ -536,9 +538,9 @@ bool exportFixedEpub(const Document &doc, const QString &path, const QVector<Fix
                                             "<head><meta charset=\"utf-8\"/><title>%2</title>\n<meta name=\"viewport\" content=\"width=%3, height=%4\"/>\n"
                                             "<style>html, body { margin: 0; padding: 0; width: %3px; height: %4px; overflow: hidden; }\n"
                                             "img.page { position: absolute; left: 0; top: 0; width: %3px; height: %4px; }\n"
-                                            ".words { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%%); }</style></head>\n"
+                                            ".words { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }</style></head>\n"
                                             "<body epub:type=\"bodymatter\"><img class=\"page\" src=\"%5\" alt=\"\"/>\n<div class=\"words\">\n%6</div></body></html>\n")
-                                 .arg(xml(lang), xml(QStringLiteral("%1, page %2").arg(title).arg(i + 1))).arg(w).arg(h).arg(svgName, words);
+                                 .arg(xml(lang), xml(QStringLiteral("%1, page %2").arg(title, QString::number(i + 1))), QString::number(w), QString::number(h), svgName, words);
         zip.add(QStringLiteral("OEBPS/") + name, body.toUtf8(), true);
         zip.add(QStringLiteral("OEBPS/") + svgName, pages[i].svg, true);
         manifest += QStringLiteral("<item id=\"p%1\" href=\"%2\" media-type=\"application/xhtml+xml\"/>\n"

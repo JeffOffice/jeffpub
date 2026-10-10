@@ -258,7 +258,7 @@ PageSetup PageSetup::fromJson(const QJsonObject &o)
     s.gridCols = o["gridCols"].toInt(1);
     s.gapH = o["gapH"].toDouble();
     s.gapV = o["gapV"].toDouble();
-    s.firstPageNumber = std::clamp(o["firstPageNumber"].toInt(1), 1, 99999);
+    s.firstPageNumber = std::clamp(o["firstPageNumber"].toInt(1), 1, 1000);   // as far as .pub files and the dialog go
     s.pageNumberFormat = o["pageNumberFormat"].toString();
     s.sideMargin = o["sideMargin"].toDouble();
     s.topMargin = o["topMargin"].toDouble();

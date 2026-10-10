@@ -34,7 +34,7 @@ In a flowing book, a new chapter starts at each paragraph in the Heading 1 style
 
 ## Pack and Go and photo prints
 
-- **Pack and Go: Save for a Commercial Printer** asks for a folder. It saves a commercial press PDF (full-resolution pictures, with crop marks and the other printer's marks outside the page), the publication, and a short text file with the page size and page count.
+- **Pack and Go: Save for a Commercial Printer** asks for a folder. It saves a commercial press PDF (full-resolution pictures, with crop marks and the other printer's marks outside the page), the publication, and a short text file with the page size and page count. If any of the three can't be saved, for example because the folder is full or protected, a message says so instead of reporting success.
 - **Pack and Go: Save for Another Computer** makes one ZIP file with the publication and the fonts it uses that come with JeffPub. Pictures linked to their files are stored whole in the publication. A linked picture marked **Not updated** brings the small preview it shows, because JeffPub has not opened its file.
 - **Save for a Photo Printer** asks for a folder and saves each page as a 300 dpi JPEG.
 

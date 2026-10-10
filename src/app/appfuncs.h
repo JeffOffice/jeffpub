@@ -30,7 +30,8 @@ void packAndGo(QWidget *parent, MainWindow *win, bool forPrinter);
 // Where Save as Building Block keeps the blocks, which Insert > Page Parts lists.
 QString userBlocksDir();
 // Pack and Go's printer folder: a commercial press PDF, the publication, and a note.
-void packForPrinter(MainWindow *win, const QString &dir);
+// False, with `error` saying what, when any of them could not be saved.
+bool packForPrinter(MainWindow *win, const QString &dir, QString *error = nullptr);
 void saveForPhotoPrinter(QWidget *parent, MainWindow *win);
 void saveAsTemplate(QWidget *parent, MainWindow *win);
 QStringList thesaurusLookup(const QString &word);

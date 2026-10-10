@@ -2834,6 +2834,145 @@ private Q_SLOTS:
         if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) QFile::copy(path, qEnvironmentVariable("JP_SHOT_DIR") + QStringLiteral("/fixed.epub"));
     }
 
+    // What is wrong with an EPUB's files: names that lead nowhere in it (the
+    // package's items, and every link, picture, and style sheet of each page),
+    // and a printf-style doubled percent sign left in a style.
+    static QStringList epubProblems(const QMap<QString, QByteArray> &zip)
+    {
+        QStringList problems;
+        const QRegularExpression ref(QStringLiteral("(?:href|src)=\"([^\"]*)\""));
+        const QRegularExpression styleBlock(QStringLiteral("<style[^>]*>(.*?)</style>"), QRegularExpression::DotMatchesEverythingOption);
+        for (auto it = zip.cbegin(); it != zip.cend(); ++it) {
+            const QString name = it.key();
+            const bool markup = name.endsWith(QLatin1String(".xhtml")) || name.endsWith(QLatin1String(".opf"));
+            if (name.endsWith(QLatin1String(".css")) && it.value().contains("%%")) problems << name + QStringLiteral(": %% in a style");
+            if (!markup) continue;
+            const QString text = QString::fromUtf8(it.value());
+            const QString dir = name.contains(QLatin1Char('/')) ? name.left(name.lastIndexOf(QLatin1Char('/')) + 1) : QString();
+            for (auto m = ref.globalMatch(text); m.hasNext();) {
+                const QString target = m.next().captured(1).section(QLatin1Char('#'), 0, 0);
+                if (!target.isEmpty() && !target.contains(QLatin1String("://")) && !zip.contains(QDir::cleanPath(dir + target))) problems << name + QStringLiteral(" -> ") + target;
+            }
+            for (auto m = styleBlock.globalMatch(text); m.hasNext();)
+                if (m.next().captured(1).contains(QLatin1String("%%"))) problems << name + QStringLiteral(": %% in a style");
+        }
+        return problems;
+    }
+
+    // The fixed-layout e-book is whole: the contents page's style sheet is in
+    // the file and listed, no style carries a doubled percent sign, and a
+    // title with %-and-digit in it comes through as typed.
+    void fixedLayoutEbookIsConsistent()
+    {
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        ed->insertPages(0, 1, false, false);
+        auto box = std::make_shared<jp::TextItem>();
+        box->rect = QRectF(72, 72, 400, 60);
+        box->storyId = ed->doc()->createStory(QStringLiteral("Growth 100%3 of %4 plans"));
+        ed->doc()->pages[0]->items.push_back(box);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("book.epub"));
+        QString err;
+        const QString title = QStringLiteral("Growth 100%3 of %4 plans");
+        QVERIFY2(w.exportFixedEpubTo(path, title, QStringLiteral("Pat %1"), &err), qPrintable(err));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QMap<QString, QByteArray> zip;
+        QVERIFY(jp::readZip(f.readAll(), zip, &err));
+        QVERIFY2(zip.contains(QStringLiteral("OEBPS/nav.xhtml")) && zip.contains(QStringLiteral("OEBPS/page1.xhtml")), qPrintable(QStringList(zip.keys()).join(' ')));
+        QCOMPARE(epubProblems(zip), QStringList());
+        QVERIFY(QString::fromUtf8(zip.value(QStringLiteral("OEBPS/nav.xhtml"))).contains(QStringLiteral("href=\"style.css\"")));
+        QVERIFY(zip.contains(QStringLiteral("OEBPS/style.css")));
+        QVERIFY(QString::fromUtf8(zip.value(QStringLiteral("OEBPS/content.opf"))).contains(QStringLiteral("href=\"style.css\"")));
+        QVERIFY2(QString::fromUtf8(zip.value(QStringLiteral("OEBPS/page1.xhtml"))).contains(QStringLiteral("<title>Growth 100%3 of %4 plans, page 1</title>")),
+                 qPrintable(QString::fromUtf8(zip.value(QStringLiteral("OEBPS/page1.xhtml")))));
+        QVERIFY(QString::fromUtf8(zip.value(QStringLiteral("OEBPS/page2.xhtml"))).contains(QStringLiteral("<title>Growth 100%3 of %4 plans, page 2</title>")));
+        QVERIFY(QString::fromUtf8(zip.value(QStringLiteral("OEBPS/page1.xhtml"))).contains(QStringLiteral("clip-path: inset(50%)")));
+        QVERIFY(QString::fromUtf8(zip.value(QStringLiteral("OEBPS/content.opf"))).contains(QStringLiteral("<dc:creator>Pat %1</dc:creator>")));
+    }
+
+    // The same in the reflowable e-book: a picture's description with
+    // %-and-digit in it is written as typed, and every name resolves.
+    void epubTextWithPercentSignsIsWrittenAsTyped()
+    {
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        auto box = std::make_shared<jp::TextItem>();
+        box->rect = QRectF(72, 72, 400, 60);
+        box->storyId = ed->doc()->createStory(QStringLiteral("Growth 100%3 of %4 plans"));
+        ed->doc()->pages[0]->items.push_back(box);
+        QImage img(40, 30, QImage::Format_RGB32);
+        img.fill(Qt::darkGreen);
+        QByteArray png;
+        QBuffer pb(&png);
+        pb.open(QIODevice::WriteOnly);
+        img.save(&pb, "PNG");
+        auto pic = std::make_shared<jp::PictureItem>();
+        pic->imageId = ed->doc()->addImage(png, QStringLiteral("png"));
+        pic->rect = QRectF(72, 400, 200, 100);
+        pic->imgRect = QRectF(0, 0, 200, 100);
+        pic->altText = QStringLiteral("Half of it, 50%3 sure");
+        ed->doc()->pages[0]->items.push_back(pic);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("book.epub"));
+        QString err;
+        QVERIFY2(w.exportEpubTo(path, QStringLiteral("Growth 100%3 of %4 plans"), QString(), true, &err), qPrintable(err));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QMap<QString, QByteArray> zip;
+        QVERIFY(jp::readZip(f.readAll(), zip, &err));
+        QCOMPARE(epubProblems(zip), QStringList());
+        const QString chapter = QString::fromUtf8(zip.value(QStringLiteral("OEBPS/chapter1.xhtml")));
+        QVERIFY2(chapter.contains(QStringLiteral("alt=\"Half of it, 50%3 sure\"")), qPrintable(chapter));
+        QVERIFY(chapter.contains(QStringLiteral("Growth 100%3 of %4 plans")));
+        QVERIFY(QString::fromUtf8(zip.value(QStringLiteral("OEBPS/content.opf"))).contains(QStringLiteral("<dc:title>Growth 100%3 of %4 plans</dc:title>")));
+    }
+
+    // The first page number is read within the limits the .pub format and the
+    // Page Numbers dialog keep (1 to 1000), however the file says it.
+    void firstPageNumberLoadsWithinTheLimits()
+    {
+        const std::pair<int, int> cases[] = {{5000, 1000}, {99999, 1000}, {1001, 1000}, {1000, 1000}, {999, 999}, {1, 1}, {0, 1}, {-7, 1}};
+        for (const auto &c : cases) {
+            QJsonObject json = jp::Document::blank(QSizeF(612, 792))->toJson();
+            QJsonObject setup = json["setup"].toObject();
+            setup["firstPageNumber"] = c.first;
+            json["setup"] = setup;
+            jp::Document doc;
+            doc.fromJson(json);
+            QVERIFY2(doc.setup.firstPageNumber == c.second, qPrintable(QString::number(c.first)));
+        }
+    }
+
+    // A table with no rows or no columns (a crafted file) has no cell to look
+    // up; asking for one reads nothing.
+    void emptyTableHasNoCellToFind()
+    {
+        for (const auto &size : {std::pair<int, int>{0, 0}, {0, 3}, {2, 0}}) {
+            jp::TableItem table;
+            table.rows = size.first;
+            table.cols = size.second;
+            table.colW = QVector<double>(size.second, 100.0);
+            table.rowH = QVector<double>(size.first, 20.0);
+            table.cells.resize(size.first * size.second);
+            int row = 5, col = 5;
+            table.cellAt(QPointF(10, 10), &row, &col);
+            QCOMPARE(row, 0);
+            QCOMPARE(col, 0);
+            QVERIFY(!table.cellsBetween(0, 0, 1, 1).valid());
+        }
+        jp::TableItem real;
+        real.rows = real.cols = 2;
+        real.colW = {100, 100};
+        real.rowH = {20, 20};
+        real.cells.resize(4);
+        int row = 0, col = 0;
+        real.cellAt(QPointF(150, 30), &row, &col);
+        QCOMPARE(row, 1);
+        QCOMPARE(col, 1);
+    }
+
     // A file whose style names point outside their section (made from
     // JeffPub's own styles sample): it still opens with all its text,
     // losing only the damaged names.
@@ -8690,6 +8829,27 @@ private Q_SLOTS:
         QVERIFY(m.hasMatch());
         QVERIFY2(m.captured(1).toDouble() > w.editor()->doc()->pageSize().width() + 36, qPrintable(m.captured(0)));   // room for the marks
         QVERIFY(QFile::exists(QDir(dir.path()).filePath(w.editor()->displayName() + QStringLiteral(".jpub"))));
+    }
+
+    // Pack and Go for a printer says so when the publication can't be saved,
+    // instead of leaving a folder with the PDF alone (and a happy message).
+    void packForPrinterReportsAFailedSave()
+    {
+        jp::MainWindow w;
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        // A folder where the publication's file must go: it can't be written there.
+        QVERIFY(QDir(dir.path()).mkdir(w.editor()->displayName() + QStringLiteral(".jpub")));
+        QString err;
+        QVERIFY(!jp::packForPrinter(&w, dir.path(), &err));
+        QVERIFY2(err.contains(QStringLiteral("publication")), qPrintable(err));
+        // With a place to write all three, it says nothing.
+        QTemporaryDir fine;
+        QVERIFY(fine.isValid());
+        err.clear();
+        QVERIFY(jp::packForPrinter(&w, fine.path(), &err));
+        QVERIFY2(err.isEmpty(), qPrintable(err));
+        QVERIFY(QFile::exists(QDir(fine.path()).filePath(w.editor()->displayName() + QStringLiteral(".jpub"))));
     }
 
     // The Design Checker's low-resolution check is a final publishing check:

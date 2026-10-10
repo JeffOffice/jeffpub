@@ -532,6 +532,10 @@ QRectF TableItem::cellRect(int r, int c) const
 
 void TableItem::cellAt(const QPointF &local, int *row, int *col) const
 {
+    if (rows <= 0 || cols <= 0) {   // no cell to be near
+        *row = *col = 0;
+        return;
+    }
     int rr = 0, cc = 0;
     double acc = 0;
     for (cc = 0; cc < cols - 1 && local.x() >= acc + colW[cc]; ++cc) acc += colW[cc];

@@ -231,7 +231,8 @@ public:
     const TableCell &cell(int r, int c) const { return cells[r * cols + c]; }
     QRectF cellRect(int r, int c) const;   // frame-local, spans included
     // The cell (the first of a merged cell) under a frame-local point; a
-    // point outside the table is taken to the nearest cell.
+    // point outside the table is taken to the nearest cell. A table with no
+    // rows or columns has none: 0, 0.
     void cellAt(const QPointF &local, int *row, int *col) const;
     // The rectangle of cells between two cells, grown until it holds every
     // merged cell it touches whole.
