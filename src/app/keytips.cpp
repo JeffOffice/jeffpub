@@ -123,10 +123,17 @@ void KeyTips::add(const QString &key, QWidget *target, std::function<void()> act
     auto *b = new QLabel(key, host);
     b->setObjectName(QStringLiteral("jpKeyTip"));
     b->setAttribute(Qt::WA_TransparentForMouseEvents);
+    // A control that can't be used now shows its letters faded.
+    const bool off = !target->isEnabled();
     QColor bg, fg, edge;
     if (uiHighContrast()) {
-        bg = QApplication::palette().color(QPalette::ToolTipBase);
-        fg = edge = QApplication::palette().color(QPalette::ToolTipText);
+        const QPalette pal = QApplication::palette();
+        bg = pal.color(QPalette::ToolTipBase);
+        fg = edge = off ? pal.color(QPalette::Disabled, QPalette::WindowText) : pal.color(QPalette::ToolTipText);
+    } else if (off) {
+        bg = uiDark() ? QColor(0x6B, 0x70, 0x7A) : QColor(0xC4, 0xC8, 0xD0);
+        fg = uiDark() ? QColor(0x2A, 0x2E, 0x36) : QColor(0x5F, 0x64, 0x6E);
+        edge = bg;
     } else {
         bg = uiDark() ? QColor(0xE8, 0xEA, 0xEF) : QColor(0x2A, 0x30, 0x3B);
         fg = uiDark() ? QColor(0x1B, 0x1F, 0x27) : QColor(Qt::white);
@@ -237,6 +244,15 @@ void KeyTips::typed(const QString &c)
     }
     for (const Tip &t : m_tips)
         if (t.key == m_typed) {
+            if (t.target && !t.target->isEnabled()) {
+                // Not usable now (nothing selected for it): the letters stay
+                // up, for another choice.
+                QApplication::beep();
+                m_typed.clear();
+                for (Tip &u : m_tips)
+                    if (u.badge) u.badge->setVisible(true);
+                return;
+            }
             const auto act = t.act;   // the act may clear the list
             act();
             return;

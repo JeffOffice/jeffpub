@@ -1667,6 +1667,33 @@ private Q_SLOTS:
         // A click puts the letters away.
         QTest::mouseClick(w.findChild<jp::Canvas *>(), Qt::LeftButton);
         QCOMPARE(kt->level(), jp::KeyTips::Off);
+        // A box's letters put the keyboard in it, ready to type (Home > Font:
+        // F F); while it can't be used (no text selected), the letters stay
+        // up and nothing moves.
+        QWidget *before = QApplication::focusWidget();
+        QTest::keyPress(&w, Qt::Key_Alt);
+        QTest::keyRelease(&w, Qt::Key_Alt);
+        QTest::keyClick(&w, Qt::Key_H);
+        QTest::keyClick(&w, Qt::Key_F);
+        QTest::keyClick(&w, Qt::Key_F);
+        QCOMPARE(kt->level(), jp::KeyTips::InTab);
+        QCOMPARE(QApplication::focusWidget(), before);
+        QVERIFY(keys().contains(QStringLiteral("FF")));
+        QTest::keyClick(&w, Qt::Key_Escape);
+        QTest::keyClick(&w, Qt::Key_Escape);
+        QCOMPARE(kt->level(), jp::KeyTips::Off);
+        jp::Editor *ed = w.editor();
+        ed->addItem(ed->newTextBox(QRectF(72, 72, 200, 100)));
+        QTRY_VERIFY(w.findChildren<jp::FontCombo *>().constFirst()->isEnabled());
+        QTest::keyPress(&w, Qt::Key_Alt);
+        QTest::keyRelease(&w, Qt::Key_Alt);
+        QTest::keyClick(&w, Qt::Key_H);
+        QTest::keyClick(&w, Qt::Key_F);
+        QTest::keyClick(&w, Qt::Key_F);
+        QCOMPARE(kt->level(), jp::KeyTips::Off);
+        QWidget *typing = QApplication::focusWidget();
+        QVERIFY2(typing && (typing->inherits("jp::FontCombo") || (typing->parentWidget() && typing->parentWidget()->inherits("jp::FontCombo"))),
+                 typing ? typing->metaObject()->className() : "nothing");
     }
 
     // Using the ribbon with the keyboard alone: F6 enters it on the current
