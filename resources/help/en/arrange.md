@@ -14,7 +14,7 @@ Every picture, text box, shape, and line on a page is an object. This topic show
 ## Move and resize
 
 - Drag an object to move it. Hold **Shift** to move it only straight across or straight up and down. Hold **Alt** to turn snapping off. Hold **Ctrl** while you drag to make a copy.
-- Press the arrow keys to nudge the object by one eighth of an inch. **Alt** with an arrow key moves it one screen pixel. You can change the nudge distance in **File > Settings > Advanced**.
+- Press the arrow keys to nudge the object by one eighth of an inch. **Alt** with an arrow key moves it one screen pixel. You can change the nudge distance in **File > Options > Advanced**.
 - Drag a square handle to resize. A corner handle changes width and height together. A side handle changes only one.
 - Text boxes and shapes: hold **Shift** while you drag a corner to keep the proportions.
 - Pictures, Text Art, icons, and groups already keep their proportions at a corner. Hold **Shift** to stretch them freely.

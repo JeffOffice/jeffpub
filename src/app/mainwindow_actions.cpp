@@ -169,28 +169,24 @@ void MainWindow::createActions()
     mk("edit.cut", tr("Cut"), "scissors", QKeySequence::Cut, [ed] { ed->cut(); });
     mk("edit.copy", tr("Copy"), "copy", QKeySequence::Copy, [ed] { ed->copy(); });
     mk("edit.paste", tr("Paste"), "clipboard-paste", QKeySequence::Paste, [ed] { ed->paste(); });
-    mk("edit.pasteText", tr("Keep Text Only"), "clipboard-type", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V), [ed] { ed->paste(true); });
+    mk("edit.pasteText", tr("Keep Text Only"), "clipboard-type", QKeySequence(), [ed] { ed->paste(true); });
     mk("edit.pasteSpecial", tr("Paste Special…"), "clipboard-list", QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_V), [this] { pasteSpecialDialog(this, m_ed); });
     mk("edit.duplicate", tr("Duplicate"), "copy-plus", QKeySequence(Qt::CTRL | Qt::Key_D), [ed] { ed->duplicateSelection(); });
     mk("edit.delete", tr("Delete Object"), "trash-2", QKeySequence(), [ed] { ed->deleteSelection(); });
-    mk("edit.formatPainter", tr("Format Painter"), "paintbrush", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C), [ed] {
+    mk("edit.formatPainter", tr("Format Painter"), "paintbrush", QKeySequence(), [ed] {
         if (ed->tool() == Tool::FormatPainter) { ed->setTool(Tool::Select); return; }
-        ed->painterItem = QJsonObject();
-        ed->painterHasText = false;
-        if (Item *it = ed->single()) {
-            const QJsonObject o = it->toJson();
-            for (const char *k : {"fill", "stroke", "fx"})
-                if (o.contains(k)) ed->painterItem[k] = o[k];
-            if (!o.contains("fill")) ed->painterItem["fill"] = Fill().toJson();
-            if (!o.contains("stroke")) ed->painterItem["stroke"] = Stroke().toJson();
-        }
-        if (ed->isEditingText() || (ed->single() && ed->single()->hasText())) {
-            ed->painterText = ed->currentCharFormat();
-            ed->painterHasText = true;
-        }
+        ed->copyFormatting();
         ed->painterLocked = QApplication::keyboardModifiers() & Qt::ShiftModifier;
         ed->setTool(Tool::FormatPainter);
     });
+    // As the other program: Ctrl+Shift+C and Ctrl+Shift+V copy and paste
+    // formatting, without the painter's pointer.
+    mk("edit.copyFormat", tr("Copy Formatting"), "paintbrush", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C), [this, ed] {
+        ed->copyFormatting();
+        statusBar()->showMessage(ed->hasCopiedFormatting() ? tr("Formatting copied. Select text or objects and press %1 to apply it.").arg(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V).toString(QKeySequence::NativeText))
+                                                           : tr("Select text or an object to copy its formatting."), 5000);
+    });
+    mk("edit.pasteFormat", tr("Paste Formatting"), "paintbrush", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V), [ed] { ed->pasteFormatting(); });
     mk("edit.selectAll", tr("Select All"), "text-select", QKeySequence::SelectAll, [ed] {
         if (ed->isEditingText()) {
             QTextCursor c = ed->cursor();
@@ -295,8 +291,9 @@ void MainWindow::createActions()
     }
     mk("para.listNone", tr("None"), "", QKeySequence(), [ed] { ed->setList(0); });
     mk("para.bulletsDialog", tr("Bullets and Numbering…"), "list-plus", QKeySequence(), [this] { bulletsDialog(this, m_ed, false); });
-    mk("para.indentDec", tr("Decrease Indent"), "indent-decrease", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M), [ed] { ed->changeIndent(-1); });
-    mk("para.indentInc", tr("Increase Indent"), "indent-increase", QKeySequence(Qt::CTRL | Qt::Key_M), [ed] { ed->changeIndent(1); });
+    // No keys: Ctrl+M is Master Page, and the other program gives these none.
+    mk("para.indentDec", tr("Decrease Indent"), "indent-decrease", QKeySequence(), [ed] { ed->changeIndent(-1); });
+    mk("para.indentInc", tr("Increase Indent"), "indent-increase", QKeySequence(), [ed] { ed->changeIndent(1); });
     mk("para.ltr", tr("Left-to-Right Text Direction"), "pilcrow-right", QKeySequence(), [ed] { ed->setDirection(Qt::LeftToRight); }, true);
     mk("para.rtl", tr("Right-to-Left Text Direction"), "pilcrow-left", QKeySequence(), [ed] { ed->setDirection(Qt::RightToLeft); }, true);
     mk("para.special", tr("Special Characters"), "pilcrow", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Y), [ed] {

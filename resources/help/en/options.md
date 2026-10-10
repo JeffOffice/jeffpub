@@ -1,7 +1,7 @@
 # Change JeffPub's settings
 <!-- keywords: options, settings, preferences, theme, dark mode, units, inches, autorecover, backup, language, user name, nudge, updates, usage statistics, about -->
 
-Your settings are in the **JeffPub Options** window. Click **File > Settings** to open it. It has four tabs. Click **OK** to keep your changes, or **Cancel** to throw them away.
+Your settings are in the **JeffPub Options** window. Click **File > Options** to open it. It has four tabs. Click **OK** to keep your changes, or **Cancel** to throw them away.
 
 ## General
 

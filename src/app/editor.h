@@ -125,6 +125,14 @@ public:
     QTextCharFormat painterText;       // Format Painter: copied text formatting
     bool painterHasText = false;
     bool painterLocked = false;
+    // Copy Formatting (Ctrl+Shift+C): the selected object's fill, outline and
+    // effects, and the formatting of the text at the cursor or in the object.
+    // Paste Formatting (Ctrl+Shift+V) gives them to the selected text, or to
+    // the selected objects and all their text. The Format Painter uses both.
+    void copyFormatting();
+    bool hasCopiedFormatting() const { return !painterItem.isEmpty() || painterHasText; }
+    void pasteFormatting();
+    void pasteFormattingTo(const QString &itemId);
     void setCropItem(const QString &id) { cropItem = id; Q_EMIT viewChanged(); }
     void setPointsItem(const QString &id) { pointsItem = id; Q_EMIT viewChanged(); }
     void setWrapItem(const QString &id) { wrapItem = id; Q_EMIT viewChanged(); }
@@ -236,6 +244,7 @@ Q_SIGNALS:
 
 private:
     TextItem *textBoxUnder(const Item &obj) const;
+    void applyCopiedFormatting(Item *it);
     friend class SnapshotCommand;
     QByteArray snapshot() const;
     void restore(const QByteArray &snap, const QStringList &sel, int page, const QString &master);

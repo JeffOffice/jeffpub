@@ -1460,24 +1460,7 @@ QStringList Canvas::moveSet() const
 
 void Canvas::applyFormatPainter(const QString &id)
 {
-    Item *it = m_ed->doc()->item(id);
-    if (!it) return;
-    m_ed->change(QCoreApplication::translate("Canvas", "Format Painter"), [&] {
-        const QJsonObject &f = m_ed->painterItem;
-        if (f.contains("fill")) it->fill = Fill::fromJson(f["fill"].toObject());
-        if (f.contains("stroke")) it->stroke = Stroke::fromJson(f["stroke"].toObject());
-        if (f.contains("fx")) it->fx = Effects::fromJson(f["fx"].toObject());
-        if (m_ed->painterHasText) {
-            QString sid;
-            if (it->type() == ItemType::Text) sid = m_ed->doc()->chainOf(it->id).value(0, static_cast<TextItem *>(it))->storyId;
-            else if (it->type() == ItemType::Shape) sid = static_cast<ShapeItem *>(it)->storyId;
-            if (QTextDocument *d = m_ed->doc()->storyDoc(sid)) {
-                QTextCursor c(d);
-                c.select(QTextCursor::Document);
-                c.mergeCharFormat(m_ed->painterText);
-            }
-        }
-    });
+    m_ed->pasteFormattingTo(id);
     if (!m_ed->painterLocked) m_ed->setTool(Tool::Select);
 }
 

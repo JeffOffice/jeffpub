@@ -9,11 +9,11 @@ Press Ctrl+S, click the **Save** button in the Quick Access Toolbar, or click **
 
 A star (*) after the name in the title bar means you have changes you have not saved. Save often. If JeffPub stops by surprise, see [Get back unsaved work](recover).
 
-To keep the last saved copy of a file, turn on **Always create backup copy**. Each time you save, JeffPub first copies the old file to one called "Backup of" plus its name, in the same folder. You find this option in **File > Settings**, on the **Save** tab.
+To keep the last saved copy of a file, turn on **Always create backup copy**. Each time you save, JeffPub first copies the old file to one called "Backup of" plus its name, in the same folder. You find this option in **File > Options**, on the **Save** tab.
 
 ## Save with a new name
 
-Click **File > Save a Copy**, or press F12. Type a name, pick **Save as type**, and click **Save**. The choices are:
+Click **File > Save As**, or press F12. Type a name, pick **Save as type**, and click **Save**. The choices are:
 
 - **JeffPub Publication (*.jpub)** is the normal choice.
 - **.pub Publication Files (*.pub)** makes a .pub file.

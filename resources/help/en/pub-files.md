@@ -21,7 +21,7 @@ Opening is a conversion, so look at every page. Check line breaks, fonts, and pi
 ## Save as a .pub file
 
 - Click **File > Export**, then **Save as .pub File**.
-- Or click **File > Save a Copy**, and choose **.pub Publication Files (*.pub)** for **Save as type**.
+- Or click **File > Save As**, and choose **.pub Publication Files (*.pub)** for **Save as type**.
 
 When JeffPub saves a .pub file, it can write pages, text boxes and linked text boxes, text formatting, shapes, lines, pictures, tables, fills, shadows, Text Art, styles, booklets, folded cards, envelopes, page numbers, and links. If something has no .pub form, JeffPub tells you how many objects it left out. Those objects stay in your publication, and they are kept when you save as a .jpub file.
 
@@ -29,8 +29,8 @@ When JeffPub saves a .pub file, it can write pages, text boxes and linked text b
 
 When you open a .pub file and press Ctrl+S, JeffPub writes the changes back to that same .pub file. To keep the original safe:
 
-- Turn on **Always create backup copy** in **File > Settings**, on the **Save** tab. JeffPub then keeps the older file as "Backup of" plus its name.
-- Or start with **File > Save a Copy** and save a .jpub file. A .jpub file keeps everything.
+- Turn on **Always create backup copy** in **File > Options**, on the **Save** tab. JeffPub then keeps the older file as "Backup of" plus its name.
+- Or start with **File > Save As** and save a .jpub file. A .jpub file keeps everything.
 
 Keep your original files until you are sure the new ones are right.
 

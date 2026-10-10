@@ -17,7 +17,7 @@ You can reach the ribbon, the Pages list, and the objects on the page with the k
 
 ## Change the colors
 
-- **Dark or light**: click **File > Settings**, and on the **General** tab, set **Theme** to **Light**, **Dark**, or **Use system setting**. The change happens at once.
+- **Dark or light**: click **File > Options**, and on the **General** tab, set **Theme** to **Light**, **Dark**, or **Use system setting**. The change happens at once.
 - **High contrast**: on Windows, when you turn on a high-contrast theme, JeffPub follows it. It uses the colors Windows chose, and it changes as you turn the theme on or off.
 
 ## Make pictures easier to understand

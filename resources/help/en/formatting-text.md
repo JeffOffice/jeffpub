@@ -1,5 +1,5 @@
 # Format text
-<!-- keywords: font, font size, bold, italic, underline, font color, text color, character spacing, kerning, align text, line spacing, indent, drop cap, format painter, change case -->
+<!-- keywords: font, font size, bold, italic, underline, font color, text color, character spacing, kerning, align text, line spacing, indent, drop cap, format painter, copy formatting, paste formatting, change case -->
 
 You format text on the **Home** tab. The **Font** group changes letters. The **Paragraph** group changes whole paragraphs.
 
@@ -45,6 +45,8 @@ On the **Text Box** tab, **Effects** adds shadow, outline, emboss, engrave, glow
 3. Click the text box you want to change.
 
 The whole box takes on the look of the first text, plus its fill and outline. Hold Shift as you click the button to keep painting. Press Esc to stop.
+
+From the keyboard: select the text or object whose look you want and press **Ctrl+Shift+C** to copy its formatting. Then select other text, or other objects, and press **Ctrl+Shift+V** to give them that look.
 
 ## Keyboard shortcuts
 

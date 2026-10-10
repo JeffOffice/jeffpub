@@ -21,7 +21,7 @@ For more choices, choose **Bullets and Numbering…** from either menu. The **Bu
 - Press Enter for the next item. Press Enter on an empty item to end the list.
 - Press Backspace at the start of an item to remove its bullet.
 
-To turn this off, clear **AutoFormat as you type** on the **Proofing** tab of **File > Settings** (the **JeffPub Options** window).
+To turn this off, clear **AutoFormat as you type** on the **Proofing** tab of **File > Options** (the **JeffPub Options** window).
 
 ## What tab stops are
 

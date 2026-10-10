@@ -35,7 +35,7 @@ If you closed the window and want your copies back, click **File > Open**, then 
 
 ## Change how often it saves
 
-Click **File > Settings**, then the **Save** tab. Change **Save AutoRecover information every** to a number from 1 to 120 minutes. A smaller number means less to lose. The new time takes full effect the next time you start JeffPub.
+Click **File > Options**, then the **Save** tab. Change **Save AutoRecover information every** to a number from 1 to 120 minutes. A smaller number means less to lose. The new time takes full effect the next time you start JeffPub.
 
 ## Related
 

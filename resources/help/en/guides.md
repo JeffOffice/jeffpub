@@ -7,7 +7,7 @@ Guides are lines that help you line things up. They show on screen but never pri
 
 Turn rulers on or off with **View > Show > Rulers**. A red line on each ruler follows your pointer, and the part of the ruler over your selected object is shaded. While you type in a text box, the top ruler shows indent and tab markers.
 
-To change the units, click **File > Settings**, open the **Advanced** tab, and choose **Measurement units**: inches, centimeters, millimeters, points, or picas. In any size or position box, you can also type a unit, such as 2 cm.
+To change the units, click **File > Options**, open the **Advanced** tab, and choose **Measurement units**: inches, centimeters, millimeters, points, or picas. In any size or position box, you can also type a unit, such as 2 cm.
 
 ## The four kinds of guides
 

@@ -68,6 +68,10 @@ public:
     QString recoveryCopy() const { return m_recoveryCopy; }
     KeyTips *keyTips() const { return m_keyTips; }
     void autoRecover();
+    // After File > Options: settings this window keeps its own copy of (the
+    // AutoRecover interval).
+    void settingsChanged();
+    int autoRecoverInterval() const { return m_recoverTimer.interval(); }   // ms
     bool save();
     bool saveAs(const QString &format = QString());
     bool saveTo(const QString &path);

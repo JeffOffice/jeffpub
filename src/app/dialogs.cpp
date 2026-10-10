@@ -1,4 +1,6 @@
 #include "app/dialogs.h"
+#include "app/telemetry.h"
+#include "app/mainwindow.h"
 #include "app/theme.h"
 #include "app/i18n.h"
 
@@ -2129,6 +2131,13 @@ void optionsDialog(QWidget *p, Editor *ed)
     const QString oldLang = st.value("ui/language").toString();
     uiLang->setCurrentIndex(std::max(0, uiLang->findData(oldLang)));
     gf->addRow(QCoreApplication::translate("Dialogs", "Display language:"), uiLang);
+    // The choice the first start offered, which its message says is here.
+    auto *stats = new QCheckBox(QCoreApplication::translate("Dialogs", "Send anonymous usage statistics"), gen);
+    stats->setObjectName(QStringLiteral("stats"));
+    stats->setToolTip(QCoreApplication::translate("Dialogs", "Once a day, and the day it's updated: JeffPub's version, your operating system and language, and how often each command is used. "
+                                                            "Never your files, their names, or anything in them."));
+    stats->setChecked(telemetry::enabled());
+    gf->addRow(stats);
     tabs->addTab(gen, QCoreApplication::translate("Dialogs", "General"));
     auto *proof = new QWidget();
     auto *pf = new QFormLayout(proof);
@@ -2154,6 +2163,7 @@ void optionsDialog(QWidget *p, Editor *ed)
     auto *save = new QWidget();
     auto *sf = new QFormLayout(save);
     auto *recover = new QSpinBox(save);
+    recover->setObjectName(QStringLiteral("autoRecoverMinutes"));
     recover->setRange(1, 120);
     recover->setValue(st.autoRecoverMinutes());
     recover->setSuffix(QCoreApplication::translate("Dialogs", " minutes"));
@@ -2207,7 +2217,11 @@ void optionsDialog(QWidget *p, Editor *ed)
     st.setValue("edit/wholeWord", wholeWord->isChecked());
     st.setValue("edit/dragText", dragText->isChecked());
     st.setValue("edit/hyphenate", hyphenate->isChecked());
+    if (stats->isChecked() != telemetry::enabled()) telemetry::setEnabled(stats->isChecked());
     ed->setView([&](ViewOptions &v) { v.spelling = asType->isChecked(); });
+    // Every open window saves AutoRecover copies at the new interval.
+    for (QWidget *w : QApplication::topLevelWidgets())
+        if (auto *mw = qobject_cast<MainWindow *>(w)) mw->settingsChanged();
 }
 
 // ---------------- Page numbers ----------------

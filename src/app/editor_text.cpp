@@ -738,4 +738,60 @@ void Editor::insertTextBlock(const QString &text, const QString &label)
     textEdited();
 }
 
+// ---------------- copying formatting ----------------
+void Editor::copyFormatting()
+{
+    painterItem = QJsonObject();
+    painterHasText = false;
+    if (Item *it = single()) {
+        const QJsonObject o = it->toJson();
+        for (const char *k : {"fill", "stroke", "fx"})
+            if (o.contains(k)) painterItem[k] = o[k];
+        if (!o.contains("fill")) painterItem["fill"] = Fill().toJson();
+        if (!o.contains("stroke")) painterItem["stroke"] = Stroke().toJson();
+    }
+    if (isEditingText() || (single() && single()->hasText())) {
+        painterText = currentCharFormat();
+        painterHasText = true;
+    }
+}
+
+void Editor::applyCopiedFormatting(Item *it)
+{
+    const QJsonObject &f = painterItem;
+    if (f.contains("fill")) it->fill = Fill::fromJson(f["fill"].toObject());
+    if (f.contains("stroke")) it->stroke = Stroke::fromJson(f["stroke"].toObject());
+    if (f.contains("fx")) it->fx = Effects::fromJson(f["fx"].toObject());
+    if (!painterHasText) return;
+    QString sid;
+    if (it->type() == ItemType::Text) sid = m_doc->chainOf(it->id).value(0, static_cast<TextItem *>(it))->storyId;
+    else if (it->type() == ItemType::Shape) sid = static_cast<ShapeItem *>(it)->storyId;
+    if (QTextDocument *d = m_doc->storyDoc(sid)) {
+        QTextCursor c(d);
+        c.select(QTextCursor::Document);
+        c.mergeCharFormat(painterText);
+    }
+}
+
+void Editor::pasteFormattingTo(const QString &itemId)
+{
+    Item *it = m_doc->item(itemId);
+    if (!it || !hasCopiedFormatting()) return;
+    change(tr("Paste Formatting"), [&] { applyCopiedFormatting(it); });
+}
+
+void Editor::pasteFormatting()
+{
+    if (!hasCopiedFormatting()) return;
+    if (isEditingText()) {
+        if (painterHasText) mergeCharFormat(painterText, tr("Paste Formatting"));
+        return;
+    }
+    const QVector<Item *> items = selectedItems();
+    if (items.isEmpty()) return;
+    change(tr("Paste Formatting"), [&] {
+        for (Item *it : items) applyCopiedFormatting(it);
+    });
+}
+
 } // namespace jp

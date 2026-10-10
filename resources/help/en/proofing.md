@@ -16,7 +16,7 @@ To turn this off, click the arrow beside **Review > Proofing > Spelling** and cl
 3. Pick a suggestion, or type your own in **Change to**.
 4. Click **Change** for this word or **Change All** for every match. Click **Ignore** to skip it, **Ignore All** to skip it for this session, or **Add** to save it in your own word list.
 
-JeffPub checks every text box, shape, and table, starting on the first page. It says when it is done. It skips words in UPPERCASE and words with numbers. You can change that on the **Proofing** tab of **File > Settings** (the **JeffPub Options** window).
+JeffPub checks every text box, shape, and table, starting on the first page. It says when it is done. It skips words in UPPERCASE and words with numbers. You can change that on the **Proofing** tab of **File > Options** (the **JeffPub Options** window).
 
 ## Set the language
 
@@ -35,7 +35,7 @@ Both use a thesaurus built into JeffPub, in English only. Nothing you type is se
 
 ## Hyphenation
 
-Hyphenation breaks long words with a hyphen at the end of a line, so lines look even. New text boxes hyphenate by default. To change that for new boxes, see **Automatically hyphenate in new text boxes** on the **Advanced** tab of **File > Settings** (the **JeffPub Options** window).
+Hyphenation breaks long words with a hyphen at the end of a line, so lines look even. New text boxes hyphenate by default. To change that for new boxes, see **Automatically hyphenate in new text boxes** on the **Advanced** tab of **File > Options** (the **JeffPub Options** window).
 
 To change one story, click in its text box and click **Review > Check > Hyphenation…** (Ctrl+Shift+H). You can also use **Text Box > Text > Hyphenation**. In the **Hyphenation** dialog:
 

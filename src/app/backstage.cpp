@@ -409,9 +409,9 @@ Backstage::Backstage(MainWindow *win) : QWidget(win), m_win(win)
     const QList<QPair<QString, QList<Entry>>> sections = {
         {tr("Start"), {{"new", "file-plus", tr("New")}, {"open", "folder-open", tr("Open")}}},
         {tr("This publication"),
-         {{"save", "save", tr("Save")}, {"saveas", "copy", tr("Save a Copy")}, {"print", "printer", tr("Print")}, {"export", "file-output", tr("Export")},
+         {{"save", "save", tr("Save")}, {"saveas", "copy", tr("Save As")}, {"print", "printer", tr("Print")}, {"export", "file-output", tr("Export")},
           {"share", "share-2", tr("Share")}, {"info", "file-text", tr("Properties")}, {"close", "circle-x", tr("Close")}}},
-        {QStringLiteral("JeffPub"), {{"options", "settings", tr("Settings")}, {"about", "info", tr("About")}}},
+        {QStringLiteral("JeffPub"), {{"options", "settings", tr("Options")}, {"about", "info", tr("About")}}},
     };
     for (const auto &sec : sections) {
         sv->addWidget(sectionLabel(sec.first, side));

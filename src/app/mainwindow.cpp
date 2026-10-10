@@ -295,6 +295,12 @@ bool MainWindow::eventFilter(QObject *o, QEvent *e)
     return QMainWindow::eventFilter(o, e);
 }
 
+void MainWindow::settingsChanged()
+{
+    const int ms = std::max(1, Settings::get().autoRecoverMinutes()) * 60 * 1000;
+    if (m_recoverTimer.interval() != ms) m_recoverTimer.start(ms);
+}
+
 HelpView *MainWindow::helpView() const { return m_task->findChild<HelpView *>(); }
 
 void MainWindow::showHelp(const QString &topicIn)

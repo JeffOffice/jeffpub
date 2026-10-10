@@ -220,7 +220,7 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 - [x] File associations for `.jpub`
 - [x] Light and dark interface themes, switched in File > Options at once (no restart), and following the system's setting while set to
 - [x] Windows high contrast mode: the system's colors throughout, applied as it's turned on or off
-- [x] Standard desktop publishing keyboard shortcuts (Ctrl+B, Ctrl+Shift+>, F9, Ctrl+Shift+L, Ctrl+M, Ctrl+Shift+N, and others)
+- [x] Standard desktop publishing keyboard shortcuts (Ctrl+B, Ctrl+Shift+>, F9, Ctrl+Shift+L, Ctrl+M for the master page, Ctrl+Shift+C and Ctrl+Shift+V to copy and paste formatting, Ctrl+Shift+N, and others), no two commands sharing keys
 - [x] KeyTips: press Alt and letters appear on the ribbon (the same letters as Microsoft Publisher's for the tabs and the File button); type a tab's letter, then a command's, to use it without the mouse
 - [x] The ribbon by keyboard: Tab and the arrow keys move among its tabs and controls, with a visible focus ring; Escape returns to the page; F6 moves between the ribbon, the page thumbnails, and the page
 - [x] Screen readers (Narrator and others): every control in the window (the ribbon's tabs, buttons, galleries, and color buttons, the page list, the page, and the status bar) has a name and a description, checked by tests for every control and with Windows' own screen reader interface

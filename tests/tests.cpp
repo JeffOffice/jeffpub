@@ -86,6 +86,7 @@
 #include <QDirIterator>
 #include <QtTest>
 #include <QDoubleSpinBox>
+#include <QSpinBox>
 #include <QRadioButton>
 #include <QGroupBox>
 #include <QtEndian>
@@ -1620,6 +1621,47 @@ private Q_SLOTS:
         auto *pages = w.findChild<jp::PagesPane *>();
         QVERIFY(pages && pages->count() > 0);
         QCOMPARE(pages->item(0)->data(Qt::AccessibleTextRole).toString(), QStringLiteral("Page 1"));
+    }
+
+    // No two commands share keys (Ctrl+M was both Increase Indent and
+    // Master Page, so neither worked), and the keys the other program gives
+    // these commands do the same here: Ctrl+M the master page, Ctrl+Shift+C
+    // and Ctrl+Shift+V copy and paste formatting.
+    void shortcutsAreOneEach()
+    {
+        jp::MainWindow w;
+        QHash<QString, QStringList> byKeys;
+        for (const QString &id : w.actionIds())
+            for (const QKeySequence &k : w.act(id)->shortcuts()) byKeys[k.toString(QKeySequence::PortableText)] << id;
+        QStringList shared;
+        for (auto it = byKeys.begin(); it != byKeys.end(); ++it)
+            if (it.value().size() > 1) shared << it.key() + QStringLiteral(": ") + it.value().join(QStringLiteral(", "));
+        QVERIFY2(shared.isEmpty(), qPrintable(shared.join(QStringLiteral("; "))));
+        QCOMPARE(byKeys.value(QStringLiteral("Ctrl+M")), QStringList{QStringLiteral("view.master")});
+        QCOMPARE(byKeys.value(QStringLiteral("Ctrl+Shift+C")), QStringList{QStringLiteral("edit.copyFormat")});
+        QCOMPARE(byKeys.value(QStringLiteral("Ctrl+Shift+V")), QStringList{QStringLiteral("edit.pasteFormat")});
+        // Copy one box's formatting, paste it on another: its fill and its text's.
+        jp::Editor *ed = w.editor();
+        auto a = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 72, 200, 60), QStringLiteral("Bold one")));
+        auto b = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 200, 200, 60), QStringLiteral("Plain one")));
+        ed->addItem(a);
+        ed->addItem(b);
+        ed->select(a->id);
+        ed->toggleBold();
+        ed->forEachSelected(QStringLiteral("Fill"), [](jp::Item *it) { it->fill = jp::Fill::solid(jp::ColorRef::fromString(QStringLiteral("#ff0000"))); });
+        w.act(QStringLiteral("edit.copyFormat"))->trigger();
+        QVERIFY(ed->hasCopiedFormatting());
+        QCOMPARE(ed->tool(), jp::Tool::Select);   // no painter pointer
+        ed->select(b->id);
+        w.act(QStringLiteral("edit.pasteFormat"))->trigger();
+        QTextCursor c(ed->doc()->storyDoc(b->storyId));
+        c.movePosition(QTextCursor::NextCharacter);
+        QCOMPARE(c.charFormat().fontWeight(), int(QFont::Bold));
+        QCOMPARE(b->fill.toJson(), a->fill.toJson());
+        ed->undo();
+        c = QTextCursor(ed->doc()->storyDoc(b->storyId));
+        c.movePosition(QTextCursor::NextCharacter);
+        QVERIFY(c.charFormat().fontWeight() != int(QFont::Bold));
     }
 
     // Help's topics are all built in, each has a title and search words,
@@ -4149,6 +4191,32 @@ private Q_SLOTS:
     // commands count by id, in the form the collector takes, and a ping holds
     // only the install id, version, system, language, launches and counts.
     // Turning them off forgets what was counted and the id.
+    // File > Options holds the statistics choice the first start points to,
+    // and a new AutoRecover interval reaches windows already open.
+    void optionsApplyToOpenWindows()
+    {
+        jp::MainWindow w;
+        const bool wasOn = telemetry::enabled();
+        const QVariant minutes = Settings::get().value(QStringLiteral("save/autoRecoverMinutes"));
+        telemetry::setEnabled(false);
+        QTimer::singleShot(0, [] {
+            auto *d = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            QVERIFY(d);
+            auto *stats = d->findChild<QCheckBox *>(QStringLiteral("stats"));
+            auto *spin = d->findChild<QSpinBox *>(QStringLiteral("autoRecoverMinutes"));
+            QVERIFY(stats && spin);
+            QVERIFY(!stats->isChecked());
+            stats->setChecked(true);
+            spin->setValue(3);
+            d->accept();
+        });
+        w.act(QStringLiteral("file.options"))->trigger();
+        QVERIFY(telemetry::enabled());
+        QCOMPARE(w.autoRecoverInterval(), 3 * 60 * 1000);
+        telemetry::setEnabled(wasOn);
+        Settings::get().setValue(QStringLiteral("save/autoRecoverMinutes"), minutes);
+    }
+
     void telemetryCountsOnlyWhenOn()
     {
         using namespace jp;

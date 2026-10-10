@@ -362,6 +362,7 @@ HelpView::HelpView(MainWindow *win, QWidget *parent, bool commands) : QWidget(pa
     m_results->setAccessibleName(tr("Search results"));
     m_results->setWordWrap(true);
     m_results->hide();
+    m_results->installEventFilter(this);
     v->addWidget(m_results, 1);
     m_browser = new QTextBrowser(this);
     m_browser->setObjectName(QStringLiteral("jpHelpTopic"));
@@ -387,7 +388,9 @@ HelpView::HelpView(MainWindow *win, QWidget *parent, bool commands) : QWidget(pa
         for (int i = 0; i < m_results->count(); ++i)
             if (m_results->item(i)->flags() & Qt::ItemIsEnabled && m_results->item(i)->data(KindRole).toInt()) return activate(m_results->item(i));
     });
-    connect(m_results, &QListWidget::itemActivated, this, &HelpView::activate);
+    // A click opens or runs a result, and Return (eventFilter); not
+    // itemActivated too, which a double-click or a one-click desktop would
+    // send as well, running a command twice.
     connect(m_results, &QListWidget::itemClicked, this, &HelpView::activate);
     connect(m_browser, &QTextBrowser::anchorClicked, this, [this](const QUrl &u) {
         if (u.scheme() == QLatin1String("http") || u.scheme() == QLatin1String("https") || u.scheme() == QLatin1String("mailto")) {
@@ -560,6 +563,15 @@ bool HelpView::eventFilter(QObject *o, QEvent *e)
         }
         if (ke->key() == Qt::Key_Escape && !m_search->text().isEmpty()) {
             m_search->clear();
+            return true;
+        }
+    }
+    // Return opens or runs the chosen result everywhere (a Mac list only
+    // activates its rows with Cmd+O).
+    if (o == m_results && e->type() == QEvent::KeyPress) {
+        auto *ke = static_cast<QKeyEvent *>(e);
+        if ((ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter) && m_results->currentItem()) {
+            activate(m_results->currentItem());
             return true;
         }
     }
