@@ -799,6 +799,18 @@ void Ribbon::setTabKeytip(RibbonTab *t, const QString &k)
         if (tab.page == t) tab.keytip = k;
 }
 
+void Ribbon::setTabVisible(const QString &name, bool visible)
+{
+    for (int i = 0; i < m_tabs.size(); ++i)
+        if (m_tabs[i].name == name && m_tabs[i].visible != visible) {
+            m_tabs[i].visible = visible;
+            if (!visible && i == m_current)
+                for (int k = 0; k < m_tabs.size(); ++k)
+                    if (m_tabs[k].name == QLatin1String("Home")) { showTab(m_tabs[k].page); break; }
+            m_header->layoutButtons();
+        }
+}
+
 void Ribbon::setContextVisible(const QString &group, bool visible)
 {
     bool changed = false, currentHidden = false;

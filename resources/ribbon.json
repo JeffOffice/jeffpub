@@ -182,7 +182,7 @@
         {"large": {"id": "ribbon.mailMerge", "text": "Mail Merge", "icon": "mail"}, "keytip": "MM", "menu": [
           "mm.wizard", "mm.mergeEmail"]},
         {"large": {"id": "ribbon.selectRecipients", "text": "Select Recipients", "icon": "users"}, "keytip": "SR", "menu": [
-          "mm.typeNew", "mm.existing"]},
+          "mm.typeNew", "mm.existing", "mm.contacts"]},
         {"large": "mm.editList", "keytip": "EL"}
       ]},
       {"name": "Write & Insert Fields", "keytip": "ZW", "items": [
@@ -268,19 +268,18 @@
     {"name": "Master Page", "keytip": "JM", "context": "Master Page", "color": "masterPage", "groups": [
       {"name": "Master Page", "keytip": "ZM", "items": [
         {"large": "mp.add", "keytip": "AD"},
-        {"large": "mp.dup", "keytip": "DU"},
-        {"large": "mp.rename", "keytip": "RN"},
-        {"large": "mp.delete", "keytip": "DE"}
-      ]},
-      {"name": "Layout", "keytip": "ZL", "items": [
         {"large": "mp.twoPage", "keytip": "TP"},
         {"large": {"id": "ribbon.applyTo", "text": "Apply To", "icon": "copy-check"}, "keytip": "AT", "menu": [
-          "mp.applyAll", "mp.applyCurrent"]}
+          "mp.applyAll", "mp.applyCurrent"]},
+        {"small": "mp.dup", "keytip": "DU"},
+        {"small": "mp.rename", "keytip": "RN"},
+        {"small": "mp.delete", "keytip": "DE"}
       ]},
       {"name": "Header & Footer", "keytip": "ZH", "items": [
-        {"small": "ins.header", "keytip": "HD"},
-        {"small": "ins.footer", "keytip": "FT"},
-        {"small": "ins.pageNumber", "keytip": "PN"}
+        {"large": "mp.showHeaderFooter", "keytip": "HF"},
+        {"small": "ins.pageNumber", "keytip": "PN"},
+        {"small": "ins.date", "keytip": "DA"},
+        {"small": "ins.time", "keytip": "TI"}
       ]},
       {"name": "Close", "keytip": "ZC", "items": [
         {"large": "mp.close", "keytip": "CM"}

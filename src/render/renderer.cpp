@@ -7,6 +7,10 @@
 #include "core/fonts.h"
 
 #include <QCache>
+#include <QDateTime>
+#include <QDir>
+#include <QFileInfo>
+#include <QMutex>
 #include <QFontMetricsF>
 #include <QJsonDocument>
 #include <QPainter>
@@ -662,6 +666,23 @@ static void paintText(QPainter *p, const PaintContext &ctx, const TextItem &t)
     Renderer::strokePath(p, [&] { QPainterPath pp; pp.addRect(r); return pp; }(), t.stroke, cs);
 }
 
+// A picture field's picture for one record of the mail merge list: the file
+// its column names, beside the list (read once, until the file changes).
+static QImage mergePicture(const Document &d, const QString &field, int record)
+{
+    const QString file = d.merge.value(record, field);
+    if (file.isEmpty()) return QImage();
+    const QFileInfo fi(QDir(QFileInfo(d.merge.path).absolutePath()).absoluteFilePath(file));
+    const QString key = fi.absoluteFilePath() + QLatin1Char('|') + QString::number(fi.lastModified().toMSecsSinceEpoch());
+    static QMutex lock;
+    static QCache<QString, QImage> cache(256 * 1024 * 1024);   // bytes
+    QMutexLocker locked(&lock);
+    if (const QImage *img = cache.object(key)) return *img;
+    QImage img(fi.absoluteFilePath());
+    if (!img.isNull()) cache.insert(key, new QImage(img), std::max<qsizetype>(1, img.sizeInBytes()));
+    return img;
+}
+
 static void paintPicture(QPainter *p, const PaintContext &ctx, const PictureItem &pic)
 {
     if (ctx.opt.skipPictures) return;
@@ -669,6 +690,21 @@ static void paintPicture(QPainter *p, const PaintContext &ctx, const PictureItem
     const ColorScheme &cs = ctx.doc->colors;
     const QPainterPath mask = shapePath(pic.maskShape, r.size());
     if (!pic.fill.isNone()) p->fillPath(mask, pic.fill.brush(r, cs, lookupFor(*ctx.doc)));
+    // A picture field showing a record (preview, printing, PDF, email): that
+    // record's picture, filling the frame as merged copies do.
+    if (pic.name.startsWith(QLatin1String("merge:")) && ctx.opt.mergeRecord >= 0) {
+        const QImage img = mergePicture(*ctx.doc, pic.name.mid(6), ctx.opt.mergeRecord);
+        if (!img.isNull()) {
+            QSizeF sz = img.size();
+            sz.scale(r.size(), Qt::KeepAspectRatioByExpanding);
+            p->save();
+            p->setClipPath(mask, Qt::IntersectClip);
+            p->setRenderHint(QPainter::SmoothPixmapTransform);
+            p->drawImage(QRectF(QPointF((r.width() - sz.width()) / 2, (r.height() - sz.height()) / 2), sz), img);
+            p->restore();
+            return;
+        }
+    }
     const QImage src = pic.imageId.isEmpty() ? QImage() : ctx.doc->image(pic.imageId);
     if (src.isNull()) {
         if (!ctx.opt.output) {

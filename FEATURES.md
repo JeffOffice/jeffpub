@@ -68,7 +68,7 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 - [x] **(alt)** Email: send the current page as a picture, or the publication as an attachment. JeffPub creates a ready-to-send `.eml`, PDF, or HTML file instead of sending through a mail program.
 
 ### Options
-- [x] General (user name and initials, UI theme), Proofing (AutoCorrect of common misspellings, symbols, sentence capitals, and two initial capitals; smart quotes; spelling options), Save (AutoRecover interval and location, backup copies), Language, and Advanced (auto-select entire word, drag-and-drop text, hyphenation in new text boxes, automatic hyphenation zone, measurement units, recent file count, nudge amount, print and display options)
+- [x] General (user name and initials, light or dark interface, display language, usage statistics, update checks), Proofing (spelling as you type, ignoring words in capitals or with numbers, AutoCorrect of common misspellings, symbols, sentence capitals, and two initial capitals; smart quotes; AutoFormat as you type), Save (AutoRecover interval, backup copies), and Advanced (auto-select entire word, drag-and-drop text, hyphenation in new text boxes, measurement units, nudge amount, recent publication count)
 
 ## Home tab
 - [x] Clipboard: Paste (Keep Source Formatting, Keep Text Only, Paste Special), Cut, Copy, Format Painter (single use and locked)
@@ -83,13 +83,13 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 - [x] Pages: Insert Blank Page, Insert Duplicate Page, Insert Page dialog (count, before/after, blank, duplicate, or one text box per page), Catalog Pages (a catalog area repeated for each item of a product list, in rows and columns, with preview and merging to a new publication, PDF, or printer)
 - [x] Tables: grid picker and Insert Table dialog
 - [x] Illustrations: Pictures (from file), Online Pictures **(alt: Openverse and Wikimedia Commons search with license info)**, Shapes (full gallery), Icons, Picture Placeholder, Barcode (book ISBN from ISBN-10 or -13, hyphenated as the International ISBN Agency assigns ranges for every country, with a price add-on in US, Canadian, Australian, or New Zealand dollars or pounds, or no suggested price; EAN-13, UPC-A, and EAN-8 with 2- or 5-digit add-ons; Code 128; Code 39; magnification and bar height; vector bars and digits on a white quiet zone)
-- [x] Building Blocks: Page Parts (headings, pull quotes, sidebars, stories, tables of contents), Calendars (by month and year, with options), Borders & Accents, Advertisements, and saving your own building blocks to the library
-- [x] Text: Draw Text Box, Business Information fields, Text Art, Insert File (text, RTF, HTML, and `.docx` documents into a text box), Symbol (recently used symbols, kept between sessions, in the Symbol drop-down and the dialog, and the full character map), Date & Time (formats, update automatically), Object (embed a file)
+- [x] Building Blocks: Page Parts (headings, pull quotes, sidebars, stories, tables of contents), Calendars (by month and year, with options), Borders & Accents, Advertisements, and saving your own (Save as Building Block), which Page Parts lists under My Building Blocks
+- [x] Text: Draw Text Box, Business Information fields, Text Art, Insert File (text, RTF, HTML, and `.docx` documents into a text box), Symbol (recently used symbols, kept between sessions, in the Symbol drop-down and the dialog, and the full character map), Date & Time (formats, update automatically), Object **(alt: places a PDF page, an SVG drawing, or a picture; documents from other programs can't be embedded)**
 - [x] Links: Hyperlink (web, email, place in this document, new document), Bookmark
 - [x] Header & Footer: Header, Footer (open the master page), Page Number (position, format, start number)
 
 ## Page Design tab
-- [x] Template: Change Template, Options
+- [~] Template: Change Template *(opens the templates for a new publication; applying another template's design to this publication isn't done yet)*
 - [x] Page Setup: Margins (margin guide presets, and Custom Margins opening the Margin Guides settings), Orientation, Size (presets, the user's saved custom sizes, Create New Page Size, and editing or deleting saved sizes), and the Page Setup dialog (layout type: one page per sheet, booklet, envelope, folded card, multiple pages per sheet, labels; for several pages per sheet, the sheet's side and top margins and the gaps between pages, kept apart from the margin guides, with how many fit)
 - [x] Printing several pages per sheet (business cards, labels) places them by the publication's own side and top margins and gaps
 - [x] Guides: built-in guide layouts, Grid and Baseline Guides dialog (columns, rows, spacing, center guide, baseline spacing and offset), Add Horizontal and Vertical Ruler Guides (each new one beside the last), Ruler Guides dialog (add, move, and remove guides by position, or add a series at even spacing), Clear All Ruler Guides
@@ -101,7 +101,7 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 ## Mailings tab
 - [x] Mail Merge and Email Merge
 - [x] Step-by-Step Mail Merge Wizard (task pane)
-- [x] Select Recipients: Type a New List, Use an Existing List (CSV, tab-delimited, `.xlsx` spreadsheets, and `.jpub` tables), Select from Contacts **(alt: vCard `.vcf` import)**
+- [x] Select Recipients: Type a New List, Use an Existing List (CSV, tab-delimited, and `.xlsx` spreadsheets, and vCard contacts), Select from Contacts **(alt: any address book's contacts saved as vCard `.vcf` files)**
 - [x] Edit Recipient List: sort, filter, find duplicates, validate addresses, include or exclude records
 - [x] Address Block, Greeting Line, Insert Merge Field, Picture Field
 - [x] Preview Results with record navigation and Find Recipient
@@ -111,7 +111,7 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 ## Review tab
 - [x] Spelling (check as you type, dialog with suggestions, ignore, add to dictionary, and hide spelling errors)
 - [x] Thesaurus
-- [x] Research **(alt: dictionary lookup)**
+- [x] Research **(alt: an offline thesaurus: synonyms and related words, without going online)**
 - [x] Translate **(alt: opens the selected text in LibreTranslate, an open-source translation service)**
 - [x] Language: set the proofing language for selected text; spelling and automatic hyphenation follow it (English for the US, UK, Canada, and Australia; Spanish for Spain and Mexico; French; German; Italian; Dutch; Portuguese for Brazil and Portugal)
 
@@ -130,7 +130,7 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 
 ## Master Page tab (while editing master pages)
 - [x] Add Master Page, Duplicate, Rename, Delete, Two-Page Master, Apply To, Close Master Page
-- [x] Header and footer editing with Show Header/Footer and Insert Page Number
+- [x] Header and footer editing with Show Header/Footer, Insert Page Number, Insert Date, and Insert Time (Alt+Shift+P, D, and T); the Mailings tab hides while a master page is open, as there
 
 ## Drawing Tools / Shape Format tab
 - [x] Insert Shapes gallery, Edit Shape (Change Shape and Edit Points), Draw Text Box
@@ -160,14 +160,14 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 - [x] Arrange and Size
 - [x] Picture placeholders with click-to-insert
 - [x] Scratch-area picture tray behavior (pictures parked on the scratch area): inserting several pictures at once puts them beside the page as thumbnails, Arrange Thumbnails tidies them, and Swap trades two pictures
-- [x] Graphics Manager pane (list, status of linked or embedded pictures, relink, save a copy)
+- [~] Graphics Manager pane (every picture with its page, format, size, original file, and resolution; go to it, save a copy, replace it) *(not yet: pictures linked to their files instead of kept in the publication, so there is nothing to relink)*
 
 ## Table Tools Design and Layout tabs
 - [x] Table Formats gallery, Fill, Borders (style, weight, color, which borders), Diagonals
-- [x] Insert rows and columns above, below, left, and right; Delete rows, columns, and table; Select cell, row, column, and table; View Gridlines
+- [~] Insert rows and columns above, below, left, and right; Delete rows, columns, and table; Select cell and table; View Gridlines *(not yet: selecting a row or column, or several cells, to format them together)*
 - [x] Merge Cells, Split Cells, Diagonals
-- [x] Cell alignment (nine-way), Text Direction, Hyphenation, Cell Margins
-- [x] Size: column widths and row heights by dragging and by value, Grow to Fit Text, Lock
+- [~] Cell alignment (nine-way) and Cell Margins *(not yet: Text Direction and Hyphenation for table cells)*
+- [~] Size: column widths and row heights by dragging, Grow to Fit Text, and Distribute *(not yet: widths and heights typed as numbers, and Lock)*
 - [x] Tab moves between cells, and Tab in the last cell adds a row
 
 ## Text Art Tools Format tab
@@ -180,14 +180,14 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 - [x] Frames: text box, picture, shape, line, arrow, table, Text Art, group, embedded object
 - [x] Select (click, Shift or Ctrl-click, marquee, Tab cycling, select through groups)
 - [x] Move, resize (aspect lock with Shift, from center with Ctrl), rotate (15° steps with Shift), flip, nudge with arrows and Alt+arrows, and Ctrl-drag to copy
-- [x] Snap to margin and grid guides, ruler guides, other objects, and ruler marks, with visual alignment guides
+- [x] Snap to margin and grid guides, ruler guides, and other objects, with visual alignment guides
 - [x] Layering, grouping, and locking (lock position and size)
 - [x] Text wrapping: None, Square, Tight, Through, Top and Bottom, Edit Wrap Points, and wrap distances
 - [x] Format Object dialog: Colors and Lines, Size (with rotation and scale), Layout (position, wrap, distances), Picture, Text Box (margins, autofit, columns, vertical alignment), and Alt Text
 - [x] Measurement toolbar: x, y, width, height, rotation, tracking (percent), text scaling, kerning (points), and line spacing
 - [x] Measurements to three decimal places in every unit (8.125", 1.234 cm, 10.125 pt), shown without trailing zeros and kept without rounding
 - [x] Scratch area shared across pages
-- [x] Rulers in in, cm, mm, pt, and pica, with movable origin and drag-out guides
+- [~] Rulers in in, cm, mm, pt, and pica, with drag-out guides *(not yet: moving the rulers' zero point)*
 - [x] Context menus for every object type
 - [x] Undo and redo with full history
 - [x] Two-page spreads and facing pages
@@ -196,7 +196,7 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 - [x] Rich text: fonts, sizes, color (scheme-aware), highlight, underline styles, strike, sub and superscript, all caps, small caps, tracking (a percentage, with Publisher's Very Tight to Very Loose presets) and kerning (points) together, automatic pair kerning (for fonts 14 pt and above unless set otherwise), and scaling
 - [x] Paragraphs: alignment, indents (left, right, first line, hanging), spacing before and after, line spacing (single, multiple, exact, at least), keep with next, keep lines together, widow and orphan control, start in next text box
 - [x] Tabs with leaders (left, center, right, decimal)
-- [x] Bullets and numbering, multilevel
+- [x] Bullets and numbering, multilevel (Increase Indent nests list items: 1. then a. then i., or a dot, a circle, then a square)
 - [x] Text styles (paragraph and character) with Based On and Style for Following Paragraph
 - [x] Linked text frames across pages, columns inside frames, text wrap around objects, vertical alignment, autofit
 - [x] Continued-on and continued-from notices

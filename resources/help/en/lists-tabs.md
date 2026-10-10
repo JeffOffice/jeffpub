@@ -12,7 +12,7 @@ Click the same button again to turn the list off. Each button also has an arrow.
 
 For more choices, choose **Bullets and Numbering…** from either menu. The **Bullets** tab has 12 symbols and a **Character…** button for your own. The **Numbering** tab has a **Start at** box, so a list can begin at 5, for example.
 
-**Increase Indent** and **Decrease Indent** move list items in or out by a quarter inch.
+**Increase Indent** and **Decrease Indent** move list items in or out a level, a quarter inch at a time. An item moved in starts a list of its own under the one above: numbers there go a. b. c. (then i. ii. iii. a level further), and bullets become circles (then squares). For example, select items 2 and 3 of a numbered list and click **Increase Indent**: they become a. and b. under 1., and the next item stays 2.
 
 ## Type a list
 

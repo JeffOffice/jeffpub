@@ -95,6 +95,7 @@ public:
     RibbonTab *addTab(const QString &name, const QString &contextGroup = QString(), const QColor &color = QColor(),
                       const QString &title = QString());
     void setContextVisible(const QString &group, bool visible);
+    void setTabVisible(const QString &name, bool visible);   // any tab, by name
     void showTab(RibbonTab *t);
     RibbonTab *current() const;
     RibbonTab *tab(const QString &name) const;

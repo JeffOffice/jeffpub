@@ -88,6 +88,8 @@
 #include <QtTest>
 #include <QDoubleSpinBox>
 #include <QSpinBox>
+#include <QInputDialog>
+#include <QStandardPaths>
 #include <QRadioButton>
 #include <QGroupBox>
 #include <QtEndian>
@@ -645,6 +647,165 @@ private Q_SLOTS:
         QVERIFY(cap);
         QCOMPARE(w.editor()->doc()->storyDoc(cap->storyId)->toPlainText(), QStringLiteral("“Red barn” by Pat Lee, CC BY 2.0"));
         QCOMPARE(w.editor()->doc()->imageSize(pic->imageId), QSize(30, 20));
+    }
+
+    // Save as Building Block's blocks show in Insert > Page Parts, under My
+    // Building Blocks, and insert from there (they were saved where no
+    // gallery looked).
+    void savedBuildingBlocksInsert()
+    {
+        QStandardPaths::setTestModeEnabled(true);   // a test folder, not the real one
+        QDir(jp::userBlocksDir()).removeRecursively();
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        auto box = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 72, 200, 60), QStringLiteral("Block text")));
+        ed->addItem(box);
+        QTimer::singleShot(0, [] {
+            if (auto *d = qobject_cast<QInputDialog *>(QApplication::activeModalWidget())) {
+                d->setTextValue(QStringLiteral("Pull quote"));
+                d->accept();
+            }
+        });
+        w.act(QStringLiteral("obj.saveBlock"))->trigger();
+        QVERIFY(QFile::exists(QDir(jp::userBlocksDir()).filePath(QStringLiteral("Pull quote.json"))));
+        jp::GalleryButton *pageParts = nullptr;
+        for (auto *g : w.findChildren<jp::GalleryButton *>())
+            if (g->text() == QLatin1String("Page Parts")) pageParts = g;
+        QVERIFY(pageParts);
+        QString id;
+        for (const auto &it : pageParts->items())
+            if (it.tip == QLatin1String("Pull quote") && it.group == QLatin1String("My Building Blocks")) id = it.id;
+        QVERIFY(!id.isEmpty());
+        const int before = int(ed->surfaceItems().size());
+        Q_EMIT pageParts->activated(id);
+        QCOMPARE(int(ed->surfaceItems().size()), before + 1);
+        auto *made = dynamic_cast<jp::TextItem *>(ed->single());
+        QVERIFY(made && made->id != box->id);
+        QCOMPARE(ed->doc()->storyDoc(made->storyId)->toPlainText(), QStringLiteral("Block text"));
+        QDir(jp::userBlocksDir()).removeRecursively();
+        QStandardPaths::setTestModeEnabled(false);
+    }
+
+    // The Master Page tab as the other program has it: Show Header/Footer
+    // goes to the master's header, then its footer; Insert Date and Insert
+    // Time (Alt+Shift+D, Alt+Shift+T) add fields; the Mailings tab hides.
+    // Select Recipients also offers contacts (vCard files).
+    void masterPageTabAsTheOtherProgram()
+    {
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        jp::Ribbon *r = w.ribbon();
+        auto visible = [r](const QString &name) {
+            for (int i = 0; i < r->tabCount(); ++i)
+                if (r->tabName(i) == name) return r->tabVisible(i);
+            return false;
+        };
+        QVERIFY(visible(QStringLiteral("Mailings")));
+        w.act(QStringLiteral("mp.showHeaderFooter"))->trigger();
+        QVERIFY(!ed->masterView().isEmpty());
+        QVERIFY(visible(QStringLiteral("Master Page")));
+        QVERIFY(!visible(QStringLiteral("Mailings")));
+        QVERIFY(ed->isEditingText());
+        const QString header = ed->textTarget().itemId;
+        QCOMPARE(ed->doc()->item(header)->name, QStringLiteral("Header"));
+        w.act(QStringLiteral("ins.date"))->trigger();
+        w.act(QStringLiteral("ins.time"))->trigger();
+        QStringList fields;
+        for (QTextBlock b = ed->editDoc()->begin(); b.isValid(); b = b.next())
+            for (auto it = b.begin(); !it.atEnd(); ++it)
+                if (const QString f = it.fragment().charFormat().stringProperty(jp::tp::Field); !f.isEmpty()) fields << f;
+        QCOMPARE(fields, (QStringList{QStringLiteral("date"), QStringLiteral("time")}));
+        w.act(QStringLiteral("mp.showHeaderFooter"))->trigger();
+        QVERIFY(ed->isEditingText());
+        QCOMPARE(ed->doc()->item(ed->textTarget().itemId)->name, QStringLiteral("Footer"));
+        w.act(QStringLiteral("mp.showHeaderFooter"))->trigger();
+        QCOMPARE(ed->textTarget().itemId, header);
+        QCOMPARE(w.act(QStringLiteral("ins.date"))->shortcut(), QKeySequence(Qt::ALT | Qt::SHIFT | Qt::Key_D));
+        w.act(QStringLiteral("mp.close"))->trigger();
+        QVERIFY(visible(QStringLiteral("Mailings")));
+        QVERIFY(w.act(QStringLiteral("mm.contacts")));
+    }
+
+    // Increase Indent on list items nests them a level (numbered a., b. under
+    // 1., bulleted with a circle under a dot), and Decrease Indent brings them
+    // back, continuing the outer numbers; saved and opened again the same.
+    void multilevelLists()
+    {
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        auto box = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 72, 300, 200), QStringLiteral("one\ntwo\nthree\nfour")));
+        ed->addItem(box);
+        auto selectBlocks = [&](int from, int to) {
+            ed->beginTextEdit(box->id);
+            QTextCursor c(ed->editDoc()->findBlockByNumber(from));
+            c.setPosition(ed->editDoc()->findBlockByNumber(to).position(), QTextCursor::KeepAnchor);
+            ed->setCursor(c);
+        };
+        auto markers = [](QTextDocument *d) {
+            QStringList m;
+            for (QTextBlock b = d->begin(); b.isValid(); b = b.next()) m << (b.textList() ? b.textList()->itemText(b) : QString());
+            return m.join(QLatin1Char(' '));
+        };
+        selectBlocks(0, 3);
+        ed->setList(2, 1);
+        QCOMPARE(markers(ed->editDoc()), QStringLiteral("1. 2. 3. 4."));
+        selectBlocks(1, 2);
+        ed->changeIndent(1);
+        QCOMPARE(markers(ed->editDoc()), QStringLiteral("1. a. b. 2."));
+        selectBlocks(2, 2);
+        ed->changeIndent(-1);
+        QCOMPARE(markers(ed->editDoc()), QStringLiteral("1. a. 2. 3."));
+        ed->endTextEdit();
+        QTextDocument copy;
+        jp::storyFromJson(&copy, jp::storyToJson(ed->doc()->storyDoc(box->storyId)));
+        QCOMPARE(markers(&copy), QStringLiteral("1. a. 2. 3."));
+        // Bullets: a circle a level in.
+        selectBlocks(0, 3);
+        ed->setList(1);
+        selectBlocks(1, 1);
+        ed->changeIndent(1);
+        QCOMPARE(ed->editDoc()->findBlockByNumber(1).textList()->format().style(), QTextListFormat::ListCircle);
+        ed->endTextEdit();
+    }
+
+    // A picture field shows each record's picture in the preview, printing,
+    // PDF, and email (only merging to a new publication did).
+    void pictureFieldsShowEachRecord()
+    {
+        QTemporaryDir dir;
+        auto save = [&](const QString &name, const QColor &c) {
+            QImage img(20, 20, QImage::Format_RGB32);
+            img.fill(c);
+            img.save(dir.filePath(name));
+        };
+        save(QStringLiteral("a.png"), Qt::red);
+        save(QStringLiteral("b.png"), Qt::blue);
+        auto doc = jp::Document::blank(QSizeF(200, 200));
+        doc->merge.path = dir.filePath(QStringLiteral("list.csv"));
+        doc->merge.fields = {QStringLiteral("Name"), QStringLiteral("Photo")};
+        doc->merge.rows = {{QStringLiteral("Ann"), QStringLiteral("a.png")}, {QStringLiteral("Bo"), QStringLiteral("b.png")}};
+        doc->merge.include = {true, true};
+        auto pic = std::make_shared<jp::PictureItem>();
+        pic->name = QStringLiteral("merge:Photo");
+        pic->rect = QRectF(50, 50, 100, 100);
+        doc->pages[0]->items.push_back(pic);
+        auto centre = [&](int record) {
+            jp::LayoutCache cache;
+            jp::PaintContext ctx;
+            ctx.doc = doc.get();
+            ctx.cache = &cache;
+            ctx.opt.output = true;
+            ctx.opt.mergeRecord = record;
+            QImage img(200, 200, QImage::Format_RGB32);
+            img.fill(Qt::white);
+            QPainter p(&img);
+            jp::Renderer::paintPage(&p, ctx, 0);
+            p.end();
+            return img.pixelColor(100, 100);
+        };
+        QCOMPARE(centre(0), QColor(Qt::red));
+        QCOMPARE(centre(1), QColor(Qt::blue));
+        QCOMPARE(centre(-1), QColor(Qt::white));   // field codes shown: no record's picture
     }
 
     // A file whose style names point outside their section (made from

@@ -114,6 +114,7 @@ class GalleryButton : public QToolButton {
 public:
     GalleryButton(const QIcon &icon, const QString &text, const QSize &itemSize, int columns, bool large, QWidget *parent = nullptr);
     void setItemsProvider(const std::function<QVector<GalleryItem>()> &fn) { m_provider = fn; }
+    QVector<GalleryItem> items() const { return m_provider ? m_provider() : QVector<GalleryItem>(); }
     void setFooterActions(const QList<QAction *> &a) { m_footer = a; }
 
 Q_SIGNALS:

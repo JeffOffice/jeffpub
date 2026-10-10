@@ -178,6 +178,10 @@ public:
     void copy();
     void cut();
     void paste(bool textOnly = false);
+    // Objects as copying writes them (pictures and text with them), added to
+    // the page being edited and selected: what pasting and building blocks
+    // saved by Save as Building Block do. Returns their ids.
+    QStringList insertItemsJson(const QByteArray &json, const QString &label);
     bool canPaste() const;
 
     // ---- pages ----

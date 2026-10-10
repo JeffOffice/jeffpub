@@ -3,6 +3,9 @@
 // selection.
 
 #include "app/appfuncs.h"
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include "app/mainwindow.h"
 #include "app/taskpane.h"
 
@@ -462,9 +465,44 @@ void MainWindow::ribbonGalleryParts(RibbonParts &parts)
                     p->restore();
                 }), bb.category};
             }
+            // Blocks saved with Save as Building Block, under their own heading.
+            if (category == QLatin1String("Page Parts"))
+                for (const QFileInfo &fi : QDir(userBlocksDir()).entryInfoList({QStringLiteral("*.json")}, QDir::Files, QDir::Name)) {
+                    const QString path = fi.absoluteFilePath();
+                    Editor *e = m_ed;
+                    v << GalleryItem{QStringLiteral("user:") + path, fi.completeBaseName(), drawnIcon([e, path](QPainter *p, const QRectF &rc) {
+                        QFile f(path);
+                        if (!f.open(QIODevice::ReadOnly)) return;
+                        Editor tmp;
+                        auto d = Document::blank(QSizeF(612, 792));
+                        d->colors = e->doc()->colors;
+                        d->fonts = e->doc()->fonts;
+                        tmp.setDocument(std::move(d));
+                        tmp.insertItemsJson(f.readAll(), QString());
+                        const ItemList &items = tmp.surfaceItems();
+                        const QRectF b = unionBounds(items);
+                        if (b.isEmpty()) return;
+                        PaintContext ctx;
+                        ctx.doc = tmp.doc();
+                        ctx.cache = &tmp.cache();
+                        ctx.opt.output = true;
+                        const double s = std::min(rc.width() / b.width(), rc.height() / b.height()) * 0.92;
+                        p->save();
+                        p->translate(rc.center());
+                        p->scale(s, s);
+                        p->translate(-b.center());
+                        Renderer::paintItems(p, ctx, items);
+                        p->restore();
+                    }), tr("My Building Blocks")};
+                }
             return v;
         });
         connect(b, &GalleryButton::activated, this, [this](const QString &id) {
+            if (id.startsWith(QLatin1String("user:"))) {
+                QFile f(id.mid(5));
+                if (f.open(QIODevice::ReadOnly)) m_ed->insertItemsJson(f.readAll(), tr("Insert Building Block"));
+                return;
+            }
             const BuildingBlock *blk = findBlock(id);
             if (!blk) return;
             m_ed->beginChange(tr("Insert Building Block"));
@@ -1002,6 +1040,7 @@ void MainWindow::updateContextTabs()
     m_ribbon->setContextVisible(QStringLiteral("Table Tools"), table);
     m_ribbon->setContextVisible(QStringLiteral("Text Art Tools"), textart);
     m_ribbon->setContextVisible(QStringLiteral("Master Page"), !m_ed->masterView().isEmpty());
+    m_ribbon->setTabVisible(QStringLiteral("Mailings"), m_ed->masterView().isEmpty());   // as the other program: no merging on a master
     Q_UNUSED(before);
 }
 

@@ -17,9 +17,9 @@
     <message numerus="yes">
         <location filename="../../src/app/onlinepictures.cpp" line="+210"/>
         <source>%n picture(s) found. Choose one to see its license.</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
+        <translation>
+            <numerusform>%n picture found. Choose it to see its license.</numerusform>
+            <numerusform>%n pictures found. Choose one to see its license.</numerusform>
         </translation>
     </message>
 </context>

@@ -1,11 +1,12 @@
 # Master Page tab
-<!-- keywords: master page tab, master tab, header, footer, page number, two-page master, close master page, ribbon -->
+<!-- keywords: master page tab, master tab, header, footer, show header footer, insert date, insert time, page number, two-page master, close master page, ribbon -->
 
 The **Master Page** tab appears while you are editing a master page. To get there, click **View > Views > Master Page**. A master page is a background page whose contents show on every page that uses it.
 
-- **Master Page**: add, duplicate, rename, or delete a master page. See [Master pages, headers, and page numbers](master-pages).
-- **Layout**: switch to a two-page master for facing pages, or apply this master to all pages or the current page. See [Master pages, headers, and page numbers](master-pages).
-- **Header & Footer**: add a header, a footer, or a page number. See [Master pages, headers, and page numbers](master-pages).
+While you edit a master page, the **Mailings** tab is hidden.
+
+- **Master Page**: add a master page or a two-page master for facing pages, apply this master to all pages or the current page, and duplicate, rename, or delete it. See [Master pages, headers, and page numbers](master-pages).
+- **Header & Footer**: **Show Header/Footer** puts the cursor in the master's header (making one if needed); click it again for the footer. **Insert Page Number** (Alt+Shift+P), **Insert Date** (Alt+Shift+D), and **Insert Time** (Alt+Shift+T) add a page number, today's date, or the time where the cursor is; the date and time stay current. See [Master pages, headers, and page numbers](master-pages).
 - **Close**: leave the master page and go back to your pages. See [Master pages, headers, and page numbers](master-pages).
 
 ## Related

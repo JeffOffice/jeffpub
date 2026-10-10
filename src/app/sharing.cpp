@@ -98,6 +98,8 @@ void emailAsAttachment(QWidget *parent, Editor *ed, const QString &format)
     saveEml(parent, ed->displayName(), eml);
 }
 
+QString userBlocksDir() { return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/BuildingBlocks"); }
+
 void packForPrinter(MainWindow *win, const QString &dir)
 {
     Editor *ed = win->editor();

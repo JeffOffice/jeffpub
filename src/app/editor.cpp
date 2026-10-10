@@ -1162,28 +1162,11 @@ bool Editor::canPaste() const
     return md && (md->hasFormat(kItemsMime) || md->hasText() || md->hasImage() || md->hasHtml());
 }
 
-void Editor::paste(bool textOnly)
+QStringList Editor::insertItemsJson(const QByteArray &json, const QString &label)
 {
-    const QMimeData *md = QApplication::clipboard()->mimeData();
-    if (!md) return;
-    if (isEditingText()) {
-        beginChange(tr("Paste"));
-        if (!textOnly && md->hasFormat("application/x-jeffpub-text")) {
-            QTextDocument tmp;
-            storyFromJson(&tmp, QJsonDocument::fromJson(md->data("application/x-jeffpub-text")).object());
-            m_cursor.insertFragment(QTextDocumentFragment(&tmp));
-        } else if (!textOnly && md->hasHtml()) {
-            m_cursor.insertFragment(QTextDocumentFragment::fromHtml(md->html()));
-        } else if (md->hasText()) {
-            m_cursor.insertText(md->text());
-        }
-        endChange();
-        textEdited();
-        return;
-    }
-    if (md->hasFormat(kItemsMime) && !textOnly) {
-        const QJsonObject o = QJsonDocument::fromJson(md->data(kItemsMime)).object();
-        beginChange(tr("Paste"));
+    {
+        const QJsonObject o = QJsonDocument::fromJson(json).object();
+        beginChange(label);
         QHash<QString, QString> storyMap, imageMap;
         const QJsonObject stories = o["stories"].toObject(), images = o["images"].toObject();
         for (auto it = images.begin(); it != images.end(); ++it) {
@@ -1234,6 +1217,31 @@ void Editor::paste(bool textOnly)
         m_sel = made;
         endChange();
         Q_EMIT selectionChanged();
+        return made;
+    }
+}
+
+void Editor::paste(bool textOnly)
+{
+    const QMimeData *md = QApplication::clipboard()->mimeData();
+    if (!md) return;
+    if (isEditingText()) {
+        beginChange(tr("Paste"));
+        if (!textOnly && md->hasFormat("application/x-jeffpub-text")) {
+            QTextDocument tmp;
+            storyFromJson(&tmp, QJsonDocument::fromJson(md->data("application/x-jeffpub-text")).object());
+            m_cursor.insertFragment(QTextDocumentFragment(&tmp));
+        } else if (!textOnly && md->hasHtml()) {
+            m_cursor.insertFragment(QTextDocumentFragment::fromHtml(md->html()));
+        } else if (md->hasText()) {
+            m_cursor.insertText(md->text());
+        }
+        endChange();
+        textEdited();
+        return;
+    }
+    if (md->hasFormat(kItemsMime) && !textOnly) {
+        insertItemsJson(md->data(kItemsMime), tr("Paste"));
         return;
     }
     if (md->hasImage() && !textOnly) {

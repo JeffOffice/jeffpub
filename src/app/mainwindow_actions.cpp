@@ -414,6 +414,23 @@ void MainWindow::createActions()
         m_ed->addItem(t);
         m_ed->beginTextEdit(t->id);
     });
+    // Today's date and the time as fields that stay current, as the other
+    // program's Insert Date and Insert Time (Alt+Shift+D and Alt+Shift+T).
+    mk("ins.date", tr("Insert Date"), "calendar", QKeySequence(Qt::ALT | Qt::SHIFT | Qt::Key_D), [this] {
+        if (m_ed->isEditingText()) m_ed->insertField(QStringLiteral("date"));
+        else statusBar()->showMessage(tr("Click in text where the date goes, then choose Insert Date."), 6000);
+    });
+    mk("ins.time", tr("Insert Time"), "clock", QKeySequence(Qt::ALT | Qt::SHIFT | Qt::Key_T), [this] {
+        if (m_ed->isEditingText()) m_ed->insertField(QStringLiteral("time"));
+        else statusBar()->showMessage(tr("Click in text where the time goes, then choose Insert Time."), 6000);
+    });
+    // The master page's header, then its footer, then the header again.
+    mk("mp.showHeaderFooter", tr("Show Header/Footer"), "rows-3", QKeySequence(), [this] {
+        const Item *in = m_ed->isEditingText() && !m_ed->masterView().isEmpty() ? m_ed->doc()->item(m_ed->textTarget().itemId) : nullptr;
+        const QRectF content = QRectF(QPointF(0, 0), m_ed->doc()->pageSize()).marginsRemoved(m_ed->doc()->setup.margins);
+        const bool inHeader = in && (in->name == QLatin1String("Header") || in->rect.bottom() < content.top() + 60);
+        act(inHeader ? QStringLiteral("ins.footer") : QStringLiteral("ins.header"))->trigger();
+    });
     mk("ins.pageNumber", tr("Insert Page Number"), "hash", QKeySequence(Qt::ALT | Qt::SHIFT | Qt::Key_P), [this] {
         if (m_ed->isEditingText()) m_ed->insertField(QStringLiteral("page"));
         else pageNumberDialog(this, m_ed);
@@ -539,7 +556,7 @@ void MainWindow::createActions()
         if (!ok || name.trimmed().isEmpty()) return;
         m_ed->copy();
         const QByteArray data = QApplication::clipboard()->mimeData()->data("application/x-jeffpub-items");
-        const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/BuildingBlocks";
+        const QString dir = userBlocksDir();
         QDir().mkpath(dir);
         // The name becomes a file name: characters a file name can't hold
         // (or that would leave the folder) become dashes.
@@ -672,15 +689,22 @@ void MainWindow::createActions()
     // ---------------- Mailings ----------------
     mk("mm.wizard", tr("Step-by-Step Mail Merge Wizard"), "wand-sparkles", QKeySequence(), [this] { showTaskPane("mailmerge"); });
     mk("mm.typeNew", tr("Type a New List…"), "user-plus", QKeySequence(), [this] { recipientsDialog(this, m_ed, true); });
-    mk("mm.existing", tr("Use an Existing List…"), "file-spreadsheet", QKeySequence(), [this] {
-        const QString p = QFileDialog::getOpenFileName(this, tr("Select Data Source"), QString(),
-                                                       tr("Data Sources (*.csv *.txt *.tsv *.xlsx *.vcf)") + QStringLiteral(";;") + tr("All Files (*)"));
+    auto useList = [this](const QString &title, const QString &filter) {
+        const QString p = QFileDialog::getOpenFileName(this, title, QString(), filter + QStringLiteral(";;") + tr("All Files (*)"));
         if (p.isEmpty()) return;
         MergeSource src;
         QString err;
-        if (!loadMergeSource(p, &src, &err)) { QMessageBox::warning(this, tr("Select Data Source"), err); return; }
+        if (!loadMergeSource(p, &src, &err)) { QMessageBox::warning(this, title, err); return; }
         m_ed->change(tr("Select Recipients"), [&] { m_ed->doc()->merge = src; });
         recipientsDialog(this, m_ed, false);
+    };
+    mk("mm.existing", tr("Use an Existing List…"), "file-spreadsheet", QKeySequence(), [useList] {
+        useList(tr("Select Data Source"), tr("Data Sources (*.csv *.txt *.tsv *.xlsx *.vcf)"));
+    });
+    // The other program reads one mail program's contacts; JeffPub reads the
+    // contacts any address book can save, as vCard files.
+    mk("mm.contacts", tr("Select from Contacts…"), "contact", QKeySequence(), [useList] {
+        useList(tr("Select from Contacts"), tr("Contacts (*.vcf *.vcard)"));
     });
     mk("mm.editList", tr("Edit Recipient List"), "user-pen", QKeySequence(), [this] { recipientsDialog(this, m_ed, false); });
     mk("mm.addressBlock", tr("Address Block"), "mail-open", QKeySequence(), [this] { mergeFieldDialog(this, m_ed, 0); });

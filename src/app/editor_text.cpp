@@ -385,6 +385,44 @@ void Editor::changeIndent(int dir)
             QTextBlockFormat bf = b.blockFormat();
             bf.setLeftMargin(std::max(0.0, bf.leftMargin() + dir * 18.0));
             QTextCursor(b).setBlockFormat(bf);
+            // A list item moves a level in or out: into the list of that level
+            // just above it (so its numbers go on), or a new one, numbered
+            // 1. a. i. or bulleted • ◦ ▪ by level.
+            QTextList *l = b.textList();
+            if (!l) continue;
+            const QTextListFormat lf = l->format();
+            const int level = lf.intProperty(tp::ListLevel), to = std::clamp(level + dir, 0, 8);
+            if (to == level) continue;
+            QTextList *join = nullptr;
+            for (QTextBlock p = b.previous(); p.isValid(); p = p.previous()) {
+                QTextList *pl = p.textList();
+                if (!pl) break;
+                const int pv = pl->format().intProperty(tp::ListLevel);
+                if (pv == to) { join = pl; break; }
+                if (pv < to) break;   // a shallower item: this one starts a new list under it
+            }
+            l->remove(b);
+            if (join) {
+                join->add(b);
+                continue;
+            }
+            QTextListFormat nf = lf;
+            nf.setProperty(tp::ListLevel, to);
+            nf.setStart(1);
+            const bool bullets = lf.style() == QTextListFormat::ListDisc || lf.style() == QTextListFormat::ListCircle || lf.style() == QTextListFormat::ListSquare;
+            if (bullets) {
+                static const QTextListFormat::Style marks[] = {QTextListFormat::ListDisc, QTextListFormat::ListCircle, QTextListFormat::ListSquare};
+                nf.setStyle(marks[to % 3]);
+                nf.clearProperty(tp::BulletChar);   // the level's own mark
+            } else {
+                static const QTextListFormat::Style numbers[] = {QTextListFormat::ListDecimal, QTextListFormat::ListLowerAlpha, QTextListFormat::ListLowerRoman};
+                static const int formats[] = {1, 2, 4};   // tp::NumberFormat: "1." "a." "i."
+                nf.setStyle(numbers[to % 3]);
+                nf.setProperty(tp::NumberFormat, formats[to % 3]);
+                nf.setNumberPrefix(QString());
+                nf.setNumberSuffix(QStringLiteral("."));
+            }
+            QTextCursor(b).createList(nf);
         }
     }
     endChange();

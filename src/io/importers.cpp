@@ -424,7 +424,7 @@ bool loadMergeSource(const QString &path, MergeSource *out, QString *error)
     MergeSource m;
     m.path = path;
     if (suffix == "xlsx") rows = readXlsx(data);
-    else if (suffix == "vcf") rows = readVcf(QString::fromUtf8(data), &m.fields);
+    else if (suffix == "vcf" || suffix == "vcard") rows = readVcf(QString::fromUtf8(data), &m.fields);
     else {
         QString text = QString::fromUtf8(data);
         if (text.startsWith(QChar(0xFEFF))) text.remove(0, 1);

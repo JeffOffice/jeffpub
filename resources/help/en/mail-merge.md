@@ -9,7 +9,8 @@ The tools are on the **Mailings** tab. For a guided path, click **Mailings > Sta
 
 Click **Mailings > Start > Select Recipients**:
 
-- **Use an Existing List…**: pick a CSV file, a tab-separated text file, an .xlsx spreadsheet (the first sheet), or a .vcf contacts file. The first row must hold the column names.
+- **Use an Existing List…**: pick a CSV file, a tab-separated text file, an .xlsx spreadsheet (the first sheet), or a .vcf contacts file. In a CSV, text, or spreadsheet file, the first row must hold the column names.
+- **Select from Contacts…**: pick a contacts file (.vcf or .vcard). Most address books and phones can save their contacts as one; each contact becomes a recipient, with name, address, phone, and email columns.
 - **Type a New List…**: fill in the **New Address List** window, using **New Entry** for each person. JeffPub then offers to save the list as a CSV file.
 
 To check the list, click **Mailings > Start > Edit Recipient List**. In the **Mail Merge Recipients** window, uncheck a row to skip that person, click a heading to sort, and type in **Filter recipients** to narrow the list. **Find Duplicates** unchecks repeats, and **Validate Addresses** highlights rows with a missing address or an odd ZIP code.
@@ -21,7 +22,7 @@ A merge field is a placeholder, such as «First Name», that becomes a real valu
 - **Address Block**: a mailing address built from columns named like First Name, Last Name, and Address Line 1.
 - **Greeting Line**: "Dear" and the person's name, or "Dear Friend," if there is no name.
 - **Insert Merge Field**: pick any column.
-- **Picture Field**: pick a column of picture file names. JeffPub adds an empty frame and looks for the files next to your list. Pictures appear in a merged new publication or a catalog merge.
+- **Picture Field**: pick a column of picture file names. JeffPub adds an empty frame and looks for the files next to your list. Each record's picture shows when you preview the results, print, save a PDF, or merge to a new publication or a catalog.
 
 ## Preview the results
 
