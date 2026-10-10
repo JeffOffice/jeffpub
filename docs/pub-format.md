@@ -425,6 +425,26 @@ files again. (Publisher's object model reports a publication's design
 type instead, as `PublicationLayout`: 47 for a greeting card design, 23
 for JeffPub's copy, "custom".)
 
+### Page numbering
+
+The first page's number and the number style live in a section list, chunk
+type 0x75, named by the DOCUMENT chunk's field `2f` (a reference, type 0x70)
+and present only when the pages aren't numbered 1, 2, 3. The chunk holds
+`01` (type 0x18) = the number of sections and an array `02` (type 0xA0) with
+one `00` record (type 0x88) per section: `01` (type 0x20) = the section's
+first page index (1 for the first page), `02` (type 0x18) = its start number
+(left out when the section continues the numbering), and `03` (type 0x18) =
+the style, left out for 1 2 3: 1 = I II III, 2 = i ii iii, 3 = A B C, and
+4 = a b c. Its directory entry is stamped like the font chunk's: version
+0x0102, flag 08, `0b` = 1. Publisher refuses a start number above 1000.
+
+Confirmed October 2026 by numbering sections in Publisher 2021 through its
+object model (`Sections(1).PageNumberStart`, `.PageNumberFormat`), saving,
+and comparing the streams; then by opening JeffPub's own files in Publisher,
+which read back start 5 in lowercase roman numerals and drew v, vi, vii.
+JeffPub numbers a publication one way, so it writes one section and, when
+opening a file whose later sections number on their own, keeps the first.
+
 ### Text wrapping
 
 How text in boxes behind an object wraps around it is the low byte of the
