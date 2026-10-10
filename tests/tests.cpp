@@ -1696,6 +1696,38 @@ private Q_SLOTS:
                  typing ? typing->metaObject()->className() : "nothing");
     }
 
+    // Tab belongs to the page: while typing it types a tab, otherwise it
+    // selects the next object (Shift+Tab the one before), and the keyboard
+    // stays on the page; F6 is the way to the ribbon. Once the ribbon's
+    // controls took the keyboard, Tab left the page for the File button.
+    void tabStaysOnThePage()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        QVERIFY(QTest::qWaitForWindowActive(&w));
+        jp::Editor *ed = w.editor();
+        ed->addItem(ed->newTextBox(QRectF(72, 72, 200, 100)));
+        ed->addItem(ed->newTextBox(QRectF(72, 300, 200, 100)));
+        const auto &items = ed->surfaceItems();
+        QCOMPARE(int(items.size()), 2);
+        const QString first = items[0]->id, second = items[1]->id;
+        auto *canvas = w.findChild<jp::Canvas *>();
+        canvas->setFocus();
+        ed->select(QStringList{first});
+        QTest::keyClick(canvas, Qt::Key_Tab);
+        QCOMPARE(QApplication::focusWidget(), canvas);
+        QCOMPARE(ed->selection(), QStringList{second});
+        QTest::keyClick(canvas, Qt::Key_Backtab, Qt::ShiftModifier);
+        QCOMPARE(ed->selection(), QStringList{first});
+        ed->beginTextEdit(first);
+        QTest::keyClicks(canvas, QStringLiteral("a"));
+        QTest::keyClick(canvas, Qt::Key_Tab);
+        QTest::keyClicks(canvas, QStringLiteral("b"));
+        QCOMPARE(QApplication::focusWidget(), canvas);
+        QVERIFY2(ed->editDoc() && ed->editDoc()->toPlainText().contains(QStringLiteral("a\tb")), qPrintable(ed->editDoc() ? ed->editDoc()->toPlainText() : QString()));
+    }
+
     // Using the ribbon with the keyboard alone: F6 enters it on the current
     // tab, Right switches to the next tab, Down goes into its controls, the
     // arrow keys move among them, and Escape goes back to the page.

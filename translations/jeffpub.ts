@@ -445,7 +445,7 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+1"/>
-        <source>Tab selects the next object, the arrow keys move it, Enter edits its text, and Delete removes it.</source>
+        <source>Tab selects the next object, the arrow keys move it, Enter edits its text, and Delete removes it. F6 goes to the ribbon.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

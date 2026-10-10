@@ -92,6 +92,9 @@ protected:
     void mouseDoubleClickEvent(QMouseEvent *e) override;
     void wheelEvent(QWheelEvent *e) override;
     void keyPressEvent(QKeyEvent *e) override;
+    // Tab is the page's own (a tab character, or the next object), never a
+    // move to another control: F6 leaves the page.
+    bool focusNextPrevChild(bool) override { return false; }
     void inputMethodEvent(QInputMethodEvent *e) override;
     QVariant inputMethodQuery(Qt::InputMethodQuery q) const override;
     void focusInEvent(QFocusEvent *e) override;
