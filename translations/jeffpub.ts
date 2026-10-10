@@ -10495,9 +10495,9 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="+33"/>
-        <location filename="../src/app/mainwindow_ribbon.cpp" line="+258"/>
+        <location filename="../src/app/mainwindow_ribbon.cpp" line="+299"/>
         <location line="+1"/>
-        <location line="+694"/>
+        <location line="+672"/>
         <source>Zoom</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10627,7 +10627,7 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="-151"/>
-        <location filename="../src/app/mainwindow_ribbon.cpp" line="-632"/>
+        <location filename="../src/app/mainwindow_ribbon.cpp" line="-610"/>
         <location line="+1"/>
         <source>Shapes</source>
         <translation type="unfinished"></translation>
@@ -10640,7 +10640,7 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     <message>
         <location line="+0"/>
         <location line="+160"/>
-        <location filename="../src/app/mainwindow_ribbon.cpp" line="+158"/>
+        <location filename="../src/app/mainwindow_ribbon.cpp" line="+136"/>
         <source>Text Art</source>
         <translation type="unfinished"></translation>
     </message>
@@ -12050,7 +12050,7 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
     </message>
     <message>
         <location line="+2"/>
-        <location filename="../src/app/mainwindow_ribbon.cpp" line="-520"/>
+        <location filename="../src/app/mainwindow_ribbon.cpp" line="-498"/>
         <source>Line</source>
         <translation type="unfinished"></translation>
     </message>
@@ -13091,7 +13091,7 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
     <message>
         <location line="+2"/>
         <location line="+7"/>
-        <location line="+333"/>
+        <location line="+311"/>
         <source>Change Shape</source>
         <translation type="unfinished"></translation>
     </message>
@@ -13328,7 +13328,7 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+159"/>
+        <location line="+142"/>
         <source>Master Page %1</source>
         <translation type="unfinished"></translation>
     </message>
