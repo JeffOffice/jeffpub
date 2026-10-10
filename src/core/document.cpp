@@ -10,6 +10,7 @@
 
 #include <QCoreApplication>
 #include <QBuffer>
+#include <QCryptographicHash>
 #include <atomic>
 #include <QDir>
 #include <QFile>
@@ -175,12 +176,15 @@ QByteArray readPictureBytes(const QString &path)
     return bytes.size() == size ? bytes : QByteArray();
 }
 
-bool readPictureFile(const QString &path, int pdfPage, QByteArray *bytes, QString *format, QSize *pixels)
+static QByteArray hashOf(const QByteArray &bytes) { return QCryptographicHash::hash(bytes, QCryptographicHash::Sha1).toHex(); }
+
+bool readPictureFile(const QString &path, int pdfPage, QByteArray *bytes, QString *format, QSize *pixels, QByteArray *fileHash)
 {
     if (bytes->isEmpty()) {
         *bytes = readPictureBytes(path);
         if (bytes->isEmpty()) return false;
     }
+    if (fileHash) *fileHash = hashOf(*bytes);
     *format = QFileInfo(path).suffix().toLower();
     if (*format == "jpeg") *format = "jpg";
     if (*format == "tiff") *format = "tif";
@@ -645,12 +649,14 @@ QString Document::addImage(const QByteArray &bytes, const QString &format, const
     return id;
 }
 
-QString Document::addLinkedImage(const QByteArray &bytes, const QString &format, const QString &path, bool keepCopy, int pdfPage, const QImage &decoded)
+QString Document::addLinkedImage(const QByteArray &bytes, const QString &format, const QString &path, bool keepCopy, int pdfPage, const QImage &decoded,
+                                 const QByteArray &fileHash)
 {
     const QFileInfo fi(path);
     const QString file = QDir::cleanPath(fi.absoluteFilePath());
+    const QByteArray hash = !fileHash.isEmpty() ? fileHash : format.compare(QLatin1String("pdf"), Qt::CaseInsensitive) ? hashOf(bytes) : QByteArray();
     for (auto it = images.cbegin(); it != images.cend(); ++it)
-        if (it->linked && it->sourcePath == file && it->keepsCopy == keepCopy && it->linkPage == pdfPage && it->bytes == bytes &&
+        if (it->linked && it->sourcePath == file && it->keepsCopy == keepCopy && it->linkPage == pdfPage && it->bytes == bytes && it->fileHash == hash &&
             it->fileSize == fi.size() && it->fileTime == fi.lastModified().toMSecsSinceEpoch())
             return it.key();
     ImageData d;
@@ -662,6 +668,7 @@ QString Document::addLinkedImage(const QByteArray &bytes, const QString &format,
     d.linkPage = pdfPage;
     d.fileSize = fi.size();
     d.fileTime = fi.lastModified().toMSecsSinceEpoch();
+    d.fileHash = hash;
     d.cache = decoded;
     d.pixelSize = d.image().size();
     d.makePreview();
@@ -676,6 +683,7 @@ LinkStatus Document::linkStatus(const QString &imageId) const
     if (it == images.cend() || !it->linked) return LinkStatus::Embedded;
     const QFileInfo fi(it->sourcePath);
     if (!fi.isFile()) return LinkStatus::Missing;
+    if (it->changed) return LinkStatus::Modified;
     if (fi.size() != it->fileSize || fi.lastModified().toMSecsSinceEpoch() != it->fileTime) return LinkStatus::Modified;
     return LinkStatus::Linked;
 }
@@ -688,22 +696,33 @@ void Document::refreshLinks()
         const LinkStatus status = linkStatus(it.key());
         // A stored copy that matches the file needs no reading of it.
         const bool stored = d.keepsCopy && !d.bytes.isEmpty();
-        QByteArray bytes;
+        QByteArray bytes, hash;
         QString format;
         QSize px;
         const bool read = status != LinkStatus::Missing && !(stored && status == LinkStatus::Linked) &&
-                          readPictureFile(d.sourcePath, d.linkPage, &bytes, &format, &px);
+                          readPictureFile(d.sourcePath, d.linkPage, &bytes, &format, &px, &hash);
         if (read) {
             d.bytes = bytes;
             d.format = format;
             d.cache = QImage();
-            if (status != LinkStatus::Linked) {
+            // The file it was linked to when its contents are the same (one
+            // saved again unchanged has a new date, and two others of one
+            // size can share a date); with no hash kept, when size and date are.
+            const bool same = d.fileHash.isEmpty() ? status == LinkStatus::Linked : hash == d.fileHash;
+            const QFileInfo fi(d.sourcePath);
+            if (same) {
+                d.fileSize = fi.size();
+                d.fileTime = fi.lastModified().toMSecsSinceEpoch();
+                d.fileHash = hash;
+            } else {
                 // Not the file the sizes were taken from: a picture of another
                 // shape must not be stretched into the old one's place.
-                const QFileInfo fi(d.sourcePath);
                 if (d.keepsCopy) {
                     d.fileSize = fi.size();
                     d.fileTime = fi.lastModified().toMSecsSinceEpoch();
+                    d.fileHash = hash;
+                } else {
+                    d.changed = true;
                 }
                 const QSize now = d.image().size();
                 if (d.pixelSize.isValid() && now != d.pixelSize)
@@ -1005,6 +1024,7 @@ QJsonObject Document::toJson() const
             if (it->linkPage) io["page"] = it->linkPage;
             io["fileSize"] = double(it->fileSize);
             io["fileTime"] = double(it->fileTime);
+            if (!it->fileHash.isEmpty()) io["fileHash"] = QString::fromLatin1(it->fileHash);
         }
         imgs.append(io);
     }
@@ -1099,6 +1119,7 @@ void Document::fromJson(const QJsonObject &o)
         d.linkPage = io["page"].toInt();
         d.fileSize = qint64(io["fileSize"].toDouble());
         d.fileTime = qint64(io["fileTime"].toDouble());
+        d.fileHash = io["fileHash"].toString().toLatin1();
         // Where the file is from the publication wins over where it was.
         const QString relative = io["relative"].toString();
         if (d.linked && !relative.isEmpty() && !folder.isEmpty()) {

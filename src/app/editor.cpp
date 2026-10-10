@@ -1032,10 +1032,10 @@ bool Editor::changeLink(const QString &pictureId, const QString &path, int pdfPa
     if (!pic || pic->imageId.isEmpty()) return false;
     const QString oldId = pic->imageId;
     const ImageData old = m_doc->images.value(oldId);
-    QByteArray bytes;
+    QByteArray bytes, hash;
     QString format;
     QSize px;
-    if (!readPictureFile(path, pdfPage, &bytes, &format, &px)) {
+    if (!readPictureFile(path, pdfPage, &bytes, &format, &px, &hash)) {
         Q_EMIT status(QFileInfo(path).isFile() ? tr("JeffPub can't read \"%1\" as a picture.").arg(QFileInfo(path).fileName())
                                               : tr("JeffPub can't find \"%1\".").arg(QDir::toNativeSeparators(path)));
         return false;
@@ -1043,7 +1043,7 @@ bool Editor::changeLink(const QString &pictureId, const QString &path, int pdfPa
     // The same file again is an update, and every picture with that link follows.
     const bool update = old.linked && QDir::cleanPath(QFileInfo(path).absoluteFilePath()) == old.sourcePath;
     change(update ? tr("Update Link") : tr("Change Link"), [&] {
-        const QString id = m_doc->addLinkedImage(bytes, format, path, old.keepsCopy, pdfPage);
+        const QString id = m_doc->addLinkedImage(bytes, format, path, old.keepsCopy, pdfPage, QImage(), hash);
         m_doc->forEachItem([&](Item *it, int, const QString &) {
             auto *p = dynamic_cast<PictureItem *>(it);
             if (!p || p->imageId != oldId || (!update && p != pic)) return;
@@ -1277,7 +1277,7 @@ void Editor::copy()
             auto im = m_doc->images.find(iid);
             if (im != m_doc->images.end()) {
                 QJsonObject io{{"format", im->format}, {"data", QString::fromLatin1(im->bytes.toBase64())}};
-                if (im->linked) io["link"] = QJsonObject{{"path", im->sourcePath}, {"copy", im->keepsCopy}, {"page", im->linkPage}};
+                if (im->linked) io["link"] = QJsonObject{{"path", im->sourcePath}, {"copy", im->keepsCopy}, {"page", im->linkPage}, {"hash", QString::fromLatin1(im->fileHash)}};
                 images[iid] = io;
             }
             break;
@@ -1350,7 +1350,8 @@ QStringList Editor::insertItemsJson(const QByteArray &json, const QString &label
             const QString file = QDir::cleanPath(QFileInfo(link["path"].toString()).absoluteFilePath());
             const auto same = std::find_if(m_doc->images.cbegin(), m_doc->images.cend(), [&](const ImageData &d) { return d.linked && d.sourcePath == file && d.bytes == bytes; });
             imageMap[it.key()] = same != m_doc->images.cend() ? same.key()
-                                                              : m_doc->addLinkedImage(bytes, io["format"].toString(), file, link["copy"].toBool(true), link["page"].toInt());
+                                                              : m_doc->addLinkedImage(bytes, io["format"].toString(), file, link["copy"].toBool(true), link["page"].toInt(), QImage(),
+                                                                                      link["hash"].toString().toLatin1());
         }
         auto mapStory = [&](QString &sid) {
             if (sid.isEmpty()) return;

@@ -41,12 +41,18 @@ struct ImageData {
     bool keepsCopy = true;      // the full picture is stored in the publication too (Insert and Link)
     int linkPage = 0;           // which page of a PDF file
     qint64 fileSize = 0;        // the file as it was when the link was made or updated,
-    qint64 fileTime = 0;        // msecs since the epoch: a different file is a Modified one
+    qint64 fileTime = 0;        // msecs since the epoch
+    QByteArray fileHash;        // SHA-1 of the file's bytes, in hex: a file with other contents is a Modified
+                                // one. Empty in files from before it was kept: size and date decide then.
     QByteArray preview;         // a small picture of it (at most 512 pixels across), for when the file is gone
     QString previewFormat;      // "jpg" or "png"
     QImage image() const;       // decoded, cached
     void makePreview();         // fills preview from the picture
     mutable QImage cache;
+    // Not saved: when the publication opened, the file was read and its
+    // contents were not the linked ones. (A status check looks only at the
+    // size and date, and doesn't read the file.)
+    bool changed = false;
 };
 
 struct Story {
@@ -272,7 +278,10 @@ public:
     // A picture tied to its file at `path`; `bytes` are the file's (see
     // readPictureFile), kept in the publication when `keepCopy`, else only
     // a small preview is.
-    QString addLinkedImage(const QByteArray &bytes, const QString &format, const QString &path, bool keepCopy, int pdfPage = 0, const QImage &decoded = QImage());
+    // `fileHash` is the file's, as readPictureFile gives it (made from `bytes`
+    // when left out, unless those are a PDF page, which is not the file).
+    QString addLinkedImage(const QByteArray &bytes, const QString &format, const QString &path, bool keepCopy, int pdfPage = 0, const QImage &decoded = QImage(),
+                           const QByteArray &fileHash = QByteArray());
     LinkStatus linkStatus(const QString &imageId) const;
     // After a publication opens: reads each link's file again (a changed
     // file replaces the stored copy of an Insert and Link picture; a Link
@@ -325,7 +334,8 @@ QByteArray readPictureBytes(const QString &path);
 // the one page `pdfPage` alone), and its size in pixels. `bytes` may already
 // hold the file's bytes. False when it can't be read as a picture (readPictureBytes
 // says which files are not read at all).
-bool readPictureFile(const QString &path, int pdfPage, QByteArray *bytes, QString *format, QSize *pixels);
+// `fileHash`, when given, gets the SHA-1 of the file's bytes in hex.
+bool readPictureFile(const QString &path, int pdfPage, QByteArray *bytes, QString *format, QSize *pixels, QByteArray *fileHash = nullptr);
 
 QVector<TextStyle> defaultStyles();
 

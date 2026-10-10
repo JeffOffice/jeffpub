@@ -1393,7 +1393,7 @@ static int choosePdfPage(QWidget *parent, const PdfDocument &pdf, const QString 
     return list->currentItem()->data(Qt::UserRole).toInt();
 }
 
-static bool readPicture(QWidget *parent, const QString &path, QByteArray *bytes, QString *fmt, QSize *px, int *page = nullptr)
+static bool readPicture(QWidget *parent, const QString &path, QByteArray *bytes, QString *fmt, QSize *px, int *page = nullptr, QByteArray *hash = nullptr)
 {
     *bytes = readPictureBytes(path);
     if (bytes->isEmpty()) return false;
@@ -1404,15 +1404,15 @@ static bool readPicture(QWidget *parent, const QString &path, QByteArray *bytes,
         if (pdfPage < 0) return false;
     }
     if (page) *page = pdfPage;
-    return readPictureFile(path, pdfPage, bytes, fmt, px);
+    return readPictureFile(path, pdfPage, bytes, fmt, px, hash);
 }
 
 // A picture file as an image of the publication: copied in, linked to its
 // file, or both.
-static QString addPicture(Document *d, const QString &path, const QByteArray &bytes, const QString &fmt, int page, PictureInsert how)
+static QString addPicture(Document *d, const QString &path, const QByteArray &bytes, const QString &fmt, int page, PictureInsert how, const QByteArray &hash)
 {
     if (how == PictureInsert::Embed) return d->addImage(bytes, fmt, path);
-    return d->addLinkedImage(bytes, fmt, path, how == PictureInsert::EmbedAndLink, page);
+    return d->addLinkedImage(bytes, fmt, path, how == PictureInsert::EmbedAndLink, page, QImage(), hash);
 }
 
 void MainWindow::insertPictureFromFile(const QString &replaceItemId, const QPointF &at)
@@ -1425,13 +1425,13 @@ void MainWindow::insertPictureFromFile(const QString &replaceItemId, const QPoin
     Settings::get().setValue("dirs/pictures", QFileInfo(paths.first()).absolutePath());
     if (!replaceItemId.isEmpty()) {
         auto *pic = dynamic_cast<PictureItem *>(m_ed->doc()->item(replaceItemId));
-        QByteArray bytes;
+        QByteArray bytes, hash;
         QString fmt;
         QSize px;
         int page = 0;
-        if (!pic || !readPicture(this, paths.first(), &bytes, &fmt, &px, &page)) return;
+        if (!pic || !readPicture(this, paths.first(), &bytes, &fmt, &px, &page, &hash)) return;
         m_ed->change(tr("Change Picture"), [&] {
-            pic->imageId = addPicture(m_ed->doc(), paths.first(), bytes, fmt, page, how);
+            pic->imageId = addPicture(m_ed->doc(), paths.first(), bytes, fmt, page, how, hash);
             pic->fitImage(m_ed->doc()->imageSize(pic->imageId), true);
         });
         return;
@@ -1480,13 +1480,13 @@ void MainWindow::insertFiles(const QStringList &paths, const QPointF &atIn, Pict
             made << t->id;
             continue;
         }
-        QByteArray bytes;
+        QByteArray bytes, hash;
         QString fmt;
         QSize px;
         int page = 0;
-        if (!readPicture(this, path, &bytes, &fmt, &px, &page)) continue;
+        if (!readPicture(this, path, &bytes, &fmt, &px, &page, &hash)) continue;
         auto pic = std::make_shared<PictureItem>();
-        pic->imageId = addPicture(d, path, bytes, fmt, page, how);
+        pic->imageId = addPicture(d, path, bytes, fmt, page, how, hash);
         // Natural size from the picture's resolution (96 dpi if unknown), limited to the page.
         QImageReader r(path);
         double dpi = 96;

@@ -438,13 +438,16 @@ Pictures no object uses are not saved.
 A linked picture also has `copy` (whether `images/<id>.<format>` is saved too;
 `true` when absent), `page` (which page of a PDF file; 0 when absent), `fileSize`
 and `fileTime` (the file's size in bytes and its modified time in milliseconds
-since 1970, as they were when the link was made or last updated), and
+since 1970, as they were when the link was made or last updated), `fileHash`
+(the SHA-1 of the file's bytes, in lowercase hex, taken then too), and
 `relative` (the file's path from the folder the `.jpub` file was saved in,
 which a reader tries first, using `source` when nothing is there). With
 `copy` false there is no `images/` entry, only `previews/<id>.<ext>`, which
 stands in when the file can't be found; `w` and `h` are still the file's size.
-A reader finds a changed file by comparing `fileSize` and `fileTime` with the
-file's. Files without these fields have embedded pictures.
+A reader finds a changed file by comparing `fileHash` with the SHA-1 of the
+file's bytes: two different files can share a size and a date. A link without
+`fileHash` (made before it was kept) is compared by `fileSize` and `fileTime`
+instead. Files without these fields have embedded pictures.
 
 ## Business information
 

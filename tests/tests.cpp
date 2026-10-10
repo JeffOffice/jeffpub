@@ -6555,6 +6555,122 @@ private Q_SLOTS:
 #endif
     }
 
+    // A .jpub with its image entries changed by `edit` (a crafted file).
+    static QByteArray rewriteImageEntries(const QByteArray &jpub, const std::function<void(QJsonArray &)> &edit)
+    {
+        QMap<QString, QByteArray> entries;
+        if (!jp::readZip(jpub, entries)) return QByteArray();
+        QJsonObject json = QJsonDocument::fromJson(entries["document.json"]).object();
+        QJsonArray images = json["images"].toArray();
+        edit(images);
+        json["images"] = images;
+        entries["document.json"] = QJsonDocument(json).toJson(QJsonDocument::Compact);
+        jp::ZipWriter z;
+        z.add(QStringLiteral("mimetype"), entries.take(QStringLiteral("mimetype")));
+        for (auto it = entries.cbegin(); it != entries.cend(); ++it) z.add(it.key(), it.value());
+        return z.finish();
+    }
+
+    // A picture as file bytes: the left half `color`, the right half the opposite.
+    static QByteArray linkPictureBytes(const QSize &size, const QColor &color)
+    {
+        QTemporaryDir tmp;
+        const QString path = linkPicture(tmp.filePath(QStringLiteral("p.png")), size, color);
+        return linkFileBytes(path);
+    }
+
+    static void linkWrite(const QString &path, const QByteArray &bytes, qint64 msecs)
+    {
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        QVERIFY(f.write(bytes) == bytes.size());
+        QVERIFY(f.flush());   // closing the file later must not touch its date again
+        QVERIFY(f.setFileTime(QDateTime::fromMSecsSinceEpoch(msecs), QFileDevice::FileModificationTime));
+    }
+
+    // A linked picture is Modified when the file's contents differ, not when
+    // its size and date do: two different files can share both (written in
+    // one clock tick), and a file saved again unchanged differs in neither
+    // way that matters.
+    void linkedPictureModifiedByContent()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        QByteArray red = linkPictureBytes(QSize(100, 80), QColor(200, 30, 30));
+        QByteArray blue = linkPictureBytes(QSize(100, 80), QColor(30, 30, 200));
+        // Zeros after the picture's end change nothing in it: the two files get one size.
+        const qsizetype size = std::max(red.size(), blue.size());
+        red.append(QByteArray(size - red.size(), '\0'));
+        blue.append(QByteArray(size - blue.size(), '\0'));
+        QVERIFY(red != blue && red.size() == blue.size());
+        const qint64 then = 1700000000000;
+        const QString file = dir.filePath(QStringLiteral("photo.png"));
+        linkWrite(file, red, then);
+
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto item = std::make_shared<jp::PictureItem>();
+        item->rect = QRectF(100, 100, 200, 160);
+        item->imgRect = QRectF(0, 0, 200, 160);
+        item->imageId = doc->addLinkedImage(red, QStringLiteral("png"), file, false);
+        const QString id = item->imageId;
+        doc->pages[0]->items.push_back(item);
+        QCOMPARE(doc->images[id].fileHash, QCryptographicHash::hash(red, QCryptographicHash::Sha1).toHex());
+        QString err;
+        const QString path = dir.filePath(QStringLiteral("book.jpub"));
+        QVERIFY(jp::savePublication(*doc, path, QImage(), &err));
+        QMap<QString, QByteArray> entries;
+        QVERIFY(jp::readZip(linkFileBytes(path), entries));
+        QCOMPARE(QJsonDocument::fromJson(entries["document.json"]).object()["images"].toArray()[0].toObject()["fileHash"].toString().toLatin1(),
+                 QCryptographicHash::hash(red, QCryptographicHash::Sha1).toHex());
+
+        auto same = jp::loadPublication(path, &err);
+        QVERIFY2(same, qPrintable(err));
+        QCOMPARE(same->linkStatus(id), jp::LinkStatus::Linked);
+
+        // Another picture, the same size, the same date.
+        linkWrite(file, blue, then);
+        QCOMPARE(QFileInfo(file).size(), qint64(size));
+        auto other = jp::loadPublication(path, &err);
+        QVERIFY2(other, qPrintable(err));
+        QCOMPARE(other->linkStatus(id), jp::LinkStatus::Modified);
+        QCOMPARE(other->images[id].bytes, blue);   // drawn from the file until updated
+        const jp::PictureItem *shown = linkFirstPicture(other.get());
+        const QImage page = linkRender(other.get());
+        const QPoint left = (shown->rect.topLeft() + QPointF(shown->rect.width() * 0.25, shown->rect.height() * 0.5)).toPoint();
+        QVERIFY(linkColorsClose(QColor(page.pixel(left)), QColor(30, 30, 200)));
+
+        // The same picture, saved again a minute later: still the one that was linked.
+        linkWrite(file, red, then + 60000);
+        auto touched = jp::loadPublication(path, &err);
+        QVERIFY2(touched, qPrintable(err));
+        QCOMPARE(touched->linkStatus(id), jp::LinkStatus::Linked);
+
+        // A file from before links had a hash has only the size and date to go by.
+        const QByteArray old = rewriteImageEntries(linkFileBytes(path), [](QJsonArray &images) {
+            QJsonObject io = images[0].toObject();
+            io.remove(QStringLiteral("fileHash"));
+            images[0] = io;
+        });
+        QVERIFY(!old.isEmpty());
+        linkWrite(file, blue, then);
+        auto before = jp::publicationFromBytes(old, &err, dir.path());
+        QVERIFY2(before, qPrintable(err));
+        QCOMPARE(before->linkStatus(id), jp::LinkStatus::Linked);   // the same size and date: no way to tell
+        linkWrite(file, blue + QByteArray(10, '\0'), then);
+        auto longer = jp::publicationFromBytes(old, &err, dir.path());
+        QVERIFY2(longer, qPrintable(err));
+        QCOMPARE(longer->linkStatus(id), jp::LinkStatus::Modified);
+
+        // Update Link keeps the hash of what it read.
+        jp::MainWindow w;
+        w.editor()->setDocument(std::move(other), path);
+        const QString picId = linkFirstPicture(w.editor()->doc())->id;
+        linkWrite(file, blue, then);
+        QVERIFY(w.editor()->updateLink(picId));
+        const jp::ImageData &updated = w.editor()->doc()->images[linkFirstPicture(w.editor()->doc())->imageId];
+        QCOMPARE(updated.fileHash, QCryptographicHash::hash(blue, QCryptographicHash::Sha1).toHex());
+    }
+
     void templatesFitTheirText()
     {
         QStringList problems;
