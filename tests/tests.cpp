@@ -9836,11 +9836,9 @@ private Q_SLOTS:
         ed->beginTextEdit(id, 0, 1, 0);
         direction()->trigger();
         QCOMPARE(turned(), QStringLiteral("--v-"));   // row by row: the cell the cursor is in
-        QTest::qWait(60);
-        QVERIFY(direction()->isChecked());
+        QTRY_VERIFY(direction()->isChecked());   // the ribbon catches up on its next refresh
         ed->beginTextEdit(id, 0, 0, 1);
-        QTest::qWait(60);
-        QVERIFY2(!direction()->isChecked(), "the button follows the cell");
+        QTRY_VERIFY2(!direction()->isChecked(), "the button follows the cell");
         direction()->trigger();
         QCOMPARE(turned(), QStringLiteral("-vv-"));
         direction()->trigger();
@@ -9856,8 +9854,7 @@ private Q_SLOTS:
         ed->select(id);
         direction()->trigger();
         QCOMPARE(turned(), QStringLiteral("vvvv"));
-        QTest::qWait(60);
-        QVERIFY(direction()->isChecked());
+        QTRY_VERIFY(direction()->isChecked());   // the ribbon catches up on its next refresh
         direction()->trigger();
         QCOMPARE(turned(), QStringLiteral("----"));
         ed->undo();
