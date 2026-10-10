@@ -487,6 +487,44 @@ int Document::pageIndexOf(const QString &pageId) const
     return -1;
 }
 
+void Document::pageSizeChanged(const QSizeF &from)
+{
+    const QSizeF to = setup.size;
+    if (from == to || from.width() <= 0 || from.height() <= 0) return;
+    const double dw = to.width() - from.width(), dh = to.height() - from.height();
+    const double kx = to.width() / from.width(), ky = to.height() / from.height();
+    // Moves the objects of one page (or of a master's left or right page),
+    // and sends those that no longer touch it to the scratch area.
+    auto shift = [&](ItemList &items, bool twoPage) {
+        ItemList kept;
+        for (const ItemPtr &it : items) {
+            const bool right = twoPage && it->bounds().center().x() >= from.width();
+            it->moveBy(twoPage ? (right ? dw : 0) : dw / 2, dh / 2);
+            const QRectF b = it->bounds().translated(right ? -to.width() : 0, 0);
+            if (b.right() > 0 && b.left() < to.width() && b.bottom() > 0 && b.top() < to.height()) {
+                kept.push_back(it);
+            } else {
+                if (right) it->moveBy(-to.width(), 0);
+                scratch.push_back(it);
+            }
+        }
+        items = kept;
+    };
+    auto guides = [&](PageBase &pb, bool twoPage) {
+        for (double &x : pb.guides.v) x = twoPage && x >= from.width() ? to.width() + (x - from.width()) * kx : x * kx;
+        for (double &y : pb.guides.h) y *= ky;
+    };
+    for (auto &pg : pages) {
+        shift(pg->items, false);
+        guides(*pg, false);
+    }
+    for (auto &mp : masters) {
+        shift(mp->items, mp->twoPage);
+        guides(*mp, mp->twoPage);
+    }
+    if (pageIndexOf(catalog.pageId) >= 0) catalog.rect.translate(dw / 2, dh / 2);
+}
+
 Story *Document::story(const QString &id) const
 {
     auto it = stories.find(id);

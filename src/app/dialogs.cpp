@@ -297,13 +297,20 @@ void applyPageSetup(Editor *ed, const PageSetup &ns, const QString &sizeName, co
         doc->setup = ns;
         doc->setup.fold = fold;
         doc->setup.sizeName = sizeName;
-        // Keep objects in proportion when the page size changes (reflow).
-        if (oldSize != doc->setup.size && oldSize.width() > 0) {
-            const QRectF from(QPointF(0, 0), oldSize), to(QPointF(0, 0), doc->setup.size);
-            for (auto &pg : doc->pages) for (auto &it : pg->items) it->scaleInto(from, to);
-            for (auto &mp : doc->masters) for (auto &it : mp->items) it->scaleInto(from, to);
-        }
+        doc->pageSizeChanged(oldSize);
     });
+}
+
+void applyPageSize(Editor *ed, const QSizeF &size, const QString &sizeName)
+{
+    PageSetup ns = ed->doc()->setup;
+    // Keep the current orientation.
+    QSizeF s = size;
+    const QSizeF cur = ns.size;
+    if ((cur.width() > cur.height()) != (s.width() > s.height()) && s.width() != s.height()) s = s.transposed();
+    ns.size = s;
+    ns.sheet = s;
+    applyPageSetup(ed, ns, sizeName, QCoreApplication::translate("Dialogs", "Page Size"));
 }
 
 void pageSetupDialog(QWidget *p, Editor *ed)

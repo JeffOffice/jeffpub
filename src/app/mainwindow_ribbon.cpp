@@ -865,17 +865,6 @@ void MainWindow::ribbonMenuParts(RibbonParts &parts)
         auto *sizeMenu = new QMenu(owner);
         connect(sizeMenu, &QMenu::aboutToShow, this, [this, sizeMenu] {
             sizeMenu->clear();
-            auto applySize = [this](const QSizeF &s, const QString &name) {
-                m_ed->change(tr("Page Size"), [&] {
-                    // Keep the current orientation.
-                    QSizeF ns = s;
-                    const QSizeF cur = m_ed->doc()->setup.size;
-                    if ((cur.width() > cur.height()) != (ns.width() > ns.height()) && ns.width() != ns.height()) ns = ns.transposed();
-                    m_ed->doc()->setup.size = ns;
-                    m_ed->doc()->setup.sheet = ns;
-                    m_ed->doc()->setup.sizeName = name;
-                });
-            };
             QString group;
             for (const auto &bs : blankSizes()) {
                 if (bs.group != group) { group = bs.group; sizeMenu->addSection(group); }
@@ -884,7 +873,7 @@ void MainWindow::ribbonMenuParts(RibbonParts &parts)
                 a->setChecked(m_ed->doc()->setup.sizeName == bs.name);
                 const QSizeF s = bs.size;
                 const QString name = bs.name;
-                connect(a, &QAction::triggered, this, [applySize, s, name] { applySize(s, name); });
+                connect(a, &QAction::triggered, this, [this, s, name] { applyPageSize(m_ed, s, name); });
             }
             const auto custom = customPageSizes();
             if (!custom.isEmpty()) {

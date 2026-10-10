@@ -244,6 +244,13 @@ public:
     MasterPage *masterFor(const Page &p) const;
     std::shared_ptr<Page> addPage(int at = -1, const QString &masterId = QStringLiteral("A"));
     int pageIndexOf(const QString &pageId) const;
+    // After setup.size changed from `from`, as Publisher does it: nothing is
+    // scaled, every object moves by half the change on each axis (it keeps its
+    // distance from the page center), ruler guides keep their share of the
+    // page, and an object left wholly off its page goes to the scratch area,
+    // where it stays. On a two-page master the objects keep their places
+    // across their page, and move half the change down.
+    void pageSizeChanged(const QSizeF &from);
 
     // stories
     Story *story(const QString &id) const;

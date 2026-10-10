@@ -40,6 +40,8 @@ QVector<QPair<QString, PageSetup>> customPageSizes();
 bool createPageSizeDialog(QWidget *p, Editor *ed, int editIndex = -1, bool apply = true);
 void customPageSizesDialog(QWidget *p, Editor *ed);
 void applyPageSetup(Editor *ed, const PageSetup &setup, const QString &sizeName, const QString &undoName);
+// The Size gallery's standard sizes: the page keeps its orientation.
+void applyPageSize(Editor *ed, const QSizeF &size, const QString &sizeName);
 void fontDialog(QWidget *p, Editor *ed);
 void paragraphDialog(QWidget *p, Editor *ed, int tab = 0);
 void bulletsDialog(QWidget *p, Editor *ed, bool numbering);

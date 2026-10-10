@@ -8,7 +8,7 @@ Page setup controls how big each page is, where the margins sit, and how pages f
 1. Click **Page Design > Page Setup > Size**.
 2. Choose a size. The sizes are grouped as Standard (Letter, Legal, Tabloid, A3, A4, A5, and more), Cards, Envelopes, Large (posters and banners), and Web.
 
-The page keeps its portrait or landscape direction. Built-in sizes leave your objects where they are, so look over the page afterward.
+The page keeps its portrait or landscape direction. Your objects keep their size, and each one moves by half the change in width and half the change in height, so it stays the same distance from the center of the page. Going from Letter to A4, for example, every object moves about 8 points left and 25 points down. Ruler guides keep their share of the page. On a smaller page, an object that no longer touches the page lands on the scratch area beside it, where you can drag it back. Click **Undo** to put everything back.
 
 ## Make your own size
 
@@ -26,7 +26,7 @@ The size is used right away and joins the **Custom** list in every publication. 
 
 ## The Page Setup window
 
-Click the small button at the corner of the **Page Setup** group, or right-click an empty part of the page and choose **Page Setup…**. The **Page** tab has the **Layout type**, the **Page size**, the page **Width** and **Height**, and the **Paper width** and **Paper height**. The page is what you design. The paper is the sheet it prints on. This window, and your custom sizes, resize your objects to fit a new page size.
+Click the small button at the corner of the **Page Setup** group, or right-click an empty part of the page and choose **Page Setup…**. The **Page** tab has the **Layout type**, the **Page size**, the page **Width** and **Height**, and the **Paper width** and **Paper height**. The page is what you design. The paper is the sheet it prints on. This window, and your custom sizes, move your objects the same way as the **Size** list when the page size changes.
 
 Choose a **Layout type**:
 

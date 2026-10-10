@@ -12662,6 +12662,156 @@ private Q_SLOTS:
         jp::Settings::get().setCustomPageSizes(before);
     }
 
+    // Changing the page size, in the Size gallery or the Page Setup window,
+    // scales nothing: every object moves by half the change on each axis and
+    // keeps its distance from the page center, as in Publisher (Letter to A4:
+    // 8.36 points left, 24.94 down). Ruler guides keep their share of the
+    // page. Undo puts everything back in one step.
+    void pageSizeKeepsDistanceFromCenter()
+    {
+        using namespace jp;
+        const QSizeF a4(595.2756, 841.8898);
+        auto make = [] {
+            auto doc = Document::blank(QSizeF(612, 792), QStringLiteral("Letter"), 2);
+            auto shape = [](const QRectF &r) {
+                auto s = std::make_shared<ShapeItem>();
+                s->rect = r;
+                return s;
+            };
+            auto text = std::make_shared<TextItem>();
+            text->rect = QRectF(72, 300, 200, 60);
+            text->storyId = doc->createStory(QStringLiteral("Hello"));
+            QTextCursor tc(doc->storyDoc(text->storyId));
+            tc.select(QTextCursor::Document);
+            QTextCharFormat big;
+            big.setFontPointSize(18);
+            tc.mergeCharFormat(big);
+            auto turned = shape(QRectF(300, 400, 80, 40));
+            turned->rotation = 30;
+            auto line = std::make_shared<LineItem>();
+            line->p1 = QPointF(50, 500);
+            line->p2 = QPointF(200, 520);
+            line->syncRect();
+            auto group = std::make_shared<GroupItem>();
+            group->children = {shape(QRectF(400, 100, 30, 30)), shape(QRectF(440, 100, 30, 30))};
+            group->syncRect();
+            doc->pages[0]->items = {shape(QRectF(72, 72, 100, 50)), text, turned, line, group};
+            doc->pages[0]->guides.v = {200};
+            doc->pages[0]->guides.h = {300};
+            doc->pages[1]->items = {shape(QRectF(100, 200, 80, 40))};
+            doc->masters[0]->items = {shape(QRectF(36, 36, 50, 50))};
+            doc->masters[0]->guides.v = {100};
+            doc->scratch = {shape(QRectF(-200, 100, 50, 50))};
+            return doc;
+        };
+        const double dx = (a4.width() - 612) / 2, dy = (a4.height() - 792) / 2;
+        QCOMPARE(QString::number(dx, 'f', 2), QStringLiteral("-8.36"));
+        QCOMPARE(QString::number(dy, 'f', 2), QStringLiteral("24.94"));
+        for (const bool gallery : {true, false}) {
+            Editor ed;
+            ed.setDocument(make());
+            Document *d = ed.doc();
+            const QByteArray before = QJsonDocument(d->toJson()).toJson();
+            const QRectF first = d->pages[0]->items[0]->rect, turned = d->pages[0]->items[2]->rect;
+            const QPointF p1 = static_cast<LineItem *>(d->pages[0]->items[3].get())->p1;
+            const QRectF member = static_cast<GroupItem *>(d->pages[0]->items[4].get())->children[1]->rect;
+            const QRectF masterItem = d->masters[0]->items[0]->rect, scratchItem = d->scratch[0]->rect;
+            if (gallery) {
+                applyPageSize(&ed, a4, QStringLiteral("A4"));
+            } else {
+                PageSetup ns = d->setup;
+                ns.size = ns.sheet = a4;
+                applyPageSetup(&ed, ns, QStringLiteral("A4"), QStringLiteral("Page Setup"));
+            }
+            QCOMPARE(d->setup.size, a4);
+            QCOMPARE(d->setup.sizeName, QStringLiteral("A4"));
+            // Nothing is scaled: sizes stay, positions shift.
+            QCOMPARE(d->pages[0]->items[0]->rect, first.translated(dx, dy));
+            QCOMPARE(d->pages[0]->items[2]->rect, turned.translated(dx, dy));
+            QCOMPARE(d->pages[0]->items[2]->rotation, 30.0);
+            QCOMPARE(static_cast<LineItem *>(d->pages[0]->items[3].get())->p1, p1 + QPointF(dx, dy));
+            QCOMPARE(static_cast<GroupItem *>(d->pages[0]->items[4].get())->children[1]->rect, member.translated(dx, dy));
+            QCOMPARE(d->pages[1]->items[0]->rect, QRectF(100 + dx, 200 + dy, 80, 40));
+            QCOMPARE(d->masters[0]->items[0]->rect, masterItem.translated(dx, dy));
+            QCOMPARE(d->scratch[0]->rect, scratchItem);
+            auto *t = static_cast<TextItem *>(d->pages[0]->items[1].get());
+            QCOMPARE(t->rect.size(), QSizeF(200, 60));
+            QCOMPARE(QTextCursor(d->storyDoc(t->storyId)->begin()).charFormat().fontPointSize(), 18.0);
+            QCOMPARE(d->setup.margins, QMarginsF(36, 36, 36, 36));
+            // Ruler guides keep their share of the page.
+            QCOMPARE(d->pages[0]->guides.v[0], 200 * a4.width() / 612);
+            QCOMPARE(d->pages[0]->guides.h[0], 300 * a4.height() / 792);
+            QCOMPARE(d->masters[0]->guides.v[0], 100 * a4.width() / 612);
+            QCOMPARE(d->scratch.size(), size_t(1));
+            // One undo step restores all of it.
+            QCOMPARE(ed.undoStack()->count(), 1);
+            ed.undo();
+            QCOMPARE(QJsonDocument(d->toJson()).toJson(), before);
+        }
+    }
+
+    // What a smaller page leaves wholly off it goes to the scratch area, where
+    // the shift put it, and the scratch area itself doesn't move. On a
+    // two-page master each page's objects keep their places across and move
+    // half the change down.
+    void pageSizeSendsOffPageObjectsToScratch()
+    {
+        using namespace jp;
+        auto doc = Document::blank(QSizeF(612, 792), QStringLiteral("Letter"), 2);
+        auto shape = [](const QRectF &r) {
+            auto s = std::make_shared<ShapeItem>();
+            s->rect = r;
+            return s;
+        };
+        auto corner = shape(QRectF(72, 72, 100, 50)), far = shape(QRectF(500, 700, 60, 60)), mid = shape(QRectF(300, 500, 60, 60));
+        auto onSecond = shape(QRectF(100, 200, 80, 40)), masterItem = shape(QRectF(36, 36, 50, 50)), kept = shape(QRectF(-200, 100, 50, 50));
+        doc->pages[0]->items = {corner, far, mid};
+        doc->pages[1]->items = {onSecond};
+        doc->masters[0]->items = {masterItem};
+        doc->scratch = {kept};
+        auto spread = std::make_shared<MasterPage>();
+        spread->id = QStringLiteral("S");
+        spread->twoPage = true;
+        auto leftOff = shape(QRectF(100, 100, 40, 40)), rightOff = shape(QRectF(700, 100, 40, 40));
+        auto leftOn = shape(QRectF(100, 400, 40, 40)), rightOn = shape(QRectF(700, 400, 40, 40));
+        spread->items = {leftOff, rightOff, leftOn, rightOn};
+        doc->masters.push_back(spread);
+        Editor ed;
+        ed.setDocument(std::move(doc));
+        Document *d = ed.doc();
+        applyPageSize(&ed, QSizeF(300, 300), QStringLiteral("Small"));
+        // Half of 312 across and 492 down.
+        QCOMPARE(d->pages[0]->items.size(), size_t(1));
+        QCOMPARE(mid->rect, QRectF(144, 254, 60, 60));
+        QVERIFY(d->pages[1]->items.empty());
+        QVERIFY(d->masters[0]->items.empty());
+        QCOMPARE(d->scratch.size(), size_t(7));
+        QVERIFY(d->scratch[0] == kept);
+        QCOMPARE(kept->rect, QRectF(-200, 100, 50, 50));
+        QVERIFY(d->scratch[1] == corner);
+        QCOMPARE(corner->rect, QRectF(-84, -174, 100, 50));
+        QVERIFY(d->scratch[2] == far);
+        QCOMPARE(far->rect, QRectF(344, 454, 60, 60));
+        QVERIFY(d->scratch[3] == onSecond);
+        QCOMPARE(onSecond->rect, QRectF(-56, -46, 80, 40));
+        QVERIFY(d->scratch[4] == masterItem);
+        QCOMPARE(masterItem->rect, QRectF(-120, -210, 50, 50));
+        // Two-page master: the right page's objects follow the page's edge
+        // (now at 300), and what is wholly off goes to the scratch area at
+        // its place on its own page.
+        QVERIFY(d->scratch[5] == leftOff);
+        QCOMPARE(leftOff->rect, QRectF(100, -146, 40, 40));
+        QVERIFY(d->scratch[6] == rightOff);
+        QCOMPARE(rightOff->rect, QRectF(88, -146, 40, 40));
+        QCOMPARE(d->masters[1]->items.size(), size_t(2));
+        QCOMPARE(leftOn->rect, QRectF(100, 154, 40, 40));
+        QCOMPARE(rightOn->rect, QRectF(388, 154, 40, 40));
+        // A later change leaves the scratch area where it is.
+        applyPageSize(&ed, QSizeF(400, 400), QStringLiteral("Square"));
+        QCOMPARE(far->rect, QRectF(344, 454, 60, 60));
+        QCOMPARE(mid->rect, QRectF(194, 304, 60, 60));
+    }
+
     // The thesaurus finds synonyms, including for inflected words.
     void thesaurusFinds()
     {
