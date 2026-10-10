@@ -1572,7 +1572,11 @@ private Q_SLOTS:
             // Boxes, spin boxes and lists need a name of their own: some
             // systems read their current text instead, others nothing.
             if (name.isEmpty() || (!qobject_cast<QAbstractButton *>(c) && c->accessibleName().isEmpty())) unnamed << where;
-            if (typingField) continue;
+            if (typingField) {
+                // What the reader says once the box's letters put the keyboard there.
+                if (iface->text(QAccessible::Help).trimmed().isEmpty()) undescribed << where + QStringLiteral(" [typing field]");
+                continue;
+            }
             if (!(c->focusPolicy() & Qt::TabFocus) && c->objectName() != QLatin1String("jpRibbonTab")) unreachable << where + QStringLiteral(" [") + name + QLatin1Char(']');
             // Windows' screen readers read Qt's help text; some read nothing
             // else of a control's description.
@@ -1609,6 +1613,10 @@ private Q_SLOTS:
         }
         QVERIFY2(checked > 300, qPrintable(QString::number(checked)));
         QVERIFY2(unnamed.isEmpty(), qPrintable(QStringLiteral("no name: ") + unnamed.join(QStringLiteral("; "))));
+        // The page list's entries say which page.
+        auto *pages = w.findChild<jp::PagesPane *>();
+        QVERIFY(pages && pages->count() > 0);
+        QCOMPARE(pages->item(0)->data(Qt::AccessibleTextRole).toString(), QStringLiteral("Page 1"));
     }
 
     // KeyTips: Alt shows letters on the top row, a tab's letter opens it and

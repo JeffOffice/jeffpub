@@ -409,8 +409,14 @@ void describeForScreenReaders(QWidget *root)
     for (QWidget *w : root->findChildren<QWidget *>()) {
         // A box one types in hands the focus to its typing field, which is
         // what Windows' screen readers then name.
-        if (auto *c = qobject_cast<QComboBox *>(w); c && c->lineEdit() && c->lineEdit()->accessibleName().isEmpty())
-            c->lineEdit()->setAccessibleName(c->accessibleName());
+        if (auto *c = qobject_cast<QComboBox *>(w); c && c->lineEdit()) {
+            if (c->lineEdit()->accessibleName().isEmpty()) c->lineEdit()->setAccessibleName(c->accessibleName());
+            if (c->lineEdit()->whatsThis().isEmpty()) {
+                const QString about = !c->whatsThis().isEmpty() ? c->whatsThis() : !c->accessibleDescription().isEmpty() ? c->accessibleDescription() : c->toolTip();
+                c->lineEdit()->setWhatsThis(about);
+                c->lineEdit()->setAccessibleDescription(about);
+            }
+        }
         // Qt gives Windows a control's description as its full description,
         // which not every screen reader reads; its help text (What's This)
         // carries the same, or the tooltip with its shortcut.

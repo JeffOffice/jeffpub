@@ -124,6 +124,8 @@ void PagesPane::refresh(bool thumbnailsOnly)
     for (int i = 0; i < n; ++i) {
         const Page &pg = *m_ed->doc()->pages[i];
         item(i)->setText(pg.title.isEmpty() ? QString::number(i + 1) : QStringLiteral("%1  %2").arg(i + 1).arg(pg.title));
+        // Screen readers say "Page 3", not just "3".
+        item(i)->setData(Qt::AccessibleTextRole, pg.title.isEmpty() ? tr("Page %1").arg(i + 1) : tr("Page %1, %2").arg(i + 1).arg(pg.title));
     }
     if (m_ed->masterView().isEmpty()) setCurrentRow(m_ed->currentPage());
     else clearSelection();
