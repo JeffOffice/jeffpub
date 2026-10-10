@@ -102,6 +102,10 @@
 #include <QStyleHints>
 #include <QSignalSpy>
 #include <QUrlQuery>
+#include <QNetworkAccessManager>
+#include <QTcpServer>
+#include <QTcpSocket>
+#include <QScopeGuard>
 #include <QToolButton>
 #include <QSlider>
 #include <QAccessible>
@@ -1510,7 +1514,7 @@ private Q_SLOTS:
         red.save(&buf, "PNG");
         QStringList asked;
         const auto keep = jp::online::fetch;
-        jp::online::fetch = [&](const QUrl &u, QObject *, const jp::online::Done &done) {
+        jp::online::fetch = [&](const QUrl &u, QObject *, const jp::online::Done &done, qint64) {
             asked << u.toString();
             done(u.host() == QLatin1String("api.openverse.org") && u.path() == QLatin1String("/v1/images/") ? openverse : png, QString());
         };
@@ -1766,6 +1770,292 @@ private Q_SLOTS:
         QTextCharFormat cf;
         cf.setFontPointSize(40);
         c.insertText(QStringLiteral("Help Wanted"), cf);   // no spacing of its own
+    // Clearing the search box and pressing Enter left the old search's small
+    // copies on their way, and they were set on list items that had gone (a
+    // crash). A new search, with words or without, now ends the old one's
+    // requests and drops any answer that still comes.
+    void onlinePicturesNewSearchEndsPendingAnswers()
+    {
+        QJsonArray found;
+        for (int i = 0; i < 3; ++i)
+            found.append(QJsonObject{{"title", QStringLiteral("Pic %1").arg(i)}, {"license", "by"}, {"license_version", "2.0"},
+                                     {"url", QStringLiteral("https://example.org/%1.png").arg(i)}, {"thumbnail", QStringLiteral("https://example.org/%1.thumb").arg(i)}});
+        const QByteArray openverse = QJsonDocument(QJsonObject{{"results", found}}).toJson();
+        QImage red(30, 20, QImage::Format_RGB32);
+        red.fill(Qt::red);
+        QByteArray png;
+        QBuffer buf(&png);
+        buf.open(QIODevice::WriteOnly);
+        red.save(&buf, "PNG");
+        std::vector<jp::online::Done> waiting;   // small copies, not yet arrived
+        QList<QPointer<QObject>> asking;         // who asked for them
+        const auto keep = jp::online::fetch;
+        const auto restore = qScopeGuard([&] { jp::online::fetch = keep; });
+        jp::online::fetch = [&](const QUrl &u, QObject *context, const jp::online::Done &done, qint64) {
+            if (u.host() == QLatin1String("api.openverse.org")) {
+                done(openverse, QString());
+                return;
+            }
+            waiting.push_back(done);
+            asking << context;
+        };
+        jp::MainWindow w;
+        w.showTaskPane(QStringLiteral("online"));
+        auto *pane = w.findChild<jp::OnlinePicturesPane *>();
+        QVERIFY(pane);
+        pane->search(QStringLiteral("barn"));
+        QCOMPARE(pane->results()->count(), 3);
+        QCOMPARE(int(waiting.size()), 3);
+        pane->search(QString());   // the box cleared, and Enter pressed
+        QCOMPARE(pane->results()->count(), 0);
+        for (const auto &who : asking) QVERIFY(who.isNull());   // their requests are ended
+        for (const auto &done : waiting) done(png, QString());   // and any that still come are dropped
+        QCOMPARE(pane->results()->count(), 0);
+        // A new search with words does the same for the one before it.
+        waiting.clear();
+        asking.clear();
+        pane->search(QStringLiteral("barn"));
+        pane->search(QStringLiteral("sky"));
+        QCOMPARE(pane->results()->count(), 3);
+        QCOMPARE(int(waiting.size()), 6);
+        for (int i = 0; i < 3; ++i) QVERIFY(asking[i].isNull());
+        for (int i = 0; i < 3; ++i) waiting[i](png, QString());   // the first search's
+        for (int i = 0; i < 3; ++i) QVERIFY(pane->results()->item(i)->icon().isNull());
+        for (int i = 3; i < 6; ++i) waiting[i](png, QString());   // the second's
+        for (int i = 0; i < 3; ++i) QVERIFY(!pane->results()->item(i)->icon().isNull());
+    }
+
+    // A library's answer can name a file on this computer, a program, or data
+    // in the address, and the pane would fetch it or show a link to it. Only
+    // https addresses are used: results with another kind are left out, and the
+    // download itself refuses them.
+    void onlinePicturesTrustOnlySecureAddresses()
+    {
+        const QString pic = QStringLiteral("https://example.org/a.png"), thumb = QStringLiteral("https://example.org/a.thumb");
+        const QString license = QStringLiteral("https://creativecommons.org/licenses/by/2.0/"), landing = QStringLiteral("https://example.org/p");
+        auto result = [](const char *title, const QString &url, const QString &thumbnail, const QString &licenseUrl, const QString &page) {
+            return QJsonObject{{"title", title}, {"license", "by"}, {"license_version", "2.0"}, {"license_url", licenseUrl}, {"foreign_landing_url", page}, {"url", url}, {"thumbnail", thumbnail}};
+        };
+        const QByteArray openverse = QJsonDocument(QJsonObject{{"results", QJsonArray{
+            result("good", pic, thumb, license, landing),
+            result("file picture", QStringLiteral("file:///etc/hostname"), thumb, license, landing),
+            result("data picture", QStringLiteral("data:text/plain;base64,SEVMTE8="), thumb, license, landing),
+            result("plain http picture", QStringLiteral("http://example.org/b.png"), thumb, license, landing),
+            result("file thumbnail", pic, QStringLiteral("file:///etc/hostname"), license, landing),
+            result("program link", pic, thumb, QStringLiteral("file:///C:/Windows/System32/calc.exe"), landing),
+            result("script link", pic, thumb, license, QStringLiteral("javascript:alert(1)")),
+            result("no thumbnail", pic, QString(), license, landing)}}}).toJson();
+        const QList<jp::online::Picture> list = jp::online::parseOpenverse(openverse);
+        QStringList titles;
+        for (const auto &p : list) titles << p.title;
+        QCOMPARE(titles, (QStringList{QStringLiteral("good"), QStringLiteral("no thumbnail")}));
+        QVERIFY(list[1].thumb.isEmpty());
+        for (const auto &p : list) {
+            QCOMPARE(p.full.scheme(), QStringLiteral("https"));
+            QVERIFY(p.licenseUrl.startsWith(QStringLiteral("https://")));
+        }
+        // Commons: the same for each of its addresses.
+        auto meta = [](const QString &licenseUrl) {
+            return QJsonObject{{"LicenseShortName", QJsonObject{{"value", "CC BY 2.0"}}}, {"LicenseUrl", QJsonObject{{"value", licenseUrl}}}};
+        };
+        auto entry = [&](int index, const char *title, const QString &url, const QString &licenseUrl) {
+            return QJsonObject{{"index", index}, {"title", title}, {"imageinfo", QJsonArray{QJsonObject{{"url", url}, {"thumburl", thumb}, {"descriptionurl", landing}, {"extmetadata", meta(licenseUrl)}}}}};
+        };
+        const QByteArray commons = QJsonDocument(QJsonObject{{"query", QJsonObject{{"pages", QJsonObject{
+            {"1", entry(1, "File:Good.png", pic, license)}, {"2", entry(2, "File:Local.png", QStringLiteral("file:///etc/hostname"), license)},
+            {"3", entry(3, "File:Program.png", pic, QStringLiteral("file:///C:/Windows/System32/calc.exe"))}, {"4", entry(4, "File:Plain.png", QStringLiteral("http://example.org/c.png"), license)}}}}}}).toJson();
+        const QList<jp::online::Picture> fromCommons = jp::online::parseCommons(commons);
+        QCOMPARE(fromCommons.size(), 1);
+        QCOMPARE(fromCommons[0].title, QStringLiteral("Good"));
+        // The pane shows no link to them either.
+        {
+            const auto keep = jp::online::fetch;
+            const auto restore = qScopeGuard([&] { jp::online::fetch = keep; });
+            jp::online::fetch = [&](const QUrl &, QObject *, const jp::online::Done &done, qint64) { done(openverse, QString()); };
+            jp::MainWindow w;
+            w.showTaskPane(QStringLiteral("online"));
+            auto *pane = w.findChild<jp::OnlinePicturesPane *>();
+            QVERIFY(pane);
+            pane->search(QStringLiteral("x"));
+            QCOMPARE(pane->results()->count(), 2);
+            for (auto *l : pane->findChildren<QLabel *>()) QVERIFY(!l->text().contains(QStringLiteral("file:")) && !l->text().contains(QStringLiteral("javascript:")));
+        }
+        // The download refuses a file, data, and a plain web address without reading them.
+        QTemporaryDir dir;
+        QFile secret(dir.filePath(QStringLiteral("secret.txt")));
+        QVERIFY(secret.open(QIODevice::WriteOnly));
+        secret.write("SECRET-LOCAL-FILE");
+        secret.close();
+        QObject context;
+        for (const QUrl &u : {QUrl::fromLocalFile(secret.fileName()), QUrl(QStringLiteral("data:text/plain;base64,SEVMTE8=")), QUrl(QStringLiteral("http://127.0.0.1:9/never"))}) {
+            bool answered = false;
+            QByteArray body;
+            QString error;
+            jp::online::fetch(u, &context, [&](const QByteArray &b, const QString &e) { body = b; error = e; answered = true; }, jp::online::kMaxSmallBytes);
+            QTRY_VERIFY_WITH_TIMEOUT(answered, 5000);
+            QVERIFY2(body.isEmpty() && !error.isEmpty(), qPrintable(u.toString()));
+        }
+    }
+
+    // A library's answer is held to a size: no more results than were asked
+    // for, no more bytes than a picture or a small copy should be (the download
+    // stops when they pass it, and when it takes too long overall, not only when
+    // it goes quiet), and a Commons picture wider than 1,920 pixels comes as a
+    // copy that wide, not the original upload. (The downloads are from a server
+    // in this program, on this computer; nothing goes online.)
+    void onlinePicturesLimitWhatALibraryCanSend()
+    {
+        QCOMPARE(jp::online::kMaxResults, 24);
+        QVERIFY(jp::online::searchUrl(jp::online::Openverse, QStringLiteral("x")).query().contains(QStringLiteral("page_size=24")));
+        QVERIFY(jp::online::searchUrl(jp::online::Commons, QStringLiteral("x")).query().contains(QStringLiteral("gsrlimit=24")));
+        QJsonArray many;
+        QJsonObject pages;
+        for (int i = 0; i < 100; ++i) {
+            many.append(QJsonObject{{"title", QStringLiteral("Pic %1").arg(i)}, {"license", "by"}, {"license_version", "2.0"}, {"url", QStringLiteral("https://example.org/%1.png").arg(i)}});
+            pages[QString::number(i)] = QJsonObject{{"index", i}, {"title", QStringLiteral("File:Pic %1.png").arg(i)},
+                                                    {"imageinfo", QJsonArray{QJsonObject{{"url", QStringLiteral("https://example.org/%1.png").arg(i)}}}}};
+        }
+        const QList<jp::online::Picture> ov = jp::online::parseOpenverse(QJsonDocument(QJsonObject{{"results", many}}).toJson());
+        QCOMPARE(ov.size(), 24);
+        QCOMPARE(ov.last().title, QStringLiteral("Pic 23"));
+        const QList<jp::online::Picture> wc = jp::online::parseCommons(QJsonDocument(QJsonObject{{"query", QJsonObject{{"pages", pages}}}}).toJson());
+        QCOMPARE(wc.size(), 24);
+        QCOMPARE(wc.last().title, QStringLiteral("Pic 23"));   // the first 24 in the search's order
+        // A big original comes as a sized copy; a small one, or one of unknown width, as itself.
+        auto commons = [](const char *file, int width) {
+            const QString original = QStringLiteral("https://upload.wikimedia.org/wikipedia/commons/a/ab/%1").arg(QLatin1String(file));
+            QJsonObject info{{"url", original}, {"thumburl", QStringLiteral("https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/%1/240px-%1").arg(QLatin1String(file))}};
+            if (width > 0) info["width"] = width;
+            return jp::online::parseCommons(QJsonDocument(QJsonObject{{"query", QJsonObject{{"pages", QJsonObject{{"1", QJsonObject{{"index", 1}, {"title", "File:x"}, {"imageinfo", QJsonArray{info}}}}}}}}}).toJson());
+        };
+        QCOMPARE(commons("Big.jpg", 6000).value(0).full.toString(), QStringLiteral("https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Big.jpg/1920px-Big.jpg"));
+        QCOMPARE(commons("Big.jpg", 1920).value(0).full.toString(), QStringLiteral("https://upload.wikimedia.org/wikipedia/commons/a/ab/Big.jpg"));
+        QCOMPARE(commons("Big.jpg", 0).value(0).full.toString(), QStringLiteral("https://upload.wikimedia.org/wikipedia/commons/a/ab/Big.jpg"));
+        QVERIFY(jp::online::searchUrl(jp::online::Commons, QStringLiteral("x")).query().contains(QStringLiteral("size")));   // the width is asked for
+        // The download.
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        enum Reply { Small, Declared, Endless, Stalled, Elsewhere } reply = Small;
+        connect(&server, &QTcpServer::newConnection, &server, [&] {
+            QTcpSocket *s = server.nextPendingConnection();
+            connect(s, &QTcpSocket::disconnected, s, &QObject::deleteLater);
+            connect(s, &QTcpSocket::readyRead, s, [&reply, s] {
+                s->readAll();
+                switch (reply) {
+                case Small: s->write("HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello"); break;
+                case Declared: s->write("HTTP/1.1 200 OK\r\nContent-Length: 3000000\r\nConnection: close\r\n\r\n" + QByteArray(10000, 'x')); break;
+                case Stalled: s->write("HTTP/1.1 200 OK\r\nContent-Length: 1000\r\nConnection: close\r\n\r\nhello"); break;
+                case Elsewhere: s->write("HTTP/1.1 302 Found\r\nLocation: file:///etc/hostname\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"); break;
+                case Endless: {
+                    s->write("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n");
+                    auto pump = [s] {
+                        while (s->state() == QAbstractSocket::ConnectedState && s->bytesToWrite() < 200000) s->write(QByteArray(65536, 'x'));
+                    };
+                    connect(s, &QTcpSocket::bytesWritten, s, pump);
+                    pump();
+                    break;
+                }
+                }
+            });
+        });
+        QNetworkAccessManager nam;
+        auto get = [&](Reply r, qint64 most, int totalMs, QByteArray *body, QString *error) {
+            reply = r;
+            bool answered = false;
+            QObject context;
+            jp::online::download(&nam, QUrl(QStringLiteral("http://127.0.0.1:%1/p").arg(server.serverPort())), &context, [&](const QByteArray &b, const QString &e) { *body = b; *error = e; answered = true; }, most, totalMs);
+            QTRY_VERIFY_WITH_TIMEOUT(answered, 10000);
+        };
+        QByteArray body;
+        QString error;
+        get(Small, 100000, 5000, &body, &error);
+        QCOMPARE(body, QByteArray("hello"));
+        QVERIFY(error.isEmpty());
+        get(Declared, 100000, 5000, &body, &error);   // says it is 3 MB: stopped as soon as it says so
+        QVERIFY(body.isEmpty());
+        QVERIFY2(error.contains(QStringLiteral("too large")), qPrintable(error));
+        get(Endless, 100000, 5000, &body, &error);    // never says, never ends: stopped when it passes the limit
+        QVERIFY(body.isEmpty());
+        QVERIFY2(error.contains(QStringLiteral("too large")), qPrintable(error));
+        get(Stalled, 100000, 300, &body, &error);     // sends a little and waits: stopped by the overall time
+        QVERIFY(body.isEmpty());
+        QVERIFY2(error.contains(QStringLiteral("too long")), qPrintable(error));
+        get(Elsewhere, 100000, 5000, &body, &error);  // sends the download to a file on this computer: not followed
+        QVERIFY(body.isEmpty());
+        QVERIFY(!error.isEmpty());
+    }
+
+    // "C++" searched for "C" (a plus sign was sent as it is, and a server reads
+    // it as a space); and a literal "%20" was read as a space.
+    void onlinePicturesSearchWordsAreEncoded()
+    {
+        // What a server reads back from the address: "+" is a space, and %XX a byte.
+        auto serverReads = [](const QUrl &u, const QString &key) {
+            for (const QString &pair : QString::fromLatin1(u.toEncoded()).section(QLatin1Char('?'), 1).split(QLatin1Char('&')))
+                if (pair.startsWith(key + QLatin1Char('='))) return QUrl::fromPercentEncoding(pair.mid(key.size() + 1).replace(QLatin1Char('+'), QLatin1Char(' ')).toLatin1());
+            return QString();
+        };
+        for (const QString &words : {QStringLiteral("C++"), QStringLiteral("a&b=c#d+e%20f"), QStringLiteral("100% fun"), QStringLiteral("caf\u00e9 \"red barn\""), QStringLiteral("red barn")}) {
+            QCOMPARE(serverReads(jp::online::searchUrl(jp::online::Openverse, words), QStringLiteral("q")), words);
+            QCOMPARE(serverReads(jp::online::searchUrl(jp::online::Commons, words), QStringLiteral("gsrsearch")), words + QStringLiteral(" filetype:bitmap"));
+        }
+        QVERIFY(jp::online::searchUrl(jp::online::Openverse, QStringLiteral("red barn")).toString(QUrl::FullyEncoded).contains(QStringLiteral("q=red%20barn")));
+    }
+
+    // A picture that cannot be loaded (too large, too slow, cut short, or not a
+    // picture) says so in the pane; it stayed at "Downloading...", and the
+    // chosen picture of the person's own was not touched.
+    void onlinePicturesSayWhenAPictureFails()
+    {
+        const QByteArray openverse = QJsonDocument(QJsonObject{{"results", QJsonArray{QJsonObject{{"title", "Red barn"}, {"creator", "Pat"}, {"license", "by"}, {"license_version", "2.0"},
+                                                                                                   {"url", "https://example.org/barn.bmp"}, {"thumbnail", "https://example.org/barn.thumb"}}}}}).toJson();
+        QByteArray cut("\x89PNG\r\n\x1a\n", 8);   // sniffs as a PNG, but is cut short
+        QString pictureError;
+        const auto keep = jp::online::fetch;
+        const auto restore = qScopeGuard([&] { jp::online::fetch = keep; });
+        jp::online::fetch = [&](const QUrl &u, QObject *, const jp::online::Done &done, qint64) {
+            if (u.host() == QLatin1String("api.openverse.org")) done(openverse, QString());
+            else if (u.path().endsWith(QLatin1String(".bmp"))) done(pictureError.isEmpty() ? cut : QByteArray(), pictureError);
+            else done(QByteArray(), QStringLiteral("no thumbnail"));
+        };
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        QImage green(40, 40, QImage::Format_RGB32);
+        green.fill(Qt::green);
+        QByteArray png;
+        QBuffer buf(&png);
+        buf.open(QIODevice::WriteOnly);
+        green.save(&buf, "PNG");
+        auto mine = std::make_shared<jp::PictureItem>();
+        mine->imageId = ed->doc()->addImage(png, "png");
+        mine->rect = QRectF(72, 72, 100, 100);
+        mine->imgRect = QRectF(0, 0, 100, 100);
+        mine->altText = QStringLiteral("My family photo");
+        ed->addItem(mine);
+        w.showTaskPane(QStringLiteral("online"));
+        auto *pane = w.findChild<jp::OnlinePicturesPane *>();
+        QVERIFY(pane);
+        auto shown = [&] {
+            QStringList s;
+            for (auto *l : pane->findChildren<QLabel *>()) s << l->text();
+            return s.join(QLatin1Char('\n'));
+        };
+        pane->search(QStringLiteral("barn"));
+        QCOMPARE(pane->results()->count(), 1);
+        const size_t before = ed->surfaceItems().size();
+        pane->insertButton()->click();   // cut short
+        QVERIFY2(shown().contains(QStringLiteral("couldn't be loaded")), qPrintable(shown()));
+        QVERIFY(!shown().contains(QStringLiteral("Downloading")));
+        QCOMPARE(ed->surfaceItems().size(), before);
+        QCOMPARE(mine->altText, QStringLiteral("My family photo"));
+        QVERIFY(mine->caption.isEmpty());
+        QVERIFY(pane->insertButton()->isEnabled());
+        pictureError = QStringLiteral("It is too large.");
+        pane->insertButton()->click();
+        QVERIFY2(shown().contains(QStringLiteral("couldn't be downloaded: It is too large.")), qPrintable(shown()));
+        QVERIFY(!shown().contains(QStringLiteral("Downloading")));
+    }
+
         doc->pages[0]->items.push_back(box);
         QTemporaryDir dir;
         const QString path = dir.filePath(QStringLiteral("tight.pub"));

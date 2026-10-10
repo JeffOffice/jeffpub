@@ -25,6 +25,7 @@
 #include <QTextCursor>
 #include <QTextDocument>
 #include <QTextDocumentFragment>
+#include <QTimer>
 #include <QUrlQuery>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -34,21 +35,65 @@ namespace online {
 
 namespace {
 QString plain(const QString &html) { return QTextDocumentFragment::fromHtml(html).toPlainText().simplified(); }
+
+// An address from a library: none, or one that starts https and names a host
+// (never a file on this computer, a program, or data in the address itself).
+// A library may leave the scheme off ("//host/path"), which means https.
+bool secureUrl(QString s, QUrl *out)
+{
+    s = s.trimmed();
+    *out = QUrl();
+    if (s.isEmpty()) return true;
+    if (s.startsWith(QLatin1String("//"))) s.prepend(QStringLiteral("https:"));
+    const QUrl u(s);
+    if (!u.isValid() || u.scheme() != QLatin1String("https") || u.host().isEmpty()) return false;
+    *out = u;
+    return true;
+}
+
+// A search word or phrase as one query value: every character that is not plain
+// letters, digits, or - . _ ~ is %-coded, "+" and "%" included.
+QString queryValue(const QString &s) { return QString::fromLatin1(QUrl::toPercentEncoding(s)); }
 } // namespace
 
-std::function<void(const QUrl &, QObject *, const Done &)> fetch = [](const QUrl &url, QObject *context, const Done &done) {
-    static auto *net = new QNetworkAccessManager(qApp);
+void download(QNetworkAccessManager *net, const QUrl &url, QObject *context, const Done &done, qint64 maxBytes, int totalMs)
+{
     QNetworkRequest req(url);
     // Wikimedia asks programs to say who they are.
     req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("JeffPub/" JP_VERSION " (https://github.com/JeffOffice/jeffpub)"));
-    req.setTransferTimeout(30000);
+    req.setTransferTimeout(30000);   // no data at all for this long
     QNetworkReply *r = net->get(req);
+    // Past the size or the time allowed, the download stops and says why.
+    auto stop = [r](const QString &why) {
+        if (!r->isRunning()) return;
+        r->setProperty("stoppedBecause", why);
+        r->abort();
+    };
+    // Checked as the headers and each piece arrive (downloadProgress comes only a few
+    // times a second, and not for the first piece).
+    auto checkSize = [r, stop, maxBytes] {
+        if (r->bytesAvailable() > maxBytes || r->header(QNetworkRequest::ContentLengthHeader).toLongLong() > maxBytes) stop(QCoreApplication::translate("Online", "It is too large."));
+    };
+    QObject::connect(r, &QNetworkReply::metaDataChanged, r, checkSize);
+    QObject::connect(r, &QNetworkReply::readyRead, r, checkSize);
+    QTimer::singleShot(totalMs, r, [stop] { stop(QCoreApplication::translate("Online", "It took too long.")); });
     QObject::connect(r, &QNetworkReply::finished, context, [r, done] {
         r->deleteLater();
-        if (r->error() != QNetworkReply::NoError) done(QByteArray(), r->errorString());
+        const QString why = r->property("stoppedBecause").toString();
+        if (!why.isEmpty()) done(QByteArray(), why);
+        else if (r->error() != QNetworkReply::NoError) done(QByteArray(), r->errorString());
         else done(r->readAll(), QString());
     });
     QObject::connect(context, &QObject::destroyed, r, &QNetworkReply::abort);
+}
+
+std::function<void(const QUrl &, QObject *, const Done &, qint64)> fetch = [](const QUrl &url, QObject *context, const Done &done, qint64 maxBytes) {
+    static auto *net = new QNetworkAccessManager(qApp);
+    if (url.scheme() != QLatin1String("https")) {   // not a file on this computer, nor data in the address
+        QTimer::singleShot(0, context, [done] { done(QByteArray(), QCoreApplication::translate("Online", "Only secure (https) addresses are used.")); });
+        return;
+    }
+    download(net, url, context, done, maxBytes, maxBytes > kMaxSmallBytes ? 120000 : 30000);
 };
 
 QUrl searchUrl(Source s, const QString &query)
@@ -56,8 +101,8 @@ QUrl searchUrl(Source s, const QString &query)
     QUrlQuery q;
     if (s == Openverse) {
         QUrl u(QStringLiteral("https://api.openverse.org/v1/images/"));
-        q.addQueryItem(QStringLiteral("q"), query);
-        q.addQueryItem(QStringLiteral("page_size"), QStringLiteral("24"));
+        q.addQueryItem(QStringLiteral("q"), queryValue(query));
+        q.addQueryItem(QStringLiteral("page_size"), QString::number(kMaxResults));
         u.setQuery(q);
         return u;
     }
@@ -65,11 +110,11 @@ QUrl searchUrl(Source s, const QString &query)
     q.addQueryItem(QStringLiteral("action"), QStringLiteral("query"));
     q.addQueryItem(QStringLiteral("format"), QStringLiteral("json"));
     q.addQueryItem(QStringLiteral("generator"), QStringLiteral("search"));
-    q.addQueryItem(QStringLiteral("gsrsearch"), query + QStringLiteral(" filetype:bitmap"));
+    q.addQueryItem(QStringLiteral("gsrsearch"), queryValue(query + QStringLiteral(" filetype:bitmap")));
     q.addQueryItem(QStringLiteral("gsrnamespace"), QStringLiteral("6"));
-    q.addQueryItem(QStringLiteral("gsrlimit"), QStringLiteral("24"));
+    q.addQueryItem(QStringLiteral("gsrlimit"), QString::number(kMaxResults));
     q.addQueryItem(QStringLiteral("prop"), QStringLiteral("imageinfo"));
-    q.addQueryItem(QStringLiteral("iiprop"), QStringLiteral("url|extmetadata"));
+    q.addQueryItem(QStringLiteral("iiprop"), QStringLiteral("url|size|extmetadata"));
     q.addQueryItem(QStringLiteral("iiurlwidth"), QStringLiteral("240"));
     q.addQueryItem(QStringLiteral("iiextmetadatafilter"), QStringLiteral("LicenseShortName|LicenseUrl|Artist|ObjectName|AttributionRequired"));
     u.setQuery(q);
@@ -80,6 +125,7 @@ QList<Picture> parseOpenverse(const QByteArray &json)
 {
     QList<Picture> out;
     for (const QJsonValue &v : QJsonDocument::fromJson(json).object().value(QStringLiteral("results")).toArray()) {
+        if (out.size() >= kMaxResults) break;
         const QJsonObject o = v.toObject();
         Picture p;
         p.title = o.value(QStringLiteral("title")).toString().simplified();
@@ -87,12 +133,13 @@ QList<Picture> parseOpenverse(const QByteArray &json)
         const QString code = o.value(QStringLiteral("license")).toString().toLower(), version = o.value(QStringLiteral("license_version")).toString();
         p.license = code == QLatin1String("pdm") ? QStringLiteral("Public Domain Mark") : code == QLatin1String("cc0") ? QStringLiteral("CC0 ") + version
                                                                                                               : (QStringLiteral("CC ") + code.toUpper() + QLatin1Char(' ') + version).trimmed();
-        p.licenseUrl = o.value(QStringLiteral("license_url")).toString();
         p.needsCredit = code != QLatin1String("cc0") && code != QLatin1String("pdm");
-        p.page = QUrl(o.value(QStringLiteral("foreign_landing_url")).toString());
-        p.full = QUrl(o.value(QStringLiteral("url")).toString());
-        p.thumb = QUrl(o.value(QStringLiteral("thumbnail")).toString());
-        if (p.full.isValid() && !p.full.isEmpty()) out << p;
+        QUrl license;
+        if (!secureUrl(o.value(QStringLiteral("license_url")).toString(), &license) || !secureUrl(o.value(QStringLiteral("foreign_landing_url")).toString(), &p.page)
+            || !secureUrl(o.value(QStringLiteral("url")).toString(), &p.full) || !secureUrl(o.value(QStringLiteral("thumbnail")).toString(), &p.thumb))
+            continue;   // one of its addresses is not https: left out
+        p.licenseUrl = license.toString(QUrl::FullyEncoded);
+        if (!p.full.isEmpty()) out << p;
     }
     return out;
 }
@@ -113,16 +160,27 @@ QList<Picture> parseCommons(const QByteArray &json)
         if (p.title.isEmpty()) p.title = name.section(QLatin1Char('.'), 0, -2);
         p.creator = plain(field("Artist"));
         p.license = plain(field("LicenseShortName"));
-        p.licenseUrl = field("LicenseUrl");
         p.needsCredit = field("AttributionRequired") != QLatin1String("false");
-        p.page = QUrl(info.value(QStringLiteral("descriptionurl")).toString());
-        p.full = QUrl(info.value(QStringLiteral("url")).toString());
-        p.thumb = QUrl(info.value(QStringLiteral("thumburl")).toString());
-        if (p.full.isValid() && !p.full.isEmpty()) found << std::make_pair(o.value(QStringLiteral("index")).toInt(), p);
+        QUrl license;
+        if (!secureUrl(field("LicenseUrl"), &license) || !secureUrl(info.value(QStringLiteral("descriptionurl")).toString(), &p.page)
+            || !secureUrl(info.value(QStringLiteral("url")).toString(), &p.full) || !secureUrl(info.value(QStringLiteral("thumburl")).toString(), &p.thumb))
+            continue;   // one of its addresses is not https: left out
+        p.licenseUrl = license.toString(QUrl::FullyEncoded);
+        // An original wider than kRenditionWidth comes as a copy that wide: the small
+        // copy's address with the width changed ("240px-Name.jpg" to "1920px-Name.jpg").
+        const QString last = p.thumb.path().section(QLatin1Char('/'), -1);
+        static const QRegularExpression sized(QStringLiteral("^\\d+px-(.+)$"));
+        if (const QRegularExpressionMatch m = sized.match(last); m.hasMatch() && info.value(QStringLiteral("width")).toInt() > kRenditionWidth) {
+            QUrl rendition = p.thumb;
+            rendition.setPath(p.thumb.path().chopped(last.size()) + QStringLiteral("%1px-").arg(kRenditionWidth) + m.captured(1));
+            p.full = rendition;
+        }
+        if (!p.full.isEmpty()) found << std::make_pair(o.value(QStringLiteral("index")).toInt(), p);
     }
     std::sort(found.begin(), found.end(), [](const auto &a, const auto &b) { return a.first < b.first; });   // the search's order
     QList<Picture> out;
-    for (const auto &f : found) out << f.second;
+    for (const auto &f : found)
+        if (out.size() < kMaxResults) out << f.second;
     return out;
 }
 
@@ -189,18 +247,32 @@ OnlinePicturesPane::OnlinePicturesPane(MainWindow *win) : m_win(win)
     connect(m_insert, &QPushButton::clicked, this, &OnlinePicturesPane::insertChosen);
 }
 
+OnlinePicturesPane::~OnlinePicturesPane()
+{
+    ++m_search;   // answers still on their way are dropped
+    delete m_requests;
+}
+
 void OnlinePicturesPane::search(const QString &query)
 {
+    // Whatever is asked, the last search's answers are dropped and its requests
+    // ended, before its results go (a small copy arriving later would be set on a gone item).
+    const int mine = ++m_search;
+    delete m_requests;
+    m_requests = nullptr;
     m_query->setText(query);
     m_results->clear();
     m_found.clear();
     showDetails();
-    if (query.trimmed().isEmpty()) return;
-    const int mine = ++m_search;
+    if (query.trimmed().isEmpty()) {
+        m_status->clear();
+        return;
+    }
+    m_requests = new QObject(this);
     const auto source = online::Source(m_source->currentIndex());
     m_status->setText(tr("Searching..."));
     QPointer<OnlinePicturesPane> self(this);
-    online::fetch(online::searchUrl(source, query.trimmed()), this, [self, mine, source](const QByteArray &bytes, const QString &error) {
+    online::fetch(online::searchUrl(source, query.trimmed()), m_requests, [self, mine, source](const QByteArray &bytes, const QString &error) {
         if (!self || mine != self->m_search) return;
         if (!error.isEmpty()) {
             self->m_status->setText(tr("The library couldn't be reached: %1").arg(error));
@@ -215,15 +287,16 @@ void OnlinePicturesPane::search(const QString &query)
             it->setToolTip(online::credit(p));
             it->setData(Qt::AccessibleTextRole, online::credit(p));
             // Its small copy, when it comes.
+            if (p.thumb.isEmpty()) continue;
             QPointer<QListWidget> list(self->m_results);
-            online::fetch(p.thumb, self->m_results, [list, it, mine, self](const QByteArray &img, const QString &) {
+            online::fetch(p.thumb, self->m_requests, [list, it, mine, self](const QByteArray &img, const QString &) {
                 if (!list || !self || mine != self->m_search) return;
                 QPixmap pm;
                 if (pm.loadFromData(img)) it->setIcon(QIcon(pm));
-            });
+            }, online::kMaxSmallBytes);
         }
         if (!self->m_found.isEmpty()) self->m_results->setCurrentRow(0);
-    });
+    }, online::kMaxSmallBytes);
 }
 
 void OnlinePicturesPane::showDetails()
@@ -277,9 +350,13 @@ void OnlinePicturesPane::insertChosen()
         f.close();
         MainWindow *win = self->m_win;
         Editor *ed = win->editor();
+        const size_t before = ed->surfaceItems().size();
         win->insertFiles({path}, QPointF(-1, -1));
-        auto *pic = dynamic_cast<PictureItem *>(ed->single());
-        if (!pic) return;
+        auto *pic = ed->surfaceItems().size() > before ? dynamic_cast<PictureItem *>(ed->single()) : nullptr;
+        if (!pic) {   // the file did not open as a picture
+            self->m_status->setText(tr("That picture couldn't be loaded."));
+            return;
+        }
         // Its title describes it for screen readers; the credit names its author and license.
         ed->change(tr("Picture Credit"), [&] {
             pic->altText = p.title;
@@ -293,7 +370,7 @@ void OnlinePicturesPane::insertChosen()
         });
         ed->select(pic->id);
         self->m_status->setText(tr("Inserted. Check that its license fits how you'll use it."));
-    });
+    }, online::kMaxPictureBytes);
 }
 
 } // namespace jp

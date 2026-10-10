@@ -44,6 +44,8 @@ Click **Insert > Illustrations > Online Pictures**. The **Online Pictures** pane
 
 Your search words go to the library you chose. Check that each picture's license fits how you'll use it.
 
+A search shows up to 24 pictures. JeffPub uses only secure (https) web addresses from a library, and it leaves out a picture whose address is not one. From Wikimedia Commons, a picture wider than 1,920 pixels comes as a copy that wide, not the original upload. A download over 50 MB, or one that takes too long, is stopped, and the pane says that the picture couldn't be downloaded or loaded.
+
 ## Crop a picture
 
 Cropping hides the edges of a picture.

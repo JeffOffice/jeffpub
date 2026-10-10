@@ -15,6 +15,7 @@ class QComboBox;
 class QLabel;
 class QLineEdit;
 class QListWidget;
+class QNetworkAccessManager;
 class QPushButton;
 
 namespace jp {
@@ -32,17 +33,27 @@ struct Picture {
 };
 
 enum Source { Openverse, Commons };
+// What a library may send: this many results, at most this many bytes (for a
+// picture; for a search answer or a small copy), and from Commons a copy no wider
+// than the last width in place of a bigger original upload.
+constexpr int kMaxResults = 24;
+constexpr qint64 kMaxPictureBytes = 50 * 1024 * 1024;
+constexpr qint64 kMaxSmallBytes = 2 * 1024 * 1024;
+constexpr int kRenditionWidth = 1920;
 QUrl searchUrl(Source s, const QString &query);
 QList<Picture> parseOpenverse(const QByteArray &json);
 QList<Picture> parseCommons(const QByteArray &json);
 // The credit line: "Title" by Author, License.
 QString credit(const Picture &p);
 
-// Fetches a web address and calls `done` with what came back, or an error
-// (replaceable in tests, which never go online). `context` ends the request
-// when it goes.
+// Fetches a secure (https) web address and calls `done` with what came back, or
+// an error (replaceable in tests, which never go online). The request ends
+// when `context` goes, when more than `maxBytes` come, or when it takes too
+// long overall.
 using Done = std::function<void(const QByteArray &bytes, const QString &error)>;
-extern std::function<void(const QUrl &url, QObject *context, const Done &done)> fetch;
+extern std::function<void(const QUrl &url, QObject *context, const Done &done, qint64 maxBytes)> fetch;
+// The download behind fetch, to any address (tests point it at a local one).
+void download(QNetworkAccessManager *net, const QUrl &url, QObject *context, const Done &done, qint64 maxBytes, int totalMs);
 
 } // namespace online
 
@@ -50,6 +61,7 @@ class OnlinePicturesPane : public QWidget {
     Q_OBJECT
 public:
     explicit OnlinePicturesPane(MainWindow *win);
+    ~OnlinePicturesPane() override;
     void search(const QString &query);   // as if typed and Enter pressed
     QListWidget *results() const { return m_results; }
     QPushButton *insertButton() const { return m_insert; }
@@ -67,6 +79,7 @@ private:
     QPushButton *m_insert;
     QList<online::Picture> m_found;
     int m_search = 0;   // the latest search, so older answers are dropped
+    QObject *m_requests = nullptr;   // the latest search's requests; a new search ends them
     QTemporaryDir m_downloads;
 };
 
