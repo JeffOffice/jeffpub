@@ -217,6 +217,6 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 - [x] Standard desktop publishing keyboard shortcuts (Ctrl+B, Ctrl+Shift+>, F9, Ctrl+Shift+L, Ctrl+M, Ctrl+Shift+N, and others)
 - [x] KeyTips: press Alt and letters appear on the ribbon; type a tab's letter, then a command's, to use it without the mouse
 - [x] The ribbon by keyboard: Tab and the arrow keys move among its tabs and controls, with a visible focus ring; Escape returns to the page; F6 moves between the ribbon, the page thumbnails, and the page
-- [x] Screen readers (Narrator and others): every ribbon control, tab, gallery, and color button has a name and description (checked by a test for every control)
+- [x] Screen readers (Narrator and others): every control in the window (the ribbon's tabs, buttons, galleries, and color buttons, the page list, the page, and the status bar) has a name and a description, checked by tests for every control and with Windows' own screen reader interface
 - [x] Translatable: the program's text (2,566 strings) is ready for translation with Qt Linguist, with a display language choice in File > Options; no translations yet (see translations/README.md)
 - [x] Bundled open fonts, including metric-compatible replacements for Calibri, Cambria, Arial, Times New Roman, and Courier New
