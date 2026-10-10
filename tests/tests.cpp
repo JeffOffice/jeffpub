@@ -891,6 +891,57 @@ private Q_SLOTS:
         QVERIFY(found);
     }
 
+    // Line spacing in points with neither flag bit set (12 pt as 1219200,
+    // eighths of an EMU) is Publisher's too: a booklet's list double-spaced
+    // in Publisher came in at its style's 1.19 lines, the value dropped.
+    void unflaggedLineSpacingInPoints()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto box = std::make_shared<jp::TextItem>();
+        box->rect = QRectF(72, 72, 300, 100);
+        box->storyId = doc->createStory();
+        QTextCursor c(doc->storyDoc(box->storyId));
+        QTextBlockFormat bf;
+        bf.setLineHeight(12, QTextBlockFormat::FixedHeight);
+        c.setBlockFormat(bf);
+        c.insertText(QStringLiteral("Purpose/Essential Task:"));
+        doc->pages[0]->items.push_back(box);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("spacing.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        // JeffPub writes the points kind (1219200 | 1); make it the unflagged kind.
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        jp::cfb::File file;
+        QVERIFY(jp::cfb::read(f.readAll(), &file, &err));
+        f.close();
+        QByteArray quill = file.stream(QStringLiteral("Quill/QuillSub/CONTENTS"));
+        QByteArray flagged("\x34\x22", 2), plain = flagged;
+        for (quint32 v : {1219201u, 1219200u}) {
+            QByteArray &b = v == 1219201u ? flagged : plain;
+            for (int i = 0; i < 4; ++i) b.append(char((v >> (8 * i)) & 0xff));
+        }
+        QVERIFY(quill.contains(flagged));
+        quill.replace(flagged, plain);
+        QVERIFY(file.setStream(QStringLiteral("Quill/QuillSub/CONTENTS"), quill));
+        QFile out(path);
+        QVERIFY(out.open(QIODevice::WriteOnly));
+        out.write(jp::cfb::write(file));
+        out.close();
+        auto back = jp::importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        bool found = false;
+        for (auto it = back->stories.cbegin(); it != back->stories.cend(); ++it) {
+            const QTextBlock b = (*it)->doc->begin();
+            if (!b.text().startsWith(QLatin1String("Purpose"))) continue;
+            found = true;
+            QCOMPARE(b.blockFormat().lineHeightType(), int(QTextBlockFormat::FixedHeight));
+            QCOMPARE(b.blockFormat().lineHeight(), 12.0);
+        }
+        QVERIFY(found);
+    }
+
     // A file whose style names point outside their section (made from
     // JeffPub's own styles sample): it still opens with all its text,
     // losing only the damaged names.

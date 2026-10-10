@@ -1773,6 +1773,13 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
         ret.m_lineSpacing = LineSpacingInfo(LINE_SPACING_SP,
                                             static_cast<double>(info.data - 2) / EMUS_IN_INCH * 72 / 96);
       }
+      else if (info.data)
+      {
+        // JeffPub: neither flag: points, in eighths of an EMU like the first
+        // kind (1219200 is 12 pt); upstream dropped it for the style's spacing.
+        ret.m_lineSpacing = LineSpacingInfo(LINE_SPACING_PT,
+                                            static_cast<double>(info.data) / 8 * 72 / EMUS_IN_INCH);
+      }
       break;
     case PARAGRAPH_SPACE_BEFORE:
       ret.m_spaceBeforeEmu = info.data;
