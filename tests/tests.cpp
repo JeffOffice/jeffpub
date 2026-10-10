@@ -3337,6 +3337,7 @@ private Q_SLOTS:
         QCOMPARE(textOf(*d, note), QStringLiteral("Bring a lawn chair"));
         QCOMPARE(note->rect.topLeft(), QPointF(100, 600));
         QVERIFY(d->extra.empty());
+        w.refreshUi();   // the pane follows the publication when the window updates, and only while it shows
         QCOMPARE(list->count(), 0);
         ed->undo();   // back in Extra Content
         QCOMPARE(int(d->extra.size()), 1);
@@ -6898,8 +6899,10 @@ private Q_SLOTS:
         QVERIFY(w.saveTo(path));
         QMap<QString, QByteArray> entries;
         QVERIFY(jp::readZip(linkFileBytes(path), entries));
-        const QJsonObject io = QJsonDocument::fromJson(entries["document.json"]).object()["images"].toArray()[0].toObject();
-        QCOMPARE(io["source"].toString(), QFileInfo(one).absoluteFilePath());
+        QJsonObject io;
+        for (const auto &v : QJsonDocument::fromJson(entries["document.json"]).object()["images"].toArray())
+            if (v.toObject()["source"].toString() == QFileInfo(one).absoluteFilePath()) io = v.toObject();
+        QVERIFY(!io.isEmpty());
         QCOMPARE(io["relative"].toString(), QStringLiteral("../outside/one.png"));
         auto again = jp::loadPublication(path, &err);
         QVERIFY2(again, qPrintable(err));
@@ -7037,6 +7040,108 @@ private Q_SLOTS:
         QVERIFY2(back, qPrintable(err));
         for (const auto &it : back->pages[0]->items)
             if (auto *p = dynamic_cast<jp::PictureItem *>(it.get())) QCOMPARE(std::max(back->image(p->imageId).width(), back->image(p->imageId).height()), 512);
+    }
+
+    // Extra Content in a damaged file: a text box with no story to hold its
+    // text, a table whose cell has none, are dropped when the file loads; a
+    // shape without text stays. (Found by a crafted file.)
+    void danglingExtraContentIsDroppedOnLoad()
+    {
+        QJsonObject json = jp::Document::blank(QSizeF(612, 792))->toJson();
+        json["extra"] = QJsonArray{
+            QJsonObject{{"id", "x1"}, {"type", "text"}, {"rect", QJsonArray{0, 0, 100, 50}}, {"story", "no-such-story"}},
+            QJsonObject{{"id", "x2"}, {"type", "shape"}, {"rect", QJsonArray{0, 0, 100, 50}}, {"shape", "rect"}},
+            QJsonObject{{"id", "x3"}, {"type", "table"}, {"rect", QJsonArray{0, 0, 100, 50}}, {"rows", 1}, {"cols", 1}, {"colW", QJsonArray{100}},
+                        {"rowH", QJsonArray{50}}, {"cells", QJsonArray{QJsonObject{{"story", "nope"}}}}},
+            QJsonObject{{"id", "x4"}, {"type", "shape"}, {"rect", QJsonArray{0, 0, 100, 50}}, {"shape", "rect"}, {"story", "gone"}}};
+        jp::Document doc;
+        doc.fromJson(json);
+        QCOMPARE(int(doc.extra.size()), 1);
+        QCOMPARE(doc.extra[0]->id, QStringLiteral("x2"));
+
+        // One that has its story is kept.
+        auto good = jp::Document::blank(QSizeF(612, 792));
+        auto box = std::make_shared<jp::TextItem>();
+        box->rect = QRectF(0, 0, 100, 50);
+        box->storyId = good->createStory(QStringLiteral("Kept"));
+        good->extra.push_back(box);
+        jp::Document back;
+        back.fromJson(good->toJson());
+        QCOMPARE(int(back.extra.size()), 1);
+    }
+
+    // The Extra Content pane lists whatever is there, with words from the
+    // story when it has one: an object whose story is missing (it can't come
+    // from a file, but nothing may crash on it) is listed by its kind.
+    void extraContentPaneSurvivesMissingStories()
+    {
+        jp::MainWindow w;
+        w.show();
+        jp::Document *d = w.editor()->doc();
+        auto box = std::make_shared<jp::TextItem>();
+        box->rect = QRectF(0, 0, 100, 50);
+        box->storyId = QStringLiteral("ghost");
+        auto shape = std::make_shared<jp::ShapeItem>();
+        shape->rect = QRectF(0, 0, 100, 50);
+        shape->storyId = QStringLiteral("ghost");
+        auto table = std::make_shared<jp::TableItem>();
+        table->rows = table->cols = 1;
+        table->colW = {100};
+        table->rowH = {50};
+        table->cells.resize(1);
+        table->cells[0].storyId = QStringLiteral("ghost");
+        auto plain = std::make_shared<jp::ShapeItem>();
+        plain->rect = QRectF(0, 0, 100, 50);
+        d->extra = {box, shape, table, plain};
+        w.showTaskPane(QStringLiteral("extra"));
+        auto *list = w.findChild<jp::TaskPane *>()->findChild<QListWidget *>(QStringLiteral("extraContentList"));
+        QVERIFY(list);
+        QCOMPARE(list->count(), 4);
+    }
+
+    // A pane that is not showing does nothing when the publication changes:
+    // the Extra Content pane rescales every picture in it each time it
+    // refreshes, so hidden it must not refresh at all.
+    void hiddenExtraContentPaneDoesNotRefresh()
+    {
+        jp::MainWindow w;
+        w.show();
+        jp::Editor *ed = w.editor();
+        QImage big(1600, 1200, QImage::Format_RGB32);
+        big.fill(Qt::blue);
+        QByteArray png;
+        QBuffer buffer(&png);
+        buffer.open(QIODevice::WriteOnly);
+        big.save(&buffer, "PNG");
+        for (int i = 0; i < 3; ++i) {
+            auto pic = std::make_shared<jp::PictureItem>();
+            pic->rect = QRectF(0, 0, 100, 80);
+            pic->imageId = ed->doc()->addImage(png, QStringLiteral("png"));
+            ed->doc()->extra.push_back(pic);
+        }
+        w.showTaskPane(QStringLiteral("extra"));
+        auto *list = w.findChild<jp::TaskPane *>()->findChild<QListWidget *>(QStringLiteral("extraContentList"));
+        QVERIFY(list);
+        QCOMPARE(list->count(), 3);
+        w.showTaskPane(QStringLiteral("graphics"));   // another pane in front: this one is hidden
+        QVERIFY(!list->isVisible());
+        QSignalSpy rebuilt(list->model(), &QAbstractItemModel::rowsInserted);
+        for (int i = 0; i < 4; ++i) {
+            ed->change(QStringLiteral("Test"), [&] {
+                auto box = ed->newTextBox(QRectF(50, 50 + 20 * i, 100, 40));
+                ed->surfaceItems().push_back(box);
+            });
+            w.refreshUi();
+        }
+        QCOMPARE(rebuilt.count(), 0);
+        // Showing it brings it up to date again, and a change while it shows refreshes it.
+        ed->doc()->extra.pop_back();
+        w.showTaskPane(QStringLiteral("extra"));
+        QCOMPARE(list->count(), 2);
+        ed->doc()->extra.pop_back();
+        ed->change(QStringLiteral("Test"), [&] {});
+        w.refreshUi();
+        QCOMPARE(list->count(), 1);
     }
 
     void templatesFitTheirText()

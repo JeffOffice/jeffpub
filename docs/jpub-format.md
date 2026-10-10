@@ -66,6 +66,7 @@ The root object:
 | `masters` | array | Master pages ([Pages](#pages-and-master-pages)) |
 | `pages` | array | The pages, in order |
 | `scratch` | array | Objects on the scratch area beside the pages ([Objects](#objects)) |
+| `extra` | array | Optional: Extra Content, objects left over when the design was changed ([Objects](#objects)). A reader drops an entry that needs a story the file doesn't have (a text box, or a table cell or shape naming one, or a group holding either) |
 | `stories` | array | The text of every text box, shape, table cell, and note ([Stories](#stories)) |
 | `styles` | array | Named paragraph and character styles ([Styles](#styles)) |
 | `colorScheme` | object | `name` and `colors`: 8 color strings, in the slot order above |

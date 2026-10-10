@@ -1133,6 +1133,25 @@ QJsonObject Document::toJson() const
     return o;
 }
 
+// Whether an object, or one inside it, needs a story the publication doesn't have.
+static bool namesMissingStory(const Document &d, const Item &it)
+{
+    auto missing = [&](const QString &storyId, bool needed) { return (needed || !storyId.isEmpty()) && !d.stories.contains(storyId); };
+    switch (it.type()) {
+    case ItemType::Text: return missing(static_cast<const TextItem &>(it).storyId, true);
+    case ItemType::Shape: return missing(static_cast<const ShapeItem &>(it).storyId, false);
+    case ItemType::Table:
+        for (const TableCell &c : static_cast<const TableItem &>(it).cells)
+            if (missing(c.storyId, false)) return true;
+        return false;
+    case ItemType::Group:
+        for (const ItemPtr &c : static_cast<const GroupItem &>(it).children)
+            if (namesMissingStory(d, *c)) return true;
+        return false;
+    default: return false;
+    }
+}
+
 void Document::fromJson(const QJsonObject &o)
 {
     setup = PageSetup::fromJson(o["setup"].toObject());
@@ -1174,6 +1193,8 @@ void Document::fromJson(const QJsonObject &o)
         storyFromJson(s->doc.get(), so);
         stories.insert(s->id, s);
     }
+    // Extra content that names a story the file doesn't have (a damaged file) is dropped.
+    extra.erase(std::remove_if(extra.begin(), extra.end(), [&](const ItemPtr &it) { return namesMissingStory(*this, *it); }), extra.end());
     styles.clear();
     for (const auto &v : o["styles"].toArray()) styles << TextStyle::fromJson(v.toObject());
     if (styles.isEmpty()) styles = defaultStyles();

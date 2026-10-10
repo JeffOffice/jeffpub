@@ -945,7 +945,6 @@ public:
         connect(m_discard, &QPushButton::clicked, this, &ExtraPane::discard);
         connect(m_list, &QListWidget::itemDoubleClicked, this, &ExtraPane::place);
         connect(m_list, &QListWidget::itemSelectionChanged, this, &ExtraPane::enable);
-        connect(win->editor(), &Editor::changed, this, &ExtraPane::refresh);
         refresh();
     }
     Q_INVOKABLE void refresh()
@@ -964,13 +963,22 @@ public:
                 if (!thumb.isNull()) ic = QIcon(QPixmap::fromImage(thumb));
             } else {
                 // The words in it; an object with none, or other than text, says what it is.
+                // (A story that is not there has none.)
+                auto storyWords = [d](const QString &storyId) {
+                    const QTextDocument *story = d->storyDoc(storyId);
+                    return story ? story->toPlainText() : QString();
+                };
                 QString words;
-                if (e->type() == ItemType::TextArt) words = static_cast<const TextArtItem *>(e.get())->text;
-                else if (const auto *box = dynamic_cast<const TextItem *>(e.get())) words = d->storyDoc(box->storyId)->toPlainText();
-                else if (const auto *shape = dynamic_cast<const ShapeItem *>(e.get())) words = shape->storyId.isEmpty() ? QString() : d->storyDoc(shape->storyId)->toPlainText();
-                else if (const auto *table = dynamic_cast<const TableItem *>(e.get()))
-                    for (const TableCell &c : table->cells)
-                        if (words.isEmpty() && !c.storyId.isEmpty()) words = d->storyDoc(c.storyId)->toPlainText().simplified();
+                switch (e->type()) {
+                case ItemType::TextArt: words = static_cast<const TextArtItem *>(e.get())->text; break;
+                case ItemType::Text: words = storyWords(static_cast<const TextItem *>(e.get())->storyId); break;
+                case ItemType::Shape: words = storyWords(static_cast<const ShapeItem *>(e.get())->storyId); break;
+                case ItemType::Table:
+                    for (const TableCell &c : static_cast<const TableItem *>(e.get())->cells)
+                        if (words.simplified().isEmpty()) words = storyWords(c.storyId);
+                    break;
+                default: break;
+                }
                 words = words.simplified();
                 if (words.size() > 120) words = words.left(120) + QStringLiteral("…");
                 text = e->type() == ItemType::Text || e->type() == ItemType::TextArt ? words : words.isEmpty() ? itemTypeName(e->type()) : tr("%1: %2").arg(itemTypeName(e->type()), words);
@@ -1008,6 +1016,7 @@ private:
         ed->beginChange(tr("Place Extra Content"));
         for (const QString &id : ids) ed->placeExtra(id);
         ed->endChange();
+        refresh();
     }
     void discard()
     {
@@ -1017,6 +1026,7 @@ private:
         ed->beginChange(tr("Discard Extra Content"));
         for (const QString &id : ids) ed->discardExtra(id);
         ed->endChange();
+        refresh();
     }
     MainWindow *m_win;
     QListWidget *m_list;
