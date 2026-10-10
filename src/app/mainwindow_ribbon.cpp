@@ -46,6 +46,47 @@ static TableItem *selTableForUi(Editor *ed)
 }
 
 static Stroke g_borderStroke = Stroke::line(ColorRef::scheme(Main), 0.75);
+
+// A style's sample in the Styles gallery: its text as it prints, on paper
+// where the interface is dark or in high contrast (black text on a dark tile
+// couldn't be read), and the style's name under it.
+static void drawStylePreview(QPainter *p, const QRectF &rc, Editor *e, const QString &name, bool large)
+{
+    const TextStyle *st = e->doc()->style(name);
+    if (!st) return;
+    LayoutEnv env;
+    env.colors = e->doc()->colors;
+    env.fonts = e->doc()->fonts;
+    const QTextCharFormat f = resolveCharFormat(st->chr, env);
+    const QRectF sample = rc.adjusted(large ? 4 : 2, 0, -2, -rc.height() * (large ? 0.32 : 0.3));
+    if (uiDark() || uiHighContrast()) {
+        p->save();
+        p->setRenderHint(QPainter::Antialiasing);
+        p->setPen(Qt::NoPen);
+        p->setBrush(Qt::white);
+        p->drawRoundedRect(sample.adjusted(-2, 2, 0, -1), 3, 3);
+        p->restore();
+    }
+    QFont font = f.font();
+    if (large) {
+        // Sized to read in the tile.
+        const double docPt = f.fontPointSize() / fontPointFactor();
+        font.setPixelSize(int(std::clamp(docPt * 1.15, 12.0, rc.height() * 0.5)));
+    } else {
+        font.setPixelSize(int(std::clamp(f.fontPointSize() * 0.9, 9.0, rc.height() * 0.45)));
+    }
+    p->setFont(font);
+    p->setPen(f.foreground().color());
+    p->drawText(sample, Qt::AlignLeft | Qt::AlignVCenter, QStringLiteral("AaBbCc"));
+    QFont lf;
+    lf.setPixelSize(std::max(9, int(rc.height() * 0.22)));
+    p->setFont(lf);
+    QColor muted = uiText();
+    if (large) muted.setAlphaF(0.65f);
+    p->setPen(muted);
+    p->drawText(rc.adjusted(large ? 4 : 2, rc.height() * (large ? 0.66 : 0.7), -2, 0), Qt::AlignLeft | Qt::AlignVCenter,
+                QFontMetrics(lf).elidedText(name, Qt::ElideRight, int(rc.width()) - 6));
+}
 Stroke currentBorderStroke() { return g_borderStroke; }
 
 void MainWindow::buildRibbon()
@@ -375,29 +416,7 @@ void MainWindow::ribbonGalleryParts(RibbonParts &parts)
             for (const auto &s : m_ed->doc()->styles) {
                 const QString name = s.name;
                 Editor *e = m_ed;
-                v << GalleryItem{name, name, drawnIcon([e, name](QPainter *p, const QRectF &rc) {
-                    const TextStyle *st = e->doc()->style(name);
-                    if (!st) return;
-                    LayoutEnv env;
-                    env.colors = e->doc()->colors;
-                    env.fonts = e->doc()->fonts;
-                    QTextCharFormat f = resolveCharFormat(st->chr, env);
-                    QFont font = f.font();
-                    // Sample in the style's own font, sized to read in the tile.
-                    const double docPt = f.fontPointSize() / fontPointFactor();
-                    font.setPixelSize(int(std::clamp(docPt * 1.15, 12.0, rc.height() * 0.5)));
-                    p->setFont(font);
-                    p->setPen(f.foreground().color());
-                    p->drawText(rc.adjusted(4, 0, -2, -rc.height() * 0.32), Qt::AlignLeft | Qt::AlignVCenter, QStringLiteral("AaBbCc"));
-                    QFont lf;
-                    lf.setPixelSize(std::max(9, int(rc.height() * 0.22)));
-                    p->setFont(lf);
-                    QColor muted = uiText();
-                    muted.setAlphaF(0.65f);
-                    p->setPen(muted);
-                    p->drawText(rc.adjusted(4, rc.height() * 0.66, -2, 0), Qt::AlignLeft | Qt::AlignVCenter,
-                                QFontMetrics(lf).elidedText(name, Qt::ElideRight, int(rc.width()) - 6));
-                }), QString()};
+                v << GalleryItem{name, name, drawnIcon([e, name](QPainter *p, const QRectF &rc) { drawStylePreview(p, rc, e, name, true); }), QString()};
             }
             return v;
         });
@@ -1130,24 +1149,7 @@ void MainWindow::refreshUi()
         Editor *e = ed;
         for (const auto &s : d->styles) {
             const QString name = s.name;
-            items << GalleryItem{name, name, drawnIcon([e, name](QPainter *p, const QRectF &rc) {
-                const TextStyle *st = e->doc()->style(name);
-                if (!st) return;
-                LayoutEnv en;
-                en.colors = e->doc()->colors;
-                en.fonts = e->doc()->fonts;
-                QTextCharFormat f = resolveCharFormat(st->chr, en);
-                QFont font = f.font();
-                font.setPixelSize(int(std::clamp(f.fontPointSize() * 0.9, 9.0, rc.height() * 0.45)));
-                p->setFont(font);
-                p->setPen(f.foreground().color());
-                p->drawText(rc.adjusted(2, 0, -2, -rc.height() * 0.3), Qt::AlignLeft | Qt::AlignVCenter, QStringLiteral("AaBbCc"));
-                QFont lf;
-                lf.setPixelSize(int(rc.height() * 0.22));
-                p->setFont(lf);
-                p->setPen(uiText());
-                p->drawText(rc.adjusted(2, rc.height() * 0.7, -2, 0), Qt::AlignLeft | Qt::AlignVCenter, name);
-            }), QString()};
+            items << GalleryItem{name, name, drawnIcon([e, name](QPainter *p, const QRectF &rc) { drawStylePreview(p, rc, e, name, false); }), QString()};
         }
         m_styleGallery->setItems(items);
         m_styleGallery->setCurrent(ed->currentStyleName());

@@ -1858,6 +1858,37 @@ private Q_SLOTS:
         QVERIFY(!ring->isVisible());
     }
 
+    // The Styles gallery's samples are the text as it prints: in a dark
+    // interface or high contrast they sit on paper (black samples on a dark
+    // tile couldn't be read in Windows' high contrast).
+    void styleSamplesReadInDark()
+    {
+        jp::MainWindow w;
+        QListWidgetItem *normal = nullptr;
+        QTRY_VERIFY([&] {
+            for (auto *g : w.findChildren<jp::Gallery *>())
+                for (auto *list : g->findChildren<QListWidget *>())
+                    for (int i = 0; i < list->count(); ++i)
+                        if (list->item(i)->data(Qt::UserRole).toString() == QLatin1String("Normal")) normal = list->item(i);
+            return normal != nullptr;
+        }());
+        const bool wasDark = jp::uiDark();
+        auto paper = [&] {
+            const QImage img = normal->icon().pixmap(QSize(76, 46)).toImage().convertToFormat(QImage::Format_ARGB32);
+            int white = 0, total = 0;
+            for (int y = 2; y < img.height() / 2; ++y)
+                for (int x = 4; x < img.width() - 4; ++x, ++total) {
+                    const QColor c = img.pixelColor(x, y);
+                    if (c.alpha() > 200 && c.lightness() > 230) ++white;
+                }
+            return double(white) / total;
+        };
+        jp::setUiDark(true);
+        const double dark = paper();
+        jp::setUiDark(wasDark);
+        QVERIFY2(dark > 0.4, qPrintable(QString::number(dark)));
+    }
+
     // Switching light or dark in Options applies at once: it half-applied
     // (the palette and the parts with colors of their own stayed) until a
     // restart.
