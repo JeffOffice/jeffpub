@@ -863,6 +863,82 @@ private Q_SLOTS:
         QCOMPARE(jp::originalAverageCharEm(QStringLiteral("No Such Font"), false, false), -1.0);
     }
 
+    // A missing stock font's letters take the original's widths (measured
+    // in the reference VM), not its stand-in's, so lines break where they
+    // break in Publisher (Gill Sans MT's "W" is 1.04 em; its stand-in's
+    // is its own).
+    void missingFontsKeepTheirLetterWidths()
+    {
+        const QString fam = QStringLiteral("Gill Sans MT");
+        if (QFontDatabase::hasFamily(fam)) QSKIP("Gill Sans MT is installed here");
+        const QHash<char16_t, double> *widths = jp::originalLetterWidths(fam, false, false);
+        QVERIFY(widths);
+        QVERIFY(std::abs(widths->value(u'W') - 1.042) < 0.001);
+        QVERIFY(jp::originalLetterWidths(fam, true, false) != widths);
+        QVERIFY(!jp::originalLetterWidths(QStringLiteral("No Such Font"), false, false));
+        QTextDocument doc;
+        QTextCursor c(&doc);
+        QTextCharFormat cf;
+        cf.setFontFamilies(QStringList{fam});
+        cf.setFontPointSize(12);   // below automatic kerning
+        const QString text = QStringLiteral("Wilhelmina 2047");
+        c.insertText(text, cf);
+        jp::FrameSpec fs;
+        fs.size = QSizeF(1000, 100);
+        fs.insets = QMarginsF(0, 0, 0, 0);
+        fs.hyphenate = false;
+        jp::StoryLayout lay;
+        lay.build(&doc, {fs}, jp::LayoutEnv());
+        auto x = [&](int pos) {
+            int frame = -1;
+            QRectF r;
+            lay.caretRect(pos, &frame, &r);
+            return r.x();
+        };
+        double want = 0;
+        for (int i = 0; i < text.size(); ++i) {
+            want += widths->value(text[i].unicode()) * 12;
+            const double got = x(i + 1) - x(0);
+            QVERIFY2(std::abs(got - want) < 0.015, qPrintable(QStringLiteral("after '%1': %2, Gill Sans MT %3").arg(text[i]).arg(got).arg(want)));
+        }
+    }
+
+    // A centered line is centered on its letters, a right-aligned one ends
+    // at its last letter: Publisher lets the spaces a line ends with hang
+    // past them. Qt counted them whenever they fit, half a space off.
+    void centeredLinesHangTrailingSpaces()
+    {
+        auto layout = [](Qt::Alignment al, double *left, double *right) {
+            QTextDocument doc;
+            QTextCursor c(&doc);
+            QTextBlockFormat bf;
+            bf.setAlignment(al);
+            c.setBlockFormat(bf);
+            QTextCharFormat cf;
+            cf.setFontFamilies(QStringList{QStringLiteral("Arial")});
+            cf.setFontPointSize(24);
+            c.insertText(QStringLiteral("Heading   "), cf);
+            jp::FrameSpec fs;
+            fs.size = QSizeF(300, 100);
+            fs.insets = QMarginsF(0, 0, 0, 0);
+            jp::StoryLayout lay;
+            lay.build(&doc, {fs}, jp::LayoutEnv());
+            int frame = -1;
+            QRectF r;
+            lay.caretRect(0, &frame, &r);
+            *left = r.x();
+            lay.caretRect(7, &frame, &r);
+            *right = r.x();
+        };
+        double l = 0, r = 0;
+        layout(Qt::AlignHCenter, &l, &r);
+        QVERIFY2(std::abs(l - (300 - r)) < 0.01, qPrintable(QStringLiteral("%1 .. %2").arg(l).arg(r)));
+        layout(Qt::AlignRight, &l, &r);
+        QVERIFY2(std::abs(r - 300) < 0.01, qPrintable(QString::number(r)));
+        layout(Qt::AlignLeft, &l, &r);
+        QVERIFY(std::abs(l) < 0.01);
+    }
+
     // A line break (Shift+Enter) goes into a .pub as \n, as Publisher's own
     // files hold it; JeffPub wrote \v, which Publisher 2021 draws as a box
     // ("BASIC INCIDENT□COMMAND" on a cover). Opened again, it is a line break.

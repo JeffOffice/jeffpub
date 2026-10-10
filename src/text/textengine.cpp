@@ -170,6 +170,9 @@ namespace {
 constexpr double kFine = 8;
 // Layout only: an underline's style while JeffPub draws it (drawUnderline).
 constexpr int kOwnUnderline = QTextFormat::UserProperty + 90;
+// Layout only: a missing stock font measured letter by letter, "family|bold|italic"
+// (applyLetterWidths gives each letter the original's width).
+constexpr int kLetterWidths = QTextFormat::UserProperty + 91;
 
 QFont fineFont(QFont f)
 {
@@ -307,6 +310,28 @@ void drawFine(QPainter *p, const QPointF &at, const QList<QGlyphRun> &runs)
     for (const QGlyphRun &g : runs) p->drawGlyphRun(QPointF(0, 0), g);
     p->restore();
 }
+
+// How far to move a centered or right-aligned line so it aligns on its
+// letters: Publisher lets the spaces a line ends with hang outside, Qt
+// counts them whenever they fit. A line wider than its room stays as Qt
+// set it.
+double hangTrailingSpaces(const PtLine &line, const QString &disp, const QTextOption &opt, double width)
+{
+    const Qt::Alignment al = opt.alignment();
+    if (al & Qt::AlignJustify) return 0;
+    const bool center = al & Qt::AlignHCenter, right = (al & Qt::AlignRight) && opt.textDirection() != Qt::RightToLeft;
+    if (!center && !right) return 0;
+    const int s = line.textStart(), e = std::min<int>(s + line.textLength(), disp.size());
+    int k = e;
+    auto hangs = [](QChar c) { return c.isSpace() && c.unicode() != 0x00A0 && c.unicode() != 0x202F; };
+    while (k > s && hangs(disp[k - 1])) --k;
+    if (k == e || k == s) return 0;
+    const double a = line.cursorToX(s), b = line.cursorToX(k);
+    const double ink = std::abs(b - a);
+    if (ink > width) return 0;
+    const double left = std::min(a, b) - line.position().x();
+    return (center ? (width - ink) / 2 : width - ink) - left;
+}
 } // namespace
 
 void drawPlainText(QPainter *p, const QPointF &baseline, const QFont &font, const QString &text)
@@ -376,6 +401,14 @@ QTextCharFormat resolveCharFormat(const QTextCharFormat &f, const LayoutEnv &env
             if (const double hs = substituteHeightScale(fams.first(), r.fontWeight() >= QFont::DemiBold); hs != 1)
                 r.setProperty(tp::GlyphScaleY, hs);
         }
+    }
+    // A missing stock font JeffPub has measured: its letters take the
+    // original's widths (applyLetterWidths), so lines break as they do there.
+    {
+        const QStringList fams = r.fontFamilies().toStringList();
+        const bool bold = f.hasProperty(QTextFormat::FontWeight) && f.fontWeight() >= QFont::DemiBold, italic = f.fontItalic();
+        if (!fams.isEmpty() && !substituteFor(fams.first()).isEmpty() && originalLetterWidths(fams.first(), bold, italic))
+            r.setProperty(kLetterWidths, fams.first() + (bold ? QStringLiteral("|1") : QStringLiteral("|0")) + (italic ? QStringLiteral("|1") : QStringLiteral("|0")));
     }
     // Sizes within the other program's range (to 1,638 pt): a file can claim
     // anything, and a huge size makes drawing a single glyph very costly.
@@ -896,6 +929,88 @@ double originalAverageCharEm(const QString &family, bool bold, bool italic)
     return -1;
 }
 
+// Each letter of a run in a missing, measured stock font gets the original's
+// width: the difference from its stand-in's goes into the letter's spacing,
+// so a run is cut into pieces of (near) equal difference. Spaces keep theirs
+// (word spacing sets those). A stand-in already within 0.4% of the original on
+// letters and digits (Arimo for Arial) is left whole.
+static QVector<QTextLayout::FormatRange> applyLetterWidths(const QVector<QTextLayout::FormatRange> &in, const QString &disp)
+{
+    QVector<QTextLayout::FormatRange> out;
+    out.reserve(in.size());
+    static QHash<QString, double> advCache;     // stand-in advance per em, by font and letter
+    static QHash<QString, bool> needed;         // whether a font pairing needs it
+    for (const auto &r : in) {
+        const QString key = r.format.stringProperty(kLetterWidths);
+        if (key.isEmpty() || r.length <= 0) { out << r; continue; }
+        const QStringList k = key.split(QLatin1Char('|'));
+        const QHash<char16_t, double> *table = originalLetterWidths(k.value(0), k.value(1) == QLatin1String("1"), k.value(2) == QLatin1String("1"));
+        QFont plain = r.format.font();
+        if (!table || (plain.letterSpacingType() == QFont::PercentageSpacing && plain.letterSpacing() != 0 && plain.letterSpacing() != 100)) { out << r; continue; }
+        const double base = plain.letterSpacingType() == QFont::AbsoluteSpacing ? plain.letterSpacing() : 0;
+        plain.setLetterSpacing(QFont::AbsoluteSpacing, 0);
+        const double em = plain.pointSizeF() / fontPointFactor();
+        if (!(em > 0)) { out << r; continue; }
+        const QString fk = emKey(plain) + QLatin1Char('|');
+        auto adv = [&](QChar c) {
+            const QString ck = fk + c;
+            auto it = advCache.constFind(ck);
+            if (it != advCache.constEnd()) return *it * em;
+            QFont unit = plain;
+            unit.setPointSizeF(100 * fontPointFactor());   // advances scale with size (unhinted)
+            const double v = advanceOf(unit, QString(c)) / 100;
+            advCache.insert(ck, v);
+            return v * em;
+        };
+        const QString nk = key + QLatin1Char('|') + fk;
+        auto nit = needed.constFind(nk);
+        if (nit == needed.constEnd()) {
+            double worst = 0;
+            for (char16_t c : u"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+                if (auto t = table->constFind(c); t != table->constEnd()) worst = std::max(worst, std::abs(*t - adv(QChar(c)) / em));
+            nit = needed.insert(nk, worst > 0.004);
+        }
+        if (!*nit) { out << r; continue; }
+        // Spaces stay in the piece before them (fewer pieces); that piece's
+        // word spacing takes its letters' correction back off them, so
+        // spaces keep their own width.
+        const double baseWord = r.format.fontWordSpacing();
+        int pieceStart = r.start;
+        double pieceDelta = 0, drift = 0;   // drift: how far the letters so far sit from the original's places
+        bool started = false;
+        auto flush = [&](int end) {
+            if (end <= pieceStart) return;
+            QTextLayout::FormatRange x = r;
+            x.start = pieceStart;
+            x.length = end - pieceStart;
+            x.format.setFontLetterSpacingType(QFont::AbsoluteSpacing);
+            x.format.setFontLetterSpacing(base + pieceDelta);
+            if (pieceDelta != 0) x.format.setFontWordSpacing(baseWord - pieceDelta);
+            out << x;
+        };
+        for (int i = r.start; i < r.start + r.length && i < disp.size(); ++i) {
+            const QChar c = disp[i];
+            if (c.isSpace() || c.unicode() == 0x00AD || c.unicode() == 0x200B || c.unicode() == 0xFFFC) continue;
+            double d = 0;
+            if (auto t = table->constFind(c.unicode()); t != table->constEnd()) d = *t * em - adv(c);
+            // A letter joins the piece while every letter stays within
+            // 0.001 em of its place; a new piece takes up the drift.
+            if (started && std::abs(drift + pieceDelta - d) <= 0.001 * em) {
+                drift += pieceDelta - d;
+                continue;
+            }
+            if (started) {
+                flush(i);
+                pieceStart = i;
+            }
+            pieceDelta = d - drift;
+            drift = 0;
+            started = true;
+        }
+        flush(std::min(r.start + r.length, int(disp.size())));
+    }
+    return out;
+}
 
 double naturalLineEm(const QFont &f, const QString &requestedFamily) { return lineEmOf(f, requestedFamily); }
 
@@ -1205,6 +1320,7 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
         // Qt draws U+2028 as a line break; keep it.
         const QFont base = baseFontFor(b, env);
         B->tl = std::make_unique<QTextLayout>(B->disp, fineFont(base));
+        ranges = applyLetterWidths(ranges, B->disp);
         B->tl->setFormats(fineRanges(ranges));
         // Letters drawn taller or shorter are drawn run by run, unless the
         // paragraph has outlined, highlighted or wavy-underlined text (Qt's
@@ -1472,6 +1588,7 @@ QVector<double> StoryLayout::buildOnce(const QTextDocument *doc, const QVector<F
                         continue;
                     }
                     line.setPosition(QPointF(iv.x0, m_frameY[f] + col.top() + y + lead));
+                    if (const double dx = hangTrailingSpaces(line, B->disp, B->tl->textOption(), iv.x1 - iv.x0); dx != 0) line.setPosition(line.position() + QPointF(dx, 0));
                     B->lines << Line{f, c, QRectF(iv.x0, col.top() + y, iv.x1 - iv.x0, h), below};
                     if (!lineNotes.isEmpty()) {
                         const bool firstNotes = !reserve.contains(rkey(f, c));

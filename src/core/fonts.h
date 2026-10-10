@@ -25,6 +25,10 @@ double substituteSpaceEm(const QString &family, bool bold = false, bool italic =
 // How much taller (over 1) or shorter to draw a missing font's stand-in so
 // its letters stand as high as the real font's; 1 when installed or alike.
 double substituteHeightScale(const QString &family, bool bold = false);
+// A stock font's measured advance width for each character it has (em), from
+// resources/fontwidths.txt: the face asked for, else the nearest the family
+// has. Null when JeffPub has no measurements of the family.
+const QHash<char16_t, double> *originalLetterWidths(const QString &family, bool bold, bool italic);
 QStringList bundledFamilies();
 
 // Symbol fonts (Symbol, Wingdings) give their pictures their own character

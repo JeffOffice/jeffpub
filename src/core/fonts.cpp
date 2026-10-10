@@ -10,6 +10,10 @@
 
 Q_GUI_EXPORT int qt_defaultDpiY();
 
+// The built-in resources (the measured letter widths among them), for
+// programs that use the core without registering them first (jpubtool).
+static void initCoreResources() { Q_INIT_RESOURCE(resources); }
+
 namespace jp {
 
 double fontPointFactor()
@@ -630,6 +634,38 @@ void initCore()
     QImageReader::setAllocationLimit(2048);   // megabytes; print covers carry 600 dpi photos
     loadBundledFonts();
     installFontSubstitutions();
+}
+
+const QHash<char16_t, double> *originalLetterWidths(const QString &family, bool bold, bool italic)
+{
+    static const QHash<QString, QHash<char16_t, double>> table = [] {
+        QHash<QString, QHash<char16_t, double>> t;
+        if (!QFile::exists(QStringLiteral(":/fontwidths.txt"))) initCoreResources();
+        QFile f(QStringLiteral(":/fontwidths.txt"));
+        if (!f.open(QIODevice::ReadOnly)) return t;
+        QVector<char16_t> chars;
+        const QList<QByteArray> lines = f.readAll().split('\n');
+        for (const QByteArray &line : lines) {
+            if (line.isEmpty() || line.startsWith('#')) continue;
+            const QList<QByteArray> p = line.split('\t');
+            if (chars.isEmpty()) {
+                for (const QByteArray &c : line.split(',')) chars << char16_t(c.toUInt());
+                continue;
+            }
+            if (p.size() < 3) continue;
+            QHash<char16_t, double> widths;
+            const QList<QByteArray> ws = p[2].split(',');
+            for (int i = 0; i < std::min(ws.size(), qsizetype(chars.size())); ++i)
+                if (const int w = ws[i].toInt(); w >= 0) widths.insert(chars[i], w / 2048.0);
+            t.insert(QString::fromUtf8(p[0]).toLower() + QLatin1Char('|') + QString::fromLatin1(p[1]), widths);
+        }
+        return t;
+    }();
+    const QString fam = family.toLower() + QLatin1Char('|');
+    const int style = (bold ? 1 : 0) + (italic ? 2 : 0);
+    for (int s : {style, style & 1, style & 2, 0})
+        if (auto it = table.constFind(fam + QString::number(s)); it != table.constEnd()) return &*it;
+    return nullptr;
 }
 
 } // namespace jp
