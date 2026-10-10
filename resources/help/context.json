@@ -17,7 +17,7 @@
   "pane:mailmerge": "mail-merge",
   "pane:catalog": "mail-merge",
   "pane:find": "find-replace",
-  "pane:graphics": "pictures",
+  "pane:graphics": "graphics-manager",
   "pane:online": "pictures",
   "pane:research": "proofing",
   "pane:help": "index",

@@ -10,6 +10,9 @@
 #include <QCoreApplication>
 #include <QBuffer>
 #include <atomic>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QFont>
 #include <QImageReader>
 #include <QJsonArray>
@@ -136,6 +139,56 @@ QImage ImageData::image() const
     rd.setAutoTransform(true);
     cache = rd.read();
     return cache;
+}
+
+void ImageData::makePreview()
+{
+    preview.clear();
+    QImage img = image();
+    if (img.isNull()) return;
+    if (std::max(img.width(), img.height()) > 512) img = img.scaled(512, 512, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    // Photos as JPEG, anything that can be see-through as PNG.
+    for (const char *fmt : {img.hasAlphaChannel() ? "png" : "jpg", "png"}) {
+        QBuffer buf(&preview);
+        buf.open(QIODevice::WriteOnly);
+        if (img.save(&buf, fmt, 85)) {
+            previewFormat = QLatin1String(fmt);
+            return;
+        }
+        preview.clear();
+    }
+}
+
+bool readPictureFile(const QString &path, int pdfPage, QByteArray *bytes, QString *format, QSize *pixels)
+{
+    if (bytes->isEmpty()) {
+        QFile f(path);
+        if (!f.open(QIODevice::ReadOnly)) return false;
+        *bytes = f.readAll();
+    }
+    *format = QFileInfo(path).suffix().toLower();
+    if (*format == "jpeg") *format = "jpg";
+    if (*format == "tiff") *format = "tif";
+    if (*format == "pdf" || PdfDocument::looksLikePdf(*bytes)) {
+        // A PDF page is kept as a PDF of that page alone; its size in
+        // points, given at 96 pixels an inch like other pictures.
+        const PdfDocument pdf(*bytes);
+        if (!pdf.isValid() || pdfPage < 0 || pdfPage >= pdf.pageCount()) return false;
+        *bytes = pdf.extractPage(pdfPage);
+        *format = QStringLiteral("pdf");
+        *pixels = (pdf.pageSize(pdfPage) * 96.0 / 72.0).toSize();
+        return !bytes->isEmpty() && pixels->isValid();
+    }
+    if (*format == "wmf" || *format == "emf" || Metafile::looksLikeMetafile(*bytes)) {
+        Metafile m;
+        if (!m.load(*bytes)) return false;
+        const QSizeF s = m.naturalSize();
+        *pixels = QSize(int(s.width() / 0.75), int(s.height() / 0.75));
+        return true;
+    }
+    QImageReader r(path);
+    *pixels = r.size();
+    return pixels->isValid() || *format == "svg";
 }
 
 // ---------- small structs ----------
@@ -522,7 +575,7 @@ QSet<QString> Document::storiesInUse() const
 QString Document::addImage(const QByteArray &bytes, const QString &format, const QString &sourcePath, const QImage &decoded)
 {
     for (auto it = images.cbegin(); it != images.cend(); ++it)
-        if (it->bytes == bytes) return it.key();
+        if (!it->linked && it->bytes == bytes) return it.key();
     ImageData d;
     d.bytes = bytes;
     d.format = format.toLower();
@@ -533,6 +586,83 @@ QString Document::addImage(const QByteArray &bytes, const QString &format, const
     const QString id = newId("img");
     images.insert(id, d);
     return id;
+}
+
+QString Document::addLinkedImage(const QByteArray &bytes, const QString &format, const QString &path, bool keepCopy, int pdfPage, const QImage &decoded)
+{
+    const QFileInfo fi(path);
+    const QString file = QDir::cleanPath(fi.absoluteFilePath());
+    for (auto it = images.cbegin(); it != images.cend(); ++it)
+        if (it->linked && it->sourcePath == file && it->keepsCopy == keepCopy && it->linkPage == pdfPage && it->bytes == bytes &&
+            it->fileSize == fi.size() && it->fileTime == fi.lastModified().toMSecsSinceEpoch())
+            return it.key();
+    ImageData d;
+    d.bytes = bytes;
+    d.format = format.toLower();
+    d.sourcePath = file;
+    d.linked = true;
+    d.keepsCopy = keepCopy;
+    d.linkPage = pdfPage;
+    d.fileSize = fi.size();
+    d.fileTime = fi.lastModified().toMSecsSinceEpoch();
+    d.cache = decoded;
+    d.pixelSize = d.image().size();
+    d.makePreview();
+    const QString id = newId("img");
+    images.insert(id, d);
+    return id;
+}
+
+LinkStatus Document::linkStatus(const QString &imageId) const
+{
+    const auto it = images.constFind(imageId);
+    if (it == images.cend() || !it->linked) return LinkStatus::Embedded;
+    const QFileInfo fi(it->sourcePath);
+    if (!fi.isFile()) return LinkStatus::Missing;
+    if (fi.size() != it->fileSize || fi.lastModified().toMSecsSinceEpoch() != it->fileTime) return LinkStatus::Modified;
+    return LinkStatus::Linked;
+}
+
+void Document::refreshLinks()
+{
+    for (auto it = images.begin(); it != images.end(); ++it) {
+        ImageData &d = it.value();
+        if (!d.linked) continue;
+        const LinkStatus status = linkStatus(it.key());
+        // A stored copy that matches the file needs no reading of it.
+        const bool stored = d.keepsCopy && !d.bytes.isEmpty();
+        QByteArray bytes;
+        QString format;
+        QSize px;
+        const bool read = status != LinkStatus::Missing && !(stored && status == LinkStatus::Linked) &&
+                          readPictureFile(d.sourcePath, d.linkPage, &bytes, &format, &px);
+        if (read) {
+            d.bytes = bytes;
+            d.format = format;
+            d.cache = QImage();
+            if (status != LinkStatus::Linked) {
+                // Not the file the sizes were taken from: a picture of another
+                // shape must not be stretched into the old one's place.
+                const QFileInfo fi(d.sourcePath);
+                if (d.keepsCopy) {
+                    d.fileSize = fi.size();
+                    d.fileTime = fi.lastModified().toMSecsSinceEpoch();
+                }
+                const QSize now = d.image().size();
+                if (d.pixelSize.isValid() && now != d.pixelSize)
+                    forEachItem([&](Item *item, int, const QString &) {
+                        auto *pic = dynamic_cast<PictureItem *>(item);
+                        if (pic && pic->imageId == it.key()) pic->keepProportions(now);
+                    });
+                d.pixelSize = now;
+            }
+        } else if (!stored && !d.preview.isEmpty()) {
+            // No file and no stored copy: the preview stands in.
+            d.bytes = d.preview;
+            d.format = d.previewFormat;
+            d.cache = QImage();
+        }
+    }
 }
 
 QImage Document::image(const QString &id) const
@@ -810,9 +940,17 @@ QJsonObject Document::toJson() const
     }
     for (const auto &s : styles) st.append(s.toJson());
     for (const auto &b : biz) bz.append(b.toJson());
-    for (auto it = images.cbegin(); it != images.cend(); ++it)
-        imgs.append(QJsonObject{{"id", it.key()}, {"format", it->format}, {"w", it->pixelSize.width()}, {"h", it->pixelSize.height()},
-                                {"source", it->sourcePath}, {"linked", it->linked}});
+    for (auto it = images.cbegin(); it != images.cend(); ++it) {
+        QJsonObject io{{"id", it.key()}, {"format", it->format}, {"w", it->pixelSize.width()}, {"h", it->pixelSize.height()},
+                       {"source", it->sourcePath}, {"linked", it->linked}};
+        if (it->linked) {
+            io["copy"] = it->keepsCopy;
+            if (it->linkPage) io["page"] = it->linkPage;
+            io["fileSize"] = double(it->fileSize);
+            io["fileTime"] = double(it->fileTime);
+        }
+        imgs.append(io);
+    }
     o["masters"] = ms;
     o["pages"] = ps;
     o["scratch"] = itemsJ(scratch);
@@ -898,6 +1036,16 @@ void Document::fromJson(const QJsonObject &o)
         d.pixelSize = QSize(io["w"].toInt(), io["h"].toInt());
         d.sourcePath = io["source"].toString();
         d.linked = io["linked"].toBool();
+        d.keepsCopy = io["copy"].toBool(true);
+        d.linkPage = io["page"].toInt();
+        d.fileSize = qint64(io["fileSize"].toDouble());
+        d.fileTime = qint64(io["fileTime"].toDouble());
+        // Where the file is from the publication wins over where it was.
+        const QString relative = io["relative"].toString();
+        if (d.linked && !relative.isEmpty() && !folder.isEmpty()) {
+            const QString found = QDir::cleanPath(QDir(folder).absoluteFilePath(relative));
+            if (QFileInfo(found).isFile()) d.sourcePath = found;
+        }
     }
     merge = MergeSource::fromJson(o["merge"].toObject());
     catalog = CatalogArea::fromJson(o["catalog"].toObject());

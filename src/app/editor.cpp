@@ -11,6 +11,7 @@
 #include <QApplication>
 #include <QBuffer>
 #include <QClipboard>
+#include <QDir>
 #include <QFileInfo>
 #include <QImage>
 #include <QJsonArray>
@@ -75,6 +76,7 @@ void Editor::setDocument(std::unique_ptr<Document> d, const QString &path)
     m_doc = std::move(d);
     m_cache.clear();
     m_path = path;
+    if (!path.isEmpty()) m_doc->folder = QFileInfo(path).absolutePath();
     m_untitledName.clear();
     m_page = 0;
     m_master.clear();
@@ -95,6 +97,7 @@ void Editor::setDocument(std::unique_ptr<Document> d, const QString &path)
 void Editor::setFilePath(const QString &p)
 {
     m_path = p;
+    if (!p.isEmpty()) m_doc->folder = QFileInfo(p).absolutePath();
     Q_EMIT changed();
 }
 
@@ -1009,6 +1012,54 @@ void Editor::arrangeThumbnails()
     endChange();
 }
 
+bool Editor::updateLink(const QString &pictureId)
+{
+    const auto *pic = dynamic_cast<PictureItem *>(m_doc->item(pictureId));
+    if (!pic || !m_doc->images.value(pic->imageId).linked) return false;
+    const ImageData d = m_doc->images.value(pic->imageId);
+    return changeLink(pictureId, d.sourcePath, d.linkPage);
+}
+
+bool Editor::changeLink(const QString &pictureId, const QString &path, int pdfPage)
+{
+    auto *pic = dynamic_cast<PictureItem *>(m_doc->item(pictureId));
+    if (!pic || pic->imageId.isEmpty()) return false;
+    const QString oldId = pic->imageId;
+    const ImageData old = m_doc->images.value(oldId);
+    QByteArray bytes;
+    QString format;
+    QSize px;
+    if (!readPictureFile(path, pdfPage, &bytes, &format, &px)) {
+        Q_EMIT status(QFileInfo(path).isFile() ? tr("JeffPub can't read \"%1\" as a picture.").arg(QFileInfo(path).fileName())
+                                              : tr("JeffPub can't find \"%1\".").arg(QDir::toNativeSeparators(path)));
+        return false;
+    }
+    // The same file again is an update, and every picture with that link follows.
+    const bool update = old.linked && QDir::cleanPath(QFileInfo(path).absoluteFilePath()) == old.sourcePath;
+    change(update ? tr("Update Link") : tr("Change Link"), [&] {
+        const QString id = m_doc->addLinkedImage(bytes, format, path, old.keepsCopy, pdfPage);
+        m_doc->forEachItem([&](Item *it, int, const QString &) {
+            auto *p = dynamic_cast<PictureItem *>(it);
+            if (!p || p->imageId != oldId || (!update && p != pic)) return;
+            p->imageId = id;
+            p->keepProportions(m_doc->imageSize(id));
+        });
+    });
+    return true;
+}
+
+bool Editor::embedPicture(const QString &pictureId)
+{
+    auto *pic = dynamic_cast<PictureItem *>(m_doc->item(pictureId));
+    if (!pic) return false;
+    const ImageData d = m_doc->images.value(pic->imageId);
+    if (!d.linked || d.bytes.isEmpty()) return false;
+    const bool missing = m_doc->linkStatus(pic->imageId) == LinkStatus::Missing && !d.keepsCopy;
+    change(tr("Embed Picture"), [&] { pic->imageId = m_doc->addImage(d.bytes, d.format, d.sourcePath, d.cache); });
+    if (missing) Q_EMIT status(tr("The file is missing, so the small preview is what was embedded."));
+    return true;
+}
+
 void Editor::settleScratch(const QStringList &ids)
 {
     if (!m_master.isEmpty()) return;
@@ -1205,7 +1256,11 @@ void Editor::copy()
         case ItemType::Picture: {
             const QString iid = static_cast<const PictureItem &>(it).imageId;
             auto im = m_doc->images.find(iid);
-            if (im != m_doc->images.end()) images[iid] = QJsonObject{{"format", im->format}, {"data", QString::fromLatin1(im->bytes.toBase64())}};
+            if (im != m_doc->images.end()) {
+                QJsonObject io{{"format", im->format}, {"data", QString::fromLatin1(im->bytes.toBase64())}};
+                if (im->linked) io["link"] = QJsonObject{{"path", im->sourcePath}, {"copy", im->keepsCopy}, {"page", im->linkPage}};
+                images[iid] = io;
+            }
             break;
         }
         case ItemType::Group: for (const auto &c : static_cast<const GroupItem &>(it).children) collect(*c); break;
@@ -1266,7 +1321,17 @@ QStringList Editor::insertItemsJson(const QByteArray &json, const QString &label
         const QJsonObject stories = o["stories"].toObject(), images = o["images"].toObject();
         for (auto it = images.begin(); it != images.end(); ++it) {
             const QJsonObject io = it.value().toObject();
-            imageMap[it.key()] = m_doc->addImage(QByteArray::fromBase64(io["data"].toString().toLatin1()), io["format"].toString());
+            const QByteArray bytes = QByteArray::fromBase64(io["data"].toString().toLatin1());
+            const QJsonObject link = io["link"].toObject();
+            if (link.isEmpty()) {
+                imageMap[it.key()] = m_doc->addImage(bytes, io["format"].toString());
+                continue;
+            }
+            // A linked picture stays linked to its file (the same link, if the publication has it).
+            const QString file = QDir::cleanPath(QFileInfo(link["path"].toString()).absoluteFilePath());
+            const auto same = std::find_if(m_doc->images.cbegin(), m_doc->images.cend(), [&](const ImageData &d) { return d.linked && d.sourcePath == file && d.bytes == bytes; });
+            imageMap[it.key()] = same != m_doc->images.cend() ? same.key()
+                                                              : m_doc->addLinkedImage(bytes, io["format"].toString(), file, link["copy"].toBool(true), link["page"].toInt());
         }
         auto mapStory = [&](QString &sid) {
             if (sid.isEmpty()) return;

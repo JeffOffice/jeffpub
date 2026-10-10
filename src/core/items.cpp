@@ -246,6 +246,14 @@ void PictureItem::fitImage(const QSize &px, bool fillFrame)
     imgRect = QRectF((fw - w) / 2, (fh - h) / 2, w, h);
 }
 
+void PictureItem::keepProportions(const QSize &px)
+{
+    if (px.isEmpty() || imgRect.isEmpty()) return;
+    const double h = imgRect.width() * px.height() / px.width();
+    if (std::abs(h - imgRect.height()) < imgRect.height() * 0.01) return;
+    imgRect = QRectF(imgRect.x(), imgRect.center().y() - h / 2, imgRect.width(), h);
+}
+
 void PictureItem::scaleInto(const QRectF &from, const QRectF &to)
 {
     const QSizeF before = rect.size();

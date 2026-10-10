@@ -128,7 +128,8 @@ public:
     QString currentTaskPane() const;
     QImage pageThumbnail(int page, int maxSide);
     void insertPictureFromFile(const QString &replaceItemId = QString(), const QPointF &at = QPointF(-1, -1));
-    void insertFiles(const QStringList &paths, const QPointF &at);
+    void insertFiles(const QStringList &paths, const QPointF &at, PictureInsert how = PictureInsert::Embed);
+    void changePictureLink(const QString &pictureId);
     void editTextArt(const QString &id);
     void refreshUi();
     void screenshotTo(const QString &path);

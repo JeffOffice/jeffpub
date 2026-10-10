@@ -187,6 +187,11 @@ public:
     void flipSelection(bool horizontal);
     void settleScratch(const QStringList &ids);   // move items between page and scratch area
     void arrangeThumbnails();                       // tidy the pictures on the scratch area into a tray
+    // Pictures linked to their files (Graphics Manager). Each is one undo
+    // step and says why in the status bar when it can't be done.
+    bool updateLink(const QString &pictureId);      // reads the file again (every picture with this link follows)
+    bool changeLink(const QString &pictureId, const QString &path, int pdfPage = 0);   // links the picture to another file
+    bool embedPicture(const QString &pictureId);    // a stored copy in place of the link
     void linkFrames(const QString &from, const QString &to);
     void breakLink(const QString &from);
     void applyTableFormat(TableItem *t, const QString &format);

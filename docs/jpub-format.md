@@ -13,7 +13,8 @@ A `.jpub` file is a ZIP archive holding:
 |---|---|
 | `mimetype` | The text `application/x-jeffpub`, always the first entry, uncompressed |
 | `document.json` | The whole publication: pages, objects, text, styles, colors, and settings |
-| `images/<id>.<ext>` | Each picture the publication uses, as the original file (`.png`, `.jpg`, `.svg`, ...) |
+| `images/<id>.<ext>` | Each picture the publication uses, as the original file (`.png`, `.jpg`, `.svg`, ...), except a picture linked to its file with no copy kept |
+| `previews/<id>.<ext>` | Optional: a small picture (`.jpg` or `.png`, at most 512 pixels on its long side) of each picture linked to its file with no copy kept |
 | `thumbnail.png` | Optional: a small picture of the first page, for file browsers |
 
 JeffPub writes every entry uncompressed ("stored"). Readers should also
@@ -430,9 +431,20 @@ the paragraph, as [formatting objects](#formatting).
 
 Each entry in `images` has `id`, `format` (the file's type: `png`, `jpg`,
 `gif`, `svg`, `webp`, `bmp`, `tif`, `wmf`, `emf`), `w` and `h` (its size in
-pixels), `source` (the file it was inserted from), and `linked` (it is shown
-from that file instead of the copy). The picture itself is the ZIP entry
-`images/<id>.<format>`. Pictures no object uses are not saved.
+pixels), `source` (the file it was inserted from), and `linked` (it is tied to
+that file). The picture itself is the ZIP entry `images/<id>.<format>`.
+Pictures no object uses are not saved.
+
+A linked picture also has `copy` (whether `images/<id>.<format>` is saved too;
+`true` when absent), `page` (which page of a PDF file; 0 when absent), `fileSize`
+and `fileTime` (the file's size in bytes and its modified time in milliseconds
+since 1970, as they were when the link was made or last updated), and
+`relative` (the file's path from the folder the `.jpub` file was saved in,
+which a reader tries first, using `source` when nothing is there). With
+`copy` false there is no `images/` entry, only `previews/<id>.<ext>`, which
+stands in when the file can't be found; `w` and `h` are still the file's size.
+A reader finds a changed file by comparing `fileSize` and `fileTime` with the
+file's. Files without these fields have embedded pictures.
 
 ## Business information
 

@@ -159,7 +159,10 @@ public:
                                 const double ppiX = px.width() / (pic->imgRect.width() / 72.0), ppiY = px.height() / (pic->imgRect.height() / 72.0);
                                 if (std::abs(ppiX - ppiY) / std::max(ppiX, ppiY) > 0.04) add(tr("Picture is not scaled proportionally"), pic->id, p, "scaling");
                             }
-                            if (data.linked) add(tr("Picture is linked, not embedded"), pic->id, p, "link");
+                            if (data.linked && !data.keepsCopy) {
+                                add(tr("Picture is linked, not embedded"), pic->id, p, "link");
+                                if (d->linkStatus(pic->imageId) == LinkStatus::Missing) add(tr("Linked picture is missing"), pic->id, p, "link-2-off");
+                            }
                         }
                     }
                 }
@@ -389,11 +392,29 @@ public:
         row->addWidget(save);
         row->addWidget(replace);
         v->addLayout(row);
+        auto *linkRow = new QHBoxLayout();
+        m_update = new QPushButton(tr("Update Link"), this);
+        m_change = new QPushButton(tr("Change Link…"), this);
+        m_embed = new QPushButton(tr("Embed Picture"), this);
+        linkRow->addWidget(m_update);
+        linkRow->addWidget(m_change);
+        linkRow->addWidget(m_embed);
+        v->addLayout(linkRow);
+        for (auto *b : {m_update, m_change, m_embed}) b->setEnabled(false);
         m_details = new QLabel(this);
         m_details->setWordWrap(true);
         v->addWidget(m_details);
         connect(m_sort, &QComboBox::currentIndexChanged, this, &GraphicsPane::refresh);
         connect(m_list, &QListWidget::currentItemChanged, this, [this](QListWidgetItem *it) { showDetails(it); });
+        connect(m_update, &QPushButton::clicked, this, [this] {
+            if (auto *it = m_list->currentItem()) m_win->editor()->updateLink(it->data(Qt::UserRole).toString());
+        });
+        connect(m_change, &QPushButton::clicked, this, [this] {
+            if (auto *it = m_list->currentItem()) m_win->changePictureLink(it->data(Qt::UserRole).toString());
+        });
+        connect(m_embed, &QPushButton::clicked, this, [this] {
+            if (auto *it = m_list->currentItem()) m_win->editor()->embedPicture(it->data(Qt::UserRole).toString());
+        });
         connect(m_list, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *it) { goTo(it); });
         connect(go, &QPushButton::clicked, this, [this] { goTo(m_list->currentItem()); });
         connect(save, &QPushButton::clicked, this, [this] {
@@ -415,14 +436,16 @@ public:
     {
         Editor *ed = m_win->editor();
         Document *d = ed->doc();
-        struct Row { QString id, iid; int page; qint64 size; QString name, fmt; };
+        struct Row { QString id, iid; int page; qint64 size; QString name, fmt; LinkStatus status; };
         QVector<Row> rows;
         d->forEachItem([&](Item *it, int page, const QString &) {
             auto *p = dynamic_cast<PictureItem *>(it);
             if (!p || p->imageId.isEmpty()) return;
             const ImageData data = d->images.value(p->imageId);
-            rows << Row{p->id, p->imageId, page, data.bytes.size(), data.sourcePath.isEmpty() ? p->imageId : QFileInfo(data.sourcePath).fileName(), data.format};
+            rows << Row{p->id, p->imageId, page, data.bytes.size(), data.sourcePath.isEmpty() ? p->imageId : QFileInfo(data.sourcePath).fileName(), data.format,
+                        d->linkStatus(p->imageId)};
         });
+        const QString current = m_list->currentItem() ? m_list->currentItem()->data(Qt::UserRole).toString() : QString();
         const int sort = m_sort->currentIndex();
         std::sort(rows.begin(), rows.end(), [sort](const Row &a, const Row &b) {
             if (sort == 1) return a.name < b.name;
@@ -434,27 +457,45 @@ public:
         for (const Row &r : rows) {
             const QImage thumb = d->image(r.iid).scaled(56, 56, Qt::KeepAspectRatio, Qt::SmoothTransformation);
             auto *it = new QListWidgetItem(QIcon(QPixmap::fromImage(thumb)),
-                                           tr("%1\nPage %2 · %3 · %4 KB").arg(r.name).arg(r.page >= 0 ? QString::number(r.page + 1) : tr("master")).arg(r.fmt.toUpper()).arg(r.size / 1024));
+                                           tr("%1\nPage %2 · %3 · %4 KB · %5").arg(r.name).arg(r.page >= 0 ? QString::number(r.page + 1) : tr("master")).arg(r.fmt.toUpper()).arg(r.size / 1024)
+                                               .arg(statusName(r.status)));
             it->setData(Qt::UserRole, r.id);
             it->setData(Qt::UserRole + 1, r.page);
             it->setData(Qt::UserRole + 2, r.iid);
             m_list->addItem(it);
+            if (r.id == current) m_list->setCurrentItem(it);
         }
+        if (!m_list->currentItem()) showDetails(nullptr);
     }
 
 private:
+    static QString statusName(LinkStatus s)
+    {
+        switch (s) {
+        case LinkStatus::Linked: return tr("Linked");
+        case LinkStatus::Missing: return tr("Missing");
+        case LinkStatus::Modified: return tr("Modified");
+        default: return tr("Embedded");
+        }
+    }
     void showDetails(QListWidgetItem *it)
     {
-        if (!it) { m_details->clear(); return; }
         Document *d = m_win->editor()->doc();
-        auto *p = dynamic_cast<PictureItem *>(d->item(it->data(Qt::UserRole).toString()));
-        if (!p) return;
+        auto *p = it ? dynamic_cast<PictureItem *>(d->item(it->data(Qt::UserRole).toString())) : nullptr;
+        for (auto *b : {m_update, m_change, m_embed}) b->setEnabled(p && d->images.value(p->imageId).linked);
+        if (!p) { m_details->clear(); return; }
         const ImageData data = d->images.value(p->imageId);
         const QSize px = d->imageSize(p->imageId);
         const double ppi = p->imgRect.width() > 0 ? px.width() / (p->imgRect.width() / 72.0) : 0;
-        m_details->setText(tr("Status: Embedded\nOriginal file: %1\nPixels: %2 × %3\nEffective resolution: %4 ppi")
-                               .arg(data.sourcePath.isEmpty() ? tr("(not available)") : data.sourcePath)
-                               .arg(px.width()).arg(px.height()).arg(int(ppi)));
+        const QString path = data.sourcePath.isEmpty() ? tr("(not available)") : data.sourcePath;
+        QString text = tr("Status: %1\n").arg(statusName(d->linkStatus(p->imageId)));
+        if (data.linked) {
+            text += tr("Linked file: %1\n").arg(path);
+            text += data.keepsCopy ? tr("The publication also keeps the picture.\n") : tr("The publication keeps only a small preview.\n");
+        } else {
+            text += tr("Original file: %1\n").arg(path);
+        }
+        m_details->setText(text + tr("Pixels: %1 × %2\nEffective resolution: %3 ppi").arg(px.width()).arg(px.height()).arg(int(ppi)));
     }
     void goTo(QListWidgetItem *it)
     {
@@ -468,6 +509,7 @@ private:
     QComboBox *m_sort;
     QListWidget *m_list;
     QLabel *m_details;
+    QPushButton *m_update, *m_change, *m_embed;
 };
 
 // ---------------- Mail merge wizard ----------------

@@ -87,7 +87,7 @@ void emailAsAttachment(QWidget *parent, Editor *ed, const QString &format)
         fileName = ed->displayName() + ".pdf";
         mime = "application/pdf";
     } else {
-        data = publicationBytes(*ed->doc(), QImage());
+        data = publicationBytes(*ed->doc(), QImage(), QString(), true);
         fileName = ed->displayName() + ".jpub";
         mime = "application/x-jeffpub";
     }
@@ -109,7 +109,7 @@ void packForPrinter(MainWindow *win, const QString &dir)
     s.preset = MainWindow::PdfSettings::CommercialPress;
     win->exportPdfTo(base + ".pdf", s);
     QString err;
-    savePublication(*ed->doc(), base + ".jpub", win->pageThumbnail(0, 256), &err);
+    savePublication(*ed->doc(), base + ".jpub", win->pageThumbnail(0, 256), &err, true);
     QFile readme(QDir(dir).filePath("README-for-printer.txt"));
     if (readme.open(QIODevice::WriteOnly)) {
         readme.write(QStringLiteral("Publication: %1\nPage size: %2 x %3 inches, %4 pages\nThe PDF has crop, bleed, and registration marks, color bars, and job information outside the page.\n"
@@ -132,7 +132,7 @@ void packAndGo(QWidget *parent, MainWindow *win, bool forPrinter)
     const QString path = askSavePath(parent, QCoreApplication::translate("Sharing", "Save for Another Computer"), ed->displayName() + ".zip", QCoreApplication::translate("Sharing", "ZIP (*.zip)"));
     if (path.isEmpty()) return;
     ZipWriter z;
-    z.add(ed->displayName() + ".jpub", publicationBytes(*ed->doc(), win->pageThumbnail(0, 256)));
+    z.add(ed->displayName() + ".jpub", publicationBytes(*ed->doc(), win->pageThumbnail(0, 256), QString(), true));
     // Include the font files the publication uses, when they are bundled or installed as files.
     QSet<QString> families;
     for (auto it = ed->doc()->stories.cbegin(); it != ed->doc()->stories.cend(); ++it)
@@ -185,7 +185,7 @@ void saveAsTemplate(QWidget *parent, MainWindow *win)
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/Templates";
     QDir().mkpath(dir);
     QString err;
-    if (savePublication(*win->editor()->doc(), dir + "/" + name.trimmed() + ".jpub", win->pageThumbnail(0, 256), &err))
+    if (savePublication(*win->editor()->doc(), dir + "/" + name.trimmed() + ".jpub", win->pageThumbnail(0, 256), &err, true))
         QMessageBox::information(parent, QCoreApplication::translate("Sharing", "Save as Template"), QCoreApplication::translate("Sharing", "\"%1\" is now in File > New > My Templates.").arg(name.trimmed()));
     else QMessageBox::warning(parent, QCoreApplication::translate("Sharing", "Save as Template"), err);
 }

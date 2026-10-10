@@ -1,5 +1,5 @@
 # Add and adjust pictures
-<!-- keywords: photo, image, insert picture, crop, clip art, PDF page, jpg, png, svg, recolor, alt text, caption, placeholder, graphics manager, online pictures -->
+<!-- keywords: photo, image, insert picture, crop, clip art, PDF page, jpg, png, svg, recolor, alt text, caption, placeholder, graphics manager, online pictures, link to file, linked picture, insert and link, embed, missing picture, relink -->
 
 A picture sits inside a frame. You can crop the picture, and move or resize the frame.
 
@@ -7,12 +7,28 @@ A picture sits inside a frame. You can crop the picture, and move or resize the 
 
 1. Click **Insert > Illustrations > Pictures**.
 2. In the **Insert Picture** window, choose a file. JeffPub opens PNG, JPEG, GIF, BMP, TIFF, WebP, SVG, WMF, EMF, ICO, and PDF files.
+3. Pick **Insert**, **Link to File**, or **Insert and Link** in the **Insert as** box, which sits with the file list and can be reached with the Tab key. **Insert** is chosen each time the window opens. See "Link a picture to its file," below.
+4. Click **Open**.
 
-The picture lands in the middle of the page. You can also drag a picture file onto the page.
+The picture lands in the middle of the page. You can also drag a picture file onto the page, which always uses **Insert**.
 
 If you choose several pictures at once, they line up as thumbnails on the scratch area, the gray space beside the page. Drag the ones you want onto the page.
 
 If a PDF has more than one page, the **Insert PDF Page** window shows each page. Pick one and click **OK**.
+
+## Link a picture to its file
+
+**Insert** puts a copy of the picture inside the publication. That copy goes wherever the publication goes, but a publication with many large photos gets large too. A link keeps the photos in their own files instead.
+
+- **Insert** copies the picture into the publication. This is the usual choice.
+- **Link to File** keeps only the file's location and a small preview, no more than 512 pixels on its longest side. The picture on the page, and in a print, a PDF, or an e-book, comes from the file at full quality. If the file is moved or deleted, the page shows the small preview instead.
+- **Insert and Link** does both. The publication keeps the whole picture and the link. When you open the publication and the file has changed, JeffPub reads it again and replaces its copy.
+
+JeffPub remembers the file's full location, and also where it is compared with the publication, such as "the Photos folder beside it". If you move the publication and its pictures together, the second one wins, so the pictures are found again. Keep the folders as they were.
+
+The **Graphics Manager** shows whether each picture is **Embedded**, **Linked**, **Missing**, or **Modified**, and has buttons to update a link, point it at another file, or turn it into a copy. See [Graphics Manager](graphics-manager).
+
+When you save a publication as a `.pub` file, make a Pack and Go file, or send it by e-mail, JeffPub puts each linked picture into the file in full, so it does not depend on files that stay behind. If a linked file is missing then, its small preview goes in instead. A `.pub` file you open never has links: its pictures come in as copies.
 
 ## Add a picture placeholder
 
@@ -58,10 +74,11 @@ On the **Picture Format** tab, use the **Adjust** group:
 
 ## See every picture
 
-Click **View > Show > Graphics Manager** to list every picture in the **Graphics Manager** pane. Select one, then click **Go to** to jump to it, **Save As…** to save a copy, or **Replace…** to choose another file.
+Click **View > Show > Graphics Manager** to list every picture in the **Graphics Manager** pane. Select one, then click **Go to** to jump to it, **Save As…** to save a copy, or **Replace…** to choose another file. For linked pictures it also has **Update Link**, **Change Link…**, and **Embed Picture**. See [Graphics Manager](graphics-manager).
 
 ## Related
 
+- [Graphics Manager](graphics-manager)
 - [Draw shapes and lines](shapes)
 - [Move, align, group, and layer objects](arrange)
 - [The Picture Format tab](tab-picture-format)

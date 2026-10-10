@@ -64,6 +64,7 @@
 #include <cstdio>
 #include <tuple>
 #include <QTemporaryDir>
+#include <QFileDialog>
 #include <QFileOpenEvent>
 #include <QSettings>
 #include <QLineEdit>
@@ -4307,6 +4308,514 @@ private Q_SLOTS:
         // One picture still goes on the page.
         w.insertFiles({paths.first()}, QPointF(-1, -1));
         QCOMPARE(int(d->pages[0]->items.size()), 1);
+    }
+
+    // ---- Pictures linked to their files ----
+
+    // A picture file for the linked-picture tests: its left half is `color`
+    // and its right half the opposite color; `noisy` makes it large to store.
+    static QString linkPicture(const QString &path, const QSize &size, const QColor &color, bool noisy = false)
+    {
+        QImage img(size, QImage::Format_RGB32);
+        img.fill(color);
+        QPainter p(&img);
+        p.fillRect(QRect(size.width() / 2, 0, size.width() - size.width() / 2, size.height()), QColor(255 - color.red(), 255 - color.green(), 255 - color.blue()));
+        p.end();
+        if (noisy) {
+            QRandomGenerator rng(7);
+            for (int y = 0; y < size.height(); ++y)
+                for (int x = 0; x < size.width(); ++x) img.setPixel(x, y, rng.generate() | 0xff000000);
+        }
+        img.save(path);
+        return path;
+    }
+
+    // The page as it prints, picture and all.
+    static QImage linkRender(jp::Document *doc)
+    {
+        jp::LayoutCache cache;
+        jp::PaintContext ctx;
+        ctx.doc = doc;
+        ctx.cache = &cache;
+        ctx.opt.output = true;
+        return jp::Renderer::renderToImage(ctx, 0, 1.0);
+    }
+
+    static bool linkColorsClose(const QColor &a, const QColor &b)
+    {
+        return std::abs(a.red() - b.red()) < 14 && std::abs(a.green() - b.green()) < 14 && std::abs(a.blue() - b.blue()) < 14;
+    }
+
+    static jp::PictureItem *linkFirstPicture(jp::Document *doc)
+    {
+        for (const auto &it : doc->pages[0]->items)
+            if (auto *p = dynamic_cast<jp::PictureItem *>(it.get())) return p;
+        return nullptr;
+    }
+
+    static QByteArray linkFileBytes(const QString &path)
+    {
+        QFile f(path);
+        return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+    }
+
+    // Link to File keeps the file's path and a preview of at most 512 pixels,
+    // not the picture; the picture draws from the file, whole, when the
+    // publication opens again.
+    void linkedPictureDrawsFromFile()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString file = linkPicture(dir.filePath(QStringLiteral("photo.png")), QSize(1000, 800), QColor(200, 30, 30), true);
+        const QByteArray fileBytes = linkFileBytes(file);
+        QVERIFY(!fileBytes.isEmpty());
+        jp::MainWindow w;
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        w.insertFiles({file}, QPointF(-1, -1), jp::PictureInsert::Link);
+        jp::Document *doc = w.editor()->doc();
+        jp::PictureItem *pic = linkFirstPicture(doc);
+        QVERIFY(pic);
+        const QString id = pic->imageId;
+        const jp::ImageData &img = doc->images[id];
+        QVERIFY(img.linked);
+        QVERIFY(!img.keepsCopy);
+        QCOMPARE(doc->linkStatus(id), jp::LinkStatus::Linked);
+        QCOMPARE(img.sourcePath, QFileInfo(file).absoluteFilePath());
+        const QImage preview = QImage::fromData(img.preview);
+        QVERIFY(!preview.isNull());
+        QCOMPARE(std::max(preview.width(), preview.height()), 512);
+
+        const QString path = dir.filePath(QStringLiteral("book.jpub"));
+        QVERIFY(w.saveTo(path));
+        QMap<QString, QByteArray> entries;
+        QVERIFY(jp::readZip(linkFileBytes(path), entries));
+        QStringList stored;
+        for (auto it = entries.cbegin(); it != entries.cend(); ++it) stored << it.key();
+        QVERIFY2(std::none_of(stored.cbegin(), stored.cend(), [](const QString &k) { return k.startsWith(QLatin1String("images/")); }), qPrintable(stored.join(' ')));
+        QVERIFY2(std::any_of(stored.cbegin(), stored.cend(), [&](const QString &k) { return k.startsWith(QLatin1String("previews/") + id + QLatin1Char('.')); }), qPrintable(stored.join(' ')));
+        QVERIFY(QFileInfo(path).size() < QFileInfo(file).size() / 4);   // the picture itself isn't in it
+
+        QString err;
+        auto back = jp::loadPublication(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(back->linkStatus(id), jp::LinkStatus::Linked);
+        QCOMPARE(back->images[id].sourcePath, QFileInfo(file).absoluteFilePath());
+        QCOMPARE(back->images[id].bytes, fileBytes);   // read from the file, not the preview
+        QCOMPARE(back->image(id).size(), QSize(1000, 800));
+        QCOMPARE(back->imageSize(id), QSize(1000, 800));
+
+        // Drawn from the file: left half red, right half the opposite.
+        auto flat = jp::Document::blank(QSizeF(612, 792));
+        const QString flatFile = linkPicture(dir.filePath(QStringLiteral("flat.png")), QSize(400, 200), QColor(200, 30, 30));
+        auto item = std::make_shared<jp::PictureItem>();
+        item->rect = QRectF(100, 100, 400, 200);
+        item->imgRect = QRectF(0, 0, 400, 200);
+        item->imageId = flat->addLinkedImage(linkFileBytes(flatFile), QStringLiteral("png"), flatFile, false);
+        flat->pages[0]->items.push_back(item);
+        const QString flatPath = dir.filePath(QStringLiteral("flat.jpub"));
+        QVERIFY(jp::savePublication(*flat, flatPath, QImage(), &err));
+        auto flatBack = jp::loadPublication(flatPath, &err);
+        QVERIFY2(flatBack, qPrintable(err));
+        const QImage page = linkRender(flatBack.get());
+        QVERIFY(linkColorsClose(QColor(page.pixel(200, 200)), QColor(200, 30, 30)));
+        QVERIFY(linkColorsClose(QColor(page.pixel(400, 200)), QColor(55, 225, 225)));
+    }
+
+    // Insert and Link keeps the full picture and the link: the picture stays
+    // when the file goes, and a changed file replaces the stored copy when
+    // the publication opens.
+    void insertAndLinkRefreshesStoredCopy()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString file = linkPicture(dir.filePath(QStringLiteral("photo.png")), QSize(800, 600), QColor(20, 120, 200));
+        jp::MainWindow w;
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        w.insertFiles({file}, QPointF(-1, -1), jp::PictureInsert::EmbedAndLink);
+        const QString id = linkFirstPicture(w.editor()->doc())->imageId;
+        QVERIFY(w.editor()->doc()->images[id].linked);
+        QVERIFY(w.editor()->doc()->images[id].keepsCopy);
+        const QString path = dir.filePath(QStringLiteral("book.jpub"));
+        QVERIFY(w.saveTo(path));
+        QMap<QString, QByteArray> entries;
+        QVERIFY(jp::readZip(linkFileBytes(path), entries));
+        QStringList keys = entries.keys();
+        QVERIFY2(keys.filter(QRegularExpression(QStringLiteral("^images/"))).size() == 1, qPrintable(keys.join(' ')));
+        QVERIFY2(keys.filter(QRegularExpression(QStringLiteral("^previews/"))).isEmpty(), qPrintable(keys.join(' ')));
+
+        // The file changes: the stored copy follows when the publication opens.
+        const QString oldId = id;
+        linkPicture(file, QSize(500, 500), QColor(20, 200, 60));
+        QString err;
+        auto changed = jp::loadPublication(path, &err);
+        QVERIFY2(changed, qPrintable(err));
+        QCOMPARE(changed->linkStatus(oldId), jp::LinkStatus::Linked);   // refreshed, so no longer Modified
+        QCOMPARE(changed->images[oldId].bytes, linkFileBytes(file));
+        QCOMPARE(changed->image(oldId).size(), QSize(500, 500));
+        const jp::PictureItem *pic = linkFirstPicture(changed.get());
+        QVERIFY(std::abs(pic->imgRect.width() - pic->imgRect.height()) < 0.5);   // not stretched to the old shape
+
+        // The file goes: the stored picture is all there is, and all that's needed.
+        QVERIFY(w.saveTo(path));
+        QVERIFY(QFile::remove(file));
+        auto gone = jp::loadPublication(path, &err);
+        QVERIFY2(gone, qPrintable(err));
+        QCOMPARE(gone->linkStatus(oldId), jp::LinkStatus::Missing);
+        QCOMPARE(gone->image(oldId).size(), QSize(800, 600));
+        jp::MainWindow w2;
+        w2.show();
+        w2.editor()->setDocument(std::move(gone), path);
+        w2.showTaskPane(QStringLiteral("designchecker"));
+        w2.refreshUi();
+        QStringList found;
+        for (auto *l : w2.findChildren<QListWidget *>())
+            for (int i = 0; i < l->count(); ++i) found << l->item(i)->text();
+        QVERIFY2(!found.filter(QStringLiteral("(Page 1)")).isEmpty(), qPrintable(found.join('|')));   // the checker did list things
+        QVERIFY2(!found.join('|').contains(QStringLiteral("Linked picture is missing")), qPrintable(found.join('|')));
+        QVERIFY2(!found.join('|').contains(QStringLiteral("linked, not embedded")), qPrintable(found.join('|')));
+    }
+
+    // The path relative to the publication wins when the publication was
+    // moved together with its pictures, even where the old path still exists.
+    void linkedPictureMovedWithPublication()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        QDir root(dir.path());
+        QVERIFY(root.mkpath(QStringLiteral("a/pictures")));
+        const QString file = linkPicture(root.filePath(QStringLiteral("a/pictures/p.png")), QSize(400, 300), QColor(200, 30, 30));
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto item = std::make_shared<jp::PictureItem>();
+        item->rect = QRectF(100, 100, 400, 300);
+        item->imgRect = QRectF(0, 0, 400, 300);
+        item->imageId = doc->addLinkedImage(linkFileBytes(file), QStringLiteral("png"), file, false);
+        const QString id = item->imageId;
+        doc->pages[0]->items.push_back(item);
+        QString err;
+        QVERIFY(jp::savePublication(*doc, root.filePath(QStringLiteral("a/book.jpub")), QImage(), &err));
+
+        // Moved together: the copy in b has other contents, and is the one found.
+        QVERIFY(root.mkpath(QStringLiteral("b/pictures")));
+        QVERIFY(QFile::copy(root.filePath(QStringLiteral("a/book.jpub")), root.filePath(QStringLiteral("b/book.jpub"))));
+        const QString moved = linkPicture(root.filePath(QStringLiteral("b/pictures/p.png")), QSize(400, 300), QColor(30, 30, 200));
+        auto back = jp::loadPublication(root.filePath(QStringLiteral("b/book.jpub")), &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(back->images[id].sourcePath, QFileInfo(moved).absoluteFilePath());
+        QCOMPARE(back->images[id].bytes, linkFileBytes(moved));
+        QCOMPARE(back->linkStatus(id), jp::LinkStatus::Modified);   // not the file it was made from
+
+        // Not moved: the full path is still there when the relative one finds nothing.
+        QVERIFY(root.mkpath(QStringLiteral("c")));
+        QVERIFY(QFile::copy(root.filePath(QStringLiteral("a/book.jpub")), root.filePath(QStringLiteral("c/book.jpub"))));
+        auto stayed = jp::loadPublication(root.filePath(QStringLiteral("c/book.jpub")), &err);
+        QVERIFY2(stayed, qPrintable(err));
+        QCOMPARE(stayed->images[id].sourcePath, QFileInfo(file).absoluteFilePath());
+        QCOMPARE(stayed->linkStatus(id), jp::LinkStatus::Linked);
+
+        // Saved somewhere else, the link is kept relative to the new place.
+        QVERIFY(jp::savePublication(*stayed, root.filePath(QStringLiteral("c/again.jpub")), QImage(), &err));
+        QMap<QString, QByteArray> entries;
+        QVERIFY(jp::readZip(linkFileBytes(root.filePath(QStringLiteral("c/again.jpub"))), entries));
+        const QJsonObject json = QJsonDocument::fromJson(entries["document.json"]).object();
+        QCOMPARE(json["images"].toArray()[0].toObject()["relative"].toString(), QStringLiteral("../a/pictures/p.png"));
+    }
+
+    // A file that has gone leaves the preview on the page; the picture is
+    // Missing, its size is still the file's, and the Design Checker says so.
+    void linkedPictureMissingShowsPreview()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString file = linkPicture(dir.filePath(QStringLiteral("photo.png")), QSize(1200, 900), QColor(200, 30, 30));
+        jp::MainWindow w;
+        w.show();
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        w.insertFiles({file}, QPointF(-1, -1), jp::PictureInsert::Link);
+        const QString path = dir.filePath(QStringLiteral("book.jpub"));
+        QVERIFY(w.saveTo(path));
+        const QString id = linkFirstPicture(w.editor()->doc())->imageId;
+        QVERIFY(QFile::remove(file));
+        QCOMPARE(w.editor()->doc()->linkStatus(id), jp::LinkStatus::Missing);   // gone while the publication is open
+
+        QString err;
+        auto back = jp::loadPublication(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(back->linkStatus(id), jp::LinkStatus::Missing);
+        QCOMPARE(back->imageSize(id), QSize(1200, 900));
+        const QImage shown = back->image(id);
+        QVERIFY(!shown.isNull());
+        QCOMPARE(std::max(shown.width(), shown.height()), 512);   // the preview
+        // ... and it is what the page shows.
+        jp::PictureItem *pic = linkFirstPicture(back.get());
+        const QImage page = linkRender(back.get());
+        const QPoint left = (pic->rect.topLeft() + QPointF(pic->rect.width() * 0.25, pic->rect.height() * 0.5)).toPoint();
+        const QPoint right = (pic->rect.topLeft() + QPointF(pic->rect.width() * 0.75, pic->rect.height() * 0.5)).toPoint();
+        QVERIFY(linkColorsClose(QColor(page.pixel(left)), QColor(200, 30, 30)));
+        QVERIFY(linkColorsClose(QColor(page.pixel(right)), QColor(55, 225, 225)));
+
+        // The Design Checker names both problems.
+        w.editor()->setDocument(std::move(back), path);
+        w.showTaskPane(QStringLiteral("designchecker"));
+        w.refreshUi();
+        QStringList found;
+        for (auto *l : w.findChildren<QListWidget *>())
+            for (int i = 0; i < l->count(); ++i) found << l->item(i)->text();
+        QVERIFY2(found.contains(QStringLiteral("Linked picture is missing (Page 1)")), qPrintable(found.join('|')));
+        QVERIFY2(found.contains(QStringLiteral("Picture is linked, not embedded (Page 1)")), qPrintable(found.join('|')));
+    }
+
+    // A changed file shows as Modified, in the Graphics Manager too, until
+    // Update Link reads it again; Update Link can be undone.
+    void linkedPictureModifiedUpdates()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString file = linkPicture(dir.filePath(QStringLiteral("photo.png")), QSize(800, 600), QColor(200, 30, 30));
+        jp::MainWindow w;
+        w.show();
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        w.insertFiles({file}, QPointF(-1, -1), jp::PictureInsert::Link);
+        jp::Document *doc = w.editor()->doc();
+        jp::PictureItem *pic = linkFirstPicture(doc);
+        const QString oldId = pic->imageId;
+        QCOMPARE(doc->linkStatus(oldId), jp::LinkStatus::Linked);
+
+        // Changed while open: Modified, still drawn as it was, then updated.
+        linkPicture(file, QSize(600, 300), QColor(30, 200, 30));
+        QCOMPARE(doc->linkStatus(oldId), jp::LinkStatus::Modified);
+        QCOMPARE(doc->image(oldId).size(), QSize(800, 600));
+        w.editor()->select(pic->id);
+        w.showTaskPane(QStringLiteral("graphics"));
+        w.refreshUi();
+        QListWidget *list = nullptr;
+        for (auto *l : w.findChildren<QListWidget *>())
+            if (l->accessibleName() == QLatin1String("Pictures")) list = l;
+        QVERIFY(list);
+        QCOMPARE(list->count(), 1);
+        QVERIFY2(list->item(0)->text().contains(QStringLiteral("Modified")), qPrintable(list->item(0)->text()));
+        list->setCurrentRow(0);
+        QPushButton *update = nullptr;
+        for (auto *b : w.findChildren<QPushButton *>())
+            if (b->text() == QLatin1String("Update Link")) update = b;
+        QVERIFY(update);
+        QVERIFY(update->isEnabled());
+        update->click();
+        w.refreshUi();
+        pic = linkFirstPicture(doc);
+        QVERIFY(pic->imageId != oldId);
+        QCOMPARE(doc->linkStatus(pic->imageId), jp::LinkStatus::Linked);
+        QCOMPARE(doc->image(pic->imageId).size(), QSize(600, 300));
+        QVERIFY(std::abs(pic->imgRect.width() / pic->imgRect.height() - 2.0) < 0.02);   // the new shape, not the old one
+        QVERIFY2(list->item(0)->text().contains(QStringLiteral("Linked")), qPrintable(list->item(0)->text()));
+        QCOMPARE(doc->images[pic->imageId].preview.isEmpty(), false);
+        QCOMPARE(QImage::fromData(doc->images[pic->imageId].preview).size(), QSize(512, 256));   // the preview follows the file
+
+        w.editor()->undo();
+        QCOMPARE(linkFirstPicture(doc)->imageId, oldId);
+        QCOMPARE(doc->linkStatus(oldId), jp::LinkStatus::Modified);
+
+        // Changed while closed: the picture draws from the file, Modified until updated.
+        const QString path = dir.filePath(QStringLiteral("book.jpub"));
+        QVERIFY(w.saveTo(path));
+        linkPicture(file, QSize(300, 600), QColor(30, 30, 200));
+        QString err;
+        auto back = jp::loadPublication(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(back->linkStatus(oldId), jp::LinkStatus::Modified);
+        QCOMPARE(back->image(oldId).size(), QSize(300, 600));
+    }
+
+    // Embed Picture turns a link into a stored copy that outlives the file;
+    // Change Link points the picture at another file.
+    void embedAndChangeLinkedPicture()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString file = linkPicture(dir.filePath(QStringLiteral("photo.png")), QSize(800, 600), QColor(200, 30, 30), true);
+        const QString other = linkPicture(dir.filePath(QStringLiteral("other.png")), QSize(400, 400), QColor(30, 30, 200));
+        jp::MainWindow w;
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        w.insertFiles({file}, QPointF(-1, -1), jp::PictureInsert::Link);
+        jp::Document *doc = w.editor()->doc();
+        const QString picId = linkFirstPicture(doc)->id;
+        const QString linkedId = linkFirstPicture(doc)->imageId;
+
+        QVERIFY(w.editor()->changeLink(picId, other));
+        QCOMPARE(doc->images[linkFirstPicture(doc)->imageId].sourcePath, QFileInfo(other).absoluteFilePath());
+        QCOMPARE(doc->image(linkFirstPicture(doc)->imageId).size(), QSize(400, 400));
+        QVERIFY(!w.editor()->changeLink(picId, dir.filePath(QStringLiteral("nothing.png"))));   // no such file: nothing changes
+        QCOMPARE(doc->images[linkFirstPicture(doc)->imageId].sourcePath, QFileInfo(other).absoluteFilePath());
+        w.editor()->undo();
+        QCOMPARE(linkFirstPicture(doc)->imageId, linkedId);
+
+        QVERIFY(w.editor()->embedPicture(picId));
+        const QString embeddedId = linkFirstPicture(doc)->imageId;
+        QVERIFY(embeddedId != linkedId);
+        QVERIFY(!doc->images[embeddedId].linked);
+        QCOMPARE(doc->linkStatus(embeddedId), jp::LinkStatus::Embedded);
+        QCOMPARE(doc->images[embeddedId].bytes, linkFileBytes(file));
+        QVERIFY(!w.editor()->embedPicture(picId));   // nothing left to embed
+
+        const QString path = dir.filePath(QStringLiteral("book.jpub"));
+        QVERIFY(w.saveTo(path));
+        QVERIFY(QFile::remove(file));
+        QString err;
+        auto back = jp::loadPublication(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(back->linkStatus(embeddedId), jp::LinkStatus::Embedded);
+        QCOMPARE(back->image(embeddedId).size(), QSize(800, 600));
+
+        w.editor()->undo();   // back to the link
+        QCOMPARE(linkFirstPicture(doc)->imageId, linkedId);
+        QCOMPARE(doc->linkStatus(linkedId), jp::LinkStatus::Missing);
+    }
+
+    // Saving to .pub embeds the full picture from the file; when the file is
+    // gone, the preview.
+    void pubExportEmbedsLinkedPictures()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString file = linkPicture(dir.filePath(QStringLiteral("photo.png")), QSize(1000, 800), QColor(200, 30, 30), true);
+        jp::MainWindow w;
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        w.insertFiles({file}, QPointF(-1, -1), jp::PictureInsert::Link);
+        const QString path = dir.filePath(QStringLiteral("book.jpub"));
+        QVERIFY(w.saveTo(path));
+
+        QString err;
+        auto exportedSize = [&](jp::Document *doc, const QString &name) {
+            const QString pub = dir.filePath(name);
+            if (!jp::exportPublisher(*doc, pub, &err)) return QSize();
+            auto back = jp::importPublisherFile(pub, &err);
+            if (!back) return QSize();
+            for (const auto &it : back->pages[0]->items)
+                if (auto *p = dynamic_cast<jp::PictureItem *>(it.get())) return back->image(p->imageId).size();
+            return QSize();
+        };
+        auto present = jp::loadPublication(path, &err);
+        QVERIFY2(present, qPrintable(err));
+        QCOMPARE(exportedSize(present.get(), QStringLiteral("full.pub")), QSize(1000, 800));
+
+        QVERIFY(QFile::remove(file));
+        auto gone = jp::loadPublication(path, &err);
+        QVERIFY2(gone, qPrintable(err));
+        const QSize small = exportedSize(gone.get(), QStringLiteral("preview.pub"));
+        QVERIFY2(!small.isEmpty() && std::max(small.width(), small.height()) == 512, qPrintable(err));
+    }
+
+    // Pack and Go and e-mail send the pictures themselves, not links to files
+    // the other computer doesn't have.
+    void sharedPublicationsEmbedLinkedPictures()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString file = linkPicture(dir.filePath(QStringLiteral("photo.png")), QSize(900, 700), QColor(200, 30, 30));
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto item = std::make_shared<jp::PictureItem>();
+        item->rect = QRectF(100, 100, 400, 300);
+        item->imgRect = QRectF(0, 0, 400, 300);
+        item->imageId = doc->addLinkedImage(linkFileBytes(file), QStringLiteral("png"), file, false);
+        const QString id = item->imageId;
+        doc->pages[0]->items.push_back(item);
+        QString err;
+        const QByteArray sent = jp::publicationBytes(*doc, QImage(), QString(), true);
+        QVERIFY(QFile::remove(file));
+        auto there = jp::publicationFromBytes(sent, &err);
+        QVERIFY2(there, qPrintable(err));
+        QCOMPARE(there->linkStatus(id), jp::LinkStatus::Missing);
+        QCOMPARE(there->image(id).size(), QSize(900, 700));   // whole, not the preview
+    }
+
+    // Files from before pictures could be linked have the same pictures,
+    // embedded, and a picture that isn't linked writes nothing about links.
+    void embeddedPicturesWriteNoLinkFields()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString file = linkPicture(dir.filePath(QStringLiteral("photo.png")), QSize(300, 200), QColor(200, 30, 30));
+        jp::MainWindow w;
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        w.insertFiles({file}, QPointF(-1, -1));
+        const QString id = linkFirstPicture(w.editor()->doc())->imageId;
+        const QJsonObject io = w.editor()->doc()->toJson()["images"].toArray()[0].toObject();
+        QStringList keys = io.keys();
+        keys.sort();
+        QCOMPARE(keys, (QStringList{"format", "h", "id", "linked", "source", "w"}));
+        QString err;
+        auto back = jp::publicationFromBytes(jp::publicationBytes(*w.editor()->doc(), QImage()), &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(back->linkStatus(id), jp::LinkStatus::Embedded);
+        QVERIFY(!back->images[id].linked);
+        QCOMPARE(back->images[id].bytes, linkFileBytes(file));
+        // An embedded copy of a file that is also linked stays a separate picture.
+        w.insertFiles({file}, QPointF(-1, -1), jp::PictureInsert::Link);
+        w.insertFiles({file}, QPointF(-1, -1));
+        QSet<QString> ids;
+        for (const auto &it : w.editor()->doc()->pages[0]->items)
+            if (auto *p = dynamic_cast<jp::PictureItem *>(it.get())) ids.insert(p->imageId);
+        QCOMPARE(ids.size(), 2);
+    }
+
+    // Insert Picture's file dialog has an "Insert as" choice with a name, and
+    // the choice decides how the picture joins the publication.
+    void insertPictureDialogOffersLinking()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString file = linkPicture(dir.filePath(QStringLiteral("photo.png")), QSize(300, 200), QColor(200, 30, 30));
+        jp::Settings::get().setValue(QStringLiteral("dirs/pictures"), dir.path());
+        jp::MainWindow w;
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        QString name;
+        QStringList choices;
+        QTimer poll;
+        poll.setInterval(20);
+        QObject::connect(&poll, &QTimer::timeout, [&] {
+            auto *dlg = qobject_cast<QFileDialog *>(QApplication::activeModalWidget());
+            if (!dlg) return;
+            poll.stop();
+            if (auto *how = dlg->findChild<QComboBox *>(QStringLiteral("insertAs"))) {
+                name = how->accessibleName();
+                for (int i = 0; i < how->count(); ++i) choices << how->itemText(i);
+                how->setCurrentIndex(2);
+            }
+            if (auto *typed = dlg->findChild<QLineEdit *>(QStringLiteral("fileNameEdit"))) typed->setText(file);
+            QMetaObject::invokeMethod(dlg, "accept");
+        });
+        poll.start();
+        w.insertPictureFromFile();
+        poll.stop();
+        QCOMPARE(name, QStringLiteral("Insert as"));
+        QCOMPARE(choices, (QStringList{"Insert", "Link to File", "Insert and Link"}));
+        jp::PictureItem *pic = linkFirstPicture(w.editor()->doc());
+        QVERIFY(pic);
+        const jp::ImageData &img = w.editor()->doc()->images[pic->imageId];
+        QVERIFY(img.linked);
+        QVERIFY(img.keepsCopy);
+    }
+
+    // A linked picture that is copied and pasted stays linked to its file.
+    void copiedLinkedPictureStaysLinked()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString file = linkPicture(dir.filePath(QStringLiteral("photo.png")), QSize(300, 200), QColor(200, 30, 30));
+        jp::MainWindow w;
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        w.insertFiles({file}, QPointF(-1, -1), jp::PictureInsert::Link);
+        jp::Document *doc = w.editor()->doc();
+        const QString id = linkFirstPicture(doc)->imageId;
+        w.editor()->select(linkFirstPicture(doc)->id);
+        w.editor()->copy();
+        w.editor()->paste();
+        QCOMPARE(int(doc->pages[0]->items.size()), 2);
+        for (const auto &it : doc->pages[0]->items) {
+            auto *p = dynamic_cast<jp::PictureItem *>(it.get());
+            QVERIFY(p);
+            QVERIFY(doc->images[p->imageId].linked);
+            QCOMPARE(p->imageId, id);
+        }
     }
 
     void templatesFitTheirText()

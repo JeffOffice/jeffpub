@@ -6,10 +6,12 @@
 
 #include <QBuffer>
 #include <QCoreApplication>
+#include <QDir>
 #include <QFile>
 #include <QDateTime>
 #include <QHash>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QPainter>
 #include <QSaveFile>
@@ -19,11 +21,28 @@ namespace jp {
 
 static const char *kMime = "application/x-jeffpub";
 
-QByteArray publicationBytes(const Document &doc, const QImage &thumbnail)
+QByteArray publicationBytes(const Document &doc, const QImage &thumbnail, const QString &folder, bool embedLinks)
 {
     ZipWriter z;
     z.add("mimetype", kMime);
-    z.add("document.json", QJsonDocument(doc.toJson()).toJson(QJsonDocument::Compact));
+    // A linked picture's path from the folder the file goes in is kept next
+    // to its full path: it wins when the two are moved together.
+    QJsonObject json = doc.toJson();
+    QJsonArray imageList = json["images"].toArray();
+    const QString base = folder.isEmpty() ? doc.folder : folder;
+    for (int i = 0; i < imageList.size(); ++i) {
+        QJsonObject io = imageList[i].toObject();
+        const auto it = doc.images.constFind(io["id"].toString());
+        if (it == doc.images.cend() || !it->linked) continue;
+        if (!base.isEmpty() && !it->sourcePath.isEmpty()) {
+            const QString relative = QDir(base).relativeFilePath(it->sourcePath);
+            if (!QDir::isAbsolutePath(relative)) io["relative"] = relative;
+        }
+        if (embedLinks) io["copy"] = true;
+        imageList[i] = io;
+    }
+    json["images"] = imageList;
+    z.add("document.json", QJsonDocument(json).toJson(QJsonDocument::Compact));
     // Only pictures that are still used somewhere are written.
     QSet<QString> used;
     doc.forEachItem([&](Item *it, int, const QString &) {
@@ -33,8 +52,21 @@ QByteArray publicationBytes(const Document &doc, const QImage &thumbnail)
     for (const auto &p : doc.pages) used.insert(p->background.imageId);
     for (const auto &m : doc.masters) used.insert(m->background.imageId);
     for (const auto &b : doc.biz) used.insert(b.logoImageId);
-    for (auto it = doc.images.cbegin(); it != doc.images.cend(); ++it)
-        if (used.contains(it.key()) && !it->bytes.isEmpty()) z.add("images/" + it.key() + "." + it->format, it->bytes);
+    for (auto it = doc.images.cbegin(); it != doc.images.cend(); ++it) {
+        if (!used.contains(it.key())) continue;
+        if ((!it->linked || it->keepsCopy || embedLinks) && !it->bytes.isEmpty()) {
+            z.add("images/" + it.key() + "." + it->format, it->bytes);
+        } else if (it->linked) {
+            // A link without a stored copy keeps only a small picture of it.
+            ImageData made;
+            if (it->preview.isEmpty()) {
+                made = *it;
+                made.makePreview();
+            }
+            const ImageData &p = it->preview.isEmpty() ? made : *it;
+            if (!p.preview.isEmpty()) z.add("previews/" + it.key() + "." + p.previewFormat, p.preview);
+        }
+    }
     if (!thumbnail.isNull()) {
         QByteArray png;
         QBuffer b(&png);
@@ -45,7 +77,7 @@ QByteArray publicationBytes(const Document &doc, const QImage &thumbnail)
     return z.finish();
 }
 
-bool savePublication(const Document &doc, const QString &path, const QImage &thumbnail, QString *error)
+bool savePublication(const Document &doc, const QString &path, const QImage &thumbnail, QString *error, bool embedLinks)
 {
     QSaveFile f(path);
     // Some sync and security tools refuse the temporary file; write in place then.
@@ -54,7 +86,7 @@ bool savePublication(const Document &doc, const QString &path, const QImage &thu
         if (error) *error = f.errorString();
         return false;
     }
-    f.write(publicationBytes(doc, thumbnail));
+    f.write(publicationBytes(doc, thumbnail, QFileInfo(path).absolutePath(), embedLinks));
     if (!f.commit()) {
         if (error) *error = f.errorString();
         return false;
@@ -62,7 +94,7 @@ bool savePublication(const Document &doc, const QString &path, const QImage &thu
     return true;
 }
 
-std::unique_ptr<Document> publicationFromBytes(const QByteArray &bytes, QString *error)
+std::unique_ptr<Document> publicationFromBytes(const QByteArray &bytes, QString *error, const QString &folder)
 {
     QMap<QString, QByteArray> entries;
     if (!readZip(bytes, entries, error)) return nullptr;
@@ -78,16 +110,24 @@ std::unique_ptr<Document> publicationFromBytes(const QByteArray &bytes, QString 
     }
     auto doc = std::make_unique<Document>();
     doc->images.clear();
+    doc->folder = folder;
     doc->fromJson(jd.object());
     for (auto it = entries.cbegin(); it != entries.cend(); ++it) {
-        if (!it.key().startsWith("images/")) continue;
-        const QString file = it.key().mid(7);
+        const bool preview = it.key().startsWith("previews/");
+        if (!preview && !it.key().startsWith("images/")) continue;
+        const QString file = it.key().mid(preview ? 9 : 7);
         const QString id = file.section('.', 0, 0);
         ImageData &d = doc->images[id];
+        if (preview) {
+            d.preview = it.value();
+            d.previewFormat = file.section('.', 1);
+            continue;
+        }
         d.bytes = it.value();
         if (d.format.isEmpty()) d.format = file.section('.', 1);
         if (!d.pixelSize.isValid()) d.pixelSize = d.image().size();
     }
+    doc->refreshLinks();
     return doc;
 }
 
@@ -98,7 +138,7 @@ std::unique_ptr<Document> loadPublication(const QString &path, QString *error)
         if (error) *error = f.errorString();
         return nullptr;
     }
-    return publicationFromBytes(f.readAll(), error);
+    return publicationFromBytes(f.readAll(), error, QFileInfo(path).absolutePath());
 }
 
 // The preview picture a .pub file keeps in its summary information

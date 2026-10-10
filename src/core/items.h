@@ -115,6 +115,7 @@ public:
     QString caption;            // caption style id when inserted from Caption gallery
 
     void fitImage(const QSize &px, bool fill);  // fill: crop to cover, else fit inside
+    void keepProportions(const QSize &px);      // the picture's height follows its width, around the same center
     QJsonObject toJson() const override;
     void fromJson(const QJsonObject &o) override;
     void scaleInto(const QRectF &from, const QRectF &to) override;

@@ -1559,6 +1559,7 @@
     <file alias="en/export.md">help/en/export.md</file>
     <file alias="en/find-replace.md">help/en/find-replace.md</file>
     <file alias="en/formatting-text.md">help/en/formatting-text.md</file>
+    <file alias="en/graphics-manager.md">help/en/graphics-manager.md</file>
     <file alias="en/guides.md">help/en/guides.md</file>
     <file alias="en/index.md">help/en/index.md</file>
     <file alias="en/insert-objects.md">help/en/insert-objects.md</file>

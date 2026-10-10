@@ -28,6 +28,7 @@ Type in the search box above to find a topic, or a command to run. Press **F1** 
 ## Pictures and objects
 
 - [Add and adjust pictures](pictures)
+- [Graphics Manager](graphics-manager)
 - [Draw shapes and lines](shapes)
 - [Icons, barcodes, and other objects](insert-objects)
 - [Move, align, group, and layer objects](arrange)

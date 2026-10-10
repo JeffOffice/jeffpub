@@ -23,13 +23,29 @@ namespace jp {
 constexpr double PT_PER_IN = 72.0;
 inline double in2pt(double in) { return in * PT_PER_IN; }
 
+// How a picture file joins a publication: copied in (Embed), only tied to
+// its file (Link), or both (EmbedAndLink).
+enum class PictureInsert { Embed, Link, EmbedAndLink };
+// Where a picture stands with its file.
+enum class LinkStatus { Embedded, Linked, Missing, Modified };
+
 struct ImageData {
-    QByteArray bytes;           // original file bytes (embedded)
+    // The picture's file bytes. Of a link whose file can't be found and that
+    // keeps no copy, the preview stands in (and `format` is the preview's).
+    QByteArray bytes;
     QString format;             // "png", "jpg", "svg", ...
     QSize pixelSize;
-    QString sourcePath;         // where it was inserted from (Graphics Manager)
-    bool linked = false;        // linked instead of embedded
+    QString sourcePath;         // where it was inserted from (Graphics Manager); a link's file
+    bool linked = false;        // tied to the file at sourcePath
+    // Of a link:
+    bool keepsCopy = true;      // the full picture is stored in the publication too (Insert and Link)
+    int linkPage = 0;           // which page of a PDF file
+    qint64 fileSize = 0;        // the file as it was when the link was made or updated,
+    qint64 fileTime = 0;        // msecs since the epoch: a different file is a Modified one
+    QByteArray preview;         // a small picture of it (at most 512 pixels across), for when the file is gone
+    QString previewFormat;      // "jpg" or "png"
     QImage image() const;       // decoded, cached
+    void makePreview();         // fills preview from the picture
     mutable QImage cache;
 };
 
@@ -214,6 +230,10 @@ public:
     // saved back to .pub under these names, not swapped for the standard
     // fonts JeffPub's look-alikes match (interchangeFontName).
     QStringList pubFonts;
+    // Where the publication is saved, when it is: a linked picture's path
+    // relative to it is kept, and wins when the publication and its pictures
+    // were moved together.
+    QString folder;
 
     // pages
     QSizeF pageSize() const { return setup.size; }
@@ -239,6 +259,16 @@ public:
     QString addImage(const QByteArray &bytes, const QString &format, const QString &sourcePath = QString(), const QImage &decoded = QImage());
     QImage image(const QString &id) const;
     QSize imageSize(const QString &id) const;
+    // A picture tied to its file at `path`; `bytes` are the file's (see
+    // readPictureFile), kept in the publication when `keepCopy`, else only
+    // a small preview is.
+    QString addLinkedImage(const QByteArray &bytes, const QString &format, const QString &path, bool keepCopy, int pdfPage = 0, const QImage &decoded = QImage());
+    LinkStatus linkStatus(const QString &imageId) const;
+    // After a publication opens: reads each link's file again (a changed
+    // file replaces the stored copy of an Insert and Link picture; a Link
+    // picture draws from the file and is Modified until updated), and a
+    // file that is gone leaves the stored copy or the preview.
+    void refreshLinks();
 
     // items
     struct Loc { Item *item = nullptr; ItemList *list = nullptr; int index = -1; int page = -1; QString masterId; bool scratch = false; GroupItem *parent = nullptr; };
@@ -273,6 +303,11 @@ public:
 
     static std::unique_ptr<Document> blank(const QSizeF &size, const QString &sizeName = QStringLiteral("Letter"), int pageCount = 1);
 };
+
+// Reads a picture file as Insert Picture does: its bytes and format (a PDF as
+// the one page `pdfPage` alone), and its size in pixels. `bytes` may already
+// hold the file's bytes. False when it can't be read as a picture.
+bool readPictureFile(const QString &path, int pdfPage, QByteArray *bytes, QString *format, QSize *pixels);
 
 QVector<TextStyle> defaultStyles();
 

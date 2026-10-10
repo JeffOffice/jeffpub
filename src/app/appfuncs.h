@@ -20,6 +20,7 @@ namespace jp {
 class Document;
 class Editor;
 class MainWindow;
+enum class PictureInsert;
 
 void emailCurrentPage(QWidget *parent, Editor *ed);
 void emailAsAttachment(QWidget *parent, Editor *ed, const QString &format);
@@ -42,6 +43,10 @@ QStringList spellingSuggestions(const QString &word, const QString &language = Q
 void spellingAdd(const QString &word);                    // add to the user dictionary
 void spellingIgnore(const QString &word);                 // ignore for this session
 // The save dialog every Save As and Export command uses (see filedialogs.cpp).
+// The Insert Picture and Change Picture dialog: the files chosen (none when
+// cancelled) and, in `how` unless it is null, whether they are inserted,
+// linked to their files, or both. `several` allows more than one file.
+QStringList askPicturePaths(QWidget *parent, const QString &caption, const QString &dir, const QString &filter, bool several, PictureInsert *how);
 // Extra advice after a failed save (Windows: folders protected from unknown apps).
 QString saveFailureHint(const QString &error);
 QString askSavePath(QWidget *parent, const QString &caption, const QString &suggested,

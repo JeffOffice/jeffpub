@@ -169,7 +169,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     connect(m_canvas, &Canvas::editBarcodeWanted, this, [this] { barcodeDialog(this, m_ed); });
     connect(m_canvas, &Canvas::tabsDialogWanted, this, [this] { paragraphDialog(this, m_ed, 2); });
     connect(m_canvas, &Canvas::openFileWanted, this, [this](const QString &f) { if (maybeSave()) openFile(f); });
-    connect(m_canvas, &Canvas::insertFilesWanted, this, &MainWindow::insertFiles);
+    connect(m_canvas, &Canvas::insertFilesWanted, this, [this](const QStringList &paths, const QPointF &at) { insertFiles(paths, at); });
     connect(m_canvas, &Canvas::pictureTabWanted, this, [this] { if (RibbonTab *t = m_ribbon->tab("Picture Format")) m_ribbon->showTab(t); });
     connect(m_canvas, &Canvas::mouseMovedPage, this, [this](const QPointF &p) {
         m_posLabel->setText(positionText(p));
@@ -402,7 +402,7 @@ bool MainWindow::openFile(const QString &path)
         doc = importPublisher(bytes, &err, &rep);
         fromPub = true;
     } else {
-        doc = publicationFromBytes(bytes, &err);
+        doc = publicationFromBytes(bytes, &err, QFileInfo(path).absolutePath());
     }
     QApplication::restoreOverrideCursor();
     if (!doc) {
@@ -491,7 +491,7 @@ bool MainWindow::saveAs(const QString &format)
         const QString tdir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/Templates";
         QDir().mkpath(tdir);
         QString err;
-        if (!savePublication(*m_ed->doc(), tdir + "/" + QFileInfo(path).completeBaseName() + ".jpub", pageThumbnail(0, 256), &err))
+        if (!savePublication(*m_ed->doc(), tdir + "/" + QFileInfo(path).completeBaseName() + ".jpub", pageThumbnail(0, 256), &err, true))
             QMessageBox::warning(this, tr("Save as Template"), err);
         else statusBar()->showMessage(tr("Saved to My Templates."), 4000);
         return true;
@@ -1370,42 +1370,35 @@ static int choosePdfPage(QWidget *parent, const PdfDocument &pdf, const QString 
     return list->currentItem()->data(Qt::UserRole).toInt();
 }
 
-static bool readPicture(QWidget *parent, const QString &path, QByteArray *bytes, QString *fmt, QSize *px)
+static bool readPicture(QWidget *parent, const QString &path, QByteArray *bytes, QString *fmt, QSize *px, int *page = nullptr)
 {
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) return false;
     *bytes = f.readAll();
-    *fmt = QFileInfo(path).suffix().toLower();
-    if (*fmt == "jpeg") *fmt = "jpg";
-    if (*fmt == "tiff") *fmt = "tif";
-    if (*fmt == "pdf" || PdfDocument::looksLikePdf(*bytes)) {
-        // A PDF page is kept as a PDF of that page alone; its size in
-        // points, given at 96 pixels an inch like other pictures.
+    int pdfPage = 0;
+    if (QFileInfo(path).suffix().compare(QLatin1String("pdf"), Qt::CaseInsensitive) == 0 || PdfDocument::looksLikePdf(*bytes)) {
         const PdfDocument pdf(*bytes);
-        const int page = pdf.isValid() ? choosePdfPage(parent, pdf, QFileInfo(path).fileName()) : -1;
-        if (page < 0) return false;
-        *bytes = pdf.extractPage(page);
-        *fmt = QStringLiteral("pdf");
-        *px = (pdf.pageSize(page) * 96.0 / 72.0).toSize();
-        return !bytes->isEmpty() && px->isValid();
+        pdfPage = pdf.isValid() ? choosePdfPage(parent, pdf, QFileInfo(path).fileName()) : -1;
+        if (pdfPage < 0) return false;
     }
-    if (*fmt == "wmf" || *fmt == "emf" || Metafile::looksLikeMetafile(*bytes)) {
-        Metafile m;
-        if (!m.load(*bytes)) return false;
-        const QSizeF s = m.naturalSize();
-        *px = QSize(int(s.width() / 0.75), int(s.height() / 0.75));
-        return true;
-    }
-    QImageReader r(path);
-    *px = r.size();
-    return px->isValid() || *fmt == "svg";
+    if (page) *page = pdfPage;
+    return readPictureFile(path, pdfPage, bytes, fmt, px);
+}
+
+// A picture file as an image of the publication: copied in, linked to its
+// file, or both.
+static QString addPicture(Document *d, const QString &path, const QByteArray &bytes, const QString &fmt, int page, PictureInsert how)
+{
+    if (how == PictureInsert::Embed) return d->addImage(bytes, fmt, path);
+    return d->addLinkedImage(bytes, fmt, path, how == PictureInsert::EmbedAndLink, page);
 }
 
 void MainWindow::insertPictureFromFile(const QString &replaceItemId, const QPointF &at)
 {
-    const QStringList paths = QFileDialog::getOpenFileNames(this, replaceItemId.isEmpty() ? tr("Insert Picture") : tr("Change Picture"),
-                                                            Settings::get().value("dirs/pictures", QStandardPaths::writableLocation(QStandardPaths::PicturesLocation)).toString(),
-                                                            imageFilter());
+    PictureInsert how = PictureInsert::Embed;
+    const QStringList paths = askPicturePaths(this, replaceItemId.isEmpty() ? tr("Insert Picture") : tr("Change Picture"),
+                                              Settings::get().value("dirs/pictures", QStandardPaths::writableLocation(QStandardPaths::PicturesLocation)).toString(),
+                                              imageFilter(), replaceItemId.isEmpty(), &how);
     if (paths.isEmpty()) return;
     Settings::get().setValue("dirs/pictures", QFileInfo(paths.first()).absolutePath());
     if (!replaceItemId.isEmpty()) {
@@ -1413,17 +1406,36 @@ void MainWindow::insertPictureFromFile(const QString &replaceItemId, const QPoin
         QByteArray bytes;
         QString fmt;
         QSize px;
-        if (!pic || !readPicture(this, paths.first(), &bytes, &fmt, &px)) return;
+        int page = 0;
+        if (!pic || !readPicture(this, paths.first(), &bytes, &fmt, &px, &page)) return;
         m_ed->change(tr("Change Picture"), [&] {
-            pic->imageId = m_ed->doc()->addImage(bytes, fmt, paths.first());
+            pic->imageId = addPicture(m_ed->doc(), paths.first(), bytes, fmt, page, how);
             pic->fitImage(m_ed->doc()->imageSize(pic->imageId), true);
         });
         return;
     }
-    insertFiles(paths, at);
+    insertFiles(paths, at, how);
 }
 
-void MainWindow::insertFiles(const QStringList &paths, const QPointF &atIn)
+// Graphics Manager > Change Link: the picture is tied to another file.
+void MainWindow::changePictureLink(const QString &pictureId)
+{
+    auto *pic = dynamic_cast<PictureItem *>(m_ed->doc()->item(pictureId));
+    if (!pic) return;
+    const QString from = QFileInfo(m_ed->doc()->images.value(pic->imageId).sourcePath).absolutePath();
+    const QStringList paths = askPicturePaths(this, tr("Change Link"),
+                                              QDir(from).exists() ? from : Settings::get().value("dirs/pictures", QStandardPaths::writableLocation(QStandardPaths::PicturesLocation)).toString(),
+                                              imageFilter(), false, nullptr);
+    if (paths.isEmpty()) return;
+    Settings::get().setValue("dirs/pictures", QFileInfo(paths.first()).absolutePath());
+    QByteArray bytes;
+    QString fmt;
+    QSize px;
+    int page = 0;
+    if (readPicture(this, paths.first(), &bytes, &fmt, &px, &page)) m_ed->changeLink(pictureId, paths.first(), page);
+}
+
+void MainWindow::insertFiles(const QStringList &paths, const QPointF &atIn, PictureInsert how)
 {
     Document *d = m_ed->doc();
     const QSizeF ps = d->pageSize();
@@ -1449,9 +1461,10 @@ void MainWindow::insertFiles(const QStringList &paths, const QPointF &atIn)
         QByteArray bytes;
         QString fmt;
         QSize px;
-        if (!readPicture(this, path, &bytes, &fmt, &px)) continue;
+        int page = 0;
+        if (!readPicture(this, path, &bytes, &fmt, &px, &page)) continue;
         auto pic = std::make_shared<PictureItem>();
-        pic->imageId = d->addImage(bytes, fmt, path);
+        pic->imageId = addPicture(d, path, bytes, fmt, page, how);
         // Natural size from the picture's resolution (96 dpi if unknown), limited to the page.
         QImageReader r(path);
         double dpi = 96;
