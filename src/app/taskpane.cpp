@@ -163,7 +163,9 @@ public:
                             }
                             if (data.linked && !data.keepsCopy) {
                                 add(tr("Picture is linked, not embedded"), pic->id, p, "link");
-                                if (d->linkStatus(pic->imageId) == LinkStatus::Missing) add(tr("Linked picture is missing"), pic->id, p, "link-2-off");
+                                const LinkStatus link = d->linkStatus(pic->imageId);
+                                if (link == LinkStatus::Missing) add(tr("Linked picture is missing"), pic->id, p, "link-2-off");
+                                if (link == LinkStatus::NotUpdated) add(tr("Linked picture shows only its preview until Update Link"), pic->id, p, "link-2-off");
                             }
                         }
                     }
@@ -477,6 +479,7 @@ private:
         case LinkStatus::Linked: return tr("Linked");
         case LinkStatus::Missing: return tr("Missing");
         case LinkStatus::Modified: return tr("Modified");
+        case LinkStatus::NotUpdated: return tr("Not updated");
         default: return tr("Embedded");
         }
     }
@@ -490,7 +493,9 @@ private:
         const QSize px = d->imageSize(p->imageId);
         const double ppi = p->imgRect.width() > 0 ? px.width() / (p->imgRect.width() / 72.0) : 0;
         const QString path = data.sourcePath.isEmpty() ? tr("(not available)") : data.sourcePath;
-        QString text = tr("Status: %1\n").arg(statusName(d->linkStatus(p->imageId)));
+        const LinkStatus status = d->linkStatus(p->imageId);
+        QString text = tr("Status: %1\n").arg(statusName(status));
+        if (status == LinkStatus::NotUpdated) text += tr("The file is outside the publication's folder, so JeffPub has not looked at it. The page shows what the publication stored. Click Update Link to use the file.\n");
         if (data.linked) {
             text += tr("Linked file: %1\n").arg(path);
             text += data.keepsCopy ? tr("The publication also keeps the picture.\n") : tr("The publication keeps only a small preview.\n");

@@ -10,6 +10,7 @@
 #include <QCache>
 #include <QDateTime>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFileInfo>
 #include <QMutex>
 #include <QFontMetricsF>
@@ -668,20 +669,38 @@ static void paintText(QPainter *p, const PaintContext &ctx, const TextItem &t)
 }
 
 // A picture field's picture for one record of the mail merge list: the file
-// its column names, beside the list (read once, until the file changes).
+// its column names, beside the list. A publication that came from a file
+// reads only the files in its own folder or below. Kept, a miss too, and not
+// looked at again for a few seconds, so painting doesn't go to the disk.
 static QImage mergePicture(const Document &d, const QString &field, int record)
 {
     const QString file = d.merge.value(record, field);
     if (file.isEmpty()) return QImage();
-    const QFileInfo fi(QDir(QFileInfo(d.merge.path).absolutePath()).absoluteFilePath(file));
-    const QString key = fi.absoluteFilePath() + QLatin1Char('|') + QString::number(fi.lastModified().toMSecsSinceEpoch());
+    const QString path = QDir::cleanPath(QDir(QFileInfo(d.merge.path).absolutePath()).absoluteFilePath(file));
+    struct Entry {
+        QImage image;
+        QDateTime time;
+        qint64 size = -1;
+        QElapsedTimer checked;
+    };
     static QMutex lock;
-    static QCache<QString, QImage> cache(256 * 1024 * 1024);   // bytes
+    static QCache<QString, Entry> cache(256 * 1024 * 1024);   // bytes
+    const QString key = QString::number(d.fromFile) + QLatin1Char('|') + d.folder + QLatin1Char('|') + path;
     QMutexLocker locked(&lock);
-    if (const QImage *img = cache.object(key)) return *img;
-    QImage img(fi.absoluteFilePath());
-    if (!img.isNull()) cache.insert(key, new QImage(img), std::max<qsizetype>(1, img.sizeInBytes()));
-    return img;
+    Entry *entry = cache.object(key);
+    if (entry && entry->checked.isValid() && entry->checked.elapsed() < 3000) return entry->image;
+    auto *fresh = new Entry;
+    if (d.mayFollow(path)) {
+        const QFileInfo fi(path);
+        fresh->time = fi.lastModified();
+        fresh->size = fi.size();
+        if (entry && entry->time == fresh->time && entry->size == fresh->size) fresh->image = entry->image;   // unchanged
+        else fresh->image = QImage::fromData(readPictureBytes(path));
+    }
+    fresh->checked.start();
+    const QImage image = fresh->image;
+    cache.insert(key, fresh, std::max<qsizetype>(1, image.sizeInBytes()));
+    return image;
 }
 
 static void paintPicture(QPainter *p, const PaintContext &ctx, const PictureItem &pic)

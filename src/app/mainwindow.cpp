@@ -1444,9 +1444,11 @@ void MainWindow::changePictureLink(const QString &pictureId)
 {
     auto *pic = dynamic_cast<PictureItem *>(m_ed->doc()->item(pictureId));
     if (!pic) return;
-    const QString from = QFileInfo(m_ed->doc()->images.value(pic->imageId).sourcePath).absolutePath();
+    // (The old file's folder is looked at only when its link is followed.)
+    const ImageData old = m_ed->doc()->images.value(pic->imageId);
+    const QString from = old.followed ? QFileInfo(old.sourcePath).absolutePath() : QString();
     const QStringList paths = askPicturePaths(this, tr("Change Link"),
-                                              QDir(from).exists() ? from : Settings::get().value("dirs/pictures", QStandardPaths::writableLocation(QStandardPaths::PicturesLocation)).toString(),
+                                              !from.isEmpty() && QDir(from).exists() ? from : Settings::get().value("dirs/pictures", QStandardPaths::writableLocation(QStandardPaths::PicturesLocation)).toString(),
                                               imageFilter(), false, nullptr);
     if (paths.isEmpty()) return;
     Settings::get().setValue("dirs/pictures", QFileInfo(paths.first()).absolutePath());

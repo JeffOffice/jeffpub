@@ -441,7 +441,18 @@ and `fileTime` (the file's size in bytes and its modified time in milliseconds
 since 1970, as they were when the link was made or last updated), `fileHash`
 (the SHA-1 of the file's bytes, in lowercase hex, taken then too), and
 `relative` (the file's path from the folder the `.jpub` file was saved in,
-which a reader tries first, using `source` when nothing is there). With
+which a reader tries first, using `source` when nothing is there). A reader
+must not look at a file the publication names until it is sure the file is
+in the folder the `.jpub` file is in, or below it, after `..` and symbolic
+links are resolved. It must not even ask whether any other file is there: a
+`source` or `relative` outside the folder, one that is a network path
+(`\\server\share`, `//server/share`) or a device path (`\\?\`, `\\.\`), and a
+`relative` that is absolute, are never followed on their own. That picture
+shows its stored copy or its `previews/` entry, and is reported as *not
+updated*; the user can ask for that one file to be read, and it is then read
+for that session only. A file that is read must be a regular file (never a
+pipe or a device) of 1 byte to 256 MB, and no more than one byte past that is
+ever read. With
 `copy` false there is no `images/` entry, only `previews/<id>.<ext>`, which
 stands in when the file can't be found; `w` and `h` are still the file's size.
 A reader finds a changed file by comparing `fileHash` with the SHA-1 of the

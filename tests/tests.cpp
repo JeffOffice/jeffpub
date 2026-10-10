@@ -6181,13 +6181,14 @@ private Q_SLOTS:
         QCOMPARE(back->images[id].bytes, linkFileBytes(moved));
         QCOMPARE(back->linkStatus(id), jp::LinkStatus::Modified);   // not the file it was made from
 
-        // Not moved: the full path is still there when the relative one finds nothing.
+        // Not moved: the full path is still the link, but the file is outside the folder
+        // the publication is in now, so it is not looked at (see linksOutsideTheFolderAreNotFollowed).
         QVERIFY(root.mkpath(QStringLiteral("c")));
         QVERIFY(QFile::copy(root.filePath(QStringLiteral("a/book.jpub")), root.filePath(QStringLiteral("c/book.jpub"))));
         auto stayed = jp::loadPublication(root.filePath(QStringLiteral("c/book.jpub")), &err);
         QVERIFY2(stayed, qPrintable(err));
         QCOMPARE(stayed->images[id].sourcePath, QFileInfo(file).absoluteFilePath());
-        QCOMPARE(stayed->linkStatus(id), jp::LinkStatus::Linked);
+        QCOMPARE(stayed->linkStatus(id), jp::LinkStatus::NotUpdated);
 
         // Saved somewhere else, the link is kept relative to the new place.
         QVERIFY(jp::savePublication(*stayed, root.filePath(QStringLiteral("c/again.jpub")), QImage(), &err));
@@ -6400,7 +6401,7 @@ private Q_SLOTS:
         QVERIFY(QFile::remove(file));
         auto there = jp::publicationFromBytes(sent, &err);
         QVERIFY2(there, qPrintable(err));
-        QCOMPARE(there->linkStatus(id), jp::LinkStatus::Missing);
+        QCOMPARE(there->linkStatus(id), jp::LinkStatus::NotUpdated);   // opened with no folder of its own: no file is looked at
         QCOMPARE(there->image(id).size(), QSize(900, 700));   // whole, not the preview
     }
 
@@ -6669,6 +6670,373 @@ private Q_SLOTS:
         QVERIFY(w.editor()->updateLink(picId));
         const jp::ImageData &updated = w.editor()->doc()->images[linkFirstPicture(w.editor()->doc())->imageId];
         QCOMPARE(updated.fileHash, QCryptographicHash::hash(blue, QCryptographicHash::Sha1).toHex());
+    }
+
+    // A publication that arrives from someone else must not make JeffPub
+    // reach for files of the computer it opens on. A link to a file in the
+    // publication's own folder or below is followed when it opens; any other
+    // (elsewhere, up a `..`, over a symbolic link, a network or device path)
+    // is not touched at all, not even to ask if it is there: the page shows
+    // the stored copy or preview, and the status is Not updated.
+    void linksOutsideTheFolderAreNotFollowed()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        QDir root(dir.path());
+        QVERIFY(root.mkpath(QStringLiteral("pub/sub")) && root.mkpath(QStringLiteral("pub2")) && root.mkpath(QStringLiteral("outside")));
+        const QString pub = root.filePath(QStringLiteral("pub"));
+        const QSize big(1000, 800);
+        const QString inside = linkPicture(pub + QStringLiteral("/sub/inside.png"), big, QColor(200, 30, 30));
+        const QString secret = linkPicture(root.filePath(QStringLiteral("outside/secret.png")), big, QColor(30, 30, 200));
+        const QString sibling = linkPicture(root.filePath(QStringLiteral("pub2/near.png")), big, QColor(30, 200, 30));   // "pub" is the start of "pub2"
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        int row = 0;
+        auto link = [&](const QString &file) {
+            auto item = std::make_shared<jp::PictureItem>();
+            item->rect = QRectF(50, 50 + 100 * row++, 100, 80);
+            item->imgRect = QRectF(0, 0, 100, 80);
+            item->imageId = doc->addLinkedImage(linkFileBytes(file), QStringLiteral("png"), file, false);
+            doc->pages[0]->items.push_back(item);
+            return item->imageId;
+        };
+        const QString idInside = link(inside), idSecret = link(secret), idSibling = link(sibling);
+        QString err;
+        const QString path = pub + QStringLiteral("/book.jpub");
+        QVERIFY(jp::savePublication(*doc, path, QImage(), &err));
+        const QByteArray saved = linkFileBytes(path);
+
+        // Each file changes after the link was made, so that a file that is read shows.
+        for (const QString &f : {inside, secret, sibling}) linkPicture(f, big, QColor(250, 250, 10));
+        auto isStored = [&](const jp::Document &d, const QString &id) {   // the preview, not the file
+            return d.images[id].bytes != linkFileBytes(inside) && d.images[id].bytes != linkFileBytes(secret) && d.images[id].bytes != linkFileBytes(sibling) &&
+                   std::max(d.image(id).width(), d.image(id).height()) == 512;
+        };
+        auto loaded = jp::publicationFromBytes(saved, &err, pub);
+        QVERIFY2(loaded, qPrintable(err));
+        QCOMPARE(loaded->linkStatus(idInside), jp::LinkStatus::Modified);   // in the folder: read, and found changed
+        QCOMPARE(loaded->images[idInside].bytes, linkFileBytes(inside));
+        QCOMPARE(loaded->linkStatus(idSecret), jp::LinkStatus::NotUpdated);
+        QVERIFY(isStored(*loaded, idSecret));
+        QCOMPARE(loaded->linkStatus(idSibling), jp::LinkStatus::NotUpdated);
+        QVERIFY(isStored(*loaded, idSibling));
+        QCOMPARE(loaded->imageSize(idSecret), big);   // the file's size is still known
+        // The page shows the preview of the outside picture (the second): its left half is blue, not the yellow of the file.
+        const QImage page = linkRender(loaded.get());
+        QVERIFY(linkColorsClose(QColor(page.pixel(75, 190)), QColor(30, 30, 200)));
+
+        // Without a folder to be in (a publication from a message, say), no link is followed.
+        auto nowhere = jp::publicationFromBytes(saved, &err);
+        QVERIFY2(nowhere, qPrintable(err));
+        QCOMPARE(nowhere->linkStatus(idInside), jp::LinkStatus::NotUpdated);
+        QVERIFY(isStored(*nowhere, idInside));
+
+        // Paths a file can name that reach other computers and devices, and
+        // `..`, absolute, and bad relative ones. None of them is there, and
+        // none is looked for: Not updated, never Missing.
+        const QStringList sources{QStringLiteral("\\\\server\\share\\x.png"), QStringLiteral("//server/share/x.png"), QStringLiteral("\\\\?\\C:\\x.png"),
+                                  QStringLiteral("\\\\?\\UNC\\server\\share\\x.png"), QStringLiteral("\\\\.\\pipe\\x"), QStringLiteral("\\\\.\\C:"),
+                                  pub + QStringLiteral("/../outside/secret.png"), pub + QStringLiteral("/sub/../../outside/nothing.png"),
+                                  QStringLiteral("pictures/x.png"), QStringLiteral("/nonexistent-folder/x.png"), QStringLiteral("/dev/zero"),
+                                  QStringLiteral("/proc/self/pagemap"), QString()};
+        for (const QString &source : sources) {
+            const QByteArray crafted = rewriteImageEntries(saved, [&](QJsonArray &images) {
+                for (int i = 0; i < images.size(); ++i) {
+                    QJsonObject io = images[i].toObject();
+                    if (io["id"].toString() != idSecret) continue;
+                    io["source"] = source;
+                    io.remove(QStringLiteral("relative"));
+                    images[i] = io;
+                }
+            });
+            auto d = jp::publicationFromBytes(crafted, &err, pub);
+            QVERIFY2(d, qPrintable(err));
+            QVERIFY2(d->linkStatus(idSecret) == jp::LinkStatus::NotUpdated, qPrintable(source));
+            QVERIFY2(isStored(*d, idSecret), qPrintable(source));
+        }
+        // A `relative` that leaves the folder, or is absolute, is not followed either.
+        for (const QString &relative : {QStringLiteral("../outside/secret.png"), root.filePath(QStringLiteral("outside/secret.png")), QStringLiteral("\\\\server\\share\\x.png"),
+                                        QStringLiteral("//server/share/x.png"), QStringLiteral("sub/../../outside/secret.png"), QStringLiteral("C:\\x.png")}) {
+            const QByteArray crafted = rewriteImageEntries(saved, [&](QJsonArray &images) {
+                for (int i = 0; i < images.size(); ++i) {
+                    QJsonObject io = images[i].toObject();
+                    if (io["id"].toString() != idSecret) continue;
+                    io["source"] = QString();
+                    io["relative"] = relative;
+                    images[i] = io;
+                }
+            });
+            auto d = jp::publicationFromBytes(crafted, &err, pub);
+            QVERIFY2(d, qPrintable(err));
+            QVERIFY2(d->linkStatus(idSecret) == jp::LinkStatus::NotUpdated, qPrintable(relative));
+            QVERIFY2(isStored(*d, idSecret), qPrintable(relative));
+        }
+        // A relative path inside the folder still finds the file when the full path is stale.
+        const QByteArray moved = rewriteImageEntries(saved, [&](QJsonArray &images) {
+            for (int i = 0; i < images.size(); ++i) {
+                QJsonObject io = images[i].toObject();
+                if (io["id"].toString() != idInside) continue;
+                io["source"] = QStringLiteral("/somewhere/else/inside.png");
+                io["relative"] = QStringLiteral("sub/inside.png");
+                images[i] = io;
+            }
+        });
+        auto found = jp::publicationFromBytes(moved, &err, pub);
+        QVERIFY2(found, qPrintable(err));
+        QCOMPARE(found->images[idInside].sourcePath, QFileInfo(inside).absoluteFilePath());
+        QCOMPARE(found->linkStatus(idInside), jp::LinkStatus::Modified);
+        // A `..` that comes back down stays inside.
+        const QByteArray round = rewriteImageEntries(saved, [&](QJsonArray &images) {
+            for (int i = 0; i < images.size(); ++i) {
+                QJsonObject io = images[i].toObject();
+                if (io["id"].toString() != idInside) continue;
+                io["source"] = pub + QStringLiteral("/sub/../sub/inside.png");
+                io.remove(QStringLiteral("relative"));
+                images[i] = io;
+            }
+        });
+        auto roundDown = jp::publicationFromBytes(round, &err, pub);
+        QVERIFY2(roundDown, qPrintable(err));
+        QCOMPARE(roundDown->linkStatus(idInside), jp::LinkStatus::Modified);
+        QCOMPARE(roundDown->images[idInside].bytes, linkFileBytes(inside));
+
+#ifndef Q_OS_WIN
+        // A symbolic link in the folder that leads out of it is outside; one that stays in is not.
+        QVERIFY(QFile::link(secret, pub + QStringLiteral("/escape.png")));
+        QVERIFY(QFile::link(root.filePath(QStringLiteral("outside")), pub + QStringLiteral("/escapedir")));
+        QVERIFY(QFile::link(inside, pub + QStringLiteral("/alias.png")));
+        QVERIFY(QFile::link(pub + QStringLiteral("/sub"), pub + QStringLiteral("/aliasdir")));
+        struct Case { QString source; jp::LinkStatus status; };
+        for (const Case &c : {Case{pub + QStringLiteral("/escape.png"), jp::LinkStatus::NotUpdated}, Case{pub + QStringLiteral("/escapedir/secret.png"), jp::LinkStatus::NotUpdated},
+                              Case{pub + QStringLiteral("/alias.png"), jp::LinkStatus::Modified}, Case{pub + QStringLiteral("/aliasdir/inside.png"), jp::LinkStatus::Modified}}) {
+            const QByteArray crafted = rewriteImageEntries(saved, [&](QJsonArray &images) {
+                for (int i = 0; i < images.size(); ++i) {
+                    QJsonObject io = images[i].toObject();
+                    if (io["id"].toString() != idSecret) continue;
+                    io["source"] = c.source;
+                    io.remove(QStringLiteral("relative"));
+                    images[i] = io;
+                }
+            });
+            auto d = jp::publicationFromBytes(crafted, &err, pub);
+            QVERIFY2(d, qPrintable(err));
+            QVERIFY2(d->linkStatus(idSecret) == c.status, qPrintable(c.source));
+            QCOMPARE(d->images[idSecret].bytes == linkFileBytes(inside), c.status == jp::LinkStatus::Modified);
+            QVERIFY2(c.status == jp::LinkStatus::Modified || isStored(*d, idSecret), qPrintable(c.source));
+        }
+#endif
+    }
+
+    // The one way to follow a link to a file outside the folder is Update
+    // Link (or Change Link) on that picture in the Graphics Manager; it holds
+    // for the session, and saving keeps the path as it was.
+    void outsideLinkIsFollowedByUpdateLinkOnly()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        QDir root(dir.path());
+        QVERIFY(root.mkpath(QStringLiteral("pub")) && root.mkpath(QStringLiteral("outside")));
+        const QString one = linkPicture(root.filePath(QStringLiteral("outside/one.png")), QSize(800, 600), QColor(200, 30, 30));
+        const QString two = linkPicture(root.filePath(QStringLiteral("outside/two.png")), QSize(800, 600), QColor(30, 200, 30));
+        const QString other = linkPicture(root.filePath(QStringLiteral("outside/other.png")), QSize(400, 400), QColor(30, 30, 200));
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        QStringList imageIds, pictureIds;
+        for (const QString &file : {one, two}) {
+            auto item = std::make_shared<jp::PictureItem>();
+            item->rect = QRectF(50, 50 + 200 * imageIds.size(), 160, 120);
+            item->imgRect = QRectF(0, 0, 160, 120);
+            item->imageId = doc->addLinkedImage(linkFileBytes(file), QStringLiteral("png"), file, false);
+            imageIds << item->imageId;
+            pictureIds << item->id;
+            doc->pages[0]->items.push_back(item);
+        }
+        QString err;
+        const QString path = root.filePath(QStringLiteral("pub/book.jpub"));
+        QVERIFY(jp::savePublication(*doc, path, QImage(), &err));
+        const QByteArray fileOne = linkFileBytes(one);
+        linkPicture(one, QSize(800, 600), QColor(250, 250, 10));   // changed since
+        linkPicture(two, QSize(800, 600), QColor(250, 250, 10));
+
+        auto loaded = jp::loadPublication(path, &err);
+        QVERIFY2(loaded, qPrintable(err));
+        QCOMPARE(loaded->linkStatus(imageIds[0]), jp::LinkStatus::NotUpdated);
+        QCOMPARE(loaded->linkStatus(imageIds[1]), jp::LinkStatus::NotUpdated);
+        jp::MainWindow w;
+        w.show();
+        w.editor()->setDocument(std::move(loaded), path);
+        jp::Document *d = w.editor()->doc();
+        w.editor()->select(pictureIds[0]);
+        w.showTaskPane(QStringLiteral("graphics"));
+        w.refreshUi();
+        QListWidget *list = nullptr;
+        for (auto *l : w.findChildren<QListWidget *>())
+            if (l->accessibleName() == QLatin1String("Pictures")) list = l;
+        QVERIFY(list);
+        QCOMPARE(list->count(), 2);
+        for (int i = 0; i < 2; ++i) QVERIFY2(list->item(i)->text().contains(QStringLiteral("Not updated")), qPrintable(list->item(i)->text()));
+        list->setCurrentRow(0);
+        QString details;
+        for (auto *l : w.findChildren<QLabel *>())
+            if (l->text().startsWith(QLatin1String("Status:"))) details = l->text();
+        QVERIFY2(details.contains(QStringLiteral("Not updated")) && details.contains(QStringLiteral("outside the publication's folder")), qPrintable(details));
+
+        QPushButton *update = nullptr;
+        for (auto *b : w.findChildren<QPushButton *>())
+            if (b->text() == QLatin1String("Update Link")) update = b;
+        QVERIFY(update && update->isEnabled());
+        update->click();
+        w.refreshUi();
+        jp::PictureItem *first = dynamic_cast<jp::PictureItem *>(d->item(pictureIds[0]));
+        jp::PictureItem *second = dynamic_cast<jp::PictureItem *>(d->item(pictureIds[1]));
+        QVERIFY(first && second);
+        QCOMPARE(d->linkStatus(first->imageId), jp::LinkStatus::Linked);
+        QCOMPARE(d->images[first->imageId].bytes, linkFileBytes(one));
+        QVERIFY(d->images[first->imageId].bytes != fileOne);
+        QCOMPARE(d->linkStatus(second->imageId), jp::LinkStatus::NotUpdated);   // not followed with it
+        QVERIFY(d->images[second->imageId].bytes != linkFileBytes(two));
+
+        // Saved, the link is the one it was; opened again, it is outside again.
+        QVERIFY(w.saveTo(path));
+        QMap<QString, QByteArray> entries;
+        QVERIFY(jp::readZip(linkFileBytes(path), entries));
+        const QJsonObject io = QJsonDocument::fromJson(entries["document.json"]).object()["images"].toArray()[0].toObject();
+        QCOMPARE(io["source"].toString(), QFileInfo(one).absoluteFilePath());
+        QCOMPARE(io["relative"].toString(), QStringLiteral("../outside/one.png"));
+        auto again = jp::loadPublication(path, &err);
+        QVERIFY2(again, qPrintable(err));
+        QCOMPARE(again->linkStatus(first->imageId), jp::LinkStatus::NotUpdated);
+
+        w.editor()->undo();   // Update Link can be undone
+        QCOMPARE(d->linkStatus(dynamic_cast<jp::PictureItem *>(d->item(pictureIds[0]))->imageId), jp::LinkStatus::NotUpdated);
+
+        // Change Link points the other picture at a file, and follows it.
+        QVERIFY(w.editor()->changeLink(pictureIds[1], other));
+        const QString changed = dynamic_cast<jp::PictureItem *>(d->item(pictureIds[1]))->imageId;
+        QCOMPARE(d->linkStatus(changed), jp::LinkStatus::Linked);
+        QCOMPARE(d->image(changed).size(), QSize(400, 400));
+    }
+
+    // The mail merge's picture files follow the same rule: those in the
+    // publication's folder (or below) show, others are not looked for. A file
+    // that is not there is not asked after at every repaint.
+    void mergePicturesStayInTheFolder()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        QDir root(dir.path());
+        QVERIFY(root.mkpath(QStringLiteral("pub/faces")) && root.mkpath(QStringLiteral("outside")));
+        linkPicture(root.filePath(QStringLiteral("pub/faces/in.png")), QSize(200, 160), QColor(200, 30, 30));
+        linkPicture(root.filePath(QStringLiteral("outside/out.png")), QSize(200, 160), QColor(30, 30, 200));
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto frame = std::make_shared<jp::PictureItem>();
+        frame->rect = QRectF(100, 100, 200, 160);
+        frame->imgRect = QRectF(0, 0, 200, 160);
+        frame->name = QStringLiteral("merge:Photo");
+        doc->pages[0]->items.push_back(frame);
+        doc->merge.path = root.filePath(QStringLiteral("pub/list.csv"));
+        doc->merge.fields = {QStringLiteral("Photo")};
+        doc->merge.rows = {{QStringLiteral("faces/in.png")}, {QStringLiteral("../outside/out.png")}, {root.filePath(QStringLiteral("outside/out.png"))},
+                           {QStringLiteral("\\\\server\\share\\x.png")}, {QStringLiteral("later.png")}};
+        doc->merge.include = {true, true, true, true, true};
+        auto shows = [&](jp::Document *d, int record) {
+            jp::LayoutCache cache;
+            jp::PaintContext ctx;
+            ctx.doc = d;
+            ctx.cache = &cache;
+            ctx.opt.output = true;
+            ctx.opt.mergeRecord = record;
+            const QImage page = jp::Renderer::renderToImage(ctx, 0, 1.0);
+            return QColor(page.pixel(150, 180));   // the left half of the frame
+        };
+        // A publication made in this session has no folder it must keep to.
+        QVERIFY(linkColorsClose(shows(doc.get(), 0), QColor(200, 30, 30)));
+        QVERIFY(linkColorsClose(shows(doc.get(), 1), QColor(30, 30, 200)));
+
+        QString err;
+        const QString path = root.filePath(QStringLiteral("pub/book.jpub"));
+        QVERIFY(jp::savePublication(*doc, path, QImage(), &err));
+        auto loaded = jp::loadPublication(path, &err);
+        QVERIFY2(loaded, qPrintable(err));
+        QVERIFY(linkColorsClose(shows(loaded.get(), 0), QColor(200, 30, 30)));
+        for (int record : {1, 2, 3}) QVERIFY2(linkColorsClose(shows(loaded.get(), record), QColor(255, 255, 255)), qPrintable(QString::number(record)));
+
+        // A picture that is not there yet: not there at the next repaint either, though it has come.
+        QVERIFY(linkColorsClose(shows(loaded.get(), 4), QColor(255, 255, 255)));
+        linkPicture(root.filePath(QStringLiteral("pub/later.png")), QSize(200, 160), QColor(30, 200, 30));
+        QVERIFY(linkColorsClose(shows(loaded.get(), 4), QColor(255, 255, 255)));
+    }
+
+    // A linked picture copied from one publication into one that came from a
+    // file, whose file is outside that publication's folder, arrives without
+    // the link: the file is not looked at.
+    void pastedOutsideLinkComesWithoutTheLink()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        QDir root(dir.path());
+        QVERIFY(root.mkpath(QStringLiteral("pub")) && root.mkpath(QStringLiteral("outside")));
+        const QString file = linkPicture(root.filePath(QStringLiteral("outside/photo.png")), QSize(300, 200), QColor(200, 30, 30));
+        jp::MainWindow w;
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        w.insertFiles({file}, QPointF(-1, -1), jp::PictureInsert::Link);
+        w.editor()->select(linkFirstPicture(w.editor()->doc())->id);
+        w.editor()->copy();
+
+        QString err;
+        const QString path = root.filePath(QStringLiteral("pub/book.jpub"));
+        QVERIFY(jp::savePublication(*jp::Document::blank(QSizeF(612, 792)), path, QImage(), &err));
+        auto opened = jp::loadPublication(path, &err);
+        QVERIFY2(opened, qPrintable(err));
+        jp::MainWindow v;
+        v.editor()->setDocument(std::move(opened), path);
+        v.editor()->paste();
+        jp::PictureItem *pic = linkFirstPicture(v.editor()->doc());
+        QVERIFY(pic);
+        QVERIFY(!v.editor()->doc()->images[pic->imageId].linked);
+        QCOMPARE(v.editor()->doc()->image(pic->imageId).size(), QSize(300, 200));
+
+        // In the publication that has the file in its folder, it stays a link.
+        w.editor()->paste();
+        int linked = 0;
+        for (const auto &it : w.editor()->doc()->pages[0]->items)
+            if (auto *p = dynamic_cast<jp::PictureItem *>(it.get())) linked += w.editor()->doc()->images[p->imageId].linked;
+        QCOMPARE(linked, 2);
+    }
+
+    // Embedding for e-mail, Pack and Go, Save as Template, and .pub files
+    // writes what the publication holds: a link not followed brings its
+    // preview, and the outside file is not read for it.
+    void embeddingNeverReadsAnOutsideLink()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        QDir root(dir.path());
+        QVERIFY(root.mkpath(QStringLiteral("pub")) && root.mkpath(QStringLiteral("outside")));
+        const QString file = linkPicture(root.filePath(QStringLiteral("outside/photo.png")), QSize(1000, 800), QColor(200, 30, 30));
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto item = std::make_shared<jp::PictureItem>();
+        item->rect = QRectF(100, 100, 250, 200);
+        item->imgRect = QRectF(0, 0, 250, 200);
+        item->imageId = doc->addLinkedImage(linkFileBytes(file), QStringLiteral("png"), file, false);
+        const QString id = item->imageId;
+        doc->pages[0]->items.push_back(item);
+        QString err;
+        const QString path = root.filePath(QStringLiteral("pub/book.jpub"));
+        QVERIFY(jp::savePublication(*doc, path, QImage(), &err));
+        linkPicture(file, QSize(1000, 800), QColor(250, 250, 10));
+        auto loaded = jp::loadPublication(path, &err);
+        QVERIFY2(loaded, qPrintable(err));
+        QCOMPARE(loaded->linkStatus(id), jp::LinkStatus::NotUpdated);
+
+        auto there = jp::publicationFromBytes(jp::publicationBytes(*loaded, QImage(), QString(), true), &err);
+        QVERIFY2(there, qPrintable(err));
+        QCOMPARE(std::max(there->image(id).width(), there->image(id).height()), 512);   // the preview, not the 1000-pixel file
+        QCOMPARE(there->imageSize(id), QSize(1000, 800));
+        const QString pub = root.filePath(QStringLiteral("embedded.pub"));
+        QVERIFY2(jp::exportPublisher(*loaded, pub, &err), qPrintable(err));
+        auto back = jp::importPublisherFile(pub, &err);
+        QVERIFY2(back, qPrintable(err));
+        for (const auto &it : back->pages[0]->items)
+            if (auto *p = dynamic_cast<jp::PictureItem *>(it.get())) QCOMPARE(std::max(back->image(p->imageId).width(), back->image(p->imageId).height()), 512);
     }
 
     void templatesFitTheirText()

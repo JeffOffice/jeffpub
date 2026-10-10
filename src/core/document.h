@@ -27,7 +27,7 @@ inline double in2pt(double in) { return in * PT_PER_IN; }
 // its file (Link), or both (EmbedAndLink).
 enum class PictureInsert { Embed, Link, EmbedAndLink };
 // Where a picture stands with its file.
-enum class LinkStatus { Embedded, Linked, Missing, Modified };
+enum class LinkStatus { Embedded, Linked, Missing, Modified, NotUpdated };
 
 struct ImageData {
     // The picture's file bytes. Of a link whose file can't be found and that
@@ -53,6 +53,10 @@ struct ImageData {
     // contents were not the linked ones. (A status check looks only at the
     // size and date, and doesn't read the file.)
     bool changed = false;
+    // Not saved: whether the file may be looked at. A link made in this
+    // session is; one from a file that lies outside its publication's folder
+    // is not, until Update Link or Change Link is used on its picture.
+    bool followed = true;
 };
 
 struct Story {
@@ -286,8 +290,21 @@ public:
     // After a publication opens: reads each link's file again (a changed
     // file replaces the stored copy of an Insert and Link picture; a Link
     // picture draws from the file and is Modified until updated), and a
-    // file that is gone leaves the stored copy or the preview.
+    // file that is gone leaves the stored copy or the preview. Only the
+    // files `mayFollow` allows: any other link is not touched, and shows the
+    // stored copy or the preview as Not updated.
     void refreshLinks();
+    // Whether the publication came from a file. What a file names (a linked
+    // picture, a mail merge list's picture) is then read only when it lies in
+    // the publication's own folder or below, until the user asks for it.
+    bool fromFile = false;
+    // Whether `path` is in `folder` or below, however it is spelled: written
+    // as text first (a network or device name, a `..` that leaves, a path
+    // that is not absolute are out without anything being touched), then
+    // symbolic links on the way are read, one by one and not followed, so
+    // one that leads out is seen first.
+    bool inFolder(const QString &path) const;
+    bool mayFollow(const QString &path) const { return !fromFile || inFolder(path); }
 
     // items
     struct Loc { Item *item = nullptr; ItemList *list = nullptr; int index = -1; int page = -1; QString masterId; bool scratch = false; GroupItem *parent = nullptr; };

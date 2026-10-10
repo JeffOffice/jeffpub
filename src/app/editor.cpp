@@ -1060,9 +1060,10 @@ bool Editor::embedPicture(const QString &pictureId)
     if (!pic) return false;
     const ImageData d = m_doc->images.value(pic->imageId);
     if (!d.linked || d.bytes.isEmpty()) return false;
-    const bool missing = m_doc->linkStatus(pic->imageId) == LinkStatus::Missing && !d.keepsCopy;
+    const LinkStatus link = m_doc->linkStatus(pic->imageId);
     change(tr("Embed Picture"), [&] { pic->imageId = m_doc->addImage(d.bytes, d.format, d.sourcePath, d.cache); });
-    if (missing) Q_EMIT status(tr("The file is missing, so the small preview is what was embedded."));
+    if (link == LinkStatus::Missing && !d.keepsCopy) Q_EMIT status(tr("The file is missing, so the small preview is what was embedded."));
+    if (link == LinkStatus::NotUpdated && !d.keepsCopy) Q_EMIT status(tr("The link was not updated, so the small preview is what was embedded. Update Link first to embed the whole picture."));
     return true;
 }
 
@@ -1349,6 +1350,11 @@ QStringList Editor::insertItemsJson(const QByteArray &json, const QString &label
             // A linked picture stays linked to its file (the same link, if the publication has it).
             const QString file = QDir::cleanPath(QFileInfo(link["path"].toString()).absoluteFilePath());
             const auto same = std::find_if(m_doc->images.cbegin(), m_doc->images.cend(), [&](const ImageData &d) { return d.linked && d.sourcePath == file && d.bytes == bytes; });
+            // (Into a publication that came from a file, a link to a file outside its folder comes as the picture alone.)
+            if (same == m_doc->images.cend() && !m_doc->mayFollow(file)) {
+                imageMap[it.key()] = m_doc->addImage(bytes, io["format"].toString());
+                continue;
+            }
             imageMap[it.key()] = same != m_doc->images.cend() ? same.key()
                                                               : m_doc->addLinkedImage(bytes, io["format"].toString(), file, link["copy"].toBool(true), link["page"].toInt(), QImage(),
                                                                                       link["hash"].toString().toLatin1());

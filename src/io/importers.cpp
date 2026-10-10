@@ -484,10 +484,11 @@ static void freezeMergeFields(Document &out, const MergeSource &src, const ItemL
         if (it->type() == ItemType::Table) for (const auto &c : static_cast<TableItem *>(it.get())->cells) stories << c.storyId;
         if (it->type() == ItemType::Picture && it->name.startsWith("merge:")) {
             const QString file = src.value(rec, it->name.mid(6));
-            QFile f(QDir(QFileInfo(src.path).absolutePath()).absoluteFilePath(file));
-            if (!file.isEmpty() && f.open(QIODevice::ReadOnly)) {
+            const QString path = QDir::cleanPath(QDir(QFileInfo(src.path).absolutePath()).absoluteFilePath(file));
+            const QByteArray bytes = !file.isEmpty() && out.mayFollow(path) ? readPictureBytes(path) : QByteArray();
+            if (!bytes.isEmpty()) {
                 auto *pic = static_cast<PictureItem *>(it.get());
-                pic->imageId = out.addImage(f.readAll(), QFileInfo(file).suffix().toLower(), f.fileName());
+                pic->imageId = out.addImage(bytes, QFileInfo(file).suffix().toLower(), path);
                 pic->fitImage(out.imageSize(pic->imageId), true);
             }
             it->name.clear();
@@ -517,14 +518,29 @@ static void freezeMergeFields(Document &out, const MergeSource &src, const ItemL
 // Replace merge fields with each record's values in a copy of the
 // publication: every page once per record, or, with a catalog area, the
 // catalog page once per pageful of records with a record in each cell.
+// A copy of the publication as it is now, kept in memory: the links that are
+// followed stay followed, and the others are not touched.
+static std::unique_ptr<Document> copyOfPublication(const Document &src, QString *err)
+{
+    auto copy = publicationFromBytes(publicationBytes(src, QImage()), err, src.folder);
+    if (!copy) return nullptr;
+    copy->fromFile = src.fromFile;
+    for (auto it = src.images.cbegin(); it != src.images.cend(); ++it) {
+        const auto mine = copy->images.find(it.key());
+        if (mine != copy->images.end() && mine->linked && it->followed) mine->followed = true;
+    }
+    copy->refreshLinks();
+    return copy;
+}
+
 std::unique_ptr<Document> mergeToNewPublication(const Document &src)
 {
     QString err;
-    auto out = publicationFromBytes(publicationBytes(src, QImage()), &err);
+    auto out = copyOfPublication(src, &err);
     if (!out) return Document::blank(src.pageSize());
     out->pages.clear();
     out->catalog = CatalogArea();
-    auto tmpl = publicationFromBytes(publicationBytes(src, QImage()), &err);
+    auto tmpl = copyOfPublication(src, &err);
     const QVector<int> records = src.merge.includedRows();
     auto copyPage = [&](const Page &pg) {
         auto np = out->addPage(-1, pg.masterId);
@@ -643,7 +659,7 @@ std::unique_ptr<Document> loadAnyPublication(const QString &path, QString *error
     }
     const QByteArray bytes = f.readAll();
     if (isPublisherFile(bytes)) return importPublisher(bytes, error);
-    return publicationFromBytes(bytes, error);
+    return publicationFromBytes(bytes, error, QFileInfo(path).absolutePath());
 }
 
 // ---------------- printing ----------------

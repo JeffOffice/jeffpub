@@ -677,10 +677,81 @@ QString Document::addLinkedImage(const QByteArray &bytes, const QString &format,
     return id;
 }
 
+namespace {
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+constexpr Qt::CaseSensitivity kPathCase = Qt::CaseInsensitive;
+#else
+constexpr Qt::CaseSensitivity kPathCase = Qt::CaseSensitive;
+#endif
+
+bool isSeparator(QChar c) { return c == QLatin1Char('/') || c == QLatin1Char('\\'); }
+
+// Written as absolute by some system: /x, \x, \\server\x, C:\x, C:/x.
+bool looksAbsolute(const QString &p)
+{
+    return (!p.isEmpty() && isSeparator(p[0])) || (p.size() >= 2 && p[0].isLetter() && p[1] == QLatin1Char(':'));
+}
+
+// \\?\ and \\.\ (or with slashes): the system's own names for devices and long paths.
+bool isDevicePath(const QString &p) { return p.size() >= 4 && isSeparator(p[0]) && isSeparator(p[1]) && (p[2] == QLatin1Char('?') || p[2] == QLatin1Char('.')) && isSeparator(p[3]); }
+
+// \\server\share or //server/share.
+bool isNetworkPath(const QString &p) { return p.size() >= 2 && isSeparator(p[0]) && isSeparator(p[1]); }
+
+// `path` (cleaned) below one of `roots` (cleaned); the root it is below, or nothing.
+QString rootOf(const QStringList &roots, const QString &path)
+{
+    for (const QString &root : roots) {
+        const QString prefix = root.endsWith(QLatin1Char('/')) ? root : root + QLatin1Char('/');
+        if (path.size() > prefix.size() && path.startsWith(prefix, kPathCase)) return root;
+    }
+    return QString();
+}
+
+bool pathInside(const QStringList &roots, const QString &path, int hops)
+{
+    if (path.isEmpty() || isDevicePath(path) || !QDir::isAbsolutePath(path)) return false;
+    const QString clean = QDir::cleanPath(path);
+    const QString root = rootOf(roots, clean);
+    if (root.isEmpty()) return false;
+    if (isNetworkPath(path) && !isNetworkPath(roots.first())) return false;
+    // Each name on the way, from the folder down. A symbolic link is read, not
+    // followed: where it points must be inside too, and then so must what
+    // comes after it. (Windows shortcuts count as links to Qt.)
+    const QStringList parts = clean.mid(root.endsWith(QLatin1Char('/')) ? root.size() : root.size() + 1).split(QLatin1Char('/'), Qt::SkipEmptyParts);
+    QString at = root;
+    for (int i = 0; i < parts.size(); ++i) {
+        if (parts[i].endsWith(QLatin1String(".lnk"), Qt::CaseInsensitive)) return false;
+        at = QDir::cleanPath(at + QLatin1Char('/') + parts[i]);
+        const QFileInfo fi(at);
+        if (!fi.isSymLink()) continue;
+        if (hops >= 8) return false;
+        QString target = fi.symLinkTarget();
+        if (target.isEmpty()) return false;
+        if (QDir::isRelativePath(target)) target = fi.absolutePath() + QLatin1Char('/') + target;
+        const QString rest = parts.mid(i + 1).join(QLatin1Char('/'));
+        return pathInside(roots, rest.isEmpty() ? target : QDir::cleanPath(target) + QLatin1Char('/') + rest, hops + 1);
+    }
+    return true;
+}
+} // namespace
+
+bool Document::inFolder(const QString &path) const
+{
+    if (folder.isEmpty() || isDevicePath(folder) || !QDir::isAbsolutePath(folder)) return false;
+    // The folder as it is spelled, and as the system names it (a link in
+    // the way, or a different case): a link pointing there is inside too.
+    QStringList roots{QDir::cleanPath(folder)};
+    const QString canonical = QFileInfo(folder).canonicalFilePath();
+    if (!canonical.isEmpty() && canonical != roots.first()) roots << canonical;
+    return pathInside(roots, path, 0);
+}
+
 LinkStatus Document::linkStatus(const QString &imageId) const
 {
     const auto it = images.constFind(imageId);
     if (it == images.cend() || !it->linked) return LinkStatus::Embedded;
+    if (!it->followed) return LinkStatus::NotUpdated;
     const QFileInfo fi(it->sourcePath);
     if (!fi.isFile()) return LinkStatus::Missing;
     if (it->changed) return LinkStatus::Modified;
@@ -693,13 +764,16 @@ void Document::refreshLinks()
     for (auto it = images.begin(); it != images.end(); ++it) {
         ImageData &d = it.value();
         if (!d.linked) continue;
+        // A file the publication may not look at stays untouched, not even
+        // asked after; what the publication stores stands in for it.
+        d.followed = d.followed || mayFollow(d.sourcePath);
         const LinkStatus status = linkStatus(it.key());
         // A stored copy that matches the file needs no reading of it.
         const bool stored = d.keepsCopy && !d.bytes.isEmpty();
         QByteArray bytes, hash;
         QString format;
         QSize px;
-        const bool read = status != LinkStatus::Missing && !(stored && status == LinkStatus::Linked) &&
+        const bool read = d.followed && status != LinkStatus::Missing && !(stored && status == LinkStatus::Linked) &&
                           readPictureFile(d.sourcePath, d.linkPage, &bytes, &format, &px, &hash);
         if (read) {
             d.bytes = bytes;
@@ -1121,10 +1195,13 @@ void Document::fromJson(const QJsonObject &o)
         d.fileTime = qint64(io["fileTime"].toDouble());
         d.fileHash = io["fileHash"].toString().toLatin1();
         // Where the file is from the publication wins over where it was.
+        // (A relative path that is written as absolute is ignored, and one
+        // that leads out of the folder is not looked at.)
         const QString relative = io["relative"].toString();
-        if (d.linked && !relative.isEmpty() && !folder.isEmpty()) {
+        if (d.linked && !relative.isEmpty() && !folder.isEmpty() && !looksAbsolute(relative)) {
             const QString found = QDir::cleanPath(QDir(folder).absoluteFilePath(relative));
-            if (QFileInfo(found).isFile()) d.sourcePath = found;
+            if (inFolder(found) && QFileInfo(found).isFile()) d.sourcePath = found;
+            else if (!QDir::isAbsolutePath(d.sourcePath)) d.sourcePath = found;   // the full path says nothing
         }
     }
     merge = MergeSource::fromJson(o["merge"].toObject());

@@ -131,6 +131,11 @@ std::unique_ptr<Document> publicationFromBytes(const QByteArray &bytes, QString 
         if (d.format.isEmpty()) d.format = file.section('.', 1);
         if (!d.pixelSize.isValid()) d.pixelSize = d.image().size();
     }
+    // Only the files in the publication's own folder are read for the links
+    // it names; the rest wait until the user asks for them.
+    doc->fromFile = true;
+    for (auto &image : doc->images)
+        if (image.linked) image.followed = false;
     doc->refreshLinks();
     return doc;
 }

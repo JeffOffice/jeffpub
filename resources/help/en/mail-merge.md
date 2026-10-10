@@ -22,7 +22,7 @@ A merge field is a placeholder, such as «First Name», that becomes a real valu
 - **Address Block**: a mailing address built from columns named like First Name, Last Name, and Address Line 1.
 - **Greeting Line**: "Dear" and the person's name, or "Dear Friend," if there is no name.
 - **Insert Merge Field**: pick any column.
-- **Picture Field**: pick a column of picture file names. JeffPub adds an empty frame and looks for the files next to your list. Each record's picture shows when you preview the results, print, save a PDF, or merge to a new publication or a catalog.
+- **Picture Field**: pick a column of picture file names. JeffPub adds an empty frame and looks for the files next to your list. In a publication you saved and opened again, a picture shows only if its file is in the publication's folder or in a folder inside it, so keep the picture files there. Each record's picture shows when you preview the results, print, save a PDF, or merge to a new publication or a catalog.
 
 ## Preview the results
 

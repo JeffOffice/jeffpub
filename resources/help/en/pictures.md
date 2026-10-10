@@ -28,9 +28,11 @@ If a PDF has more than one page, the **Insert PDF Page** window shows each page.
 
 JeffPub remembers the file's full location, and also where it is compared with the publication, such as "the Photos folder beside it". If you move the publication and its pictures together, the second one wins, so the pictures are found again. Keep the folders as they were.
 
-The **Graphics Manager** shows whether each picture is **Embedded**, **Linked**, **Missing**, or **Modified**, and has buttons to update a link, point it at another file, or turn it into a copy. See [Graphics Manager](graphics-manager).
+JeffPub opens a linked picture's file by itself only when the file is in the publication's folder or in a folder inside it. A picture linked to a file anywhere else shows its saved preview, blurry, and is marked **Not updated**, until you select it and click **Update Link** in the Graphics Manager. This keeps a publication someone sends you from reaching into your computer. To have pictures load on their own, keep them in the publication's folder.
 
-When you save a publication as a `.pub` file, make a Pack and Go file, or send it by e-mail, JeffPub puts each linked picture into the file in full, so it does not depend on files that stay behind. If a linked file is missing then, its small preview goes in instead. A `.pub` file you open never has links: its pictures come in as copies.
+The **Graphics Manager** shows whether each picture is **Embedded**, **Linked**, **Missing**, **Modified**, or **Not updated**, and has buttons to update a link, point it at another file, or turn it into a copy. See [Graphics Manager](graphics-manager).
+
+When you save a publication as a `.pub` file, make a Pack and Go file, or send it by e-mail, JeffPub puts each linked picture into the file in full, so it does not depend on files that stay behind. If a linked file is missing then, or the picture is **Not updated**, its small preview goes in instead. A `.pub` file you open never has links: its pictures come in as copies.
 
 ## Add a picture placeholder
 

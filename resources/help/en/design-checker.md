@@ -34,6 +34,7 @@ JeffPub goes to the page and selects the object. Fix it, and the item drops off 
 | Picture is not scaled proportionally | The picture is stretched or squeezed. | Resize it to restore its shape. |
 | Picture is linked, not embedded | The picture is tied to a file and only a small preview is stored in the publication. A picture inserted with **Insert and Link** is stored whole and is not listed. | Keep the original file with your publication, or click **Embed Picture** in the [Graphics Manager](graphics-manager). |
 | Linked picture is missing | The file a linked picture points to is gone, so the page shows only its small preview, and that is what would print. | In the Graphics Manager, click **Change Link…** to find the file, or put it back and click **Update Link**. |
+| Linked picture shows only its preview until Update Link | The picture is linked to a file outside the publication's folder, which JeffPub does not open on its own. The page shows the small preview, and that is what would print. | In the Graphics Manager, select the picture and click **Update Link**. |
 | Picture has low resolution | The picture has under 150 ppi (pixels per inch) at its printed size. | Use a larger picture, or print it smaller. |
 | Object has transparency or effects (may print differently) | See-through areas and effects can look different on paper. | Print a test page. |
 | Font "name" is not installed | A font in your text is not on this computer, so another stands in. | Install the font, or pick another. |
