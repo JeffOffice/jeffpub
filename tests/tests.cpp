@@ -9639,6 +9639,300 @@ private Q_SLOTS:
         QVERIFY2(std::abs(widest - 1.5) < 0.05, qPrintable(QString::number(widest)));
     }
 
+    // A table cell's Text Direction and hyphenation are saved with the table;
+    // a cell that keeps the defaults saves nothing more than it did.
+    void tableCellDirectionAndHyphenationSave()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TableItem>();
+        t->rows = 1;
+        t->cols = 3;
+        t->colW = {60, 60, 60};
+        t->rowH = {120};
+        t->rect = QRectF(72, 72, 0, 0);
+        t->syncRect();
+        t->cells.resize(3);
+        for (auto &c : t->cells) c.storyId = doc->createStory(QStringLiteral("cell"));
+        t->cell(0, 1).vertical = true;
+        t->cell(0, 2).hyphenate = false;
+        t->cell(0, 2).hyphenZone = 30;
+        doc->pages[0]->items.push_back(t);
+        QString err;
+        auto again = jp::publicationFromBytes(jp::publicationBytes(*doc, QImage()), &err);
+        QVERIFY2(again, qPrintable(err));
+        const auto *back = static_cast<const jp::TableItem *>(again->pages[0]->items[0].get());
+        QCOMPARE(int(back->cells.size()), 3);
+        QVERIFY(!back->cell(0, 0).vertical && back->cell(0, 0).hyphenate && back->cell(0, 0).hyphenZone == 18.0);
+        QVERIFY(back->cell(0, 1).vertical && back->cell(0, 1).hyphenate);
+        QVERIFY(!back->cell(0, 2).vertical && !back->cell(0, 2).hyphenate && back->cell(0, 2).hyphenZone == 30.0);
+        const QJsonObject plain = t->toJson()["cells"].toArray()[0].toObject();
+        for (const char *key : {"vertical", "hyph", "hyphZone"}) QVERIFY2(!plain.contains(QLatin1String(key)), key);
+    }
+
+    // A cell's Text Direction turns its text 90 degrees as a text box's does:
+    // the lines run down a tall, narrow cell, and it is drawn just as the
+    // vertical text box is.
+    void tableCellTextDirectionLaysOutAndDraws()
+    {
+        const QString text = QStringLiteral("Region name and notes");
+        auto tableDoc = [&](bool vertical) {
+            auto doc = jp::Document::blank(QSizeF(612, 792));
+            auto t = std::make_shared<jp::TableItem>();
+            t->rows = 1;
+            t->cols = 1;
+            t->colW = {40};
+            t->rowH = {200};
+            t->rect = QRectF(72, 72, 0, 0);
+            t->syncRect();
+            t->stroke = jp::Stroke::none();
+            t->cells.resize(1);
+            t->cells[0].storyId = doc->createStory(text);
+            t->cells[0].vertical = vertical;
+            doc->pages[0]->items.push_back(t);
+            return doc;
+        };
+        auto lines = [](jp::Document &doc) {
+            jp::LayoutCache cache;
+            jp::PaintContext ctx;
+            ctx.doc = &doc;
+            ctx.cache = &cache;
+            QPointF origin;
+            const auto *lay = jp::Renderer::cellLayout(ctx, *static_cast<jp::TableItem *>(doc.pages[0]->items[0].get()), 0, 0, &origin);
+            return lay ? int(lay->lineInfo(0).size()) : -1;
+        };
+        auto across = tableDoc(false), down = tableDoc(true);
+        QVERIFY2(lines(*across) > 1, "a 40-point cell wraps the text");
+        QCOMPARE(lines(*down), 1);   // the same cell turned: 200 points to run along
+        auto box = jp::Document::blank(QSizeF(612, 792));
+        auto spine = std::make_shared<jp::TextItem>();
+        spine->rect = QRectF(72, 72, 40, 200);
+        spine->vertical = true;
+        spine->stroke = jp::Stroke::none();
+        spine->storyId = box->createStory(text);
+        box->pages[0]->items.push_back(spine);
+        const QImage cell = jp::renderPlate(*down, 0, 3, 72), asBox = jp::renderPlate(*box, 0, 3, 72);
+        QRect ink;
+        for (int y = 0; y < cell.height(); ++y)
+            for (int x = 0; x < cell.width(); ++x)
+                if (qGray(cell.pixel(x, y)) < 128) ink |= QRect(x, y, 1, 1);
+        QVERIFY2(QRect(72, 72, 40, 200).contains(ink) && ink.height() > 3 * ink.width(), qPrintable(QStringLiteral("%1,%2 %3x%4").arg(ink.x()).arg(ink.y()).arg(ink.width()).arg(ink.height())));
+        QVERIFY2(cell == asBox, "a turned cell draws as a turned text box");
+    }
+
+    // A cell hyphenates, or not, as its setting says: in the layout (a word
+    // breaks at the end of the first line, with its hyphen) and in the
+    // drawing; the zone is the cell's too.
+    void tableCellHyphenationLaysOutAndDraws()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto t = std::make_shared<jp::TableItem>();
+        t->rows = 1;
+        t->cols = 1;
+        t->colW = {110};
+        t->rowH = {100};
+        t->rect = QRectF(72, 72, 0, 0);
+        t->syncRect();
+        t->stroke = jp::Stroke::none();
+        t->cells.resize(1);
+        t->cells[0].storyId = doc->createStory(QStringLiteral("We met at the international conference today."));
+        doc->pages[0]->items.push_back(t);
+        auto firstLine = [&](bool hyphenate, double zone) {
+            t->cells[0].hyphenate = hyphenate;
+            t->cells[0].hyphenZone = zone;
+            jp::LayoutCache cache;
+            jp::PaintContext ctx;
+            ctx.doc = doc.get();
+            ctx.cache = &cache;
+            QPointF origin;
+            const auto *lay = jp::Renderer::cellLayout(ctx, *t, 0, 0, &origin);
+            return lay ? lay->lineInfo(0).value(0).text : QString();
+        };
+        QString on = firstLine(true, 0), off = firstLine(false, 0), far = firstLine(true, 200);
+        QVERIFY2(on.endsWith(QChar(0x00AD)), qPrintable(on));   // the line ends in a hyphen
+        for (QString *line : {&on, &off, &far}) line->remove(QChar(0x00AD));
+        QVERIFY2(on.contains(QStringLiteral("inter")), qPrintable(on));
+        QVERIFY2(!off.contains(QStringLiteral("inter")), qPrintable(off));
+        QVERIFY2(!far.contains(QStringLiteral("inter")), qPrintable(far));   // moving the word whole leaves less than the zone
+        // Drawn: the first line holds the word's start and its hyphen.
+        auto topInk = [&](bool hyphenate) {
+            t->cells[0].hyphenate = hyphenate;
+            t->cells[0].hyphenZone = 0;
+            const QImage k = jp::renderPlate(*doc, 0, 3, 72);
+            int n = 0;
+            for (int y = 72; y < 90; ++y)
+                for (int x = 72; x < 182; ++x) n += qGray(k.pixel(x, y)) < 128;
+            return n;
+        };
+        const int hyphenated = topInk(true), whole = topInk(false);
+        QVERIFY2(hyphenated > whole, qPrintable(QStringLiteral("%1 vs %2").arg(hyphenated).arg(whole)));
+    }
+
+    // Typing in a cell turned on its side: the caret lies across the lines,
+    // and a click at a letter puts the caret there.
+    void tableCellEditsOnItsSide()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        jp::Editor *ed = w.editor();
+        auto t = std::make_shared<jp::TableItem>();
+        t->rows = 1;
+        t->cols = 2;
+        t->colW = {40, 120};
+        t->rowH = {200};
+        t->rect = QRectF(72, 72, 0, 0);
+        t->syncRect();
+        t->stroke = jp::Stroke::none();
+        t->cells.resize(2);
+        for (auto &c : t->cells) c.storyId = ed->doc()->createStory(QStringLiteral("Region name"));
+        t->cell(0, 0).vertical = true;
+        ed->addItem(t);
+        jp::Canvas *cv = w.canvas();
+        QTest::qWait(50);
+        ed->beginTextEdit(t->id, 3, 0, 0);
+        QRectF caret = cv->caretViewRect();
+        QVERIFY2(caret.width() > caret.height(), "the caret in turned text is a level stroke");
+        ed->beginTextEdit(t->id, 3, 0, 1);
+        caret = cv->caretViewRect();
+        QVERIFY2(caret.height() > caret.width(), "and an upright one in plain text");
+        // Each place between letters is found again from where it is drawn:
+        // the text reads down the cell, from its top.
+        jp::PaintContext ctx;
+        ctx.doc = ed->doc();
+        ctx.cache = &ed->cache();
+        QPointF origin;
+        const auto *lay = jp::Renderer::cellLayout(ctx, *t, 0, 0, &origin);
+        QVERIFY(lay);
+        double lastY = -1;
+        for (int pos : {0, 4, 7, 11}) {
+            int frame;
+            QRectF r;
+            QVERIFY(lay->caretRect(pos, &frame, &r));
+            const QPointF page = t->rect.topLeft() + QPointF(t->cellRect(0, 0).width() - r.center().y(), r.x());
+            QCOMPARE(cv->textPosAt(t->id, page, 0, 0), pos);
+            QVERIFY(page.y() > lastY);
+            lastY = page.y();
+        }
+    }
+
+    // Table Layout > Alignment has Text Direction, for the cell the cursor is
+    // in or, with the table selected, every cell; new rows follow their
+    // neighbors.
+    void tableTextDirectionButton()
+    {
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        auto made = ed->newTable(QRectF(72, 72, 288, 72), 2, 2);
+        ed->addItem(made);
+        const QString id = made->id;
+        auto turned = [&] {
+            QString s;
+            for (const auto &c : static_cast<jp::TableItem *>(ed->doc()->item(id))->cells) s += c.vertical ? 'v' : '-';
+            return s;
+        };
+        auto direction = [&] { return w.act(QStringLiteral("tb.direction")); };
+        ed->beginTextEdit(id, 0, 1, 0);
+        direction()->trigger();
+        QCOMPARE(turned(), QStringLiteral("--v-"));   // row by row: the cell the cursor is in
+        QTest::qWait(60);
+        QVERIFY(direction()->isChecked());
+        ed->beginTextEdit(id, 0, 0, 1);
+        QTest::qWait(60);
+        QVERIFY2(!direction()->isChecked(), "the button follows the cell");
+        direction()->trigger();
+        QCOMPARE(turned(), QStringLiteral("-vv-"));
+        direction()->trigger();
+        QCOMPARE(turned(), QStringLiteral("--v-"));
+        // A row added next to a turned cell is turned too.
+        ed->beginTextEdit(id, 0, 1, 0);
+        w.act(QStringLiteral("tbl.insBelow"))->trigger();
+        QCOMPARE(turned(), QStringLiteral("--v-v-"));
+        ed->undo();
+        QCOMPARE(turned(), QStringLiteral("--v-"));
+        // The whole table: every cell turns, and turns back when all are turned.
+        ed->endTextEdit();
+        ed->select(id);
+        direction()->trigger();
+        QCOMPARE(turned(), QStringLiteral("vvvv"));
+        QTest::qWait(60);
+        QVERIFY(direction()->isChecked());
+        direction()->trigger();
+        QCOMPARE(turned(), QStringLiteral("----"));
+        ed->undo();
+        QCOMPARE(turned(), QStringLiteral("vvvv"));
+        // Its place on the ribbon: Table Layout > Alignment, with KeyTips.
+        auto *r = w.findChild<jp::Ribbon *>();
+        QVERIFY(r);
+        const QString d = r->describe(true);
+        const QString layout = d.mid(d.indexOf(QStringLiteral("\ntab Table Layout")) + 1).section(QStringLiteral("\ntab "), 0, 0);
+        QVERIFY(!layout.isEmpty());
+        bool direct = false, hyphen = false;
+        for (const QString &line : layout.split(QLatin1Char('\n'))) {
+            direct = direct || (line.contains(QStringLiteral("tb.direction")) && line.endsWith(QStringLiteral(" keytip=TD")));
+            hyphen = hyphen || (line.contains(QStringLiteral("ribbon.hyphenation")) && line.endsWith(QStringLiteral(" keytip=HY")));
+        }
+        QVERIFY2(direct && hyphen, qPrintable(layout));
+    }
+
+    // The Hyphenation command works in a table: on the cell the cursor is in
+    // or, with the table selected, on every cell.
+    void tableHyphenationCommand()
+    {
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        auto made = ed->newTable(QRectF(72, 72, 288, 72), 2, 2);
+        ed->addItem(made);
+        const QString id = made->id;
+        auto *t = static_cast<jp::TableItem *>(ed->doc()->item(id));
+        for (auto &c : t->cells) ed->doc()->storyDoc(c.storyId)->setPlainText(QStringLiteral("international conference"));
+        auto settings = [&] {
+            QString s;
+            for (const auto &c : static_cast<jp::TableItem *>(ed->doc()->item(id))->cells) s += c.hyphenate ? 'h' : '-';
+            return s;
+        };
+        auto hyphenated = [&] {
+            QString s;
+            for (const auto &c : static_cast<jp::TableItem *>(ed->doc()->item(id))->cells)
+                s += ed->doc()->storyDoc(c.storyId)->toPlainText().contains(QChar(0x00AD)) ? 'o' : '-';
+            return s;
+        };
+        // The dialog: automatic hyphenation on or off, and optional hyphens added.
+        auto command = [&](bool automatic, bool addHyphens) {
+            QTimer::singleShot(0, &w, [&, automatic, addHyphens] {
+                auto *dlg = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+                if (!dlg) return;
+                auto *check = dlg->findChild<QCheckBox *>();
+                if (!check) {
+                    dlg->reject();   // the "click in a text box" notice
+                    return;
+                }
+                check->setChecked(automatic);
+                if (addHyphens)
+                    for (auto *b : dlg->findChildren<QPushButton *>())
+                        if (b->text() == QLatin1String("Add Optional Hyphens")) b->click();
+                dlg->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok)->click();
+            });
+            w.act(QStringLiteral("rev.hyphenation"))->trigger();
+        };
+        QCOMPARE(settings(), QStringLiteral("hhhh"));
+        ed->beginTextEdit(id, 0, 1, 1);
+        command(false, true);
+        QCOMPARE(settings(), QStringLiteral("hhh-"));   // the cell the cursor is in
+        QCOMPARE(hyphenated(), QStringLiteral("---o"));
+        ed->undo();
+        ed->undo();
+        QCOMPARE(settings(), QStringLiteral("hhhh"));
+        ed->endTextEdit();
+        ed->select(id);
+        command(false, true);
+        QCOMPARE(settings(), QStringLiteral("----"));   // the whole table
+        QCOMPARE(hyphenated(), QStringLiteral("oooo"));
+        command(true, false);
+        QCOMPARE(settings(), QStringLiteral("hhhh"));
+    }
+
     // A process color from a .pub file: the screen shows the color the file
     // shows, and a CMYK PDF and the plates get its exact inks.
     void processInksShownColor()

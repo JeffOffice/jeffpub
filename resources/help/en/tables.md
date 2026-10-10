@@ -1,5 +1,5 @@
 # Make and edit tables
-<!-- keywords: table, grid, rows, columns, cells, merge cells, split cells, borders, cell fill, table format, table style, insert table, draw table, delete row, gridlines -->
+<!-- keywords: table, grid, rows, columns, cells, merge cells, split cells, borders, cell fill, table format, table style, insert table, draw table, delete row, gridlines, text direction, hyphenation -->
 
 A table is a grid of rows and columns. Each box in the grid is a cell, and each cell holds its own text.
 
@@ -51,6 +51,12 @@ Use the **Table Design** tab.
 - **Diagonals** draws a line across a cell. Choose **Divide Down** or **Divide Up**. **No Division** removes it.
 
 To place text in a cell, use the buttons in **Table Layout > Alignment**: top, middle, or bottom, and left, center, right, or justified. **Cell Margins**, also there, sets the space between a cell's edges and its text: **None**, **Narrow**, **Moderate**, or **Wide**. It changes the cell you are in, or every cell when the whole table is selected.
+
+**Text Direction**, also in **Table Layout > Alignment**, turns the text in a cell a quarter turn, so its lines read from top to bottom. It suits a heading over a narrow column. Click it again to turn the text back. The row does not grow to fit turned text, so drag the line under the row down until the text fits.
+
+**Hyphenation**, next to it, opens the **Hyphenation** dialog. There you turn **Automatically hyphenate this story** on or off, which sets whether long words break with a hyphen at the end of a line, and you set the **Hyphenation zone**. Words in cells are hyphenated unless you turn it off. See [Spelling, thesaurus, research, and hyphenation](proofing).
+
+Text Direction and Hyphenation change the cell you are in, or every cell when the whole table is selected.
 
 **View Gridlines** in **Table Layout > Table** shows dotted lines around every cell on screen. They do not print.
 

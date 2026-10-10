@@ -192,6 +192,9 @@ struct TableCell {
     bool covered = false;       // hidden under a merged cell
     int diagonal = 0;           // 0 none, 1 down (\), 2 up (/)
     VAlign valign = VAlign::Top;
+    bool vertical = false;      // text direction rotated 90°
+    bool hyphenate = true;      // automatic hyphenation
+    double hyphenZone = 18;     // points: break a word only if moving it whole would leave more empty
     QMarginsF margins{2.88, 2.88, 2.88, 2.88};
     CellBorder border;
 };

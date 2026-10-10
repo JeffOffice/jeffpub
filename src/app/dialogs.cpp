@@ -2632,18 +2632,25 @@ void tintsDialog(QWidget *p, Editor *ed, const std::function<void(const ColorRef
 void hyphenationDialog(QWidget *p, Editor *ed)
 {
     // The story of the text box being typed in or selected: all its boxes.
+    // In a table, the cell being typed in, or with the table selected, every cell.
     Document *d = ed->doc();
     const QString id = ed->isEditingText() ? ed->textTarget().itemId : (ed->single() ? ed->single()->id : QString());
     auto *t = dynamic_cast<TextItem *>(d->item(id));
-    if (!t) {
-        QMessageBox::information(p, QCoreApplication::translate("Dialogs", "Hyphenation"), QCoreApplication::translate("Dialogs", "Click in a text box first."));
+    auto *tb = dynamic_cast<TableItem *>(d->item(id));
+    QVector<TableCell *> cells;
+    if (tb)
+        for (int r = 0; r < tb->rows; ++r)
+            for (int c = 0; c < tb->cols; ++c)
+                if (!ed->isEditingText() || (r == ed->textTarget().row && c == ed->textTarget().col)) cells << &tb->cell(r, c);
+    if (!t && cells.isEmpty()) {
+        QMessageBox::information(p, QCoreApplication::translate("Dialogs", "Hyphenation"), QCoreApplication::translate("Dialogs", "Click in a text box or a table first."));
         return;
     }
-    const QVector<TextItem *> chain = d->chainOf(t->id);
+    const QVector<TextItem *> chain = t ? d->chainOf(t->id) : QVector<TextItem *>();
     Dlg dlg(p, QCoreApplication::translate("Dialogs", "Hyphenation"));
     auto *autoH = new QCheckBox(QCoreApplication::translate("Dialogs", "Automatically hyphenate this story"), &dlg.d);
-    autoH->setChecked(t->hyphenate);
-    auto *zone = measure(t->hyphenZone, &dlg.d, 0, 720);
+    autoH->setChecked(t ? t->hyphenate : cells.first()->hyphenate);
+    auto *zone = measure(t ? t->hyphenZone : cells.first()->hyphenZone, &dlg.d, 0, 720);
     zone->setToolTip(QCoreApplication::translate("Dialogs", "A word is broken only if moving it whole to the next line would leave more space than this."));
     auto *form = new QFormLayout();
     form->addRow(autoH);
@@ -2656,8 +2663,11 @@ void hyphenationDialog(QWidget *p, Editor *ed)
     everywhere->setToolTip(QCoreApplication::translate("Dialogs", "Put an optional hyphen at every place each long word can break; they show only where a line breaks."));
     QObject::connect(everywhere, &QPushButton::clicked, &dlg.d, [&] {
         int n = 0;
-        QTextDocument *sd = d->storyDoc(t->storyId);
-        if (sd) ed->change(QCoreApplication::translate("Dialogs", "Hyphenate"), [&] { n = hyphenateStory(sd); });
+        QVector<QTextDocument *> stories;
+        if (t) stories << d->storyDoc(t->storyId);
+        for (const TableCell *c : cells) stories << d->storyDoc(c->storyId);
+        stories.removeAll(nullptr);
+        if (!stories.isEmpty()) ed->change(QCoreApplication::translate("Dialogs", "Hyphenate"), [&] { for (QTextDocument *sd : stories) n += hyphenateStory(sd); });
         Q_EMIT ed->status(QCoreApplication::translate("Dialogs", "Added %1 optional hyphens.").arg(n));
     });
     zone->setEnabled(autoH->isChecked());
@@ -2668,6 +2678,11 @@ void hyphenationDialog(QWidget *p, Editor *ed)
             f->hyphenate = autoH->isChecked();
             f->hyphenZone = zone->value();
         }
+        for (TableCell *c : cells) {
+            c->hyphenate = autoH->isChecked();
+            c->hyphenZone = zone->value();
+        }
+        if (tb) ed->fitTableRows(tb);   // words wrap differently
     });
 }
 

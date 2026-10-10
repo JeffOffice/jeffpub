@@ -215,8 +215,10 @@ second control point and the end point.
 Each cell has `story` and `margins`, and may have `fill`, `rs` and `cs` (it
 spans that many rows and columns), `covered` (hidden under another cell's
 span), `diag` (a diagonal line: 1 top-left to bottom-right, 2 the other
-way), `valign`, and `border`, with a [line](#lines) for each side present:
-`t`, `b`, `l`, `r`.
+way), `valign`, `vertical` (its text runs top to bottom), `hyph` (false when its
+text isn't hyphenated automatically), `hyphZone` (the hyphenation zone, when
+not 18), and `border`, with a [line](#lines) for each side present: `t`, `b`,
+`l`, `r`.
 
 #### textart
 

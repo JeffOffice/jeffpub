@@ -1145,7 +1145,15 @@ void MainWindow::refreshUi()
         act("wa.even")->setChecked(w->evenHeight);
         act("wa.vertical")->setChecked(w->vertical);
     }
-    if (auto *tb = selTableForUi(ed)) act("tbl.grow")->setChecked(tb->growToFit);
+    if (auto *tb = selTableForUi(ed)) {
+        act("tbl.grow")->setChecked(tb->growToFit);
+        // Text Direction is on for the cell the text cursor is in, or when every cell has it.
+        bool turned = !tb->cells.isEmpty();
+        for (int r = 0; r < tb->rows; ++r)
+            for (int c = 0; c < tb->cols; ++c)
+                if (!editing || (r == ed->textTarget().row && c == ed->textTarget().col)) turned = turned && tb->cell(r, c).vertical;
+        act("tb.direction")->setChecked(turned);
+    }
     act("tb.shadow")->setChecked(cf.boolProperty(tp::Shadow));
     act("tb.outline")->setChecked(!cf.stringProperty(tp::OutlineRef).isEmpty());
     act("tb.emboss")->setChecked(cf.boolProperty(tp::Emboss));

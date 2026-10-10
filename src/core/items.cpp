@@ -563,6 +563,9 @@ QJsonObject TableItem::toJson() const
         if (c.covered) co["covered"] = true;
         if (c.diagonal) co["diag"] = c.diagonal;
         if (c.valign != VAlign::Top) co["valign"] = int(c.valign);
+        if (c.vertical) co["vertical"] = true;
+        if (!c.hyphenate) co["hyph"] = false;
+        if (std::abs(c.hyphenZone - 18) > 1e-6) co["hyphZone"] = c.hyphenZone;
         co["margins"] = marginsJson(c.margins);
         const auto b = borderJson(c.border);
         if (!b.isEmpty()) co["border"] = b;
@@ -599,6 +602,9 @@ void TableItem::fromJson(const QJsonObject &o)
         c.covered = co["covered"].toBool();
         c.diagonal = co["diag"].toInt();
         c.valign = VAlign(co["valign"].toInt());
+        c.vertical = co["vertical"].toBool();
+        c.hyphenate = co["hyph"].toBool(true);
+        c.hyphenZone = co["hyphZone"].toDouble(18);
         c.margins = marginsFrom(co["margins"], c.margins);
         const auto b = co["border"].toObject();
         c.border.top = Stroke::fromJson(b["t"].toObject());

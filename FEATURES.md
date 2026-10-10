@@ -166,7 +166,7 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 - [x] Table Formats gallery, Fill, Borders (style, weight, color, which borders), Diagonals
 - [~] Insert rows and columns above, below, left, and right; Delete rows, columns, and table; Select cell and table; View Gridlines *(not yet: selecting a row or column, or several cells, to format them together)*
 - [x] Merge Cells, Split Cells, Diagonals
-- [~] Cell alignment (nine-way) and Cell Margins *(not yet: Text Direction and Hyphenation for table cells)*
+- [~] Cell alignment (nine-way), Cell Margins, Text Direction, and Hyphenation for table cells *(not yet: a cell's Text Direction and hyphenation in .pub files, which open with the defaults and save without them)*
 - [~] Size: column widths and row heights by dragging, Grow to Fit Text, and Distribute *(not yet: widths and heights typed as numbers, and Lock)*
 - [x] Tab moves between cells, and Tab in the last cell adds a row
 

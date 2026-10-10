@@ -491,6 +491,9 @@
           {"icon": "para.right", "keytip": "AR"}]},
         {"row": [{"icon": "valign.1", "keytip": "VM"}, {"icon": "para.justify", "keytip": "AJ"}]},
         {"row": [{"icon": "valign.2", "keytip": "VB"}]},
+        {"large": "tb.direction", "keytip": "TD"},
+        {"large": {"id": "ribbon.hyphenation", "text": "Hyphenation", "icon": "hyphenation"}, "keytip": "HY", "menu": [
+          "rev.hyphenation"]},
         {"large": {"id": "ribbon.cellMargins", "text": "Cell Margins", "icon": "square-dashed"}, "keytip": "CM", "menu": [
           "tbmargin.None", "tbmargin.Narrow", "tbmargin.Moderate", "tbmargin.Wide"]}
       ]},

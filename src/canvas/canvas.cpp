@@ -917,11 +917,19 @@ bool Canvas::caretInfo(QLineF *pageLine, QString *frameId, int atPos) const
         if (frameId) *frameId = it->id;
     } else if (it->type() == ItemType::Table) {
         QPointF o;
-        const StoryLayout *lay = Renderer::cellLayout(ctx, *static_cast<TableItem *>(it), tt.row, tt.col, &o);
+        const auto *tb = static_cast<TableItem *>(it);
+        const StoryLayout *lay = Renderer::cellLayout(ctx, *tb, tt.row, tt.col, &o);
         int fi;
         if (!lay || !lay->caretRect(pos, &fi, &r)) return false;
-        r.translate(o);
         t = it->transform();
+        // Text turned 90 degrees runs down the cell from its top right.
+        QTransform cell;
+        cell.translate(o.x(), o.y());
+        if (tb->cell(tt.row, tt.col).vertical) {
+            cell.translate(tb->cellRect(tt.row, tt.col).width(), 0);
+            cell.rotate(90);
+        }
+        t = cell * t;
         if (frameId) *frameId = it->id;
     } else {
         return false;
@@ -1372,8 +1380,11 @@ int Canvas::textPosAt(const QString &itemId, const QPointF &page, int row, int c
     }
     if (it->type() == ItemType::Table) {
         QPointF o;
-        const StoryLayout *lay = Renderer::cellLayout(ctx, *static_cast<TableItem *>(it), row, col, &o);
-        return lay ? lay->hitTest(0, local - o) : -1;
+        const auto *tb = static_cast<TableItem *>(it);
+        const StoryLayout *lay = Renderer::cellLayout(ctx, *tb, row, col, &o);
+        QPointF l = local - o;
+        if (lay && tb->cell(row, col).vertical) l = QPointF(l.y(), tb->cellRect(row, col).width() - l.x());
+        return lay ? lay->hitTest(0, l) : -1;
     }
     return -1;
 }
@@ -2710,6 +2721,9 @@ void Canvas::handleTextKey(QKeyEvent *e)
                         nc.border = above.border;
                         nc.fill = above.fill;
                         nc.margins = above.margins;
+                        nc.vertical = above.vertical;
+                        nc.hyphenate = above.hyphenate;
+                        nc.hyphenZone = above.hyphenZone;
                         t->cells.push_back(nc);
                     }
                     t->syncRect();
@@ -2986,9 +3000,10 @@ Ruler::TextRuler Ruler::textRuler() const
     } else if (it->type() == ItemType::Table) {
         auto *t = static_cast<TableItem *>(it);
         const QRectF cr = t->cellRect(ed->textTarget().row, ed->textTarget().col);
-        const auto &m = t->cell(ed->textTarget().row, ed->textTarget().col).margins;
-        left = cr.left() + m.left();
-        right = cr.right() - m.right();
+        const auto &cell = t->cell(ed->textTarget().row, ed->textTarget().col);
+        if (cell.vertical) return tr;
+        left = cr.left() + cell.margins.left();
+        right = cr.right() - cell.margins.right();
     } else if (it->type() == ItemType::Shape) {
         auto *s = static_cast<ShapeItem *>(it);
         const QRectF r = shapeTextRect(s->shape, s->rect.size(), s->adj);

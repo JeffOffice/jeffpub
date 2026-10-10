@@ -1024,12 +1024,15 @@ void Editor::fitTableRows(TableItem *t)
         double need = 0;
         for (int c = 0; c < t->cols; ++c) {
             const TableCell &cell = t->cell(r, c);
-            if (cell.covered || cell.rowSpan > 1) continue;
+            // Text turned 90 degrees runs along the row, so the row doesn't grow for it.
+            if (cell.covered || cell.rowSpan > 1 || cell.vertical) continue;
             Story *s = m_doc->story(cell.storyId);
             if (!s) continue;
             FrameSpec spec;
             spec.size = QSizeF(t->cellRect(r, c).width(), 1e5);
             spec.insets = cell.margins;
+            spec.hyphenate = cell.hyphenate;
+            spec.hyphenZone = cell.hyphenZone;
             StoryLayout lay;
             lay.build(s->doc.get(), {spec}, env);
             need = std::max(need, lay.usedHeight(0));

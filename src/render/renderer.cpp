@@ -798,9 +798,11 @@ const StoryLayout *Renderer::cellLayout(const PaintContext &ctx, const TableItem
     const TableCell &c = t.cell(row, col);
     const QRectF cr = t.cellRect(row, col);
     FrameSpec spec;
-    spec.size = cr.size();
+    spec.size = c.vertical ? QSizeF(cr.height(), cr.width()) : cr.size();   // text turned 90 degrees: laid out on its side
     spec.insets = c.margins;
     spec.valign = c.valign;
+    spec.hyphenate = c.hyphenate;
+    spec.hyphenZone = c.hyphenZone;
     spec.ctx.doc = ctx.doc;
     spec.ctx.pageNumber = ctx.pageNumber;
     spec.ctx.pageCount = ctx.pageCount;
@@ -845,6 +847,10 @@ static void paintTable(QPainter *p, const PaintContext &ctx, const TableItem &t)
             p->save();
             p->translate(cr.topLeft());
             p->setClipRect(QRectF(QPointF(0, 0), cr.size()), Qt::IntersectClip);
+            if (c.vertical) {
+                p->translate(cr.width(), 0);
+                p->rotate(90);
+            }
             lay->paint(p, 0, po);
             paintInlineObjects(p, ctx, *lay, 0);
             p->restore();
