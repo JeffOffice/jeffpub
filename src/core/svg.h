@@ -3,7 +3,8 @@
 // shapes. It reads paths and the basic shapes, groups, <use>, transforms,
 // style sheets and fill and stroke (a gradient fills with its first color).
 // Text, embedded pictures and foreign content are left out and `skipped`
-// says so; clipping, masks, filters and patterns are ignored.
+// says so; clip paths cut the shapes they cover, and masks, filters and
+// patterns are ignored.
 
 #include "core/items.h"
 
@@ -11,6 +12,9 @@
 #include <QPainterPath>
 #include <QRectF>
 #include <QVector>
+
+class QPainter;
+class QSvgRenderer;
 
 namespace jp::svg {
 
@@ -46,6 +50,12 @@ ItemPtr shapes(const Drawing &d, const QRectF &frame, bool merge, const QColor &
 // flipped as it is (its crop, border and effects are left behind).
 // `partial` tells whether text or pictures inside it were left out.
 ItemPtr pictureShapes(const QByteArray &svg, const PictureItem &pic, bool *partial);
+// Draws `svg`, which `renderer` has loaded, stretched over `bounds`. Qt's
+// renderer draws masks, filters and patterns but leaves out clip-path, so a
+// drawing with clipping is drawn in runs of parts under the same clip, each
+// run cut to its clip as the painter's own clip (kept as a vector in PDFs
+// and prints), in the order the parts were drawn.
+void paint(QSvgRenderer &renderer, const QByteArray &svg, QPainter *p, const QRectF &bounds);
 // An SVG elliptical arc from p0 to p1, as cubic Béziers.
 void arcTo(QPainterPath &path, QPointF p0, double rx, double ry, double phiDeg, bool large, bool sweep, QPointF p1);
 

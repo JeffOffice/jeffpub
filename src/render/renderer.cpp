@@ -5,6 +5,7 @@
 #include "render/shapes.h"
 #include "render/textart.h"
 #include "core/fonts.h"
+#include "core/svg.h"
 
 #include <QCache>
 #include <QDateTime>
@@ -741,7 +742,7 @@ static void paintPicture(QPainter *p, const PaintContext &ctx, const PictureItem
         } else if (ctx.opt.output && plain && metafile && mf.load(data.bytes)) {
             mf.play(p, pic.imgRect);
         } else if (ctx.opt.output && plain && data.format == QLatin1String("svg") && svg.load(data.bytes)) {
-            svg.render(p, pic.imgRect);
+            svg::paint(svg, data.bytes, p, pic.imgRect);
         } else if (ctx.opt.output && plain && data.format == QLatin1String("pdf") && PdfDocument::shared(data.bytes)->isValid()) {
             PdfDocument::shared(data.bytes)->play(p, 0, pic.imgRect);
         } else {

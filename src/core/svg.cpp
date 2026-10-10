@@ -1,13 +1,18 @@
 #include "core/svg.h"
 
 #include <QHash>
+#include <QPainter>
+#include <QPainterPathStroker>
 #include <QRegularExpression>
+#include <QSvgRenderer>
 #include <QTransform>
 #include <QXmlStreamReader>
+#include <QXmlStreamWriter>
 #include <QtMath>
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <utility>
 #include <vector>
 
 namespace jp::svg {
@@ -16,6 +21,7 @@ namespace {
 
 const QString svgNs = QStringLiteral("http://www.w3.org/2000/svg");
 const QString xlinkNs = QStringLiteral("http://www.w3.org/1999/xlink");
+const QString xmlNs = QStringLiteral("http://www.w3.org/XML/1998/namespace");
 
 struct Node {
     QString name;
@@ -132,10 +138,20 @@ struct Style {
     double strokeWidth = 1, fillOpacity = 1, strokeOpacity = 1, opacity = 1;
     Qt::PenCapStyle cap = Qt::FlatCap;
     Qt::PenJoinStyle join = Qt::MiterJoin;
-    bool evenOdd = false, hidden = false;
+    bool evenOdd = false, hidden = false, clipEvenOdd = false;
     QColor color;
     QVector<double> dashes;
     double dashOffset = 0;
+    QPainterPath clip;              // where clip paths leave the element showing, in the drawing's coordinates
+    bool clipped = false;
+};
+
+// A part of the drawing QSvgRenderer draws whole (a shape, text, a picture):
+// its element, counted in document order from the root, and what clips it.
+struct Leaf {
+    int node = 0;
+    bool clipped = false;
+    QPainterPath clip;
 };
 
 const QStringList &styleProperties()
@@ -144,7 +160,8 @@ const QStringList &styleProperties()
                                   QStringLiteral("fill-opacity"), QStringLiteral("stroke-opacity"), QStringLiteral("opacity"),
                                   QStringLiteral("stroke-linecap"), QStringLiteral("stroke-linejoin"), QStringLiteral("fill-rule"),
                                   QStringLiteral("visibility"), QStringLiteral("display"), QStringLiteral("color"),
-                                  QStringLiteral("stroke-dasharray"), QStringLiteral("stroke-dashoffset")};
+                                  QStringLiteral("stroke-dasharray"), QStringLiteral("stroke-dashoffset"),
+                                  QStringLiteral("clip-path"), QStringLiteral("clip-rule")};
     return p;
 }
 
@@ -381,7 +398,9 @@ QPainterPath pathData(const QString &d)
     return path;
 }
 
-Drawing read(const QByteArray &svg, const QColor &currentColor)
+// `leaves`, when given, is filled with the drawing's parts in the order they
+// are drawn, each with the clipping that covers it, and nothing is drawn.
+static Drawing readParts(const QByteArray &svg, const QColor &currentColor, std::vector<Leaf> *leaves)
 {
     Drawing out;
     std::vector<Node> nodes;
@@ -535,10 +554,71 @@ Drawing read(const QByteArray &svg, const QColor &currentColor)
                 if (st.dashes.size() % 2) st.dashes += st.dashes;
                 if (std::all_of(st.dashes.cbegin(), st.dashes.cend(), [](double x) { return x <= 0; })) st.dashes.clear();
             } else if (k == QLatin1String("stroke-dashoffset")) st.dashOffset = length(v, diag);
+            else if (k == QLatin1String("clip-rule")) st.clipEvenOdd = v == QLatin1String("evenodd");
+        }
+    };
+
+    // Clipping: `clipSink` makes the shapes walked collect their outlines
+    // (a clip path's shapes, an element's bounding box) instead of drawing.
+    std::vector<QPainterPath> *clipSink = nullptr;
+    bool clipUnsupported = false;   // a clip path of text, which has no outline here
+    int current = 0;                // the element being walked
+    std::function<bool(int, const QTransform &, int, int, QPainterPath *)> clipRegion;
+    // The clip path an element names, as a node, or -1.
+    auto clipPathOf = [&](int idx) -> int {
+        QString v;
+        for (const auto &[k, val] : nodeDecls[idx])
+            if (k == QLatin1String("clip-path")) v = val.trimmed();
+        const qsizetype close = v.indexOf(')');
+        if (!v.startsWith(QLatin1String("url(")) || close < 0) return -1;
+        const QString id = v.mid(4, close - 4).trimmed().remove('"').remove('\'');
+        return id.startsWith('#') ? byId.value(id.mid(1), -1) : -1;
+    };
+    // An element cut to a clip: its fill inside the clip, and its stroke
+    // inside it as an area of the stroke's color (a shape's line can't be cut).
+    auto clipElement = [&](const Element &e, const QPainterPath &clip) {
+        const double margin = e.stroke.isValid() ? e.strokeWidth * 2 : 0;
+        if (clip.contains(e.path.boundingRect().adjusted(-margin, -margin, margin, margin))) {
+            out.elements << e;
+            return;
+        }
+        if (e.fill.isValid()) {
+            Element part = e;
+            part.stroke = QColor();
+            part.path = e.path.intersected(clip);
+            if (!part.path.isEmpty()) out.elements << part;
+        }
+        if (e.stroke.isValid()) {
+            QPainterPathStroker stroker;
+            stroker.setWidth(e.strokeWidth);
+            stroker.setCapStyle(e.cap);
+            stroker.setJoinStyle(e.join);
+            stroker.setMiterLimit(4);
+            if (!e.dashes.isEmpty()) {
+                QList<qreal> dashes;
+                for (double x : e.dashes) dashes << x / e.strokeWidth;
+                stroker.setDashPattern(dashes);
+                stroker.setDashOffset(e.dashOffset / e.strokeWidth);
+            }
+            Element line;
+            line.fill = e.stroke;
+            line.path = stroker.createStroke(e.path).intersected(clip);
+            if (!line.path.isEmpty()) out.elements << line;
         }
     };
 
     auto add = [&](const QPainterPath &local, const QTransform &t, const Style &st, bool fillable) {
+        if (clipSink) {
+            if (st.hidden || local.isEmpty()) return;
+            QPainterPath outline = t.map(local);
+            outline.setFillRule(st.clipEvenOdd ? Qt::OddEvenFill : Qt::WindingFill);
+            clipSink->push_back(outline);
+            return;
+        }
+        if (leaves) {
+            leaves->push_back({current, st.clipped, st.clip});
+            return;
+        }
         if (st.hidden || local.isEmpty()) return;
         Element e;
         e.path = t.map(local);
@@ -553,7 +633,9 @@ Drawing read(const QByteArray &svg, const QColor &currentColor)
         const double scale = std::sqrt(std::abs(t.determinant()));
         for (double x : st.dashes) e.dashes << x * scale;
         e.dashOffset = st.dashOffset * scale;
-        if (e.fill.isValid() || e.stroke.isValid()) out.elements << e;
+        if (!e.fill.isValid() && !e.stroke.isValid()) return;
+        if (st.clipped) clipElement(e, st.clip);
+        else out.elements << e;
     };
 
     auto attr = [](const Node &n, const char *name, double ref) { return length(n.attrs.value(QLatin1String(name)), ref); };
@@ -573,13 +655,26 @@ Drawing read(const QByteArray &svg, const QColor &currentColor)
         if (!display) return;
         ctm = nodeTransforms[idx] * ctm;
         const QString &name = n.name;
+        if (!clipSink)
+            if (const int cp = clipPathOf(idx); cp >= 0) {
+                // A <use> is clipped in the space its picture is placed in.
+                const QTransform at = name == QLatin1String("use") ? QTransform::fromTranslate(attr(n, "x", vw), attr(n, "y", vh)) * ctm : ctm;
+                QPainterPath region;
+                if (clipRegion(cp, at, idx, 0, &region)) {
+                    st.clip = st.clipped ? st.clip.intersected(region) : region;
+                    st.clipped = true;
+                }
+            }
+        current = idx;
         auto children = [&](const QTransform &t) {
             for (int ch : n.children) walk(ch, t, st, depth + 1, nullptr);
         };
         if (name == QLatin1String("g") || name == QLatin1String("a") || (name == QLatin1String("svg") && idx == 0)) {
             children(ctm);
         } else if (name == QLatin1String("switch")) {
-            if (!n.children.isEmpty()) walk(n.children.first(), ctm, st, depth + 1, nullptr);
+            // Taken whole when drawing, as it picks which of its parts shows.
+            if (leaves && !clipSink) leaves->push_back({idx, st.clipped, st.clip});
+            else if (!n.children.isEmpty()) walk(n.children.first(), ctm, st, depth + 1, nullptr);
         } else if (name == QLatin1String("svg") || (name == QLatin1String("symbol") && use)) {
             // A nested drawing (or a symbol drawn by <use>) maps its own box into place.
             const QVector<double> box = numbers(n.attrs.value(QStringLiteral("viewBox")));
@@ -595,6 +690,10 @@ Drawing read(const QByteArray &svg, const QColor &currentColor)
             }
             children(t * ctm);
         } else if (name == QLatin1String("use")) {
+            if (leaves && !clipSink) {
+                leaves->push_back({idx, st.clipped, st.clip});
+                return;
+            }
             const QString href = n.attrs.value(QStringLiteral("href"));
             const int target = href.startsWith('#') ? byId.value(href.mid(1), -1) : -1;
             if (target < 0 || target == idx) return;
@@ -638,16 +737,191 @@ Drawing read(const QByteArray &svg, const QColor &currentColor)
             if (name == QLatin1String("polygon")) p.closeSubpath();
             add(p, ctm, st, true);
         } else if (name == QLatin1String("text") || name == QLatin1String("image") || name == QLatin1String("foreignObject")) {
-            out.skipped = true;
+            if (clipSink) clipUnsupported = true;
+            else if (leaves) leaves->push_back({idx, st.clipped, st.clip});
+            else out.skipped = true;
         }
         // defs, symbol outside <use>, gradients, clip paths, masks, patterns,
         // markers, style, title and metadata draw nothing.
+    };
+
+    // The area a clip path leaves showing for the element `ref`, whose own
+    // coordinates are `ctm`. False when it can't be worked out (a clip path
+    // of text, or of an element with no box); the element then shows whole.
+    QHash<QString, QPair<bool, QPainterPath>> regions;
+    auto outlines = [&](int node, const QTransform &t) {
+        std::vector<QPainterPath> found;
+        std::vector<QPainterPath> *saved = std::exchange(clipSink, &found);
+        walk(node, t, Style(), 1, nullptr);
+        clipSink = saved;
+        return found;
+    };
+    clipRegion = [&](int cp, const QTransform &ctm, int ref, int depth, QPainterPath *region) -> bool {
+        const Node &c = nodes[cp];
+        if (c.name != QLatin1String("clipPath") || depth > 4) return false;
+        const bool boxed = c.attrs.value(QStringLiteral("clipPathUnits")) == QLatin1String("objectBoundingBox");
+        const QString key = QStringLiteral("%1|%2|%3,%4,%5,%6,%7,%8").arg(cp).arg(boxed ? ref : -1).arg(ctm.m11(), 0, 'g', 17).arg(ctm.m12(), 0, 'g', 17)
+                                .arg(ctm.m21(), 0, 'g', 17).arg(ctm.m22(), 0, 'g', 17).arg(ctm.dx(), 0, 'g', 17).arg(ctm.dy(), 0, 'g', 17);
+        auto remember = [&](bool ok, const QPainterPath &area) {
+            regions.insert(key, qMakePair(ok, area));
+            *region = area;
+            return ok;
+        };
+        if (const auto hit = regions.constFind(key); hit != regions.cend()) {
+            *region = hit->second;
+            return hit->first;
+        }
+        QTransform t = nodeTransforms[cp] * ctm;
+        if (boxed) {
+            // The box is the element's own, in the units its shapes are written in.
+            bool invertible = false;
+            const QTransform inverse = nodeTransforms[ref].inverted(&invertible);
+            if (!invertible) return remember(false, {});
+            QRectF box;
+            for (const QPainterPath &p : outlines(ref, inverse)) box = box.united(p.boundingRect());
+            if (box.width() <= 0 || box.height() <= 0) return remember(false, {});
+            t = QTransform(box.width(), 0, 0, box.height(), box.x(), box.y()) * t;
+        }
+        clipUnsupported = false;
+        QPainterPath area;
+        bool first = true;
+        for (int ch : c.children)
+            for (const QPainterPath &p : outlines(ch, t)) {
+                area = first ? p : area.united(p);
+                first = false;
+            }
+        if (clipUnsupported) return remember(false, {});
+        if (const int outer = clipPathOf(cp); outer >= 0) {
+            QPainterPath other;
+            if (clipRegion(outer, ctm, ref, depth + 1, &other)) area = area.intersected(other);
+        }
+        return remember(true, area);
     };
 
     Style st;
     st.color = currentColor;
     walk(0, QTransform(), st, 0, nullptr);
     return out;
+}
+
+Drawing read(const QByteArray &svg, const QColor &currentColor)
+{
+    return readParts(svg, currentColor, nullptr);
+}
+
+// `svg` without the elements numbered in `drop` (counted as readParts counts
+// them), and without foreign content; empty if it can't be read.
+static QByteArray without(const QByteArray &svg, const std::vector<char> &drop)
+{
+    QByteArray out;
+    QXmlStreamWriter w(&out);
+    QXmlStreamReader r(svg);
+    int next = 0, open = 0;
+    auto foreign = [&] {
+        const QString ns = r.namespaceUri().toString();
+        return !ns.isEmpty() && ns != svgNs;
+    };
+    while (!r.atEnd()) {
+        r.readNext();
+        if (r.isStartElement()) {
+            if (foreign()) {
+                r.skipCurrentElement();
+                continue;
+            }
+            const int idx = next++;
+            if (idx < int(drop.size()) && drop[idx]) {
+                // Left out with all it holds, which still count.
+                for (int depth = 1; depth > 0 && !r.atEnd();) {
+                    r.readNext();
+                    if (r.isStartElement()) {
+                        if (foreign()) { r.skipCurrentElement(); continue; }
+                        ++next;
+                        ++depth;
+                    } else if (r.isEndElement()) {
+                        --depth;
+                    }
+                }
+                continue;
+            }
+            w.writeStartElement(r.qualifiedName().toString());
+            ++open;
+            for (const QXmlStreamNamespaceDeclaration &d : r.namespaceDeclarations()) {
+                if (d.prefix().isEmpty()) w.writeDefaultNamespace(d.namespaceUri().toString());
+                else w.writeNamespace(d.namespaceUri().toString(), d.prefix().toString());
+            }
+            for (const QXmlStreamAttribute &a : r.attributes()) {
+                const QString ns = a.namespaceUri().toString();
+                if (ns.isEmpty() || ns == xlinkNs || ns == xmlNs) w.writeAttribute(a.qualifiedName().toString(), a.value().toString());
+            }
+        } else if (r.isEndElement()) {
+            w.writeEndElement();
+            --open;
+        } else if (r.isCharacters() && open > 0) {
+            if (r.isCDATA()) w.writeCDATA(r.text().toString());
+            else w.writeCharacters(r.text().toString());
+        }
+    }
+    return r.hasError() ? QByteArray() : out;
+}
+
+void paint(QSvgRenderer &renderer, const QByteArray &svg, QPainter *p, const QRectF &bounds)
+{
+    std::vector<Leaf> leaves;
+    if (svg.size() <= (8 << 20) && svg.contains("clip-path")) readParts(svg, Qt::black, &leaves);
+    // The parts drawn in a row under the same clip make a run.
+    struct Run {
+        bool clipped;
+        QPainterPath clip;
+        size_t first, end;
+    };
+    std::vector<Run> runs;
+    bool any = false;
+    // Each run is another parse of the drawing: the bigger it is, the fewer
+    // runs are cut, and the parts after the last of them show unclipped.
+    const size_t maxRuns = size_t(std::clamp<qsizetype>((8 << 20) / std::max<qsizetype>(svg.size(), 1), 8, 100));
+    for (size_t i = 0; i < leaves.size(); ++i) {
+        const Leaf &l = leaves[i];
+        if (!runs.empty() && runs.back().clipped == l.clipped && (!l.clipped || runs.back().clip == l.clip)) {
+            runs.back().end = i + 1;
+            continue;
+        }
+        const bool last = runs.size() + 1 == maxRuns;
+        runs.push_back({l.clipped && !last, l.clip, i, last ? leaves.size() : i + 1});
+        any = any || runs.back().clipped;
+        if (last) break;
+    }
+    const QRectF box = renderer.viewBoxF();
+    if (!any || box.isEmpty()) {
+        renderer.render(p, bounds);
+        return;
+    }
+    // QSvgRenderer maps the drawing's box onto the bounds, stretching it.
+    QTransform toBounds;
+    toBounds.translate(bounds.x(), bounds.y());
+    toBounds.scale(bounds.width() / box.width(), bounds.height() / box.height());
+    toBounds.translate(-box.x(), -box.y());
+    // Each run's parts alone, the rest of the drawing left out (a drawing
+    // clipped as a whole needs no other).
+    std::vector<QByteArray> drawings;
+    for (size_t r = 0; runs.size() > 1 && r < runs.size(); ++r) {
+        std::vector<char> drop(size_t(leaves.back().node) + 1, 0);
+        for (size_t i = 0; i < leaves.size(); ++i)
+            if (i < runs[r].first || i >= runs[r].end) drop[size_t(leaves[i].node)] = 1;
+        drawings.push_back(without(svg, drop));
+        if (drawings.back().isEmpty()) {
+            renderer.render(p, bounds);
+            return;
+        }
+    }
+    for (size_t i = 0; i < runs.size(); ++i) {
+        QSvgRenderer part;
+        if (runs.size() > 1 && !part.load(drawings[i])) continue;
+        p->save();
+        p->setRenderHint(QPainter::Antialiasing);
+        if (runs[i].clipped) p->setClipPath(toBounds.map(runs[i].clip), Qt::IntersectClip);
+        (runs.size() > 1 ? part : renderer).render(p, bounds);
+        p->restore();
+    }
 }
 
 ItemPtr shapes(const Drawing &d, const QRectF &frame, bool merge, const QColor &current, const ColorRef &currentRef)

@@ -63,7 +63,7 @@ On the **Picture Format** tab, use the **Adjust** group:
 - **Transparency…**: fade the whole picture.
 - **Reset Picture**: undo these changes.
 - **Compress Pictures…**: shrink the file by lowering detail to 300, 220, or 96 ppi (pixels per inch). By default it changes every picture and deletes cropped areas.
-- **Convert to Shapes**: turns an SVG picture (a drawing made of lines and shapes) into shapes you can edit. Text and pictures inside it are left out.
+- **Convert to Shapes**: turns an SVG picture (a drawing made of lines and shapes) into shapes you can edit, cut where the drawing clips them. Text and pictures inside it are left out.
 
 ## Caption, alt text, and swapping
 

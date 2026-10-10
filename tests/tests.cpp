@@ -6412,6 +6412,100 @@ private Q_SLOTS:
         QTRY_VERIFY(!w.act(QStringLiteral("pic.toShapes"))->isEnabled());
     }
 
+    // Clipping inside an SVG picture (clip-path, which Qt's SVG renderer
+    // leaves out) shows on screen, in print and PDF, and in Save as Picture:
+    // the big square is cut to the circle, and what is drawn before and
+    // after it keeps its place in the stacking order.
+    void svgPictureClips()
+    {
+        using namespace jp;
+        const QByteArray plain =
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 50\">"
+            "<defs><clipPath id=\"c\"><circle cx=\"50\" cy=\"25\" r=\"20\"/></clipPath></defs>"
+            "<rect x=\"60\" y=\"20\" width=\"20\" height=\"10\" fill=\"#ffff00\"/>"
+            "<rect width=\"100\" height=\"50\" fill=\"#ff0000\" clip-path=\"url(#c)\"/>"
+            "<rect width=\"10\" height=\"10\" fill=\"#0000ff\"/></svg>";
+        // The clip is in the box's own units, and moves with the group's transform.
+        const QByteArray boxed =
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 50\">"
+            "<defs><clipPath id=\"b\" clipPathUnits=\"objectBoundingBox\"><circle cx=\".5\" cy=\".5\" r=\".5\"/></clipPath></defs>"
+            "<g transform=\"translate(50 0)\"><rect width=\"50\" height=\"50\" fill=\"#00ff00\" style=\"clip-path:url(#b)\"/></g></svg>";
+        auto empty = [](QRgb c) { return qAlpha(c) < 10 || (qRed(c) > 245 && qGreen(c) > 245 && qBlue(c) > 245); };
+        auto is = [](QRgb c, QColor want) {
+            return std::abs(qRed(c) - want.red()) < 12 && std::abs(qGreen(c) - want.green()) < 12 && std::abs(qBlue(c) - want.blue()) < 12 && qAlpha(c) > 245;
+        };
+        // The picture is 200 by 100 points at (100, 100): two points to a unit.
+        auto place = [](double x, double y) { return QPoint(int(100 + 2 * x), int(100 + 2 * y)); };
+        auto check = [&](const QImage &page, bool first, const QString &how) {
+            auto px = [&](double x, double y) { return page.pixel(place(x, y)); };
+            const QByteArray msg = how.toUtf8();
+            if (first) {
+                QVERIFY2(is(px(50, 25), Qt::red), msg.constData());                 // inside the circle
+                QVERIFY2(is(px(62, 37), Qt::red), msg.constData());
+                QVERIFY2(is(px(65, 25), Qt::red), msg.constData());                 // the yellow under it is covered
+                QVERIFY2(is(px(75, 25), Qt::yellow), msg.constData());              // and shows beyond the circle
+                QVERIFY2(empty(px(30, 5)), msg.constData());                        // the square's corners are cut off
+                QVERIFY2(empty(px(67, 42)), msg.constData());
+                QVERIFY2(empty(px(95, 45)), msg.constData());
+                QVERIFY2(is(px(5, 5), Qt::blue), msg.constData());                  // drawn after, outside the clip
+            } else {
+                QVERIFY2(is(px(75, 25), Qt::green), msg.constData());
+                QVERIFY2(is(px(60, 40), Qt::green), msg.constData());
+                QVERIFY2(empty(px(52, 2)), msg.constData());
+                QVERIFY2(empty(px(98, 48)), msg.constData());
+                QVERIFY2(empty(px(25, 25)), msg.constData());
+            }
+        };
+        for (const bool first : {true, false}) {
+            auto doc = Document::blank(QSizeF(612, 792));
+            auto pic = std::make_shared<PictureItem>();
+            pic->imageId = doc->addImage(first ? plain : boxed, QStringLiteral("svg"));
+            pic->rect = QRectF(100, 100, 200, 100);
+            pic->imgRect = QRectF(0, 0, 200, 100);
+            doc->pages[0]->items.push_back(pic);
+            MainWindow w;
+            w.editor()->setDocument(std::move(doc));
+            Editor *ed = w.editor();
+            PaintContext ctx;
+            ctx.doc = ed->doc();
+            ctx.cache = &ed->cache();
+            for (const bool output : {false, true}) {
+                ctx.opt.output = output;
+                check(Renderer::renderToImage(ctx, 0, 1.0, true), first, output ? QStringLiteral("print path") : QStringLiteral("screen path"));
+                if (QTest::currentTestFailed()) return;
+            }
+            QTemporaryDir dir;
+            const QString path = dir.filePath(QStringLiteral("clip.pdf"));
+            QVERIFY(w.exportPdfTo(path, MainWindow::PdfSettings()));
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::ReadOnly));
+            const PdfDocument pdf(f.readAll());
+            QVERIFY(pdf.isValid());
+            check(pdf.render(0, QSize(612, 792)), first, QStringLiteral("PDF"));
+            if (QTest::currentTestFailed()) return;
+            // Save as Picture (SVG) writes the cut as a clip path: round,
+            // not the picture's frame.
+            ctx.opt.output = true;
+            const QString svgPage = QString::fromUtf8(pageSvg(ctx, 0, QStringLiteral("clip")));
+            const QRegularExpression clipPath(QStringLiteral("<clipPath[^>]*>\\s*<path[^>]* d=\"([^\"]*)\""));
+            int cuts = 0;
+            for (auto m = clipPath.globalMatch(svgPage); m.hasNext();)
+                cuts += m.next().captured(1).count(QLatin1Char('L')) > 20;
+            QVERIFY(cuts > 0);
+        }
+        // Convert to Shapes cuts the square to the circle too: 40 units, 80 points, across.
+        PictureItem pic;
+        pic.rect = QRectF(100, 100, 200, 100);
+        pic.imgRect = QRectF(0, 0, 200, 100);
+        bool partial = false;
+        const ItemPtr made = svg::pictureShapes(plain, pic, &partial);
+        QVERIFY(made && made->type() == ItemType::Group);
+        auto *parts = static_cast<GroupItem *>(made.get());
+        QCOMPARE(parts->children.size(), size_t(3));
+        const QRectF cut = parts->children[1]->rect;
+        QVERIFY2(std::abs(cut.width() - 80) < 1 && std::abs(cut.height() - 80) < 1, qPrintable(QStringLiteral("%1 x %2").arg(cut.width()).arg(cut.height())));
+    }
+
     // Save as Picture > SVG: each page as a vector drawing with letters as
     // outlines (no <text> to be respaced by another font), pictures cropped
     // to their shape, and the whole looking as JeffPub draws it.

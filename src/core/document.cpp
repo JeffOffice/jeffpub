@@ -2,6 +2,7 @@
 
 #include <cmath>
 
+#include "core/svg.h"
 #include "render/metafile.h"
 #include "render/pdfpage.h"
 #include "text/storyio.h"
@@ -129,7 +130,7 @@ QImage ImageData::image() const
         QImage img(s, QImage::Format_ARGB32_Premultiplied);
         img.fill(Qt::transparent);
         QPainter p(&img);
-        r.render(&p);
+        svg::paint(r, bytes, &p, QRectF(QPointF(), QSizeF(s)));
         cache = img;
         return cache;
     }
