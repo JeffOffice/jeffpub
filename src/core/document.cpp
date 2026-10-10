@@ -160,12 +160,26 @@ void ImageData::makePreview()
     }
 }
 
+QByteArray readPictureBytes(const QString &path)
+{
+    // A pipe would block the open for good, and a device or a file the system
+    // calls empty can go on without end: only a regular file is opened.
+    const QFileInfo fi(path);
+    if (!fi.isFile() || fi.size() <= 0 || fi.size() > kMaxPictureFile) return QByteArray();
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) return QByteArray();
+    // The file as opened, and one byte more than it, to see that it didn't grow.
+    const qint64 size = f.size();
+    if (size <= 0 || size > kMaxPictureFile) return QByteArray();
+    const QByteArray bytes = f.read(size + 1);
+    return bytes.size() == size ? bytes : QByteArray();
+}
+
 bool readPictureFile(const QString &path, int pdfPage, QByteArray *bytes, QString *format, QSize *pixels)
 {
     if (bytes->isEmpty()) {
-        QFile f(path);
-        if (!f.open(QIODevice::ReadOnly)) return false;
-        *bytes = f.readAll();
+        *bytes = readPictureBytes(path);
+        if (bytes->isEmpty()) return false;
     }
     *format = QFileInfo(path).suffix().toLower();
     if (*format == "jpeg") *format = "jpg";
@@ -187,7 +201,9 @@ bool readPictureFile(const QString &path, int pdfPage, QByteArray *bytes, QStrin
         *pixels = QSize(int(s.width() / 0.75), int(s.height() / 0.75));
         return true;
     }
-    QImageReader r(path);
+    // From the bytes read, not from the path opened again.
+    QBuffer buffer(bytes);
+    QImageReader r(&buffer, format->toLatin1());
     *pixels = r.size();
     return pixels->isValid() || *format == "svg";
 }

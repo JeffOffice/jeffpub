@@ -1395,9 +1395,8 @@ static int choosePdfPage(QWidget *parent, const PdfDocument &pdf, const QString 
 
 static bool readPicture(QWidget *parent, const QString &path, QByteArray *bytes, QString *fmt, QSize *px, int *page = nullptr)
 {
-    QFile f(path);
-    if (!f.open(QIODevice::ReadOnly)) return false;
-    *bytes = f.readAll();
+    *bytes = readPictureBytes(path);
+    if (bytes->isEmpty()) return false;
     int pdfPage = 0;
     if (QFileInfo(path).suffix().compare(QLatin1String("pdf"), Qt::CaseInsensitive) == 0 || PdfDocument::looksLikePdf(*bytes)) {
         const PdfDocument pdf(*bytes);

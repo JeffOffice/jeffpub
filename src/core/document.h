@@ -314,9 +314,17 @@ public:
     static std::unique_ptr<Document> blank(const QSizeF &size, const QString &sizeName = QStringLiteral("Letter"), int pageCount = 1);
 };
 
+// The most a picture file can be, in bytes; a larger file isn't read.
+constexpr qint64 kMaxPictureFile = 256 * 1024 * 1024;
+// A picture file's bytes: of a regular file only (never a pipe or a device),
+// from 1 byte to kMaxPictureFile, and never more than a byte past that.
+// Empty when the file isn't one of those or can't be read.
+QByteArray readPictureBytes(const QString &path);
+
 // Reads a picture file as Insert Picture does: its bytes and format (a PDF as
 // the one page `pdfPage` alone), and its size in pixels. `bytes` may already
-// hold the file's bytes. False when it can't be read as a picture.
+// hold the file's bytes. False when it can't be read as a picture (readPictureBytes
+// says which files are not read at all).
 bool readPictureFile(const QString &path, int pdfPage, QByteArray *bytes, QString *format, QSize *pixels);
 
 QVector<TextStyle> defaultStyles();

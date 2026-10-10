@@ -12,6 +12,8 @@ A picture sits inside a frame. You can crop the picture, and move or resize the 
 
 The picture lands in the middle of the page. You can also drag a picture file onto the page, which always uses **Insert**.
 
+JeffPub reads picture files up to 256 MB. A bigger file is refused, and so is an empty file or anything that is not an ordinary file on disk, such as a device or a pipe. The message says JeffPub can't read it as a picture.
+
 If you choose several pictures at once, they line up as thumbnails on the scratch area, the gray space beside the page. Drag the ones you want onto the page.
 
 If a PDF has more than one page, the **Insert PDF Page** window shows each page. Pick one and click **OK**.

@@ -112,6 +112,9 @@
 #include <QGridLayout>
 #include <QListWidget>
 #include <clocale>
+#ifdef Q_OS_UNIX
+#include <sys/stat.h>
+#endif
 
 using namespace jp;
 
@@ -6490,6 +6493,66 @@ private Q_SLOTS:
             QVERIFY(doc->images[p->imageId].linked);
             QCOMPARE(p->imageId, id);
         }
+    }
+
+    // A picture file is read only when it is a regular file of at most
+    // kMaxPictureFile bytes: not a pipe or a device, not an empty file, not a
+    // huge one. Every way in (open, Insert, Update Link, Change Link) uses it.
+    void pictureFilesAreReadSafely()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString good = linkPicture(dir.filePath(QStringLiteral("good.png")), QSize(40, 30), QColor(200, 30, 30));
+        auto read = [](const QString &path) {
+            QByteArray bytes;
+            QString format;
+            QSize px;
+            return jp::readPictureFile(path, 0, &bytes, &format, &px);
+        };
+        QVERIFY(read(good));
+        QVERIFY(!read(dir.filePath(QStringLiteral("nothing.png"))));
+        QVERIFY(!read(dir.path()));   // a folder
+        QFile empty(dir.filePath(QStringLiteral("empty.png")));
+        QVERIFY(empty.open(QIODevice::WriteOnly));
+        empty.close();
+        QVERIFY(!read(empty.fileName()));
+        // A real picture followed by zeros, one byte past the limit: too big, though it would decode.
+        QByteArray padded = linkFileBytes(good);
+        QFile big(dir.filePath(QStringLiteral("big.png")));
+        QVERIFY(big.open(QIODevice::WriteOnly));
+        QVERIFY(big.write(padded) == padded.size());
+        QVERIFY(big.resize(jp::kMaxPictureFile + 1));
+        big.close();
+        QVERIFY(!read(big.fileName()));
+        QVERIFY(big.resize(jp::kMaxPictureFile));   // exactly the limit is still fine
+        QVERIFY(read(big.fileName()));
+        QVERIFY(big.remove());
+#ifdef Q_OS_UNIX
+        // A named pipe would block the first open of it forever, and a file the
+        // system reports as empty can be endless.
+        const QString fifo = dir.filePath(QStringLiteral("pipe.png"));
+        QVERIFY(::mkfifo(QFile::encodeName(fifo).constData(), 0600) == 0);
+        QVERIFY(!read(fifo));
+        QVERIFY(!read(QStringLiteral("/dev/zero")));
+        QVERIFY(!read(QStringLiteral("/dev/null")));
+        if (QFileInfo::exists(QStringLiteral("/proc/self/maps"))) QVERIFY(!read(QStringLiteral("/proc/self/maps")));   // a file of size 0
+
+        // Insert, Change Link, and Update Link on it do nothing, and don't wait.
+        jp::MainWindow w;
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        w.insertFiles({fifo}, QPointF(-1, -1), jp::PictureInsert::Embed);
+        QVERIFY(!linkFirstPicture(w.editor()->doc()));
+        w.insertFiles({good}, QPointF(-1, -1), jp::PictureInsert::Link);
+        jp::PictureItem *pic = linkFirstPicture(w.editor()->doc());
+        QVERIFY(pic);
+        const QString picId = pic->id, imageId = pic->imageId;
+        QVERIFY(!w.editor()->changeLink(picId, fifo));
+        QVERIFY(QFile::remove(good));
+        QVERIFY(::mkfifo(QFile::encodeName(good).constData(), 0600) == 0);   // the linked file becomes a pipe
+        QCOMPARE(w.editor()->doc()->linkStatus(imageId), jp::LinkStatus::Missing);
+        QVERIFY(!w.editor()->updateLink(picId));
+        QCOMPARE(linkFirstPicture(w.editor()->doc())->imageId, imageId);
+#endif
     }
 
     void templatesFitTheirText()
