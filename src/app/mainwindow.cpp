@@ -7,6 +7,7 @@
 #include <QLocale>
 #include <QDateTime>
 #include <QCheckBox>
+#include <QRadioButton>
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QSpinBox>
@@ -1123,10 +1124,18 @@ void MainWindow::exportEpub()
     QDialog dlg(this);
     dlg.setWindowTitle(tr("Save as E-book"));
     auto *v = new QVBoxLayout(&dlg);
-    auto *about = new QLabel(tr("An EPUB e-book whose text flows to fit each reader's screen. Chapters start at each "
-                                "Heading 1 paragraph, and the Heading 1-3 paragraphs make its table of contents."), &dlg);
+    auto *about = new QLabel(tr("An EPUB e-book. Its contents list comes from the Heading 1-3 paragraphs."), &dlg);
     about->setWordWrap(true);
     v->addWidget(about);
+    // Two kinds: text that flows to the reader's screen (novels, reports),
+    // or each page as designed (picture books, magazines, comics).
+    auto *flowing = new QRadioButton(tr("Text that flows to fit the screen (chapters start at each Heading 1)"), &dlg);
+    auto *fixed = new QRadioButton(tr("Each page exactly as designed (fixed layout)"), &dlg);
+    flowing->setObjectName(QStringLiteral("flowing"));
+    fixed->setObjectName(QStringLiteral("fixed"));
+    flowing->setChecked(true);
+    v->addWidget(flowing);
+    v->addWidget(fixed);
     auto *form = new QFormLayout();
     auto *title = new QLineEdit(d->props.title.isEmpty() ? QFileInfo(m_ed->displayName()).completeBaseName() : d->props.title, &dlg);
     auto *author = new QLineEdit(d->props.author, &dlg);
@@ -1136,6 +1145,7 @@ void MainWindow::exportEpub()
     auto *cover = new QCheckBox(tr("Use the first page as the cover"), &dlg);
     cover->setChecked(true);
     v->addWidget(cover);
+    connect(fixed, &QRadioButton::toggled, cover, [cover](bool on) { cover->setEnabled(!on); });   // page 1 is the cover there
     auto *bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
     connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
     connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
@@ -1148,7 +1158,9 @@ void MainWindow::exportEpub()
                                      tr("EPUB e-book (*.epub)"));
     if (path.isEmpty()) return;
     QString error;
-    if (exportEpubTo(path, title->text().trimmed(), author->text().trimmed(), cover->isChecked(), &error))
+    const bool ok = fixed->isChecked() ? exportFixedEpubTo(path, title->text().trimmed(), author->text().trimmed(), &error)
+                                       : exportEpubTo(path, title->text().trimmed(), author->text().trimmed(), cover->isChecked(), &error);
+    if (ok)
         statusBar()->showMessage(tr("Saved the e-book."), 5000);
     else
         QMessageBox::warning(this, tr("Save as E-book"), tr("The e-book couldn't be saved: %1").arg(error));
@@ -1168,6 +1180,59 @@ bool MainWindow::exportEpubTo(const QString &path, const QString &title, const Q
         opt.cover = Renderer::renderToImage(ctx, 0, 1600 / std::max(1.0, m_ed->doc()->pageSize().height()));
     }
     return jp::exportEpub(*m_ed->doc(), path, opt, error);
+}
+
+bool MainWindow::exportFixedEpubTo(const QString &path, const QString &title, const QString &author, QString *error)
+{
+    Document *d = m_ed->doc();
+    FixedEpubOptions opt;
+    opt.title = title;
+    opt.author = author;
+    opt.pageSize = d->pageSize();
+    opt.spreads = d->setup.layout == PageSetup::Booklet || m_ed->twoPageSpread();
+    PaintContext ctx;
+    ctx.doc = d;
+    ctx.cache = &m_ed->cache();
+    ctx.opt.output = true;
+    if (!d->pages.isEmpty()) opt.cover = Renderer::renderToImage(ctx, 0, 1600 / std::max(1.0, d->pageSize().height()));
+    QVector<FixedPage> pages;
+    for (int i = 0; i < d->pages.size(); ++i) {
+        FixedPage fp;
+        fp.svg = pageSvg(ctx, i, title);
+        // The page's words in reading order: its text boxes top to bottom,
+        // left to right, each with the part of its story it shows.
+        QVector<const Item *> boxes;
+        walkItems(d->pages[i]->items, [&](const ItemPtr &it) {
+            if (it->type() == ItemType::Text || it->type() == ItemType::Shape || it->type() == ItemType::Table) boxes << it.get();
+        });
+        std::stable_sort(boxes.begin(), boxes.end(), [](const Item *a, const Item *b) {
+            return std::abs(a->bounds().top() - b->bounds().top()) > 6 ? a->bounds().top() < b->bounds().top() : a->bounds().left() < b->bounds().left();
+        });
+        auto take = [&](QTextDocument *sd, int from, int to) {
+            if (!sd) return;
+            for (QTextBlock b = sd->findBlock(std::max(0, from)); b.isValid() && b.position() < to; b = b.next()) {
+                const int s0 = std::max(from, b.position()), e0 = std::min(to, b.position() + b.length() - 1);
+                const QString part = b.text().mid(s0 - b.position(), std::max(0, e0 - s0)).replace(QChar(QChar::LineSeparator), QLatin1Char(' ')).remove(QChar::ObjectReplacementCharacter);
+                fp.text += part + QLatin1Char('\n');
+                const QString style = b.blockFormat().stringProperty(tp::StyleName);
+                if (b.position() >= from && style.size() == 9 && style.startsWith(QLatin1String("Heading ")) && style[8] >= QLatin1Char('1') && style[8] <= QLatin1Char('3') && !part.trimmed().isEmpty())
+                    fp.headings.push_back({style[8].digitValue(), part.trimmed()});
+            }
+        };
+        for (const Item *it : boxes) {
+            if (it->type() == ItemType::Text) {
+                const auto fl = m_ed->cache().textFrame(*d, static_cast<const TextItem &>(*it), i + 1, RenderOptions());
+                if (fl.layout && fl.layout->firstPosition(fl.frame) >= 0)
+                    take(d->storyDoc(static_cast<const TextItem *>(it)->storyId), fl.layout->firstPosition(fl.frame), fl.layout->lastPosition(fl.frame) + 1);
+            } else if (it->type() == ItemType::Shape) {
+                if (QTextDocument *sd = d->storyDoc(static_cast<const ShapeItem *>(it)->storyId)) take(sd, 0, sd->characterCount());
+            } else
+                for (const auto &c : static_cast<const TableItem *>(it)->cells)
+                    if (QTextDocument *sd = d->storyDoc(c.storyId); sd && !c.covered) take(sd, 0, sd->characterCount());
+        }
+        pages << fp;
+    }
+    return jp::exportFixedEpub(*d, path, pages, opt, error);
 }
 
 void MainWindow::exportHtml()

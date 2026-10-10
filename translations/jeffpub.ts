@@ -3816,7 +3816,7 @@ Back page story	4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/io/pubexport.cpp" line="+2201"/>
+        <location filename="../src/io/pubexport.cpp" line="+2203"/>
         <source>%1 object(s) couldn&apos;t be saved to .pub</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4159,7 +4159,7 @@ Open them with your email program to send.</source>
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../src/app/mainwindow.cpp" line="+667"/>
+        <location filename="../src/app/mainwindow.cpp" line="+668"/>
         <source>A picture on page %1 has low resolution (%2 ppi; printers ask for 300).</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4211,7 +4211,7 @@ Download it from %2 now? (%3, once.)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+390"/>
+        <location line="+454"/>
         <source>All Pictures (*.png *.jpg *.jpeg *.gif *.bmp *.tif *.tiff *.webp *.svg *.wmf *.emf *.ico *.pdf)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -8302,7 +8302,7 @@ Desktop publishing</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1972"/>
+        <location line="+1988"/>
         <source>Notes</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10287,7 +10287,7 @@ Source: %3</source>
 <context>
     <name>jp::MainWindow</name>
     <message>
-        <location filename="../src/app/mainwindow.cpp" line="-1050"/>
+        <location filename="../src/app/mainwindow.cpp" line="-1114"/>
         <location filename="../src/app/mainwindow_actions.cpp" line="+613"/>
         <source>%1 (%2)</source>
         <translation type="unfinished"></translation>
@@ -10350,12 +10350,12 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="+9"/>
-        <location line="+770"/>
+        <location line="+834"/>
         <source>Saved %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-759"/>
+        <location line="-823"/>
         <source>JeffPub Publication (*.jpub)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10712,18 +10712,28 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
     </message>
     <message>
         <location line="+24"/>
-        <location line="+23"/>
-        <location line="+7"/>
+        <location line="+32"/>
+        <location line="+9"/>
         <source>Save as E-book</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-28"/>
-        <source>An EPUB e-book whose text flows to fit each reader&apos;s screen. Chapters start at each Heading 1 paragraph, and the Heading 1-3 paragraphs make its table of contents.</source>
+        <location line="-39"/>
+        <source>An EPUB e-book. Its contents list comes from the Heading 1-3 paragraphs.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+5"/>
+        <source>Text that flows to fit the screen (chapters start at each Heading 1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Each page exactly as designed (fixed layout)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Title:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10738,12 +10748,12 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+13"/>
         <source>EPUB e-book (*.epub)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+6"/>
         <source>Saved the e-book.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10753,7 +10763,7 @@ They&apos;re kept when you save as a JeffPub publication (.jpub).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+74"/>
         <location filename="../src/app/mainwindow_actions.cpp" line="-1099"/>
         <source>Save as Web Page</source>
         <translation type="unfinished"></translation>

@@ -1,5 +1,5 @@
 # Save as a picture, web page, or e-book
-<!-- keywords: export, save as picture, png, jpeg, gif, tiff, svg, image, web page, html, e-book, epub, pack and go, photo printer, email -->
+<!-- keywords: export, save as picture, png, jpeg, gif, tiff, svg, image, web page, html, e-book, epub, fixed layout, page for page, picture book, pack and go, photo printer, email -->
 
 Use **File > Export** to turn your publication into another kind of file. Your publication itself does not change. For PDFs, see [PDF files and print shops](pdf). For .pub files, see [Work with .pub files](pub-files).
 
@@ -20,14 +20,17 @@ Click **File > Export**, then **Save as Web Page**. JeffPub makes one .html file
 
 ## Save as an e-book
 
-An **EPUB** is the standard e-book file. E-readers, tablets, and phones open it. The text flows to fit each reader's screen, so the pages do not match your layout one for one.
+An **EPUB** is the standard e-book file. E-readers, tablets, and phones open it. You choose one of two kinds:
+
+- **Text that flows to fit the screen**: the words rewrap for each reader's screen and text size, like a novel. The pages don't match your layout one for one.
+- **Each page exactly as designed**: every page looks as it does in JeffPub, like a picture book, magazine, or comic. Readers zoom in to read small text. The words stay underneath each page, so readers can search them and screen readers can read them aloud.
 
 1. Click **File > Export**, then **Save as E-book (EPUB)**.
-2. Check the **Title** and **Author**.
-3. Leave **Use the first page as the cover** checked, or clear it.
+2. Choose the kind, and check the **Title** and **Author**.
+3. For flowing text, leave **Use the first page as the cover** checked, or clear it. (A page-for-page book always uses its first page as the cover.)
 4. Click **OK**, type a file name, and click **Save**.
 
-A new chapter starts at each paragraph in the Heading 1 style. The Heading 1, 2, and 3 paragraphs make the table of contents. Pictures and tables stay in place. Footnotes pop up, and endnotes go at the back. See [styles](styles) and [contents, footnotes, and endnotes](references).
+In a flowing book, a new chapter starts at each paragraph in the Heading 1 style. The Heading 1, 2, and 3 paragraphs make the table of contents in both kinds; a page-for-page book lists each heading at the page it's on. Pictures and tables stay in place. Footnotes pop up, and endnotes go at the back. See [styles](styles) and [contents, footnotes, and endnotes](references).
 
 ## Pack and Go and photo prints
 

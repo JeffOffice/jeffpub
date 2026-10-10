@@ -942,6 +942,53 @@ private Q_SLOTS:
         QVERIFY(found);
     }
 
+    // Save as E-book can make a fixed-layout EPUB: each page as designed (an
+    // SVG drawing) at the page's size, its words underneath in reading order,
+    // the contents from Heading 1-3 at the pages they're on.
+    void fixedLayoutEbook()
+    {
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        ed->insertPages(0, 1, false, false);
+        auto heading = std::make_shared<jp::TextItem>();
+        heading->rect = QRectF(72, 72, 400, 60);
+        heading->storyId = ed->doc()->createStory();
+        QTextCursor c(ed->doc()->storyDoc(heading->storyId));
+        QTextBlockFormat hf;
+        hf.setProperty(jp::tp::StyleName, QStringLiteral("Heading 1"));
+        c.setBlockFormat(hf);
+        c.insertText(QStringLiteral("Chapter One"));
+        c.insertBlock(QTextBlockFormat());
+        c.insertText(QStringLiteral("The story begins."));
+        ed->doc()->pages[0]->items.push_back(heading);
+        auto second = std::make_shared<jp::TextItem>();
+        second->rect = QRectF(72, 72, 400, 60);
+        second->storyId = ed->doc()->createStory();
+        QTextCursor(ed->doc()->storyDoc(second->storyId)).insertText(QStringLiteral("And it ends."));
+        ed->doc()->pages[1]->items.push_back(second);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("book.epub"));
+        QString err;
+        QVERIFY2(w.exportFixedEpubTo(path, QStringLiteral("A Book"), QStringLiteral("Pat"), &err), qPrintable(err));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QMap<QString, QByteArray> zip;
+        QVERIFY(jp::readZip(f.readAll(), zip, &err));
+        const QString opf = QString::fromUtf8(zip.value(QStringLiteral("OEBPS/content.opf")));
+        QVERIFY(opf.contains(QStringLiteral("<meta property=\"rendition:layout\">pre-paginated</meta>")));
+        QVERIFY(opf.contains(QStringLiteral("<itemref idref=\"p1\"/>")) && opf.contains(QStringLiteral("<itemref idref=\"p2\"/>")));
+        const QString p1 = QString::fromUtf8(zip.value(QStringLiteral("OEBPS/page1.xhtml")));
+        QVERIFY(p1.contains(QStringLiteral("content=\"width=816, height=1056\"")));   // a letter page in CSS pixels
+        QVERIFY(p1.contains(QStringLiteral("<p>Chapter One</p>")) && p1.contains(QStringLiteral("<p>The story begins.</p>")));
+        QVERIFY(QString::fromUtf8(zip.value(QStringLiteral("OEBPS/page2.xhtml"))).contains(QStringLiteral("<p>And it ends.</p>")));
+        QVERIFY(zip.value(QStringLiteral("OEBPS/pages/page1.svg")).startsWith("<?xml") || zip.value(QStringLiteral("OEBPS/pages/page1.svg")).contains("<svg"));
+        const QString nav = QString::fromUtf8(zip.value(QStringLiteral("OEBPS/nav.xhtml")));
+        QVERIFY2(nav.contains(QStringLiteral("<a href=\"page1.xhtml\">Chapter One</a>")), qPrintable(nav));
+        QVERIFY(nav.contains(QStringLiteral("epub:type=\"page-list\"")));
+        QCOMPARE(zip.value(QStringLiteral("mimetype")), QByteArray("application/epub+zip"));
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) QFile::copy(path, qEnvironmentVariable("JP_SHOT_DIR") + QStringLiteral("/fixed.epub"));
+    }
+
     // A file whose style names point outside their section (made from
     // JeffPub's own styles sample): it still opens with all its text,
     // losing only the damaged names.

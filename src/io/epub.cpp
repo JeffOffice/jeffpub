@@ -494,4 +494,91 @@ bool exportEpub(const Document &doc, const QString &path, const EpubOptions &opt
     return true;
 }
 
+
+bool exportFixedEpub(const Document &doc, const QString &path, const QVector<FixedPage> &pages, const FixedEpubOptions &opt, QString *error)
+{
+    const QString title = !opt.title.isEmpty() ? opt.title : !doc.props.title.isEmpty() ? doc.props.title : QStringLiteral("Untitled");
+    const QString author = !opt.author.isEmpty() ? opt.author : doc.props.author;
+    const QString lang = opt.language.isEmpty() ? QStringLiteral("en-US") : opt.language;
+    const QString id = !opt.identifier.isEmpty() ? opt.identifier : QStringLiteral("urn:uuid:") + QUuid::createUuid().toString(QUuid::WithoutBraces);
+    if (pages.isEmpty()) {
+        if (error) *error = QStringLiteral("The publication has no pages.");
+        return false;
+    }
+    // The page in CSS pixels (96 to the inch), which readers scale to the screen.
+    const int w = std::max(1, int(std::lround(opt.pageSize.width() * 96 / 72))), h = std::max(1, int(std::lround(opt.pageSize.height() * 96 / 72)));
+
+    ZipWriter zip;
+    zip.add(QStringLiteral("mimetype"), QByteArrayLiteral("application/epub+zip"));
+    zip.add(QStringLiteral("META-INF/container.xml"),
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\">\n"
+            "<rootfiles><rootfile full-path=\"OEBPS/content.opf\" media-type=\"application/oebps-package+xml\"/></rootfiles>\n</container>\n",
+            true);
+    QString manifest = QStringLiteral("<item id=\"nav\" href=\"nav.xhtml\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>\n");
+    QString spine;
+    if (!opt.cover.isNull()) {
+        QByteArray jpg;
+        QBuffer buf(&jpg);
+        buf.open(QIODevice::WriteOnly);
+        opt.cover.convertToFormat(QImage::Format_RGB32).save(&buf, "JPEG", 90);
+        zip.add(QStringLiteral("OEBPS/images/cover.jpg"), jpg);
+        manifest += QStringLiteral("<item id=\"cover-image\" href=\"images/cover.jpg\" media-type=\"image/jpeg\" properties=\"cover-image\"/>\n");
+    }
+    QString toc, pageList;
+    for (int i = 0; i < pages.size(); ++i) {
+        const QString name = QStringLiteral("page%1.xhtml").arg(i + 1), svgName = QStringLiteral("pages/page%1.svg").arg(i + 1);
+        // The page's words sit under the drawing, out of sight but there for
+        // search, copying, and screen readers; the drawing says nothing itself.
+        QString words;
+        for (const QString &para : pages[i].text.split(QLatin1Char('\n'), Qt::SkipEmptyParts))
+            if (!para.trimmed().isEmpty()) words += QStringLiteral("<p>%1</p>\n").arg(xml(para.trimmed()));
+        const QString body = QStringLiteral("<!DOCTYPE html>\n<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\" lang=\"%1\" xml:lang=\"%1\">\n"
+                                            "<head><meta charset=\"utf-8\"/><title>%2</title>\n<meta name=\"viewport\" content=\"width=%3, height=%4\"/>\n"
+                                            "<style>html, body { margin: 0; padding: 0; width: %3px; height: %4px; overflow: hidden; }\n"
+                                            "img.page { position: absolute; left: 0; top: 0; width: %3px; height: %4px; }\n"
+                                            ".words { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%%); }</style></head>\n"
+                                            "<body epub:type=\"bodymatter\"><img class=\"page\" src=\"%5\" alt=\"\"/>\n<div class=\"words\">\n%6</div></body></html>\n")
+                                 .arg(xml(lang), xml(QStringLiteral("%1, page %2").arg(title).arg(i + 1))).arg(w).arg(h).arg(svgName, words);
+        zip.add(QStringLiteral("OEBPS/") + name, body.toUtf8(), true);
+        zip.add(QStringLiteral("OEBPS/") + svgName, pages[i].svg, true);
+        manifest += QStringLiteral("<item id=\"p%1\" href=\"%2\" media-type=\"application/xhtml+xml\"/>\n"
+                                   "<item id=\"s%1\" href=\"%3\" media-type=\"image/svg+xml\"/>\n").arg(i + 1).arg(name, svgName);
+        // Facing pages: the first alone on the right, then left and right.
+        const QString side = opt.spreads ? (i % 2 == 0 ? QStringLiteral(" properties=\"page-spread-right\"") : QStringLiteral(" properties=\"page-spread-left\"")) : QString();
+        spine += QStringLiteral("<itemref idref=\"p%1\"%2/>\n").arg(i + 1).arg(side);
+        for (const auto &hd : pages[i].headings)
+            toc += QStringLiteral("<li class=\"h%1\"><a href=\"%2\">%3</a></li>\n").arg(hd.level).arg(name, xml(hd.text));
+        pageList += QStringLiteral("<li><a href=\"%1\">%2</a></li>\n").arg(name).arg(i + 1);
+    }
+    if (toc.isEmpty()) toc = QStringLiteral("<li><a href=\"page1.xhtml\">%1</a></li>\n").arg(xml(title));
+    const QString navBody = QStringLiteral("<nav epub:type=\"toc\" id=\"toc\"><h1>Contents</h1>\n<ol>\n%1</ol></nav>\n"
+                                           "<nav epub:type=\"page-list\" hidden=\"hidden\"><ol>\n%2</ol></nav>\n"
+                                           "<nav epub:type=\"landmarks\" hidden=\"hidden\"><ol>\n<li><a epub:type=\"cover\" href=\"page1.xhtml\">Cover</a></li>\n"
+                                           "<li><a epub:type=\"bodymatter\" href=\"page1.xhtml\">Start</a></li>\n</ol></nav>\n")
+                                .arg(toc, pageList);
+    zip.add(QStringLiteral("OEBPS/nav.xhtml"), page(QStringLiteral("Contents"), lang, navBody).toUtf8(), true);
+
+    QString meta = QStringLiteral("<dc:identifier id=\"bookid\">%1</dc:identifier>\n<dc:title>%2</dc:title>\n<dc:language>%3</dc:language>\n")
+                       .arg(xml(id), xml(title), xml(lang));
+    if (!author.isEmpty()) meta += QStringLiteral("<dc:creator>%1</dc:creator>\n").arg(xml(author));
+    meta += QStringLiteral("<meta property=\"dcterms:modified\">%1</meta>\n").arg(QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyy-MM-ddThh:mm:ssZ")));
+    meta += QStringLiteral("<meta property=\"rendition:layout\">pre-paginated</meta>\n<meta property=\"rendition:orientation\">auto</meta>\n"
+                           "<meta property=\"rendition:spread\">%1</meta>\n").arg(opt.spreads ? QStringLiteral("landscape") : QStringLiteral("none"));
+    if (!opt.cover.isNull()) meta += QStringLiteral("<meta name=\"cover\" content=\"cover-image\"/>\n");
+    const QString opf = QStringLiteral("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                       "<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\" unique-identifier=\"bookid\" xml:lang=\"%1\" "
+                                       "prefix=\"rendition: http://www.idpf.org/vocab/rendition/#\">\n"
+                                       "<metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n%2</metadata>\n"
+                                       "<manifest>\n%3</manifest>\n<spine>\n%4</spine>\n</package>\n")
+                            .arg(xml(lang), meta, manifest, spine);
+    zip.add(QStringLiteral("OEBPS/content.opf"), opf.toUtf8(), true);
+    const QByteArray bytes = zip.finish();
+    QSaveFile f(path);
+    if (!f.open(QIODevice::WriteOnly) || f.write(bytes) != bytes.size() || !f.commit()) {
+        if (error) *error = f.errorString();
+        return false;
+    }
+    return true;
+}
+
 } // namespace jp

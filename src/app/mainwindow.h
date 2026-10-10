@@ -108,6 +108,8 @@ public:
     // An EPUB e-book; `cover` makes the first page its cover.
     void exportEpub();
     bool exportEpubTo(const QString &path, const QString &title, const QString &author, bool cover, QString *error = nullptr);
+    // Page for page: each page as designed (a fixed-layout EPUB).
+    bool exportFixedEpubTo(const QString &path, const QString &title, const QString &author, QString *error = nullptr);
     bool exportHtmlTo(const QString &path);
     void printPublication();
     void showBackstage(const QString &page = QString());
