@@ -54,13 +54,25 @@ static TableItem *selTable(Editor *ed)
 }
 
 // Table structure edits keep stories, spans and borders consistent.
+// A new row or column through a merged cell makes the merged cell bigger, and
+// the new cells under it are covered.
 static void tableInsertRow(Editor *ed, TableItem *t, int at)
 {
     at = std::clamp(at, 0, t->rows);
     const int src = std::clamp(at == t->rows ? at - 1 : at, 0, t->rows - 1);
+    QVector<bool> merged(t->cols, false);   // the columns the new row passes through a merged cell in
+    QVector<QPoint> grows;                  // those merged cells (column, row)
+    for (int r = 0; r < at; ++r)
+        for (int c = 0; c < t->cols; ++c) {
+            const TableCell &s = t->cell(r, c);
+            if (s.covered || r + s.rowSpan <= at) continue;
+            grows << QPoint(c, r);
+            for (int k = c; k < std::min(t->cols, c + s.colSpan); ++k) merged[k] = true;
+        }
     QVector<TableCell> row;
     for (int c = 0; c < t->cols; ++c) {
         TableCell n;
+        n.covered = merged[c];
         const TableCell &s = t->cell(src, c);
         n.fill = s.fill;
         n.border = s.border;
@@ -76,6 +88,7 @@ static void tableInsertRow(Editor *ed, TableItem *t, int at)
     for (int c = 0; c < t->cols; ++c) t->cells[at * t->cols + c] = row[c];
     t->rowH.insert(at, t->rowH.value(src, 18));
     ++t->rows;
+    for (const QPoint &g : grows) ++t->cell(g.y(), g.x()).rowSpan;
     t->syncRect();
 }
 
@@ -83,11 +96,21 @@ static void tableInsertCol(Editor *ed, TableItem *t, int at)
 {
     at = std::clamp(at, 0, t->cols);
     const int src = std::clamp(at == t->cols ? at - 1 : at, 0, t->cols - 1);
+    QVector<bool> merged(t->rows, false);   // the rows the new column passes through a merged cell in
+    QVector<QPoint> grows;                  // those merged cells (column, row)
+    for (int r = 0; r < t->rows; ++r)
+        for (int c = 0; c < at; ++c) {
+            const TableCell &s = t->cell(r, c);
+            if (s.covered || c + s.colSpan <= at) continue;
+            grows << QPoint(c, r);
+            for (int k = r; k < std::min(t->rows, r + s.rowSpan); ++k) merged[k] = true;
+        }
     QVector<TableCell> cells;
     for (int r = 0; r < t->rows; ++r)
         for (int c = 0; c <= t->cols; ++c) {
             if (c == at) {
                 TableCell n;
+                n.covered = merged[r];
                 const TableCell &s = t->cell(r, src);
                 n.fill = s.fill;
                 n.border = s.border;
@@ -104,6 +127,7 @@ static void tableInsertCol(Editor *ed, TableItem *t, int at)
     t->colW.insert(at, w);
     ++t->cols;
     t->cells = cells;
+    for (const QPoint &g : grows) ++t->cell(g.y(), g.x()).colSpan;
     // Keep the table the same width.
     double total = 0;
     for (double v : t->colW) total += v;
@@ -1099,8 +1123,9 @@ void MainWindow::createActions()
                Item *it = ed->isEditingText() ? ed->doc()->item(ed->textTarget().itemId) : ed->single();
                if (auto *t = dynamic_cast<TextItem *>(it)) ed->change(tr("Vertical Alignment"), [t, k] { t->valign = VAlign(k); });
                else if (auto *s = dynamic_cast<ShapeItem *>(it)) ed->change(tr("Vertical Alignment"), [s, k] { s->valign = VAlign(k); });
-               else if (auto *tb = dynamic_cast<TableItem *>(it); tb && ed->targetCells().valid()) {
-                   const CellRange rg = ed->targetCells();
+               else if (auto *tb = dynamic_cast<TableItem *>(it)) {
+                   // The selected cells, the cell the text cursor is in, or with the table selected, every cell.
+                   const CellRange rg = ed->cellsToFormat(tb);
                    ed->change(tr("Cell Alignment"), [tb, rg, k] {
                        for (int r = rg.r0; r <= rg.r1; ++r)
                            for (int c = rg.c0; c <= rg.c1; ++c) tb->cell(r, c).valign = VAlign(k);

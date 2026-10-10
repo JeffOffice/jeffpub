@@ -32,7 +32,7 @@ Fills, borders, diagonals, alignment, cell margins, and text formatting (such as
 2. In **Table Layout > Rows & Columns**, click **Insert Above**, **Insert Below**, **Insert Left**, or **Insert Right**. With cells selected, the new row or column goes above, below, left of, or right of all of them.
 3. To remove rows or columns, click **Delete** and choose **Delete Rows**, **Delete Columns**, or **Delete Table**. **Delete Rows** removes every row the cell you are in or your selected cells reach, and **Delete Columns** does the same for columns.
 
-With the whole table selected, **Insert Above** and **Insert Left** add at the start of the table, and **Insert Below** and **Insert Right** at the end. To delete a row or column, click in it first. A table keeps at least one row and one column.
+With the whole table selected, **Insert Above** and **Insert Left** add at the start of the table, and **Insert Below** and **Insert Right** at the end. If a new row or column goes through a merged cell, the merged cell grows to take it in. To delete a row or column, click in it first. A table keeps at least one row and one column.
 
 ## Change sizes
 
@@ -54,7 +54,7 @@ Use the **Table Design** tab.
 - For borders, first pick a **Line Color** and a **Line Weight**. Then click **Borders** and choose **All Borders**, **Outside Borders**, **Inside Borders**, **No Border**, or one side such as **Top Border**.
 - **Diagonals** draws a line across a cell. Choose **Divide Down** or **Divide Up**. **No Division** removes it.
 
-To place text in a cell, use the buttons in **Table Layout > Alignment**: top, middle, or bottom, and left, center, right, or justified. **Cell Margins**, also there, sets the space between a cell's edges and its text: **None**, **Narrow**, **Moderate**, or **Wide**. It changes the selected cells, the cell you are in, or every cell when the whole table is selected.
+To place text in a cell, use the buttons in **Table Layout > Alignment**: top, middle, or bottom, and left, center, right, or justified. **Cell Margins**, also there, sets the space between a cell's edges and its text: **None**, **Narrow**, **Moderate**, or **Wide**. The top, middle, and bottom buttons and **Cell Margins** change the selected cells, the cell you are in, or every cell when the whole table is selected.
 
 **Text Direction**, also in **Table Layout > Alignment**, turns the text in a cell a quarter turn, so its lines read from top to bottom. It suits a heading over a narrow column. Click it again to turn the text back. The row does not grow to fit turned text, so drag the line under the row down until the text fits.
 

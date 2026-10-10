@@ -1033,6 +1033,153 @@ private Q_SLOTS:
         QCOMPARE(table()->cols, 4);
     }
 
+    // A row or column inserted through a merged cell makes that cell bigger,
+    // and the new cells under it are covered (the new row had two live cells
+    // inside the merge, and the rows below it covered cells with nothing over
+    // them). Then edits in any order, undone and redone, keep the grid whole.
+    void tableEditsKeepMergedCellsWhole()
+    {
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        auto made = std::static_pointer_cast<jp::TableItem>(ed->newTable(QRectF(72, 72, 300, 150), 3, 3));
+        ed->addItem(made);
+        const QString id = made->id;
+        auto table = [&] { return static_cast<jp::TableItem *>(ed->doc()->item(id)); };
+        // What is wrong with the grid, if anything: every cell lies under exactly one
+        // live cell's span, and spans stay inside the table.
+        auto problem = [&]() -> QString {
+            const jp::TableItem *t = table();
+            if (!t) return QStringLiteral("the table is gone");
+            if (t->rows < 1 || t->cols < 1 || t->cells.size() != t->rows * t->cols || t->colW.size() != t->cols || t->rowH.size() != t->rows)
+                return QStringLiteral("sizes: %1x%2, %3 cells, %4 widths, %5 heights").arg(t->rows).arg(t->cols).arg(t->cells.size()).arg(t->colW.size()).arg(t->rowH.size());
+            QVector<int> under(t->cells.size(), 0);
+            for (int r = 0; r < t->rows; ++r)
+                for (int c = 0; c < t->cols; ++c) {
+                    const jp::TableCell &cl = t->cell(r, c);
+                    if (!ed->doc()->storyDoc(cl.storyId)) return QStringLiteral("(%1,%2) has no text").arg(r).arg(c);
+                    if (cl.covered) continue;
+                    if (cl.rowSpan < 1 || cl.colSpan < 1 || r + cl.rowSpan > t->rows || c + cl.colSpan > t->cols)
+                        return QStringLiteral("(%1,%2) spans %3x%4 in a %5x%6 table").arg(r).arg(c).arg(cl.rowSpan).arg(cl.colSpan).arg(t->rows).arg(t->cols);
+                    for (int rr = r; rr < r + cl.rowSpan; ++rr)
+                        for (int cc = c; cc < c + cl.colSpan; ++cc) {
+                            ++under[rr * t->cols + cc];
+                            if ((rr != r || cc != c) && !t->cell(rr, cc).covered) return QStringLiteral("(%1,%2) is live under the cell at (%3,%4)").arg(rr).arg(cc).arg(r).arg(c);
+                        }
+                }
+            for (int i = 0; i < under.size(); ++i)
+                if (under[i] != 1) return QStringLiteral("(%1,%2) is under %3 cells").arg(i / t->cols).arg(i % t->cols).arg(under[i]);
+            return QString();
+        };
+        auto mergeBlock = [&] {
+            ed->selectCells(id, 0, 0, 1, 1);
+            w.act(QStringLiteral("tbl.merge"))->trigger();
+            QCOMPARE(table()->cell(0, 0).rowSpan, 2);
+        };
+
+        // Insert Below with the cursor beside a merged cell: the merged cell reaches the new row.
+        mergeBlock();
+        ed->beginTextEdit(id, 0, 0, 2);
+        w.act(QStringLiteral("tbl.insBelow"))->trigger();
+        QCOMPARE(table()->rows, 4);
+        QCOMPARE(table()->cell(0, 0).rowSpan, 3);
+        QCOMPARE(table()->cell(0, 0).colSpan, 2);
+        QVERIFY(table()->cell(2, 0).covered && table()->cell(2, 1).covered);
+        QVERIFY(!table()->cell(2, 2).covered);
+        QVERIFY(!table()->cell(3, 0).covered && table()->cell(3, 0).rowSpan == 1);
+        QCOMPARE(problem(), QString());
+        ed->undo();
+        QCOMPARE(table()->rows, 3);
+        QCOMPARE(table()->cell(0, 0).rowSpan, 2);
+        QCOMPARE(problem(), QString());
+        // Above the merge's first row it is only moved down; above its second row it grows.
+        ed->beginTextEdit(id, 0, 0, 2);
+        w.act(QStringLiteral("tbl.insAbove"))->trigger();
+        QCOMPARE(table()->cell(0, 0).rowSpan, 1);
+        QCOMPARE(table()->cell(1, 0).rowSpan, 2);
+        QCOMPARE(problem(), QString());
+        ed->undo();
+        ed->beginTextEdit(id, 0, 1, 2);
+        w.act(QStringLiteral("tbl.insAbove"))->trigger();
+        QCOMPARE(table()->rows, 4);
+        QCOMPARE(table()->cell(0, 0).rowSpan, 3);
+        QVERIFY(table()->cell(1, 0).covered && table()->cell(1, 1).covered && !table()->cell(1, 2).covered);
+        QCOMPARE(problem(), QString());
+        ed->undo();
+        // The same for columns.
+        ed->beginTextEdit(id, 0, 2, 0);
+        w.act(QStringLiteral("tbl.insRight"))->trigger();
+        QCOMPARE(table()->cols, 4);
+        QCOMPARE(table()->cell(0, 0).colSpan, 3);
+        QCOMPARE(table()->cell(0, 0).rowSpan, 2);
+        QVERIFY(table()->cell(0, 2).covered && table()->cell(1, 2).covered && !table()->cell(2, 2).covered);
+        QCOMPARE(problem(), QString());
+        ed->undo();
+        ed->beginTextEdit(id, 0, 2, 1);
+        w.act(QStringLiteral("tbl.insLeft"))->trigger();
+        QCOMPARE(table()->cols, 4);
+        QCOMPARE(table()->cell(0, 0).colSpan, 3);
+        QVERIFY(table()->cell(0, 1).covered && table()->cell(1, 1).covered && !table()->cell(2, 1).covered);
+        QCOMPARE(problem(), QString());
+        ed->undo();
+        QCOMPARE(problem(), QString());
+
+        // Edits in any order (fixed seeds), undone and redone, never break the grid.
+        const char *actions[] = {"tbl.merge", "tbl.split", "tbl.delRow", "tbl.delCol", "tbl.insAbove", "tbl.insBelow", "tbl.insLeft", "tbl.insRight", "edit.undo", "edit.redo"};
+        int insertsInMerges = 0;   // inserts made while the table had merged cells
+        for (const uint seed : {1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u}) {
+            QRandomGenerator rng(seed);
+            ed->undoStack()->clear();   // so Undo never goes back past this seed's first edit
+            for (int step = 0; step < 150; ++step) {
+                const jp::TableItem *t = table();
+                const int roll = rng.bounded(100);
+                QString what;
+                if (roll < 40) {
+                    ed->selectCells(id, rng.bounded(t->rows), rng.bounded(t->cols), rng.bounded(t->rows), rng.bounded(t->cols));
+                    what = QStringLiteral("select");
+                } else if (roll < 50) {
+                    ed->beginTextEdit(id, 0, rng.bounded(t->rows), rng.bounded(t->cols));
+                    what = QStringLiteral("cursor");
+                } else {
+                    const QString a = QString::fromLatin1(actions[rng.bounded(int(sizeof actions / sizeof *actions))]);
+                    if (a.startsWith(QLatin1String("tbl.ins")) && (t->rows > 7 || t->cols > 7)) continue;   // keep it small
+                    if (a == QLatin1String("edit.undo") && !ed->undoStack()->canUndo()) continue;
+                    if (a.startsWith(QLatin1String("tbl.ins")) && std::any_of(t->cells.cbegin(), t->cells.cend(), [](const jp::TableCell &c) { return c.covered; })) ++insertsInMerges;
+                    w.act(a)->trigger();
+                    what = a;
+                }
+                QVERIFY2(problem().isEmpty(), qPrintable(QStringLiteral("seed %1, step %2 (%3): %4").arg(seed).arg(step).arg(what, problem())));
+                if (ed->hasCellBlock()) {
+                    const jp::CellRange b = ed->cellBlock().range;
+                    QVERIFY2(b.r1 < table()->rows && b.c1 < table()->cols, qPrintable(QStringLiteral("seed %1, step %2 (%3): the selected cells are outside the table").arg(seed).arg(step).arg(what)));
+                }
+            }
+        }
+        QVERIFY2(insertsInMerges >= 30, qPrintable(QStringLiteral("only %1 inserts were made in a merged table").arg(insertsInMerges)));   // the seeds do reach the case
+    }
+
+    // Align Top, Middle, and Bottom set every cell when only the table is
+    // selected (as Text Direction and Cell Margins do; they did nothing), and
+    // just the selected cells otherwise.
+    void tableVerticalAlignmentWithTheTableSelected()
+    {
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        auto made = std::static_pointer_cast<jp::TableItem>(ed->newTable(QRectF(72, 72, 300, 150), 3, 3));
+        ed->addItem(made);
+        const QString id = made->id;
+        auto table = [&] { return static_cast<jp::TableItem *>(ed->doc()->item(id)); };
+        ed->select(id);
+        QVERIFY(!ed->hasCellBlock());
+        w.act(QStringLiteral("valign.1"))->trigger();
+        for (const auto &c : table()->cells) QCOMPARE(c.valign, jp::VAlign::Middle);
+        ed->undo();
+        for (const auto &c : table()->cells) QCOMPARE(c.valign, jp::VAlign::Top);
+        ed->selectCells(id, 1, 1, 1, 2);
+        w.act(QStringLiteral("valign.2"))->trigger();
+        for (int r = 0; r < 3; ++r)
+            for (int c = 0; c < 3; ++c) QCOMPARE(table()->cell(r, c).valign, r == 1 && c >= 1 ? jp::VAlign::Bottom : jp::VAlign::Top);
+    }
+
     // Table Layout > Size has Height and Width boxes for the whole table (and
     // none for a row or a column), Grow to Fit Text as a check box, all with
     // KeyTips and names. Typing a width scales the columns in proportion,
