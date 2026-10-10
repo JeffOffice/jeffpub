@@ -33,6 +33,7 @@
 #include <QPdfWriter>
 #include <QPrinter>
 #include "app/icons.h"
+#include <QStatusBar>
 #include <QTabBar>
 #include <QMenu>
 #include <QTranslator>
@@ -9190,9 +9191,10 @@ private Q_SLOTS:
 
     // The rulers' zero point can move. Shift and the right button dragging on
     // a ruler sets that ruler's zero where you let go; dragging from the box
-    // where the two rulers meet sets both, and a double-click there puts both
-    // back at the page's corner. Only the rulers' numbers change: guides are
-    // still placed from the page's corner.
+    // where the two rulers meet sets both. A double-click on a ruler puts
+    // that ruler's zero back at the page's corner, and one on the box puts
+    // both back. Only the rulers' numbers change: guides are still placed from
+    // the page's corner.
     void rulerZeroPoint()
     {
         jp::Settings &st = jp::Settings::get();
@@ -9279,7 +9281,18 @@ private Q_SLOTS:
         QVERIFY2(closeTo(guides[0], 250), qPrintable(QString::number(guides[0])));
         QCOMPARE(h->zero(), hz2);
 
+        // A double-click anywhere on a ruler puts that ruler's zero back, and only that one's; no guide comes of the clicks.
+        QTest::mouseDClick(h, Qt::LeftButton, Qt::NoModifier, onH(300));
+        QCOMPARE(h->zero(), 0.0);
+        QCOMPARE(v->zero(), vz2);
+        QTest::mouseDClick(v, Qt::LeftButton, Qt::NoModifier, onV(400));
+        QCOMPARE(v->zero(), 0.0);
+        QCOMPARE(guides.size(), 1);
+        QCOMPARE(w.editor()->surface()->guides.v.size(), 0);
+
         // A double-click on the box puts both back, and the rulers look as they did.
+        drag(corner, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10), view(corner, QPointF(72, 108)));
+        QVERIFY(h->zero() > 1 && v->zero() > 1);
         QTest::mouseDClick(corner, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));
         QCOMPARE(h->zero(), 0.0);
         QCOMPARE(v->zero(), 0.0);
@@ -9292,6 +9305,106 @@ private Q_SLOTS:
         w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
         QCOMPARE(h->zero(), 0.0);
         QCOMPARE(v->zero(), 0.0);
+        st.setUnit(was);
+    }
+
+    // The moved zero is saved with the publication in a .jpub, and comes back
+    // when it is opened; a file with the zero at the corner has no mention of
+    // it. Moving it is one undo step, and changes the publication.
+    void rulerZeroSaved()
+    {
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        ed->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        jp::Ruler *h = w.canvas()->hRuler(), *v = w.canvas()->vRuler();
+        QVERIFY(!ed->isModified());
+        QVERIFY(!jp::publicationBytes(*ed->doc(), QImage()).contains("rulerZero"));
+        h->setZero(216);
+        v->setZero(72);
+        QVERIFY(ed->isModified());
+        QCOMPARE(ed->doc()->rulerZero, QPointF(216, 72));
+        QVERIFY(jp::publicationBytes(*ed->doc(), QImage()).contains("\"rulerZero\":[216,72]"));
+        // Each move is a step: undo and redo take it back and bring it again, the other ruler's unmoved.
+        ed->undoStack()->undo();
+        QCOMPARE(v->zero(), 0.0);
+        QCOMPARE(h->zero(), 216.0);
+        ed->undoStack()->undo();
+        QCOMPARE(h->zero(), 0.0);
+        QVERIFY(!ed->isModified());
+        ed->undoStack()->redo();
+        ed->undoStack()->redo();
+        QCOMPARE(ed->doc()->rulerZero, QPointF(216, 72));
+
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("zero.jpub"));
+        QString err;
+        QVERIFY2(jp::savePublication(*ed->doc(), path, QImage(), &err), qPrintable(err));
+        jp::MainWindow other;
+        auto back = jp::loadPublication(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QCOMPARE(back->rulerZero, QPointF(216, 72));
+        other.editor()->setDocument(std::move(back), path);
+        QCOMPARE(other.canvas()->hRuler()->zero(), 216.0);
+        QCOMPARE(other.canvas()->vRuler()->zero(), 72.0);
+        // Put back at the corner and saved again, the file says nothing of it.
+        other.canvas()->hRuler()->setZero(0);
+        other.canvas()->vRuler()->setZero(0);
+        QVERIFY(!jp::publicationBytes(*other.editor()->doc(), QImage()).contains("rulerZero"));
+        // A new publication starts at the corner.
+        h->setZero(100);
+        ed->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        QCOMPARE(h->zero(), 0.0);
+        QCOMPARE(v->zero(), 0.0);
+    }
+
+    // The status bar's position counts from the rulers' zero, with a minus
+    // sign before it; the sizes are as ever.
+    void rulerZeroInStatusBar()
+    {
+        jp::Settings &st = jp::Settings::get();
+        const jp::Unit was = st.unit();
+        st.setUnit(jp::Unit::Inch);
+        jp::MainWindow w;
+        w.resize(1200, 900);
+        w.editor()->setDocument(jp::Document::blank(QSizeF(612, 792)));
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        jp::Editor *ed = w.editor();
+        jp::Canvas *c = w.canvas();
+        auto box = std::make_shared<jp::ShapeItem>();
+        box->rect = QRectF(72, 90, 144, 36);
+        ed->addItem(box);
+        ed->select(QStringList{box->id});
+        auto position = [&] {
+            for (QLabel *l : w.statusBar()->findChildren<QLabel *>())
+                if (l->text().contains(QLatin1String(", "))) return l->text();
+            return QString();
+        };
+        auto size = [&] {
+            for (QLabel *l : w.statusBar()->findChildren<QLabel *>())
+                if (l->text().contains(QChar(0x00D7))) return l->text();
+            return QString();
+        };
+        QTRY_COMPARE(position(), QStringLiteral("1\", 1.25\""));
+        const QString sized = size();
+        QVERIFY(!sized.isEmpty());
+        // With the zero at 3 in across and 1 in down, the shape (1 in, 1.25 in) reads -2 in, 0.25 in.
+        c->hRuler()->setZero(216);
+        c->vRuler()->setZero(72);
+        QTRY_COMPARE(position(), QStringLiteral("-2\", 0.25\""));
+        QCOMPARE(size(), sized);
+        // So does the pointer's place: the page's 4 in across and 5 in down reads 1 in, 4 in.
+        QWidget *vp = c->viewport();
+        QSignalSpy moved(c, &jp::Canvas::mouseMovedPage);
+        const QPoint at = c->pageToView(QPointF(288, 360)).toPoint();
+        QMouseEvent mv(QEvent::MouseMove, QPointF(at), QPointF(vp->mapToGlobal(at)), Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(vp, &mv);
+        QVERIFY(moved.count() > 0);
+        const QPointF page = moved.last().first().toPointF();
+        QVERIFY(qAbs(page.x() - 288) < 3 && qAbs(page.y() - 360) < 3);
+        QCOMPARE(position(), QStringLiteral("%1, %2").arg(st.format(page.x() - 216), st.format(page.y() - 72)));
+        // The Position boxes and the file still measure from the page's corner.
+        QCOMPARE(box->rect.topLeft(), QPointF(72, 90));
         st.setUnit(was);
     }
 

@@ -1044,6 +1044,14 @@ void MainWindow::updateContextTabs()
     Q_UNUSED(before);
 }
 
+// The status bar's position counts from the rulers' zero, so a place before it reads with a minus sign.
+QString MainWindow::positionText(const QPointF &page) const
+{
+    const Settings &st = Settings::get();
+    const QPointF zero = m_ed->doc()->rulerZero;
+    return QStringLiteral("%1, %2").arg(st.format(page.x() - zero.x()), st.format(page.y() - zero.y()));
+}
+
 void MainWindow::refreshUi()
 {
     Editor *ed = m_ed;
@@ -1215,7 +1223,7 @@ void MainWindow::refreshUi()
     }
     Settings &st = Settings::get();
     m_sizeLabel->setText(sel ? tr("%1 × %2").arg(st.format(b.width()), st.format(b.height())) : QString());
-    if (sel) m_posLabel->setText(QStringLiteral("%1, %2").arg(st.format(b.left()), st.format(b.top())));
+    if (sel) m_posLabel->setText(positionText(b.topLeft()));
     m_task->refresh();
 }
 

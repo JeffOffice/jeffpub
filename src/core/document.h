@@ -207,6 +207,9 @@ public:
     QString templateId;
     QJsonObject templateOptions;
     bool facingPages = false;   // default spread display
+    // Where the rulers count from, in points from the page's corner. Saved
+    // with the publication, and left out of the file at the corner.
+    QPointF rulerZero;
     // The fonts a .pub file named, when the publication came from one:
     // saved back to .pub under these names, not swapped for the standard
     // fonts JeffPub's look-alikes match (interchangeFontName).

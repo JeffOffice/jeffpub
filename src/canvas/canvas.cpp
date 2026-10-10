@@ -36,7 +36,8 @@ static const double kHandle = 4.5;     // handle radius in pixels
 // double-click on that box puts both back at the page's corner.
 static bool movesRulerZero(Qt::MouseButton b, Qt::KeyboardModifiers m) { return b == Qt::RightButton && (m & Qt::ShiftModifier); }
 static bool movesBothZeros(Qt::MouseButton b) { return b == Qt::LeftButton; }
-static bool resetsZeros(Qt::MouseButton b) { return b == Qt::LeftButton; }
+static bool resetsZeros(Qt::MouseButton b) { return b == Qt::LeftButton; }   // double-clicking a ruler, or the box
+static QString zeroLabel() { return QCoreApplication::translate("Canvas", "Move Ruler Zero Point"); }
 
 // The small box where the two rulers meet.
 class RulerCorner : public QWidget {
@@ -55,6 +56,7 @@ protected:
     {
         m_button = movesBothZeros(e->button()) ? e->button() : Qt::NoButton;
         m_press = e->position().toPoint();
+        if (m_button != Qt::NoButton) m_c->editor()->beginChange(zeroLabel());
     }
     void mouseMoveEvent(QMouseEvent *e) override { if (m_button != Qt::NoButton) follow(e); }
     void mouseReleaseEvent(QMouseEvent *e) override
@@ -62,13 +64,16 @@ protected:
         if (m_button == Qt::NoButton || e->button() != m_button) return;
         follow(e);
         m_button = Qt::NoButton;
+        m_c->editor()->endChange();
     }
     void mouseDoubleClickEvent(QMouseEvent *e) override
     {
         if (!resetsZeros(e->button())) return;
         m_button = Qt::NoButton;
+        m_c->editor()->beginChange(zeroLabel());
         m_c->hRuler()->setZero(0);
         m_c->vRuler()->setZero(0);
+        m_c->editor()->endChange();
     }
 
 private:
@@ -201,8 +206,6 @@ Canvas::Canvas(Editor *ed, QWidget *parent) : QAbstractScrollArea(parent), m_ed(
     connect(ed, &Editor::documentReplaced, this, [this] {
         m_fit = Fit::WholePage;
         QTimer::singleShot(0, this, [this] { zoomToFit(Fit::WholePage); });
-        m_hRuler->setZero(0);
-        m_vRuler->setZero(0);
     });
     connect(ed, &Editor::textCursorChanged, this, [this] {
         m_caretOn = true;
@@ -3042,14 +3045,25 @@ Ruler::Ruler(Canvas *c, Qt::Orientation o) : QWidget(c), m_c(c), m_o(o)
 
 QSize Ruler::sizeHint() const { return m_o == Qt::Horizontal ? QSize(100, kRuler) : QSize(kRuler, 100); }
 
-void Ruler::setZero(double pagePt)
+double Ruler::zero() const
 {
-    if (pagePt == m_zero) return;
-    m_zero = pagePt;
-    update();
+    const QPointF z = m_c->editor()->doc()->rulerZero;
+    return m_o == Qt::Horizontal ? z.x() : z.y();
 }
 
-double Ruler::valueAt(double pagePt) const { return Settings::get().toUnit(pagePt - m_zero); }
+// One undo step, unless a gesture holds the change open, as a drag does.
+void Ruler::setZero(double pagePt)
+{
+    if (pagePt == zero()) return;
+    Editor *ed = m_c->editor();
+    ed->beginChange(zeroLabel());
+    QPointF &z = ed->doc()->rulerZero;
+    (m_o == Qt::Horizontal ? z.rx() : z.ry()) = pagePt;
+    ed->notifyLive();   // the rulers and the status bar follow, while dragging too
+    ed->endChange();
+}
+
+double Ruler::valueAt(double pagePt) const { return Settings::get().toUnit(pagePt - zero()); }
 
 // Where the pointer is in the page area, whichever ruler's coordinates it comes in.
 QPointF Ruler::viewAt(const QMouseEvent *e) const { return m_c->viewport()->mapFromGlobal(e->globalPosition().toPoint()); }
@@ -3149,7 +3163,7 @@ void Ruler::paintEvent(QPaintEvent *)
     const double startScene = horiz ? m_c->toScene(QPointF(0, 0)).x() : m_c->toScene(QPointF(0, 0)).y();
     const double endScene = horiz ? m_c->toScene(QPointF(width(), 0)).x() : m_c->toScene(QPointF(0, height())).y();
     const double pageO = horiz ? origin.x() : origin.y();
-    const double o = pageO + m_zero;   // where the numbers start
+    const double o = pageO + zero();   // where the numbers start
     QFont f = font();
     f.setPointSizeF(7);
     p.setFont(f);
@@ -3214,6 +3228,7 @@ void Ruler::paintEvent(QPaintEvent *)
 void Ruler::mousePressEvent(QMouseEvent *e)
 {
     if (movesRulerZero(e->button(), e->modifiers())) {
+        m_c->editor()->beginChange(zeroLabel());
         m_dragZero = true;
         m_zeroButton = e->button();
         return;
@@ -3299,6 +3314,7 @@ void Ruler::mouseReleaseEvent(QMouseEvent *e)
     if (m_dragZero && e->button() == m_zeroButton) {
         m_dragZero = false;
         setZero(pageAlong(e));
+        m_c->editor()->endChange();
         return;
     }
     if (m_dragGuide) {
@@ -3312,10 +3328,12 @@ void Ruler::mouseReleaseEvent(QMouseEvent *e)
     }
 }
 
-// Double-clicking the horizontal ruler while typing opens the Tabs settings.
-void Ruler::mouseDoubleClickEvent(QMouseEvent *)
+// Double-clicking the horizontal ruler while typing opens the Tabs settings;
+// otherwise a double-click puts this ruler's zero back at the page's corner.
+void Ruler::mouseDoubleClickEvent(QMouseEvent *e)
 {
     if (m_o == Qt::Horizontal && m_c->editor()->isEditingText()) Q_EMIT m_c->tabsDialogWanted();
+    else if (resetsZeros(e->button())) setZero(0);
 }
 
 } // namespace jp

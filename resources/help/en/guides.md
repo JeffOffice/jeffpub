@@ -15,9 +15,11 @@ Each ruler counts from the top-left corner of the page: 0 is the corner, and the
 
 - Hold **Shift** and drag with the **right** mouse button along a ruler. That ruler's zero moves to where you let go.
 - To move both rulers at once, drag from the small box where the two rulers meet.
-- To put both back at the page's corner, double-click that small box.
+- To put one ruler's zero back at the page's corner, double-click that ruler. To put both back, double-click the small box. (While you type in a text box, double-clicking the top ruler opens the **Tabs** settings instead.)
 
-Only the numbers and tick marks on the two page rulers change. The status bar, the position boxes (such as the ones in the **Measurement** window), and the **Ruler Guides** window still measure from the page's corner, and so do the guides you drag out. The indent and tab markers on the text ruler still measure from the text box. The zero point belongs to the window, not to the file: it is not saved, and every publication you open starts at the corner.
+The numbers and tick marks on the two page rulers count from the zero point, and so does the position in the status bar. If the zero is 3 inches across, an object 1 inch from the left edge of the page reads -2" there, because it is 2 inches before the zero. The position boxes (such as the ones in the **Measurement** window), the **Ruler Guides** window, and the guides you drag out still measure from the page's corner. The indent and tab markers on the text ruler still measure from the text box.
+
+The zero point is saved with your publication, so it is there when you open the file again. A new publication starts with both zeros at the page's corner. Moving the zero is one step for **Undo**.
 
 ## The four kinds of guides
 

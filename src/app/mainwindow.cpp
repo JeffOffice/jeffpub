@@ -172,7 +172,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     connect(m_canvas, &Canvas::insertFilesWanted, this, &MainWindow::insertFiles);
     connect(m_canvas, &Canvas::pictureTabWanted, this, [this] { if (RibbonTab *t = m_ribbon->tab("Picture Format")) m_ribbon->showTab(t); });
     connect(m_canvas, &Canvas::mouseMovedPage, this, [this](const QPointF &p) {
-        m_posLabel->setText(QStringLiteral("%1, %2").arg(Settings::get().format(p.x()), Settings::get().format(p.y())));
+        m_posLabel->setText(positionText(p));
     });
     connect(m_canvas, &Canvas::zoomChanged, this, [this](double z) {
         m_zoomLabel->setText(QStringLiteral("%1%").arg(std::lround(z * 100)));

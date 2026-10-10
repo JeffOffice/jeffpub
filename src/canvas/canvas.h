@@ -20,8 +20,9 @@ public:
     QSize sizeHint() const override;
     void setMouse(double scenePos) { m_mouse = scenePos; update(); }
     // Where this ruler counts from, in points from the page's corner (the
-    // corner itself until moved). Not saved: it belongs to the open window.
-    double zero() const { return m_zero; }
+    // corner itself until moved). It is kept in the publication, and moving
+    // it is an undo step.
+    double zero() const;
     void setZero(double pagePt);
     // What the ruler reads at `pagePt` (points from the page's corner), in
     // the current unit, counting from its zero: negative before it.
@@ -43,7 +44,6 @@ private:
     Canvas *m_c;
     Qt::Orientation m_o;
     double m_mouse = -1e9;
-    double m_zero = 0;
     int m_dragMarker = -1;     // 0 first-line, 1 left, 2 right, 10+ tab index
     bool m_dragGuide = false;
     bool m_dragZero = false;   // the zero point is being dragged

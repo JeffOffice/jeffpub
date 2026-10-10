@@ -78,6 +78,7 @@ The root object:
 | `template` | string | The template it was made from, if any |
 | `templateOptions` | object | That template's choices (free form) |
 | `facing` | boolean | Pages show as two-page spreads |
+| `rulerZero` | array | Where the rulers count from: `[x, y]`, in points from the page's top-left corner. Left out when `[0, 0]` |
 | `pubFonts` | array | When the publication came from a `.pub` file: the font names it used, kept as they are when saving back to `.pub` |
 | `print` | object | Color output settings ([Printing colors](#printing-colors)) |
 

@@ -174,6 +174,7 @@ private:
 
     // Status bar.
     QLabel *m_pageLabel, *m_posLabel, *m_sizeLabel, *m_zoomLabel;
+    QString positionText(const QPointF &page) const;   // a place on the page as the rulers count it
     QSlider *m_zoomSlider;
     QTimer m_refreshTimer, m_recoverTimer;
     quint64 m_serial;               // this window, among this run's (names an unsaved document's copy)
