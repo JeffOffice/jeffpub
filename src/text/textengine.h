@@ -24,6 +24,10 @@ namespace jp {
 
 class Document;
 
+// A stock font's average character width in ems (OS/2 xAvgCharWidth), the
+// unit .pub tracking is measured in; -1 when it isn't one JeffPub knows.
+double originalAverageCharEm(const QString &family, bool bold, bool italic);
+
 struct FieldContext {
     const Document *doc = nullptr;
     int pageNumber = 1;           // 1-based

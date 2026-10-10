@@ -2182,10 +2182,14 @@ librevenge::RVNGPropertyList MSPUBCollector::getCharStyleProps(const CharacterSt
   // JeffPub: strikethrough and letter spacing.
   if (style.strike)
     ret.insert("style:text-line-through-type", "single");
-  if (style.letterSpacingEmu)
-    ret.insert("fo:letter-spacing", double(style.letterSpacingEmu) / EMUS_IN_INCH);
-  if (style.trackingPerMille && style.trackingPerMille != 1000)
-    ret.insert("jp:tracking", style.trackingPerMille / 10.0);
+  // JeffPub: a run that sets neither takes its paragraph style's (a sign's
+  // headline style tightens its letters; upstream let them go).
+  const int letterEmu = style.hasLetterSpacing ? style.letterSpacingEmu : defaultCharStyle.letterSpacingEmu;
+  const int tracking = style.trackingPerMille ? style.trackingPerMille : defaultCharStyle.trackingPerMille;
+  if (letterEmu)
+    ret.insert("fo:letter-spacing", double(letterEmu) / EMUS_IN_INCH);
+  if (tracking && tracking != 1000)
+    ret.insert("jp:tracking", tracking / 10.0);
   // JeffPub patch: the run is the page number field.
   // A page number: this page (22 = -1), the next box's (-7) or the previous one's (-6).
   if ((style.jpField & 0xff) == 5 && style.jpFieldArg == -7)

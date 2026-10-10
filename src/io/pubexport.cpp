@@ -1058,7 +1058,9 @@ void PubWriter::addStory(int textId, const QVector<const QTextDocument *> &docs,
             const QTextFragment fr = it.fragment();
             if (!fr.isValid()) continue;
             QString t = fr.text();
-            t.replace(QChar::LineSeparator, QChar(0x0b));
+            // A line break (Shift+Enter) is \n in Publisher's text: .pub files never hold
+            // \v, which Publisher 2021 draws as a box.
+            t.replace(QChar::LineSeparator, QLatin1Char('\n'));
             t.replace(QChar(0x2029), QChar('\r'));
             const QString field = fr.charFormat().stringProperty(tp::Field);
             const int story = int(m_storyLengths.size());

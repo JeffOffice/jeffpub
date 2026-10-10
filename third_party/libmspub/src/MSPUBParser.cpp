@@ -1938,6 +1938,7 @@ CharacterStyle MSPUBParser::getCharacterStyle(librevenge::RVNGInputStream *input
       break;
     case 0x1B:
       style.letterSpacingEmu = int(info.data);
+      style.hasLetterSpacing = true;
       break;
     // JeffPub patch: a field (checked against fields inserted in Publisher).
     case 0x00:

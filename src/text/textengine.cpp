@@ -752,14 +752,11 @@ static QString emKey(const QFont &f)
 // embedded in reference PDFs.
 static double averageCharEm(const QFont &f, const QString &requested)
 {
-    if (isSubstituted(requested)) {
-        const QString fam = requested.toLower();
-        const bool bold = f.weight() >= QFont::DemiBold, italic = f.italic();
-        if (fam == "arial") return (bold ? 980.0 : 904.0) / 2048;
-        if (fam == "times new roman") return (bold ? (italic ? 844.0 : 874.0) : (italic ? 823.0 : 821.0)) / 2048;
-        if (fam == "century schoolbook") return (bold ? (italic ? 1054.0 : 1073.0) : 951.0) / 2048;
-        if (fam == "gill sans mt") return (bold ? 956.0 : italic ? 769.0 : 834.0) / 2048;
-    }
+    // A substituted font's tracking is the original's, measured: its
+    // stand-in's letters differ (a squeezed stand-in's average is far wider
+    // than an extra-condensed original's).
+    if (isSubstituted(requested))
+        if (const double avg = originalAverageCharEm(requested, f.weight() >= QFont::DemiBold, f.italic()); avg > 0) return avg;
     static QHash<QString, double> cache;
     const QString key = emKey(f);
     auto it = cache.constFind(key);
@@ -880,6 +877,25 @@ double lineHeightFor(const QTextBlockFormat &bf, double scale, double single)
     }
 }
 } // namespace
+
+#include "fontaverages.inc"
+
+double originalAverageCharEm(const QString &family, bool bold, bool italic)
+{
+    static const QHash<QString, double> table = [] {
+        QHash<QString, double> t;
+        for (const auto &e : kPublisherAverageCharEm) t.insert(QString::fromUtf8(e.family).toLower() + QLatin1Char('|') + QString::number(e.style), e.avg);
+        return t;
+    }();
+    const QString fam = family.toLower() + QLatin1Char('|');
+    const int style = (bold ? 1 : 0) + (italic ? 2 : 0);
+    // The face asked for, else the nearest the family has (one-face
+    // families such as Gill Sans MT Ext Condensed Bold).
+    for (int s : {style, style & 1, style & 2, 0})
+        if (auto it = table.constFind(fam + QString::number(s)); it != table.constEnd()) return *it;
+    return -1;
+}
+
 
 double naturalLineEm(const QFont &f, const QString &requestedFamily) { return lineEmOf(f, requestedFamily); }
 

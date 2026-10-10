@@ -809,6 +809,88 @@ private Q_SLOTS:
         QCOMPARE(centre(-1), QColor(Qt::white));   // field codes shown: no record's picture
     }
 
+    // A run with no letter spacing of its own takes its paragraph style's
+    // (a sign's headline style tightens its letters 87.5% and 3 points; they
+    // came in at normal spacing, 8% wider than Publisher drew them).
+    void styleLetterSpacingFromPub()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        jp::TextStyle st;
+        st.name = QStringLiteral("Tight Headline");
+        st.chr.setProperty(jp::tp::Tracking, 87.5);
+        st.chr.setFontLetterSpacingType(QFont::AbsoluteSpacing);
+        st.chr.setFontLetterSpacing(-3);
+        doc->styles << st;
+        auto box = std::make_shared<jp::TextItem>();
+        box->rect = QRectF(72, 72, 400, 100);
+        box->storyId = doc->createStory();
+        QTextDocument *sd = doc->storyDoc(box->storyId);
+        QTextCursor c(sd);
+        QTextBlockFormat bf;
+        bf.setProperty(jp::tp::StyleName, st.name);
+        c.setBlockFormat(bf);
+        QTextCharFormat cf;
+        cf.setFontPointSize(40);
+        c.insertText(QStringLiteral("Help Wanted"), cf);   // no spacing of its own
+        doc->pages[0]->items.push_back(box);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("tight.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        auto back = jp::importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        QTextDocument *story = nullptr;
+        for (auto it = back->stories.cbegin(); it != back->stories.cend(); ++it)
+            if ((*it)->doc->toPlainText() == QLatin1String("Help Wanted")) story = (*it)->doc.get();
+        QVERIFY(story);
+        QTextCursor r(story);
+        r.movePosition(QTextCursor::NextCharacter);
+        QCOMPARE(jp::tp::trackingOf(r.charFormat()), 87.5);
+        QCOMPARE(jp::tp::kerningOf(r.charFormat()), -3.0);
+    }
+
+    // Tracking is measured in the original font's average letter width
+    // (Publisher's PDFs: 125% on Gill Sans MT Ext Condensed Bold adds 0.056
+    // em a letter, 87.5% on Century Schoolbook Bold takes 0.066); a squeezed
+    // stand-in's own average spread the letters twice as far.
+    void trackingUsesTheOriginalFontsAverage()
+    {
+        QVERIFY(std::abs(jp::originalAverageCharEm(QStringLiteral("Arial"), false, false) - 904.0 / 2048) < 1e-4);   // as the old table had it
+        const double ext = jp::originalAverageCharEm(QStringLiteral("Gill Sans MT Ext Condensed Bold"), true, false);   // one face only
+        QVERIFY2(std::abs(0.25 * ext - 0.056) < 0.003, qPrintable(QString::number(ext)));
+        const double csb = jp::originalAverageCharEm(QStringLiteral("Century Schoolbook"), true, false);
+        QVERIFY2(std::abs(0.125 * csb - 0.066) < 0.002, qPrintable(QString::number(csb)));
+        QCOMPARE(jp::originalAverageCharEm(QStringLiteral("No Such Font"), false, false), -1.0);
+    }
+
+    // A line break (Shift+Enter) goes into a .pub as \n, as Publisher's own
+    // files hold it; JeffPub wrote \v, which Publisher 2021 draws as a box
+    // ("BASIC INCIDENT□COMMAND" on a cover). Opened again, it is a line break.
+    void lineBreaksSavedAsPublishersOwn()
+    {
+        auto doc = jp::Document::blank(QSizeF(612, 792));
+        auto box = std::make_shared<jp::TextItem>();
+        box->rect = QRectF(72, 72, 300, 100);
+        box->storyId = doc->createStory();
+        QTextCursor(doc->storyDoc(box->storyId)).insertText(QStringLiteral("Basic Incident") + QChar(QChar::LineSeparator) + QStringLiteral("Command System"));
+        doc->pages[0]->items.push_back(box);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("breaks.pub"));
+        QString err;
+        QVERIFY2(jp::exportPublisher(*doc, path, &err), qPrintable(err));
+        const QByteArray quill = jp::cfb::readStream(path, QStringLiteral("Quill/QuillSub/CONTENTS"), &err);
+        QVERIFY2(!quill.isEmpty(), qPrintable(err));
+        auto utf16 = [](const QString &s) { return QByteArray(reinterpret_cast<const char *>(s.utf16()), s.size() * 2); };
+        QVERIFY(quill.contains(utf16(QStringLiteral("Incident\nCommand"))));
+        QVERIFY(!quill.contains(utf16(QStringLiteral("Incident\vCommand"))));
+        auto back = jp::importPublisherFile(path, &err);
+        QVERIFY2(back, qPrintable(err));
+        bool found = false;   // (toRawText: toPlainText shows a line break as \n)
+        for (auto it = back->stories.cbegin(); it != back->stories.cend(); ++it)
+            found |= (*it)->doc->toRawText().contains(QStringLiteral("Incident") + QChar(QChar::LineSeparator) + QStringLiteral("Command"));
+        QVERIFY(found);
+    }
+
     // A file whose style names point outside their section (made from
     // JeffPub's own styles sample): it still opens with all its text,
     // losing only the damaged names.
