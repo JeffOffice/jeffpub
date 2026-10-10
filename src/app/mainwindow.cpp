@@ -622,12 +622,17 @@ MainWindow *MainWindow::openRecovered(const recovery::Recovered &r, QString *err
 {
     // As if in the folder of the file it was made from: the pictures linked there load as usual.
     // (Work never saved has no such folder, and no link is followed.)
-    QFile copy(r.file);
-    if (!copy.open(QIODevice::ReadOnly)) {
-        if (error) *error = copy.errorString();
-        return nullptr;
+    QByteArray bytes;
+    {
+        // Closed before the old copy is discarded below: Windows can't delete an open file.
+        QFile copy(r.file);
+        if (!copy.open(QIODevice::ReadOnly)) {
+            if (error) *error = copy.errorString();
+            return nullptr;
+        }
+        bytes = copy.readAll();
     }
-    auto doc = publicationFromBytes(copy.readAll(), error, r.source.isEmpty() ? QString() : QFileInfo(r.source).absolutePath());
+    auto doc = publicationFromBytes(bytes, error, r.source.isEmpty() ? QString() : QFileInfo(r.source).absolutePath());
     if (!doc) return nullptr;
     MainWindow *target = this;
     if (!m_ed->filePath().isEmpty() || m_ed->isModified()) {
