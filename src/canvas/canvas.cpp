@@ -1992,7 +1992,8 @@ void Canvas::mouseMoveEvent(QMouseEvent *e)
             if (x1 - x0 < 2) { if (hx[i] == 1) x1 = x0 + 2; else x0 = x1 - 2; }
             if (y1 - y0 < 2) { if (hy[i] == 1) y1 = y0 + 2; else y0 = y1 - 2; }
             const bool art = it->type() == ItemType::Shape && static_cast<ShapeItem *>(it)->isArt();
-            const bool keepAspect = (hx[i] && hy[i]) && (shift != (it->type() == ItemType::Picture || it->type() == ItemType::TextArt || art));
+            const bool locked = it->type() == ItemType::Table && static_cast<TableItem *>(it)->lockSize;   // Format Table > Size > Lock aspect ratio
+            const bool keepAspect = (hx[i] && hy[i]) && (shift != (it->type() == ItemType::Picture || it->type() == ItemType::TextArt || art || locked));
             if (keepAspect && w > 0 && h > 0) {
                 const double s = std::max((x1 - x0) / w, (y1 - y0) / h);
                 const double nw = w * s, nh = h * s;

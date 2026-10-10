@@ -168,7 +168,7 @@ Features JeffPub has that Publisher never did, then the ones planned before vers
 - [x] Insert rows and columns above, below, left, and right; Delete rows, columns, and table; Select cell, row, column, and table, or several cells at once (drag across them, or Shift+click; a merged cell is always whole) so that fills, borders, diagonals, alignment, margins, text formatting, Merge Cells, and Delete Rows and Columns act on all of them in one undo step; View Gridlines
 - [x] Merge Cells, Split Cells, Diagonals
 - [~] Cell alignment (nine-way), Cell Margins, Text Direction, and Hyphenation for table cells *(not yet: a cell's Text Direction and hyphenation in .pub files, which open with the defaults and save without them)*
-- [~] Size: column widths and row heights by dragging, Grow to Fit Text, and Distribute *(not yet: widths and heights typed as numbers, and Lock)*
+- [x] Size: Height and Width boxes for the whole table (typed in your units; the columns or rows scale in proportion), Grow to Fit Text as a check box, Format Table (Colors and Lines, Size with Lock aspect ratio, Layout, Cell Properties: vertical alignment, margins, and turned text for the selected cells; from the Alignment group's launcher and the right-click menu), column widths and row heights by dragging, and Distribute Rows and Columns *(Lock aspect ratio is saved in JeffPub files; .pub files don't carry it yet)*
 - [x] Tab moves between cells, and Tab in the last cell adds a row
 
 ## Text Art Tools Format tab

@@ -347,6 +347,12 @@ CellRange Editor::targetCells() const
     return CellRange();
 }
 
+CellRange Editor::cellsToFormat(const TableItem *t) const
+{
+    const CellRange r = targetCells();
+    return r.valid() ? r : CellRange{0, 0, t->rows - 1, t->cols - 1};
+}
+
 void Editor::clearCellBlockText()
 {
     const CellBlock b = cellBlock();
@@ -1166,6 +1172,19 @@ void Editor::fitTableRows(TableItem *t)
         if (need > t->rowH[r] + 0.5) { t->rowH[r] = need; grew = true; }
     }
     if (grew) t->syncRect();
+}
+
+void Editor::resizeTable(TableItem *t, double width, double height)
+{
+    if (!t) return;
+    const double kx = width > 0 && t->rect.width() > 0 ? width / t->rect.width() : 1;
+    const double ky = height > 0 && t->rect.height() > 0 ? height / t->rect.height() : 1;
+    change(tr("Table Size"), [&] {
+        for (double &w : t->colW) w *= kx;
+        for (double &h : t->rowH) h *= ky;
+        t->syncRect();
+        fitTableRows(t);   // a row never shrinks below its text
+    });
 }
 
 void Editor::applyTableFormat(TableItem *t, const QString &format)

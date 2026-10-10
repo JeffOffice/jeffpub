@@ -1080,7 +1080,9 @@ void formatObjectDialog(QWidget *p, Editor *ed, int tab)
     rot->setSuffix(QStringLiteral("°"));
     rot->setValue(it->rotation);
     auto *lockAspect = new QCheckBox(QCoreApplication::translate("Dialogs", "Lock aspect ratio"), sz);
-    lockAspect->setChecked(it->type() == ItemType::Picture);
+    auto *table = dynamic_cast<TableItem *>(it);
+    lockAspect->setObjectName(QStringLiteral("lockAspect"));
+    lockAspect->setChecked(it->type() == ItemType::Picture || (table && table->lockSize));
     const double ratio = it->rect.width() / std::max(1.0, it->rect.height());
     QObject::connect(w, &QDoubleSpinBox::valueChanged, sz, [=](double v) { if (lockAspect->isChecked() && !h->hasFocus()) { const QSignalBlocker b(h); h->setValue(v / ratio); } });
     QObject::connect(h, &QDoubleSpinBox::valueChanged, sz, [=](double v) { if (lockAspect->isChecked() && !w->hasFocus()) { const QSignalBlocker b(w); w->setValue(v * ratio); } });
@@ -1156,6 +1158,46 @@ void formatObjectDialog(QWidget *p, Editor *ed, int tab)
         tbf->addRow(cFrom);
     }
     if (isText || isShape) tabs->addTab(tb, QCoreApplication::translate("Dialogs", "Text Box"));
+    // Cell Properties (tables): the vertical alignment and margins of the selected cells, the cell
+    // the cursor is in, or every cell; and turning their text. Only what is changed is applied.
+    QWidget *cp = nullptr;
+    CellRange cells;
+    auto *cellAlign = new QComboBox(&dlg.d);
+    cellAlign->setObjectName(QStringLiteral("cellValign"));
+    cellAlign->addItems({QCoreApplication::translate("Dialogs", "Top"), QCoreApplication::translate("Dialogs", "Middle"), QCoreApplication::translate("Dialogs", "Bottom")});
+    auto cellMargin = [&](const char *name) {
+        auto *m = measure(0, &dlg.d);
+        m->setObjectName(QString::fromLatin1(name));
+        return m;
+    };
+    auto *cellLeft = cellMargin("cellMarginLeft"), *cellRight = cellMargin("cellMarginRight"), *cellTop = cellMargin("cellMarginTop"), *cellBottom = cellMargin("cellMarginBottom");
+    auto *cellRotate = new QCheckBox(QCoreApplication::translate("Dialogs", "Rotate text by 90°"), &dlg.d);
+    cellRotate->setObjectName(QStringLiteral("cellRotate"));
+    QMarginsF cellMargins0;
+    int cellAlign0 = 0;
+    bool cellRotate0 = false;
+    if (table) {
+        cells = ed->cellsToFormat(table);
+        const TableCell &first = table->cell(cells.r0, cells.c0);
+        cellMargins0 = first.margins;
+        cellAlign0 = int(first.valign);
+        cellRotate0 = first.vertical;
+        cellAlign->setCurrentIndex(cellAlign0);
+        cellLeft->setValue(cellMargins0.left());
+        cellRight->setValue(cellMargins0.right());
+        cellTop->setValue(cellMargins0.top());
+        cellBottom->setValue(cellMargins0.bottom());
+        cellRotate->setChecked(cellRotate0);
+        cp = new QWidget();
+        auto *cpf = new QFormLayout(cp);
+        cpf->addRow(QCoreApplication::translate("Dialogs", "Vertical alignment:"), cellAlign);
+        cpf->addRow(QCoreApplication::translate("Dialogs", "Left margin:"), cellLeft);
+        cpf->addRow(QCoreApplication::translate("Dialogs", "Right margin:"), cellRight);
+        cpf->addRow(QCoreApplication::translate("Dialogs", "Top margin:"), cellTop);
+        cpf->addRow(QCoreApplication::translate("Dialogs", "Bottom margin:"), cellBottom);
+        cpf->addRow(cellRotate);
+        tabs->addTab(cp, QCoreApplication::translate("Dialogs", "Cell Properties"));
+    }
     // Picture.
     auto *pic = dynamic_cast<PictureItem *>(it);
     auto *pw = new QWidget();
@@ -1186,9 +1228,9 @@ void formatObjectDialog(QWidget *p, Editor *ed, int tab)
     wbf->addRow(QCoreApplication::translate("Dialogs", "Alternative text:"), alt);
     wbf->addRow(QCoreApplication::translate("Dialogs", "Hyperlink:"), link);
     tabs->addTab(wb, QCoreApplication::translate("Dialogs", "Alt Text"));
-    // Map caller's tab index (0 colors, 1 size, 2 layout, 3 text box, 4 picture, 5 alt text).
-    QWidget *want[] = {cl, sz, lay, tb, pw, wb};
-    const int idx = tabs->indexOf(want[std::clamp(tab, 0, 5)]);
+    // Map caller's tab index (0 colors, 1 size, 2 layout, 3 text box, 4 picture, 5 alt text, 6 cell properties).
+    QWidget *want[] = {cl, sz, lay, tb, pw, wb, cp};
+    const int idx = tabs->indexOf(want[std::clamp(tab, 0, 6)]);
     if (idx >= 0) tabs->setCurrentIndex(idx);
     dlg.v->addWidget(tabs);
     if (!dlg.exec()) return;
@@ -1228,6 +1270,20 @@ void formatObjectDialog(QWidget *p, Editor *ed, int tab)
         if (auto *s = dynamic_cast<ShapeItem *>(o)) {
             s->insets = QMarginsF(tl->value(), tt->value(), tr->value(), tbm->value());
             s->valign = VAlign(va->currentIndex());
+        }
+        if (auto *tbl = dynamic_cast<TableItem *>(o); tbl && o == it) {
+            tbl->lockSize = lockAspect->isChecked();
+            for (int r = cells.r0; r <= cells.r1; ++r)
+                for (int c = cells.c0; c <= cells.c1; ++c) {
+                    TableCell &cell = tbl->cell(r, c);
+                    if (cellAlign->currentIndex() != cellAlign0) cell.valign = VAlign(cellAlign->currentIndex());
+                    if (cellLeft->value() != cellMargins0.left()) cell.margins.setLeft(cellLeft->value());
+                    if (cellRight->value() != cellMargins0.right()) cell.margins.setRight(cellRight->value());
+                    if (cellTop->value() != cellMargins0.top()) cell.margins.setTop(cellTop->value());
+                    if (cellBottom->value() != cellMargins0.bottom()) cell.margins.setBottom(cellBottom->value());
+                    if (cellRotate->isChecked() != cellRotate0) cell.vertical = cellRotate->isChecked();
+                }
+            ed->fitTableRows(tbl);   // the size, margins, and turned text change what fits
         }
         if (auto *pp = dynamic_cast<PictureItem *>(o)) {
             pp->brightness = bright->value();
@@ -2645,16 +2701,17 @@ void tintsDialog(QWidget *p, Editor *ed, const std::function<void(const ColorRef
 void hyphenationDialog(QWidget *p, Editor *ed)
 {
     // The story of the text box being typed in or selected: all its boxes.
-    // In a table, the cell being typed in, or with the table selected, every cell.
+    // In a table, the selected cells, the cell being typed in, or with the table selected, every cell.
     Document *d = ed->doc();
     const QString id = ed->isEditingText() ? ed->textTarget().itemId : (ed->single() ? ed->single()->id : QString());
     auto *t = dynamic_cast<TextItem *>(d->item(id));
     auto *tb = dynamic_cast<TableItem *>(d->item(id));
     QVector<TableCell *> cells;
-    if (tb)
-        for (int r = 0; r < tb->rows; ++r)
-            for (int c = 0; c < tb->cols; ++c)
-                if (!ed->isEditingText() || (r == ed->textTarget().row && c == ed->textTarget().col)) cells << &tb->cell(r, c);
+    if (tb) {
+        const CellRange rg = ed->cellsToFormat(tb);
+        for (int r = rg.r0; r <= rg.r1; ++r)
+            for (int c = rg.c0; c <= rg.c1; ++c) cells << &tb->cell(r, c);
+    }
     if (!t && cells.isEmpty()) {
         QMessageBox::information(p, QCoreApplication::translate("Dialogs", "Hyphenation"), QCoreApplication::translate("Dialogs", "Click in a text box or a table first."));
         return;

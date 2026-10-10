@@ -171,14 +171,6 @@ static void tableDeleteCols(TableItem *t, int c0, int c1)
     t->syncRect();
 }
 
-// The cells a cell command acts on: the selected block, the cell the text
-// cursor is in, or with only the table selected, every cell.
-static CellRange cellsToFormat(Editor *ed, const TableItem *t)
-{
-    const CellRange r = ed->targetCells();
-    return r.valid() ? r : CellRange{0, 0, t->rows - 1, t->cols - 1};
-}
-
 void MainWindow::createActions()
 {
     Editor *ed = m_ed;
@@ -1086,12 +1078,12 @@ void MainWindow::createActions()
         Item *it = ed->isEditingText() ? ed->doc()->item(ed->textTarget().itemId) : ed->single();
         if (auto *t = dynamic_cast<TextItem *>(it)) ed->change(tr("Text Direction"), [t] { t->vertical = !t->vertical; });
         else if (auto *tb = dynamic_cast<TableItem *>(it)) {
-            // The cell the text cursor is in, or with the table selected, every cell
-            // (all turned, unless they all are already).
+            // The selected cells, the cell the text cursor is in, or with the
+            // table selected, every cell (all turned, unless they all are already).
+            const CellRange rg = ed->cellsToFormat(tb);
             QVector<TableCell *> cells;
-            for (int rr = 0; rr < tb->rows; ++rr)
-                for (int cc = 0; cc < tb->cols; ++cc)
-                    if (!ed->isEditingText() || (rr == ed->textTarget().row && cc == ed->textTarget().col)) cells << &tb->cell(rr, cc);
+            for (int rr = rg.r0; rr <= rg.r1; ++rr)
+                for (int cc = rg.c0; cc <= rg.c1; ++cc) cells << &tb->cell(rr, cc);
             const bool all = std::all_of(cells.begin(), cells.end(), [](const TableCell *x) { return x->vertical; });
             ed->change(tr("Text Direction"), [&] {
                 for (TableCell *x : cells) x->vertical = !all;
@@ -1135,7 +1127,7 @@ void MainWindow::createActions()
             else if (auto *s = dynamic_cast<ShapeItem *>(it)) ed->change(tr("Margins"), [s, v] { s->insets = QMarginsF(v, v, v, v); });
             else if (auto *tb = dynamic_cast<TableItem *>(it)) {
                 // The selected cells, the cell the text cursor is in, or with the table selected, every cell.
-                const CellRange rg = cellsToFormat(ed, tb);
+                const CellRange rg = ed->cellsToFormat(tb);
                 ed->change(tr("Cell Margins"), [tb, v, rg] {
                     for (int r = rg.r0; r <= rg.r1; ++r)
                         for (int c = rg.c0; c <= rg.c1; ++c) tb->cell(r, c).margins = QMarginsF(v, v, v, v);
@@ -1452,6 +1444,7 @@ void MainWindow::createActions()
             });
         });
     }
+    mk("tbl.format", tr("Format Table…"), "settings-2", QKeySequence(), [this] { formatObjectDialog(this, m_ed, 0); });
     mk("tbl.selectTable", tr("Select Table"), "", QKeySequence(), [this] { if (TableItem *t = selTable(m_ed)) { m_ed->endTextEdit(); m_ed->select(t->id); } });
     mk("tbl.selectCell", tr("Select Cell"), "", QKeySequence(), [this] {
         // From a block, the cell it began with.
@@ -1499,7 +1492,7 @@ void MainWindow::createActions()
             TableItem *t = selTable(m_ed);
             if (!t) return;
             const Stroke s = w == 3 ? Stroke::none() : currentBorderStroke();
-            const CellRange rg = cellsToFormat(m_ed, t);
+            const CellRange rg = m_ed->cellsToFormat(t);
             m_ed->change(tr("Borders"), [&] {
                 for (int r = rg.r0; r <= rg.r1; ++r)
                     for (int c = rg.c0; c <= rg.c1; ++c) {

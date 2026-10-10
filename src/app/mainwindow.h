@@ -175,6 +175,7 @@ private:
     QVector<SizeCombo *> m_sizeCombos;
     QVector<ColorButton *> m_colorButtons;
     QVector<MeasureSpin *> m_widthSpins, m_heightSpins;
+    QVector<MeasureSpin *> m_tableWidthSpins, m_tableHeightSpins;   // Table Layout > Size: the table's own
     Gallery *m_styleGallery = nullptr;
     Gallery *m_schemeGallery = nullptr;
 

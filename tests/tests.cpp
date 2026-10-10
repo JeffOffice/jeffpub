@@ -1029,6 +1029,351 @@ private Q_SLOTS:
         QCOMPARE(table()->cols, 4);
     }
 
+    // Table Layout > Size has Height and Width boxes for the whole table (and
+    // none for a row or a column), Grow to Fit Text as a check box, all with
+    // KeyTips and names. Typing a width scales the columns in proportion,
+    // typing a height scales the rows; with Lock aspect ratio the other
+    // follows. Each is one undo step.
+    void tableSizeBoxes()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        jp::Editor *ed = w.editor();
+        auto made = std::static_pointer_cast<jp::TableItem>(ed->newTable(QRectF(72, 72, 400, 400), 4, 4));
+        ed->addItem(made);
+        const QString id = made->id;
+        auto table = [&] { return static_cast<jp::TableItem *>(ed->doc()->item(id)); };
+        auto near = [](const QVector<double> &got, const QVector<double> &want) {
+            if (got.size() != want.size()) return false;
+            for (int i = 0; i < got.size(); ++i)
+                if (std::abs(got[i] - want[i]) > 1e-6) return false;
+            return true;
+        };
+        ed->change(QStringLiteral("Sizes"), [&] {
+            table()->colW = {100, 50, 150, 100};
+            table()->rowH = {40, 120, 80, 160};
+            table()->syncRect();
+        });
+        auto *r = w.findChild<jp::Ribbon *>();
+        QVERIFY(r && r->tab(QStringLiteral("Table Layout")));
+        jp::RibbonGroup *size = nullptr;
+        for (jp::RibbonGroup *g : r->tab(QStringLiteral("Table Layout"))->groups())
+            if (g->title() == QStringLiteral("Size")) size = g;
+        QVERIFY(size);
+        // The table's own two boxes, and no box for a row's height or a column's width.
+        QCOMPARE(r->tab(QStringLiteral("Table Layout"))->findChildren<jp::MeasureSpin *>().size(), 2);
+        jp::MeasureSpin *widthBox = nullptr, *heightBox = nullptr;
+        for (auto *s : size->findChildren<jp::MeasureSpin *>()) (s->toolTip() == QStringLiteral("Table Width") ? widthBox : heightBox) = s;
+        QVERIFY(widthBox && heightBox);
+        auto *grow = size->findChild<QCheckBox *>();
+        QVERIFY(grow);
+        QCOMPARE(grow->text(), QStringLiteral("Grow to Fit Text"));
+        for (QWidget *c : {static_cast<QWidget *>(widthBox), static_cast<QWidget *>(heightBox), static_cast<QWidget *>(grow)})
+            QVERIFY2(!jp::keytip(c).isEmpty(), qPrintable(c->toolTip()));
+        QCOMPARE(widthBox->accessibleName(), QStringLiteral("Table Width"));
+        QCOMPARE(heightBox->accessibleName(), QStringLiteral("Table Height"));
+
+        ed->select(id);
+        w.refreshUi();
+        QCOMPARE(widthBox->value(), 400.0);
+        QCOMPARE(heightBox->value(), 400.0);
+        QVERIFY(grow->isChecked());
+
+        // A width: the columns scale in proportion, the rows stay.
+        int steps = ed->undoStack()->index();
+        widthBox->setValue(200);
+        QCOMPARE(ed->undoStack()->index(), steps + 1);
+        QVERIFY(near(table()->colW, {50, 25, 75, 50}));
+        QVERIFY(near(table()->rowH, {40, 120, 80, 160}));
+        QCOMPARE(table()->rect.size(), QSizeF(200, 400));
+        ed->undo();
+        QVERIFY(near(table()->colW, {100, 50, 150, 100}));
+        // A height: the rows scale; it works while typing in a cell, too.
+        ed->beginTextEdit(id, 0, 2, 1);
+        w.refreshUi();
+        steps = ed->undoStack()->index();
+        heightBox->setValue(240);
+        QCOMPARE(ed->undoStack()->index(), steps + 1);
+        QVERIFY(near(table()->rowH, {24, 72, 48, 96}));
+        QVERIFY(near(table()->colW, {100, 50, 150, 100}));
+        QCOMPARE(table()->rect.size(), QSizeF(400, 240));
+        ed->undo();
+        QVERIFY(near(table()->rowH, {40, 120, 80, 160}));
+        // Locked, the other size follows, and the shown sizes follow the table.
+        ed->change(QStringLiteral("Lock"), [&] { table()->lockSize = true; });
+        ed->select(id);
+        w.refreshUi();   // the boxes show the table again
+        steps = ed->undoStack()->index();
+        widthBox->setValue(200);
+        QCOMPARE(ed->undoStack()->index(), steps + 1);
+        QVERIFY(near(table()->colW, {50, 25, 75, 50}));
+        QVERIFY(near(table()->rowH, {20, 60, 40, 80}));
+        w.refreshUi();
+        QCOMPARE(heightBox->value(), 200.0);
+        // A row too short for its text grows (Grow to Fit Text), whatever was typed.
+        ed->change(QStringLiteral("Text"), [&] {
+            ed->doc()->storyDoc(table()->cell(0, 0).storyId)->setPlainText(QStringLiteral("one\ntwo\nthree\nfour"));
+            table()->lockSize = false;
+        });
+        w.refreshUi();
+        heightBox->setValue(40);
+        QVERIFY2(table()->rowH[0] > 20.0, qPrintable(QString::number(table()->rowH[0])));   // 4 lines of text do not fit in 4 points
+        // Grow to Fit Text is a check box that follows the table, and one step.
+        ed->select(id);
+        w.refreshUi();
+        QVERIFY(grow->isChecked());
+        steps = ed->undoStack()->index();
+        grow->click();
+        QCOMPARE(ed->undoStack()->index(), steps + 1);
+        QVERIFY(!table()->growToFit);
+        QVERIFY(!grow->isChecked());
+        ed->undo();
+        w.refreshUi();
+        QVERIFY(table()->growToFit);
+        QVERIFY(grow->isChecked());
+    }
+
+    // Format Table: the Alignment group's launcher and the table's right-click
+    // menu open it, with the shape tabs and Cell Properties (vertical
+    // alignment, the four cell margins, and turning the text), which act on
+    // the selected cells, the cell the cursor is in, or all of them. Lock
+    // aspect ratio stays with the table.
+    void tableFormatTable()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        jp::Editor *ed = w.editor();
+        auto made = std::static_pointer_cast<jp::TableItem>(ed->newTable(QRectF(72, 72, 400, 200), 4, 4));
+        ed->addItem(made);
+        const QString id = made->id;
+        auto table = [&] { return static_cast<jp::TableItem *>(ed->doc()->item(id)); };
+        auto *r = w.findChild<jp::Ribbon *>();
+        jp::RibbonGroup *align = nullptr;
+        for (jp::RibbonGroup *g : r->tab(QStringLiteral("Table Layout"))->groups())
+            if (g->title() == QStringLiteral("Alignment")) align = g;
+        QVERIFY(align && align->launcher());
+        QVERIFY(!jp::keytip(align->launcher()).isEmpty());
+        ed->select(id);
+        r->showTab(r->tab(QStringLiteral("Table Layout")));
+        w.refreshUi();
+        if (!qEnvironmentVariableIsEmpty("JP_SHOT_DIR")) w.grab(QRect(0, 0, 1400, 170)).save(qEnvironmentVariable("JP_SHOT_DIR") + QStringLiteral("/table-layout.png"));
+
+        // The launcher: the dialog is Format Table, on Cell Properties.
+        QString title, shown;
+        QStringList tabNames;
+        QTimer::singleShot(0, [&] {
+            auto *d = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            if (!d) return;
+            title = d->windowTitle();
+            if (auto *tabs = d->findChild<QTabWidget *>()) {
+                shown = tabs->tabText(tabs->currentIndex());
+                for (int i = 0; i < tabs->count(); ++i) tabNames << tabs->tabText(i);
+            }
+            d->reject();
+        });
+        align->launcher()->click();
+        QCOMPARE(title, QStringLiteral("Format Table"));
+        QCOMPARE(shown, QStringLiteral("Cell Properties"));
+        QCOMPARE(tabNames, (QStringList{"Colors and Lines", "Size", "Layout", "Cell Properties", "Alt Text"}));
+
+        // Cell Properties on a block: it shows the first cell's, and changes the block's cells only.
+        ed->change(QStringLiteral("Set up"), [&] {
+            table()->cell(1, 1).valign = jp::VAlign::Bottom;
+            table()->cell(1, 1).margins = QMarginsF(5, 6, 7, 8);
+        });
+        double firstTop = 0;
+        int firstAlign = -1;
+        auto setCells = [&](int valign, double left, double right, double top, double bottom, bool turned, bool lock, bool report) {
+            QTimer::singleShot(0, [=, &firstTop, &firstAlign] {
+                auto *d = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+                if (!d) return;
+                auto *va = d->findChild<QComboBox *>(QStringLiteral("cellValign"));
+                auto spin = [&](const char *name) { return d->findChild<jp::MeasureSpin *>(QString::fromLatin1(name)); };
+                auto *rotate = d->findChild<QCheckBox *>(QStringLiteral("cellRotate"));
+                auto *lockBox = d->findChild<QCheckBox *>(QStringLiteral("lockAspect"));
+                if (!va || !spin("cellMarginLeft") || !spin("cellMarginRight") || !spin("cellMarginTop") || !spin("cellMarginBottom") || !rotate || !lockBox) {
+                    d->reject();   // a missing control is a failure the checks below report
+                    return;
+                }
+                if (report) {
+                    firstTop = spin("cellMarginTop")->value();
+                    firstAlign = va->currentIndex();
+                }
+                va->setCurrentIndex(valign);
+                spin("cellMarginLeft")->setValue(left);
+                spin("cellMarginRight")->setValue(right);
+                spin("cellMarginTop")->setValue(top);
+                spin("cellMarginBottom")->setValue(bottom);
+                rotate->setChecked(turned);
+                lockBox->setChecked(lock);
+                d->accept();
+            });
+        };
+        ed->selectCells(id, 1, 1, 2, 2);
+        int steps = ed->undoStack()->index();
+        setCells(1, 10, 11, 12, 13, true, true, true);
+        w.act(QStringLiteral("tbl.format"))->trigger();
+        QCOMPARE(firstTop, 6.0);
+        QCOMPARE(firstAlign, 2);
+        QCOMPARE(ed->undoStack()->index(), steps + 1);
+        for (int rr = 0; rr < 4; ++rr)
+            for (int cc = 0; cc < 4; ++cc) {
+                const jp::TableCell &c = table()->cell(rr, cc);
+                const bool in = rr >= 1 && rr <= 2 && cc >= 1 && cc <= 2;
+                QCOMPARE(c.margins == QMarginsF(10, 12, 11, 13), in);
+                QCOMPARE(c.valign == jp::VAlign::Middle, in);
+                QCOMPARE(c.vertical, in);
+            }
+        QVERIFY(table()->lockSize);
+        QVERIFY(ed->hasCellBlock());   // the block stays selected
+        ed->undo();
+        QVERIFY(!table()->lockSize);
+        QCOMPARE(table()->cell(2, 2).margins, QMarginsF(2.88, 2.88, 2.88, 2.88));
+        // The cell the cursor is in; and with only the table selected, every cell.
+        ed->beginTextEdit(id, 0, 3, 3);
+        steps = ed->undoStack()->index();
+        setCells(2, 3, 3, 3, 3, true, false, false);
+        w.act(QStringLiteral("tbl.format"))->trigger();
+        QCOMPARE(ed->undoStack()->index(), steps + 1);
+        for (int rr = 0; rr < 4; ++rr)
+            for (int cc = 0; cc < 4; ++cc) QCOMPARE(table()->cell(rr, cc).valign == jp::VAlign::Bottom && table()->cell(rr, cc).vertical, rr == 3 && cc == 3);
+        ed->undo();
+        ed->select(id);
+        setCells(1, 4, 4, 4, 4, true, false, false);
+        w.act(QStringLiteral("tbl.format"))->trigger();
+        for (const auto &c : table()->cells) QVERIFY(c.valign == jp::VAlign::Middle && c.vertical && c.margins == QMarginsF(4, 4, 4, 4));
+
+        // The right-click menu offers Format Table for a table, selected or typed in; other objects keep Format Object.
+        jp::Canvas *cv = w.canvas();
+        auto menuFor = [&](const QPointF &pagePoint) {
+            QStringList ids;
+            QTimer::singleShot(100, [&] {
+                if (auto *m = qobject_cast<QMenu *>(QApplication::activePopupWidget())) {
+                    for (QAction *a : m->actions()) ids << a->objectName();
+                    m->close();
+                }
+            });
+            const QPoint at = cv->pageToView(pagePoint).toPoint();
+            QContextMenuEvent ce(QContextMenuEvent::Mouse, at, cv->viewport()->mapToGlobal(at));
+            QApplication::sendEvent(cv->viewport(), &ce);
+            return ids;
+        };
+        ed->select(id);
+        QStringList items = menuFor(QPointF(100, 100));
+        QVERIFY2(items.contains(QStringLiteral("tbl.format")) && !items.contains(QStringLiteral("obj.format")), qPrintable(items.join(QLatin1Char(' '))));
+        ed->beginTextEdit(id, 0, 1, 1);
+        items = menuFor(QPointF(100, 100));
+        QVERIFY2(items.contains(QStringLiteral("tbl.format")) && !items.contains(QStringLiteral("obj.format")), qPrintable(items.join(QLatin1Char(' '))));
+        auto box = std::static_pointer_cast<jp::TextItem>(ed->newTextBox(QRectF(72, 400, 200, 60), QStringLiteral("text")));
+        ed->addItem(box);
+        items = menuFor(QPointF(100, 420));
+        QVERIFY2(items.contains(QStringLiteral("obj.format")) && !items.contains(QStringLiteral("tbl.format")), qPrintable(items.join(QLatin1Char(' '))));
+    }
+
+    // Lock aspect ratio (Format Table > Size) keeps the table's proportions
+    // when a corner handle is dragged.
+    void tableLockAspectRatioKeepsProportions()
+    {
+        jp::MainWindow w;
+        w.resize(1400, 900);
+        w.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        jp::Editor *ed = w.editor();
+        auto made = std::static_pointer_cast<jp::TableItem>(ed->newTable(QRectF(72, 72, 360, 160), 4, 4));
+        ed->addItem(made);
+        const QString id = made->id;
+        auto table = [&] { return static_cast<jp::TableItem *>(ed->doc()->item(id)); };
+        jp::Canvas *cv = w.canvas();
+        auto cornerDrag = [&](const QPoint &by) {
+            ed->select(id);
+            const QPoint from = cv->pageToView(table()->rect.bottomRight()).toPoint();
+            QTest::mousePress(cv->viewport(), Qt::LeftButton, Qt::NoModifier, from);
+            for (int k = 1; k <= 4; ++k) {
+                const QPoint p = from + by * k / 4;
+                QMouseEvent mv(QEvent::MouseMove, QPointF(p), cv->viewport()->mapToGlobal(QPointF(p)), Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+                QApplication::sendEvent(cv->viewport(), &mv);
+            }
+            QTest::mouseRelease(cv->viewport(), Qt::LeftButton, Qt::NoModifier, from + by);
+        };
+        const double ratio = 360.0 / 160.0;
+        cornerDrag(QPoint(80, 10));
+        QVERIFY2(std::abs(table()->rect.width() / table()->rect.height() - ratio) > 0.2, "unlocked, a corner drag changes the proportions");
+        ed->undo();
+        QCOMPARE(table()->rect.size(), QSizeF(360, 160));
+        ed->change(QStringLiteral("Lock"), [&] { table()->lockSize = true; });
+        cornerDrag(QPoint(80, 10));
+        QVERIFY2(table()->rect.width() > 400, qPrintable(QString::number(table()->rect.width())));
+        QVERIFY2(std::abs(table()->rect.width() / table()->rect.height() - ratio) < 0.01, qPrintable(QString::number(table()->rect.width() / table()->rect.height())));
+        // The rows and columns scaled along.
+        double total = 0;
+        for (double c : table()->colW) total += c;
+        QVERIFY(std::abs(total - table()->rect.width()) < 0.01);
+    }
+
+    // Text Direction, Hyphenation, and the alignment buttons' check marks work
+    // on the selected cells, as the other cell commands do (they took the
+    // cell the cursor was in, or every cell).
+    void tableTextDirectionAndHyphenationFollowTheBlock()
+    {
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        auto made = std::static_pointer_cast<jp::TableItem>(ed->newTable(QRectF(72, 72, 400, 200), 4, 4));
+        ed->addItem(made);
+        const QString id = made->id;
+        auto table = [&] { return static_cast<jp::TableItem *>(ed->doc()->item(id)); };
+        auto inBlock = [](int r, int c) { return r >= 1 && r <= 2 && c >= 1 && c <= 2; };
+        ed->selectCells(id, 1, 1, 2, 2);
+        w.refreshUi();
+        int steps = ed->undoStack()->index();
+        w.act(QStringLiteral("tb.direction"))->trigger();
+        QCOMPARE(ed->undoStack()->index(), steps + 1);
+        for (int r = 0; r < 4; ++r)
+            for (int c = 0; c < 4; ++c) QCOMPARE(table()->cell(r, c).vertical, inBlock(r, c));
+        QVERIFY(ed->hasCellBlock());
+        w.refreshUi();
+        QVERIFY(w.act(QStringLiteral("tb.direction"))->isChecked());   // every cell of the block is turned
+        ed->selectCells(id, 0, 0, 1, 1);
+        w.refreshUi();
+        QVERIFY(!w.act(QStringLiteral("tb.direction"))->isChecked());   // this block is not
+        ed->selectCells(id, 1, 1, 2, 2);
+        w.act(QStringLiteral("tb.direction"))->trigger();   // turned back
+        for (const auto &c : table()->cells) QVERIFY(!c.vertical);
+        // Hyphenation: the dialog shows the block's first cell and sets the block's cells.
+        ed->change(QStringLiteral("Set up"), [&] { table()->cell(1, 1).hyphenate = false; });
+        bool shownOn = true;
+        QTimer::singleShot(0, [&] {
+            auto *d = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            if (!d) return;
+            for (auto *box : d->findChildren<QCheckBox *>()) {
+                shownOn = box->isChecked();
+                box->setChecked(false);
+                break;
+            }
+            d->accept();
+        });
+        ed->selectCells(id, 1, 1, 2, 2);
+        steps = ed->undoStack()->index();
+        w.act(QStringLiteral("rev.hyphenation"))->trigger();
+        QVERIFY(!shownOn);   // (1,1) is not hyphenated, and the dialog showed it
+        QCOMPARE(ed->undoStack()->index(), steps + 1);
+        for (int r = 0; r < 4; ++r)
+            for (int c = 0; c < 4; ++c) QCOMPARE(table()->cell(r, c).hyphenate, !inBlock(r, c));
+        QVERIFY(ed->hasCellBlock());
+        // The vertical-alignment buttons are checked for the selected cells.
+        ed->change(QStringLiteral("Align"), [&] {
+            for (int r = 1; r <= 2; ++r)
+                for (int c = 1; c <= 2; ++c) table()->cell(r, c).valign = jp::VAlign::Middle;
+        });
+        ed->selectCells(id, 1, 1, 2, 2);
+        w.refreshUi();
+        QVERIFY(w.act(QStringLiteral("valign.1"))->isChecked() && !w.act(QStringLiteral("valign.0"))->isChecked() && !w.act(QStringLiteral("valign.2"))->isChecked());
+        ed->selectCells(id, 0, 1, 2, 2);   // mixed: none is checked
+        w.refreshUi();
+        QVERIFY(!w.act(QStringLiteral("valign.0"))->isChecked() && !w.act(QStringLiteral("valign.1"))->isChecked() && !w.act(QStringLiteral("valign.2"))->isChecked());
+    }
+
     // A picture dragged onto another swaps with it, as the scratch area's
     // message says (nothing did): the dragged frame goes back, and the two
     // pictures trade frames.

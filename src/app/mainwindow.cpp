@@ -1568,7 +1568,7 @@ void MainWindow::contextMenu(const QPoint &global)
         QMenu *fit = menu.addMenu(act("tb.textFit")->icon(), tr("Text Fit"));
         for (const char *id : {"fit.best", "fit.shrink", "fit.grow", "fit.none"}) fit->addAction(act(id));
         menu.addSeparator();
-        menu.addAction(act("obj.format"));
+        menu.addAction(act(dynamic_cast<TableItem *>(m_ed->doc()->item(m_ed->textTarget().itemId)) ? "tbl.format" : "obj.format"));
     } else if (!kind.isEmpty()) {
         menu.addAction(act("edit.cut"));
         menu.addAction(act("edit.copy"));
@@ -1606,7 +1606,7 @@ void MainWindow::contextMenu(const QPoint &global)
         menu.addSeparator();
         menu.addAction(act("obj.lock"));
         menu.addAction(act("obj.saveBlock"));
-        menu.addAction(act("obj.format"));
+        menu.addAction(act(kind == "table" ? "tbl.format" : "obj.format"));
         menu.addAction(act("ins.link"));
     } else {
         menu.addAction(act("edit.paste"));

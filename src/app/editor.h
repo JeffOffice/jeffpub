@@ -126,6 +126,7 @@ public:
     // The cells a cell command acts on: the block, or the cell (all of a
     // merged one) the text cursor is in; not valid when neither.
     CellRange targetCells() const;
+    CellRange cellsToFormat(const TableItem *t) const;   // those, or every cell of t when only the table is selected
 
     // ---- changes and undo ----
     void beginChange(const QString &label);
@@ -201,6 +202,9 @@ public:
     void breakLink(const QString &from);
     void applyTableFormat(TableItem *t, const QString &format);
     void fitTableRows(TableItem *t);
+    // A table's size typed in: the columns scale to a width and the rows to a
+    // height, in proportion (0 or less leaves that size), as one change.
+    void resizeTable(TableItem *t, double width, double height);
     void autoGrowText(TextItem *t);
 
     // ---- clipboard ----

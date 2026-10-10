@@ -36,6 +36,7 @@ With the whole table selected, **Insert Above** and **Insert Left** add at the s
 
 ## Change sizes
 
+- Type a number in **Table Layout > Size > Height** or **Width** to size the whole table. A new width scales every column in proportion, and a new height scales every row in proportion. A row never gets shorter than its text needs while **Grow to Fit Text** is checked.
 - Drag a line between two columns to change their widths. The table stays the same width.
 - Drag a line between two rows to change a row's height.
 - Click **Table Layout > Size > Distribute Rows** or **Distribute Columns** to make them equal.
@@ -59,9 +60,19 @@ To place text in a cell, use the buttons in **Table Layout > Alignment**: top, m
 
 **Hyphenation**, next to it, opens the **Hyphenation** dialog. There you turn **Automatically hyphenate this story** on or off, which sets whether long words break with a hyphen at the end of a line, and you set the **Hyphenation zone**. Words in cells are hyphenated unless you turn it off. See [Spelling, thesaurus, research, and hyphenation](proofing).
 
-Text Direction and Hyphenation change the cell you are in, or every cell when the whole table is selected.
+Text Direction and Hyphenation change the selected cells, the cell you are in, or every cell when the whole table is selected.
 
 **View Gridlines** in **Table Layout > Table** shows dotted lines around every cell on screen. They do not print.
+
+## Format Table
+
+Right-click the table and choose **Format Table**. Or click the small arrow at the corner of **Table Layout > Alignment**, which opens it on **Cell Properties**. The dialog has these tabs:
+
+- **Colors and Lines** sets the fill behind the cells and the line around the table.
+- **Size** sets the table's height, width, and rotation. Check **Lock aspect ratio** to keep the table's proportions when you drag a corner handle of the table.
+- **Layout** sets where the table sits on the page and how text wraps around it.
+- **Cell Properties** sets the vertical alignment, the four margins, and **Rotate text by 90°** (the same as **Text Direction**). They apply to the selected cells, the cell you are in, or every cell when the whole table is selected. Only the settings you change are applied.
+- **Alt Text** describes the table for people who cannot see it.
 
 ## Related
 

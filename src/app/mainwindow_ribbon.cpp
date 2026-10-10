@@ -26,6 +26,7 @@
 
 #include <QAction>
 #include <QActionGroup>
+#include <QCheckBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenu>
@@ -106,6 +107,7 @@ void MainWindow::buildRibbon()
     parts.launchers[QStringLiteral("pageSetup")] = [this] { pageSetupDialog(this, m_ed); };
     parts.launchers[QStringLiteral("formatShape")] = [this] { formatObjectDialog(this, m_ed, 0); };
     parts.launchers[QStringLiteral("sizePosition")] = [this] { formatObjectDialog(this, m_ed, 1); };
+    parts.launchers[QStringLiteral("formatTable")] = [this] { formatObjectDialog(this, m_ed, 6); };   // opens on Cell Properties
     parts.triggers[QStringLiteral("ribbon.catalogPages")] = [this] { showTaskPane("catalog"); };
     parts.colors[QStringLiteral("masterPage")] = QColor(0x7A, 0x5C, 0xA8);
     parts.colors[QStringLiteral("textBox")] = QColor(0x2C, 0x6E, 0x91);
@@ -295,6 +297,38 @@ void MainWindow::ribbonControlParts(RibbonParts &parts)
             });
         });
         return w;
+    };
+    // Table Layout > Size: the whole table's height and width. A width scales
+    // the columns in proportion, a height the rows; locked, the other follows.
+    auto tableSizeBox = [this](bool width) -> QWidget * {
+        auto *s = new MeasureSpin();
+        s->setToolTip(width ? tr("Table Width") : tr("Table Height"));
+        (width ? m_tableWidthSpins : m_tableHeightSpins) << s;
+        connect(s, &QDoubleSpinBox::valueChanged, this, [this, width](double v) {
+            TableItem *t = selTableForUi(m_ed);
+            if (!t || t->locked || v <= 0) return;
+            double w = width ? v : 0, h = width ? 0 : v;
+            if (t->lockSize) {
+                if (width) h = v * t->rect.height() / t->rect.width();
+                else w = v * t->rect.width() / t->rect.height();
+            }
+            m_ed->resizeTable(t, w, h);
+        });
+        return s;
+    };
+    parts.widgets[QStringLiteral("tableHeight")] = [tableSizeBox] { return tableSizeBox(false); };
+    parts.widgets[QStringLiteral("tableWidth")] = [tableSizeBox] { return tableSizeBox(true); };
+    parts.widgets[QStringLiteral("growToFit")] = [this]() -> QWidget * {
+        QAction *grow = act("tbl.grow");
+        auto *box = new QCheckBox(grow->text());
+        box->setToolTip(tr("Grow to Fit Text: a row grows taller when its text needs more room."));
+        box->setChecked(grow->isChecked());
+        connect(box, &QCheckBox::clicked, grow, [grow] { grow->trigger(); });
+        connect(grow, &QAction::toggled, box, [box](bool on) {
+            const QSignalBlocker block(box);
+            box->setChecked(on);
+        });
+        return box;
     };
 
     parts.widgets[QStringLiteral("zoomBox")] = [this]() -> QWidget * {
@@ -1156,12 +1190,22 @@ void MainWindow::refreshUi()
     }
     if (auto *tb = selTableForUi(ed)) {
         act("tbl.grow")->setChecked(tb->growToFit);
-        // Text Direction is on for the cell the text cursor is in, or when every cell has it.
+        // Text Direction and the vertical alignment are on for the selected cells, or the
+        // cell the text cursor is in, when each cell has it (every cell with only the table selected).
+        const CellRange rg = ed->cellsToFormat(tb);
         bool turned = !tb->cells.isEmpty();
-        for (int r = 0; r < tb->rows; ++r)
-            for (int c = 0; c < tb->cols; ++c)
-                if (!editing || (r == ed->textTarget().row && c == ed->textTarget().col)) turned = turned && tb->cell(r, c).vertical;
+        int align[3] = {0, 0, 0};
+        int count = 0;
+        for (int r = rg.r0; r <= rg.r1; ++r)
+            for (int c = rg.c0; c <= rg.c1; ++c) {
+                turned = turned && tb->cell(r, c).vertical;
+                ++align[int(tb->cell(r, c).valign)];
+                ++count;
+            }
         act("tb.direction")->setChecked(turned);
+        for (int k = 0; k < 3; ++k) act(QStringLiteral("valign.%1").arg(k))->setChecked(count > 0 && align[k] == count);
+        for (MeasureSpin *s : m_tableWidthSpins) { s->setEnabled(!tb->locked); s->setPoints(tb->rect.width()); }
+        for (MeasureSpin *s : m_tableHeightSpins) { s->setEnabled(!tb->locked); s->setPoints(tb->rect.height()); }
     }
     act("tb.shadow")->setChecked(cf.boolProperty(tp::Shadow));
     act("tb.outline")->setChecked(!cf.stringProperty(tp::OutlineRef).isEmpty());

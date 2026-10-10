@@ -484,7 +484,7 @@
         {"large": "tbl.merge", "keytip": "MC"},
         {"large": "tbl.split", "keytip": "SC"}
       ]},
-      {"name": "Alignment", "keytip": "ZN", "items": [
+      {"name": "Alignment", "keytip": "ZN", "launcher": "formatTable", "launcherTip": "Format Table", "launcherKeytip": "FT", "items": [
         {"row": [
           {"icon": "valign.0", "keytip": "VT"},
           {"icon": "para.left", "keytip": "AL"},
@@ -499,7 +499,9 @@
           "tbmargin.None", "tbmargin.Narrow", "tbmargin.Moderate", "tbmargin.Wide"]}
       ]},
       {"name": "Size", "keytip": "ZS", "items": [
-        {"small": "tbl.grow", "keytip": "GR"},
+        {"row": [{"label": "Height"}, {"widget": "tableHeight", "keytip": "HT"}]},
+        {"row": [{"label": "Width"}, {"widget": "tableWidth", "keytip": "WD"}]},
+        {"row": [{"widget": "growToFit", "keytip": "GR"}]},
         {"small": "tbl.distributeRows", "keytip": "DR"},
         {"small": "tbl.distributeCols", "keytip": "DC"}
       ]},

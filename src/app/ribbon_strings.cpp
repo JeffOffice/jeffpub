@@ -47,6 +47,7 @@
     QT_TRANSLATE_NOOP("Ribbon", "Font"),
     QT_TRANSLATE_NOOP("Ribbon", "Fonts"),
     QT_TRANSLATE_NOOP("Ribbon", "Format Shape"),
+    QT_TRANSLATE_NOOP("Ribbon", "Format Table"),
     QT_TRANSLATE_NOOP("Ribbon", "Glow"),
     QT_TRANSLATE_NOOP("Ribbon", "Guides"),
     QT_TRANSLATE_NOOP("Ribbon", "Header & Footer"),
