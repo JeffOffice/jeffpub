@@ -156,14 +156,22 @@ public:
                             if (px.isValid() && data.format != "svg" && data.format != "wmf" && data.format != "emf") {
                                 const double ppiX = px.width() / (pic->imgRect.width() / 72.0), ppiY = px.height() / (pic->imgRect.height() / 72.0);
                                 if (std::abs(ppiX - ppiY) / std::max(ppiX, ppiY) > 0.04) add(tr("Picture is not scaled proportionally"), pic->id, p, "scaling");
-                                if (m_print->isChecked() && std::min(ppiX, ppiY) < 150)
-                                    add(tr("Picture has low resolution (%1 ppi)").arg(int(std::min(ppiX, ppiY))), pic->id, p, "image-off");
                             }
                             if (data.linked) add(tr("Picture is linked, not embedded"), pic->id, p, "link");
                         }
                     }
                 }
                 if (m_print->isChecked()) {
+                    // A final publishing check, with or without the general ones.
+                    if (it->type() == ItemType::Picture) {
+                        auto *pic = static_cast<PictureItem *>(it.get());
+                        const QSize px = pic->imageId.isEmpty() ? QSize() : d->imageSize(pic->imageId);
+                        const ImageData data = d->images.value(pic->imageId);
+                        if (px.isValid() && data.format != "svg" && data.format != "wmf" && data.format != "emf") {
+                            const double ppi = std::min(px.width() / (pic->imgRect.width() / 72.0), px.height() / (pic->imgRect.height() / 72.0));
+                            if (ppi < 150) add(tr("Picture has low resolution (%1 ppi)").arg(int(ppi)), pic->id, p, "image-off");
+                        }
+                    }
                     if (it->fill.transparency > 0 || it->fx.any()) add(tr("Object has transparency or effects (may print differently)"), it->id, p, "blend");
                     if (it->type() == ItemType::Text) {
                         QTextDocument *sd = d->storyDoc(static_cast<TextItem *>(it.get())->storyId);

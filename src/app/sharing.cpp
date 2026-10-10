@@ -98,22 +98,32 @@ void emailAsAttachment(QWidget *parent, Editor *ed, const QString &format)
     saveEml(parent, ed->displayName(), eml);
 }
 
+void packForPrinter(MainWindow *win, const QString &dir)
+{
+    Editor *ed = win->editor();
+    const QString base = QDir(dir).filePath(ed->displayName());
+    // The commercial press PDF: full-resolution pictures, printer's marks and bleeds.
+    MainWindow::PdfSettings s;
+    s.preset = MainWindow::PdfSettings::CommercialPress;
+    win->exportPdfTo(base + ".pdf", s);
+    QString err;
+    savePublication(*ed->doc(), base + ".jpub", win->pageThumbnail(0, 256), &err);
+    QFile readme(QDir(dir).filePath("README-for-printer.txt"));
+    if (readme.open(QIODevice::WriteOnly)) {
+        readme.write(QStringLiteral("Publication: %1\nPage size: %2 x %3 inches, %4 pages\nThe PDF has crop, bleed, and registration marks, color bars, and job information outside the page.\n"
+                                    "PDF fonts are embedded. Pictures are at full resolution.\n")
+                         .arg(ed->displayName()).arg(ed->doc()->pageSize().width() / 72, 0, 'f', 3).arg(ed->doc()->pageSize().height() / 72, 0, 'f', 3)
+                         .arg(ed->doc()->pages.size()).toUtf8());
+    }
+}
+
 void packAndGo(QWidget *parent, MainWindow *win, bool forPrinter)
 {
     Editor *ed = win->editor();
     if (forPrinter) {
         const QString dir = QFileDialog::getExistingDirectory(parent, QCoreApplication::translate("Sharing", "Save for a Commercial Printer"));
         if (dir.isEmpty()) return;
-        const QString base = QDir(dir).filePath(ed->displayName());
-        win->exportPdf(base + ".pdf");
-        QString err;
-        savePublication(*ed->doc(), base + ".jpub", win->pageThumbnail(0, 256), &err);
-        QFile readme(QDir(dir).filePath("README-for-printer.txt"));
-        if (readme.open(QIODevice::WriteOnly)) {
-            readme.write(QStringLiteral("Publication: %1\nPage size: %2 x %3 inches, %4 pages\nPDF fonts are embedded. Pictures are at full resolution.\n")
-                             .arg(ed->displayName()).arg(ed->doc()->pageSize().width() / 72, 0, 'f', 3).arg(ed->doc()->pageSize().height() / 72, 0, 'f', 3)
-                             .arg(ed->doc()->pages.size()).toUtf8());
-        }
+        packForPrinter(win, dir);
         QMessageBox::information(parent, QCoreApplication::translate("Sharing", "Pack and Go"), QCoreApplication::translate("Sharing", "Saved the PDF and publication for your printer in %1.").arg(dir));
         return;
     }

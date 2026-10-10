@@ -2299,8 +2299,6 @@ void documentPropertiesDialog(QWidget *p, Editor *ed, int tab)
     auto *model = new QComboBox(print);
     model->addItems({QCoreApplication::translate("Dialogs", "RGB (best for desktop printers and screens)"), QCoreApplication::translate("Dialogs", "Single color (spot)"), QCoreApplication::translate("Dialogs", "Spot colors"), QCoreApplication::translate("Dialogs", "Process colors (CMYK)"), QCoreApplication::translate("Dialogs", "Process plus spot colors")});
     model->setCurrentIndex(int(ed->doc()->print.model));
-    auto *embed = new QCheckBox(QCoreApplication::translate("Dialogs", "Embed TrueType fonts when saving PDF"), print);
-    embed->setChecked(ed->doc()->print.embedFonts);
     pf->addRow(QCoreApplication::translate("Dialogs", "Color model:"), model);
     // Spot colors: inks the print shop mixes, by name and color. They show
     // in every color drop-down, and print on plates of their own.
@@ -2385,7 +2383,6 @@ void documentPropertiesDialog(QWidget *p, Editor *ed, int tab)
     };
     QObject::connect(model, &QComboBox::currentIndexChanged, &dlg.d, showSpots);
     showSpots();
-    pf->addRow(embed);
     // Black overprinting in files for a printer (PDF/X): black prints over
     // the inks under it, so a shifted plate leaves no white edge.
     const OverprintSettings op0 = ed->doc()->print.overprint;
@@ -2431,7 +2428,6 @@ void documentPropertiesDialog(QWidget *p, Editor *ed, int tab)
         d.title = title->text(); d.subject = subject->text(); d.author = author->text(); d.manager = manager->text();
         d.company = company->text(); d.category = category->text(); d.keywords = keywords->text(); d.comments = comments->toPlainText();
         ed->doc()->print.model = PrintInfo::ColorModel(model->currentIndex());
-        ed->doc()->print.embedFonts = embed->isChecked();
         OverprintSettings &op = ed->doc()->print.overprint;
         op.text = opText->isChecked();
         op.textBelow = opSize->value();

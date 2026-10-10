@@ -36,7 +36,12 @@ std::unique_ptr<Document> loadAnyPublication(const QString &path, QString *error
 // copiesPerSheet, grayscale, merged, separations (with plates: "CMYK" subset),
 // and the printer's marks: cropMarks, bleedMarks, registration, densityBars,
 // colorBars, jobInfo, allowBleeds.
+// opts "pages": a list such as "1-3, 5" to print instead of the printer's range.
 void printDocument(Editor *ed, QPrinter *printer, const QJsonObject &opts);
+// The pages a list such as "1-3, 5" names, as indexes in the order given,
+// each once; a backward range ("5-3") counts up, and numbers past the end
+// are left out. Empty when it names none.
+QVector<int> parsePageList(const QString &text, int pageCount);
 
 // Printer's marks drawn outside a page's trim edge (all in points). They need
 // about 48 pt of paper around the page.

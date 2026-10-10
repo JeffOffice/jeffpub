@@ -923,19 +923,19 @@ Back page story	4</source>
     <message>
         <location line="+1"/>
         <location line="+837"/>
-        <location line="+1411"/>
+        <location line="+1407"/>
         <source>Width:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-2247"/>
+        <location line="-2243"/>
         <location line="+835"/>
-        <location line="+1413"/>
+        <location line="+1409"/>
         <source>Height:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-2247"/>
+        <location line="-2243"/>
         <source>Orientation:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1035,12 +1035,12 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+2010"/>
+        <location line="+2008"/>
         <source>Name:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1996"/>
+        <location line="-1994"/>
         <location line="+33"/>
         <source>Page Size</source>
         <translation type="unfinished"></translation>
@@ -1172,12 +1172,12 @@ Back page story	4</source>
     <message>
         <location line="-1740"/>
         <location line="+374"/>
-        <location line="+1454"/>
+        <location line="+1452"/>
         <source>Remove</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1828"/>
+        <location line="-1826"/>
         <source>Remove All</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1330,12 +1330,12 @@ Back page story	4</source>
         <location line="+282"/>
         <location line="+733"/>
         <location line="+151"/>
-        <location line="+317"/>
+        <location line="+315"/>
         <source>Color:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1758"/>
+        <location line="-1756"/>
         <source>Effects</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1501,12 +1501,12 @@ Back page story	4</source>
     </message>
     <message>
         <location line="-1342"/>
-        <location line="+1783"/>
+        <location line="+1779"/>
         <source>Line spacing:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1781"/>
+        <location line="-1777"/>
         <source>Indents and Spacing</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1894,12 +1894,12 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+1412"/>
+        <location line="+1408"/>
         <source>Rotation:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1410"/>
+        <location line="-1406"/>
         <source>Size</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1940,18 +1940,18 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+1392"/>
+        <location line="+1388"/>
         <source>Horizontal position:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1391"/>
-        <location line="+1392"/>
+        <location line="-1387"/>
+        <location line="+1388"/>
         <source>Vertical position:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1391"/>
+        <location line="-1387"/>
         <source>Wrapping style:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2243,12 +2243,12 @@ Back page story	4</source>
     <message>
         <location line="-24"/>
         <location line="+121"/>
-        <location line="+1150"/>
+        <location line="+1146"/>
         <source>Click in a text box first.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1265"/>
+        <location line="-1261"/>
         <location line="+5"/>
         <source>Insert Symbol</source>
         <translation type="unfinished"></translation>
@@ -2821,12 +2821,12 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+783"/>
+        <location line="+779"/>
         <source>Base color:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-782"/>
+        <location line="-778"/>
         <source>Tint (left) or shade (right):</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3197,12 +3197,12 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+41"/>
-        <location line="+148"/>
+        <location line="+145"/>
         <source>Properties</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-141"/>
+        <location line="-138"/>
         <source>Title:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3273,11 +3273,6 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+2"/>
-        <source>Embed TrueType fonts when saving PDF</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
         <source>Color model:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3313,7 +3308,7 @@ Back page story	4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+28"/>
         <source>Overprint black in files for a printer (PDF/X)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3348,7 +3343,7 @@ Back page story	4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+26"/>
         <location line="+51"/>
         <source>Measurement</source>
         <translation type="unfinished"></translation>
@@ -3791,7 +3786,7 @@ Or save to a folder that isn&apos;t protected.</source>
 <context>
     <name>Import</name>
     <message>
-        <location filename="../src/io/importers.cpp" line="+436"/>
+        <location filename="../src/io/importers.cpp" line="+437"/>
         <source>The file has no rows.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3859,7 +3854,7 @@ Open them with your email program to send.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+254"/>
+        <location line="+277"/>
         <source>%1  ·  Page %2 of %3  ·  %4</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6116,12 +6111,12 @@ Open it in your email program, add recipients and send.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+70"/>
         <source>Save for a Commercial Printer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+3"/>
         <location line="+30"/>
         <source>Pack and Go</source>
         <translation type="unfinished"></translation>
@@ -8304,23 +8299,23 @@ Desktop publishing</source>
     </message>
     <message>
         <location line="-683"/>
-        <location line="+1009"/>
+        <location line="+1014"/>
         <source>Export</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1009"/>
+        <location line="-1014"/>
         <source>Save As</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+983"/>
+        <location line="+988"/>
         <source>Share</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-983"/>
+        <location line="-988"/>
         <location line="+103"/>
         <source>Properties</source>
         <translation type="unfinished"></translation>
@@ -8332,12 +8327,12 @@ Desktop publishing</source>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+1054"/>
+        <location line="+1059"/>
         <source>About</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1054"/>
+        <location line="-1059"/>
         <source>Options</source>
         <translation type="unfinished"></translation>
     </message>
@@ -8829,7 +8824,7 @@ Desktop publishing</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+73"/>
+        <location line="+78"/>
         <source>Email Current Page</source>
         <translation type="unfinished"></translation>
     </message>
@@ -8940,17 +8935,17 @@ Desktop publishing</source>
     </message>
     <message>
         <location line="+0"/>
-        <source>A high-quality PDF with crop marks plus the publication file in one folder.</source>
+        <source>A commercial press PDF (full-resolution pictures, printer&apos;s marks, and bleeds) and the publication file, in one folder.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>Pack and Go: Save for Another Computer</source>
+        <source>The publication and its pictures in one ZIP file, with the fonts it uses that come with JeffPub.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+0"/>
-        <source>The publication, its pictures and the fonts it uses, bundled in one ZIP file.</source>
+        <source>Pack and Go: Save for Another Computer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -9205,7 +9200,7 @@ Desktop publishing</source>
 <context>
     <name>jp::CatalogPane</name>
     <message>
-        <location filename="../src/app/taskpane.cpp" line="+585"/>
+        <location filename="../src/app/taskpane.cpp" line="+593"/>
         <source>Choose the list of products or items (a spreadsheet, a CSV file or a list you type).</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9367,7 +9362,7 @@ Source: %3</source>
 <context>
     <name>jp::DesignChecker</name>
     <message>
-        <location filename="../src/app/taskpane.cpp" line="-657"/>
+        <location filename="../src/app/taskpane.cpp" line="-665"/>
         <source>Run general design checks</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9427,17 +9422,17 @@ Source: %3</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+14"/>
         <source>Picture has low resolution (%1 ppi)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-12"/>
         <source>Picture is linked, not embedded</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+15"/>
         <source>Object has transparency or effects (may print differently)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -13713,7 +13708,7 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
 <context>
     <name>jp::TaskPane</name>
     <message>
-        <location filename="../src/app/taskpane.cpp" line="-774"/>
+        <location filename="../src/app/taskpane.cpp" line="-782"/>
         <source>Close</source>
         <translation type="unfinished"></translation>
     </message>
@@ -13763,7 +13758,7 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+763"/>
+        <location line="+771"/>
         <source>Find free, openly licensed pictures in these libraries. Check each picture&apos;s license, download it, then use Insert &gt; Pictures or drag the file onto the page.</source>
         <translation type="unfinished"></translation>
     </message>

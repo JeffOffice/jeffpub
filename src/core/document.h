@@ -173,7 +173,7 @@ struct PrintInfo {
     QStringList spotNames;           // a name for each spot color (an ink's name, "PANTONE 286 C")
     bool usesSpots() const { return model == SingleSpot || model == SpotColors || model == ProcessPlusSpot; }
     QString spotName(int i) const { return i < spotNames.size() && !spotNames[i].isEmpty() ? spotNames[i] : QStringLiteral("Spot color %1").arg(i + 1); }
-    bool embedFonts = true;
+    bool embedFonts = true;   // kept from files; PDFs always embed their fonts (PDF/X needs them)
     OverprintSettings overprint;
 };
 

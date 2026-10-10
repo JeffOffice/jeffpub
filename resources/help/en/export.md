@@ -31,7 +31,7 @@ A new chapter starts at each paragraph in the Heading 1 style. The Heading 1, 2,
 
 ## Pack and Go and photo prints
 
-- **Pack and Go: Save for a Commercial Printer** asks for a folder. It saves a high-quality PDF, the publication, and a short text file with the page size and page count.
+- **Pack and Go: Save for a Commercial Printer** asks for a folder. It saves a commercial press PDF (full-resolution pictures, with crop marks and the other printer's marks outside the page), the publication, and a short text file with the page size and page count.
 - **Pack and Go: Save for Another Computer** makes one ZIP file with the publication and the fonts it uses that come with JeffPub.
 - **Save for a Photo Printer** asks for a folder and saves each page as a 300 dpi JPEG.
 

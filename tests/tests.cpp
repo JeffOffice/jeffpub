@@ -4191,6 +4191,81 @@ private Q_SLOTS:
     // commands count by id, in the form the collector takes, and a ping holds
     // only the install id, version, system, language, launches and counts.
     // Turning them off forgets what was counted and the id.
+    // The Print page's Pages box takes a list such as "1-3, 5", as its
+    // example says (it printed 1-3 and dropped the rest).
+    void printPageList()
+    {
+        QCOMPARE(jp::parsePageList(QStringLiteral("1-3, 5"), 10), (QVector<int>{0, 1, 2, 4}));
+        QCOMPARE(jp::parsePageList(QStringLiteral("5-3;9"), 10), (QVector<int>{2, 3, 4, 8}));
+        QCOMPARE(jp::parsePageList(QStringLiteral("2, 2, 8-20"), 10), (QVector<int>{1, 7, 8, 9}));
+        QVERIFY(jp::parsePageList(QStringLiteral("0, 11, x, 1-2-3"), 10).isEmpty());
+        jp::MainWindow w;
+        jp::Editor *ed = w.editor();
+        ed->insertPages(0, 4, false, false);
+        QCOMPARE(ed->doc()->pages.size(), qsizetype(5));
+        QTemporaryDir dir;
+        auto pagesPrinted = [&](const QJsonObject &opts) {
+            QPrinter printer(QPrinter::HighResolution);
+            printer.setOutputFormat(QPrinter::PdfFormat);
+            printer.setOutputFileName(dir.filePath("p.pdf"));
+            printer.setResolution(72);
+            printer.setFullPage(true);
+            jp::printDocument(ed, &printer, opts);
+            QFile f(dir.filePath("p.pdf"));
+            if (!f.open(QIODevice::ReadOnly)) return -1;
+            const QByteArray pdf = f.readAll();
+            return int(pdf.count("/Type /Page\n") + pdf.count("/Type /Page\r") + pdf.count("/Type /Page ") + pdf.count("/Type /Page/"));
+        };
+        QCOMPARE(pagesPrinted({{"layout", "one"}, {"pages", "1-2, 5"}}), 3);
+        QCOMPARE(pagesPrinted({{"layout", "one"}}), 5);
+    }
+
+    // Pack and Go for a printer makes the commercial press PDF its card
+    // describes (it made a plain one, with no marks).
+    void packForPrinterHasMarks()
+    {
+        jp::MainWindow w;
+        QTemporaryDir dir;
+        jp::packForPrinter(&w, dir.path());
+        QFile f(QDir(dir.path()).filePath(w.editor()->displayName() + QStringLiteral(".pdf")));
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QByteArray pdf = f.readAll();
+        static const QRegularExpression media(QStringLiteral("/MediaBox \\[\\s*0 0 ([0-9.]+) ([0-9.]+)"));
+        const auto m = media.match(QString::fromLatin1(pdf));
+        QVERIFY(m.hasMatch());
+        QVERIFY2(m.captured(1).toDouble() > w.editor()->doc()->pageSize().width() + 36, qPrintable(m.captured(0)));   // room for the marks
+        QVERIFY(QFile::exists(QDir(dir.path()).filePath(w.editor()->displayName() + QStringLiteral(".jpub"))));
+    }
+
+    // The Design Checker's low-resolution check is a final publishing check:
+    // it runs with only those checks on (it needed the general ones too).
+    void designCheckerFinalChecksAlone()
+    {
+        jp::MainWindow w;
+        w.show();
+        QImage tiny(20, 20, QImage::Format_RGB32);
+        tiny.fill(Qt::red);
+        QByteArray png;
+        QBuffer buf(&png);
+        buf.open(QIODevice::WriteOnly);
+        tiny.save(&buf, "PNG");
+        auto pic = std::make_shared<jp::PictureItem>();
+        pic->imageId = w.editor()->doc()->addImage(png, "png");
+        pic->rect = QRectF(72, 72, 288, 288);
+        pic->imgRect = QRectF(0, 0, 288, 288);   // 20 pixels across 4 inches: 5 ppi
+        w.editor()->addItem(pic);
+        w.showTaskPane(QStringLiteral("designchecker"));
+        QCheckBox *general = nullptr;
+        for (auto *c : w.findChildren<QCheckBox *>())
+            if (c->text() == QLatin1String("Run general design checks")) general = c;
+        QVERIFY(general);
+        general->setChecked(false);
+        QStringList found;
+        for (auto *l : w.findChildren<QListWidget *>())
+            for (int i = 0; i < l->count(); ++i) found << l->item(i)->text();
+        QVERIFY2(found.contains(QStringLiteral("Picture has low resolution (5 ppi) (Page 1)")), qPrintable(found.join(QStringLiteral(" / "))));
+    }
+
     // File > Options holds the statistics choice the first start points to,
     // and a new AutoRecover interval reaches windows already open.
     void optionsApplyToOpenWindows()

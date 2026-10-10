@@ -28,6 +28,7 @@
 #include <QDateTime>
 #include <QPrinter>
 #include <QRegularExpression>
+#include <QSet>
 #include <QStringDecoder>
 #include <QTextCursor>
 #include <QTextDocument>
@@ -847,6 +848,25 @@ QImage renderPlate(const Document &doc, int page, int plate, double dpi)
     return separationPlate(img, std::min(plate, 3));
 }
 
+QVector<int> parsePageList(const QString &text, int pageCount)
+{
+    QVector<int> out;
+    QSet<int> seen;
+    for (const QString &part : text.split(QRegularExpression(QStringLiteral("[,;]")), Qt::SkipEmptyParts)) {
+        const QStringList ends = part.split(QLatin1Char('-'));
+        bool ok1 = false, ok2 = true;
+        const int a = ends.value(0).trimmed().toInt(&ok1);
+        const int b = ends.size() > 1 ? ends.value(1).trimmed().toInt(&ok2) : a;
+        if (!ok1 || !ok2 || ends.size() > 2) continue;
+        for (int n = std::min(a, b); n <= std::max(a, b); ++n)
+            if (n >= 1 && n <= pageCount && !seen.contains(n - 1)) {
+                seen.insert(n - 1);
+                out << n - 1;
+            }
+    }
+    return out;
+}
+
 void printDocument(Editor *ed, QPrinter *printer, const QJsonObject &opts)
 {
     Document *d = ed->doc();
@@ -877,6 +897,10 @@ void printDocument(Editor *ed, QPrinter *printer, const QJsonObject &opts)
     int to = printer->toPage() > 0 ? printer->toPage() - 1 : d->pages.size() - 1;
     if (printer->printRange() == QPrinter::CurrentPage) from = to = ed->currentPage();
     to = std::min(to, int(d->pages.size()) - 1);
+    // The pages to print, in order: a list such as "1-3, 5", else the range.
+    QVector<int> list = parsePageList(opts.value("pages").toString(), int(d->pages.size()));
+    if (list.isEmpty())
+        for (int i = from; i <= to; ++i) list << i;
     QPainter p;
     if (!p.begin(printer)) return;
     const QRectF sheet = printer->pageRect(QPrinter::Point);
@@ -971,24 +995,24 @@ void printDocument(Editor *ed, QPrinter *printer, const QJsonObject &opts)
             const bool copies = opts.value("copiesPerSheet").toBool(true);
             const double ox = ownSheet ? sideM : (sheet.width() - (cols * ps.width() + (cols - 1) * gapH)) / 2;
             const double oy = ownSheet ? topM : (sheet.height() - (rows * ps.height() + (rows - 1) * gapV)) / 2;
-            int page = from;
-            while (page <= to) {
+            int at = 0;
+            while (at < list.size()) {
                 for (int pl : plates) {
                     plate = pl;
                     newSheet();
                     for (int rr = 0; rr < rows; ++rr)
                         for (int cc = 0; cc < cols; ++cc) {
-                            const int pg = copies ? page : page + rr * cols + cc;
-                            if (pg > to) continue;
-                            drawPage(pg, QRectF(QPointF(ox + cc * (ps.width() + gapH), oy + rr * (ps.height() + gapV)), ps));
+                            const int k = copies ? at : at + rr * cols + cc;
+                            if (k >= list.size()) continue;
+                            drawPage(list[k], QRectF(QPointF(ox + cc * (ps.width() + gapH), oy + rr * (ps.height() + gapV)), ps));
                         }
                 }
-                page += copies ? 1 : rows * cols;
+                at += copies ? 1 : rows * cols;
             }
         } else if (layout == "tiled" || ps.width() > sheet.width() * 1.05 || ps.height() > sheet.height() * 1.05) {
             // Poster and banner printing: tile across sheets with a small overlap.
             const double overlap = opts.value("overlap").toDouble(18);
-            for (int page = from; page <= to; ++page) {
+            for (int page : std::as_const(list)) {
                 for (double y = 0; y < ps.height() - 0.5; y += sheet.height() - overlap)
                     for (double x = 0; x < ps.width() - 0.5; x += sheet.width() - overlap) {
                         newSheet();
@@ -1001,7 +1025,7 @@ void printDocument(Editor *ed, QPrinter *printer, const QJsonObject &opts)
                     }
             }
         } else {
-            for (int page = from; page <= to; ++page)
+            for (int page : std::as_const(list))
                 for (int pl : plates) {
                     plate = pl;
                     newSheet();

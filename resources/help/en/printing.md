@@ -8,7 +8,7 @@ Printing happens on the **Print** page. You pick your settings on the left and c
 1. Press Ctrl+P, or click **File > Print**. The **Quick Access Toolbar** has a **Print** button too.
 2. Next to the **Print** button, set **Copies**.
 3. Choose a **Printer**. The list ends with **Save as PDF**, which makes a PDF file instead of paper.
-4. Under **Settings**, choose **Print All Pages**, **Print Current Page**, or **Custom Print**. For a custom print, type one range, such as 2-4, or one page number in the **Pages** box.
+4. Under **Settings**, choose **Print All Pages**, **Print Current Page**, or **Custom Print**. For a custom print, type the pages in the **Pages** box: page numbers and ranges, with commas between them, such as 1-3, 5.
 5. Choose the other settings you need. They are listed below.
 6. Click **Print**.
 

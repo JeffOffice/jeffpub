@@ -1346,9 +1346,13 @@ QWidget *Backstage::buildPrint()
         p.setFullPage(true);
         if (range->currentIndex() == 1) p.setPrintRange(QPrinter::CurrentPage);
         else if (range->currentIndex() == 2) {
-            const QString t = pages->text();
-            const int a = t.section('-', 0, 0).trimmed().toInt(), b = t.contains('-') ? t.section('-', 1, 1).trimmed().toInt() : a;
-            if (a > 0) { p.setPrintRange(QPrinter::PageRange); p.setFromTo(a, std::max(a, b)); }
+            // The printer keeps the span from the first to the last page named
+            // (for its own dialog); printing takes the list itself ("pages").
+            const QVector<int> list = parsePageList(pages->text(), int(d->pages.size()));
+            if (!list.isEmpty()) {
+                p.setPrintRange(QPrinter::PageRange);
+                p.setFromTo(*std::min_element(list.begin(), list.end()) + 1, *std::max_element(list.begin(), list.end()) + 1);
+            }
         }
         return true;
     };
@@ -1364,6 +1368,7 @@ QWidget *Backstage::buildPrint()
         QJsonObject opts;
         const int li = layout->currentIndex();
         opts["layout"] = li == 0 ? "one" : li == 1 ? "multiple" : li == 2 ? "multiple" : li == 3 ? "booklet" : li == 4 ? "bookletTop" : "tiled";
+        if (range->currentIndex() == 2) opts["pages"] = pages->text();
         opts["copiesPerSheet"] = li == 2;
         opts["cropMarks"] = marks->isChecked();
         opts["bleedMarks"] = bleedMarks->isChecked();
@@ -1443,10 +1448,10 @@ QWidget *Backstage::buildExport()
     row("globe", tr("Save as Web Page"), tr("A single HTML file you can open in any browser."), [this] { m_win->exportHtml(); });
     row("book-open", tr("Save as E-book (EPUB)"), tr("Text that flows to fit any e-reader, with chapters, contents, notes and a cover."), [this] { m_win->exportEpub(); });
     row("file-output", tr("Save as .pub File"), tr("Saves a .pub file for people who work with .pub publications."), [this] { m_win->saveAs("pub"); });
-    row("package", tr("Pack and Go: Save for a Commercial Printer"), tr("A high-quality PDF with crop marks plus the publication file in one folder."), [this] {
+    row("package", tr("Pack and Go: Save for a Commercial Printer"), tr("A commercial press PDF (full-resolution pictures, printer's marks, and bleeds) and the publication file, in one folder."), [this] {
         packAndGo(this, m_win, true);
     });
-    row("hard-drive", tr("Pack and Go: Save for Another Computer"), tr("The publication, its pictures and the fonts it uses, bundled in one ZIP file."), [this] {
+    row("hard-drive", tr("Pack and Go: Save for Another Computer"), tr("The publication and its pictures in one ZIP file, with the fonts it uses that come with JeffPub."), [this] {
         packAndGo(this, m_win, false);
     });
     row("camera", tr("Save for a Photo Printer"), tr("Saves each page as a 300 dpi JPEG for photo printing services."), [this] {

@@ -26,6 +26,8 @@ void emailAsAttachment(QWidget *parent, Editor *ed, const QString &format);
 // A mail header value from a name: one line, non-ASCII encoded (RFC 2047).
 QString emlHeaderText(const QString &s);
 void packAndGo(QWidget *parent, MainWindow *win, bool forPrinter);
+// Pack and Go's printer folder: a commercial press PDF, the publication, and a note.
+void packForPrinter(MainWindow *win, const QString &dir);
 void saveForPhotoPrinter(QWidget *parent, MainWindow *win);
 void saveAsTemplate(QWidget *parent, MainWindow *win);
 QStringList thesaurusLookup(const QString &word);
