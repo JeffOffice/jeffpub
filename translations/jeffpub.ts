@@ -9338,7 +9338,7 @@ Desktop publishing</source>
 <context>
     <name>jp::CatalogPane</name>
     <message>
-        <location filename="../src/app/taskpane.cpp" line="+601"/>
+        <location filename="../src/app/taskpane.cpp" line="+602"/>
         <source>Choose the list of products or items (a spreadsheet, a CSV file or a list you type).</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9500,7 +9500,7 @@ Source: %3</source>
 <context>
     <name>jp::DesignChecker</name>
     <message>
-        <location filename="../src/app/taskpane.cpp" line="-672"/>
+        <location filename="../src/app/taskpane.cpp" line="-673"/>
         <source>Run general design checks</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10038,6 +10038,11 @@ Source: %3</source>
     <name>jp::GraphicsPane</name>
     <message>
         <location filename="../src/app/taskpane.cpp" line="+17"/>
+        <source>Sort the pictures</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Sort by page</source>
         <translation type="unfinished"></translation>
     </message>
@@ -14038,7 +14043,7 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
 <context>
     <name>jp::TaskPane</name>
     <message>
-        <location filename="../src/app/taskpane.cpp" line="-792"/>
+        <location filename="../src/app/taskpane.cpp" line="-793"/>
         <source>Close</source>
         <translation type="unfinished"></translation>
     </message>

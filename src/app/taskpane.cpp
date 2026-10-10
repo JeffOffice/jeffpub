@@ -374,6 +374,7 @@ public:
         auto *v = new QVBoxLayout(this);
         v->setContentsMargins(0, 0, 0, 0);
         m_sort = new QComboBox(this);
+        m_sort->setAccessibleName(tr("Sort the pictures"));
         m_sort->addItems({tr("Sort by page"), tr("Sort by name"), tr("Sort by size"), tr("Sort by type")});
         v->addWidget(m_sort);
         m_list = new QListWidget(this);

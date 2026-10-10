@@ -2453,7 +2453,10 @@ private Q_SLOTS:
                 QWidget *pw = c->parentWidget();
                 if (pw && (qobject_cast<QAbstractItemView *>(pw) || pw->inherits("QComboBoxPrivateContainer"))) continue;
                 QAccessibleInterface *iface = QAccessible::queryAccessibleInterface(c);
-                if (!iface || iface->text(QAccessible::Name).trimmed().isEmpty())
+                // A box that chooses needs a name of its own: some systems
+                // read its current choice instead, Windows nothing.
+                const bool ownName = qobject_cast<QComboBox *>(c) && c->accessibleName().isEmpty();
+                if (!iface || iface->text(QAccessible::Name).trimmed().isEmpty() || ownName)
                     unnamed << QStringLiteral("%1: %2 %3").arg(QLatin1String(pane), QString::fromLatin1(c->metaObject()->className()), c->objectName());
             }
         }
