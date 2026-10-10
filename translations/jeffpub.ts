@@ -928,19 +928,19 @@ Back page story	4</source>
     <message>
         <location line="+1"/>
         <location line="+861"/>
-        <location line="+1448"/>
+        <location line="+1453"/>
         <source>Width:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-2308"/>
+        <location line="-2313"/>
         <location line="+859"/>
-        <location line="+1450"/>
+        <location line="+1455"/>
         <source>Height:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-2308"/>
+        <location line="-2313"/>
         <source>Orientation:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1040,12 +1040,12 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+2073"/>
+        <location line="+2078"/>
         <source>Name:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-2059"/>
+        <location line="-2064"/>
         <location line="+33"/>
         <source>Page Size</source>
         <translation type="unfinished"></translation>
@@ -1170,19 +1170,19 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+1784"/>
+        <location line="+1789"/>
         <source>Position:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1778"/>
+        <location line="-1783"/>
         <location line="+398"/>
-        <location line="+1493"/>
+        <location line="+1498"/>
         <source>Remove</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1891"/>
+        <location line="-1896"/>
         <source>Remove All</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1335,12 +1335,12 @@ Back page story	4</source>
         <location line="+282"/>
         <location line="+733"/>
         <location line="+165"/>
-        <location line="+342"/>
+        <location line="+347"/>
         <source>Color:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1800"/>
+        <location line="-1805"/>
         <source>Effects</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1506,12 +1506,12 @@ Back page story	4</source>
     </message>
     <message>
         <location line="-1360"/>
-        <location line="+1824"/>
+        <location line="+1829"/>
         <source>Line spacing:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1822"/>
+        <location line="-1827"/>
         <source>Indents and Spacing</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1919,12 +1919,12 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+1449"/>
+        <location line="+1454"/>
         <source>Rotation:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1447"/>
+        <location line="-1452"/>
         <source>Size</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1965,18 +1965,18 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+1429"/>
+        <location line="+1434"/>
         <source>Horizontal position:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1428"/>
-        <location line="+1429"/>
+        <location line="-1433"/>
+        <location line="+1434"/>
         <source>Vertical position:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1428"/>
+        <location line="-1433"/>
         <source>Wrapping style:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2268,12 +2268,12 @@ Back page story	4</source>
     <message>
         <location line="-24"/>
         <location line="+121"/>
-        <location line="+1187"/>
+        <location line="+1192"/>
         <source>Click in a text box first.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1302"/>
+        <location line="-1307"/>
         <location line="+5"/>
         <source>Insert Symbol</source>
         <translation type="unfinished"></translation>
@@ -2846,12 +2846,12 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+820"/>
+        <location line="+825"/>
         <source>Base color:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-819"/>
+        <location line="-824"/>
         <source>Tint (left) or shade (right):</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3046,6 +3046,11 @@ Back page story	4</source>
     </message>
     <message>
         <location line="+4"/>
+        <source>Check for updates when JeffPub starts</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>General</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3175,7 +3180,7 @@ Back page story	4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+26"/>
         <location line="+22"/>
         <source>Page Number</source>
         <translation type="unfinished"></translation>
@@ -4150,6 +4155,19 @@ Download it from %2 now? (%3, once.)</source>
     <message>
         <location line="+22"/>
         <source>Page %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>Online</name>
+    <message>
+        <location filename="../src/app/onlinepictures.cpp" line="+131"/>
+        <source>Picture</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 by %2</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -9242,7 +9260,7 @@ Desktop publishing</source>
 <context>
     <name>jp::CatalogPane</name>
     <message>
-        <location filename="../src/app/taskpane.cpp" line="+593"/>
+        <location filename="../src/app/taskpane.cpp" line="+594"/>
         <source>Choose the list of products or items (a spreadsheet, a CSV file or a list you type).</source>
         <translation type="unfinished"></translation>
     </message>
@@ -13651,6 +13669,117 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
     </message>
 </context>
 <context>
+    <name>jp::OnlinePicturesPane</name>
+    <message>
+        <location filename="../src/app/onlinepictures.cpp" line="+12"/>
+        <source>Free, openly licensed pictures from two open libraries. Your search words go to the library you choose.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Library</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Openverse searches many open collections; Wikimedia Commons is the library of Wikipedia&apos;s pictures.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+1"/>
+        <source>Search for pictures</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Search</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Pictures found</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Add a credit under the picture</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Most open licenses ask you to name the author and the license where the picture is used.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Insert</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Searching...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>The library couldn&apos;t be reached: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>No pictures found. Try other words, or the other library.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%n picture(s) found. Choose one to see its license.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>By %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Its page in the library</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Downloading %1...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>That picture couldn&apos;t be read.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>The picture couldn&apos;t be downloaded: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>The picture couldn&apos;t be saved for inserting.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Picture Credit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Inserted. Check that its license fits how you&apos;ll use it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>jp::PagesPane</name>
     <message>
         <location filename="../src/app/pagespane.cpp" line="+88"/>
@@ -13813,16 +13942,6 @@ Your web browser will open LibreTranslate, a free, open-source translation servi
     <message>
         <location line="+1"/>
         <source>Help</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+771"/>
-        <source>Find free, openly licensed pictures in these libraries. Check each picture&apos;s license, download it, then use Insert &gt; Pictures or drag the file onto the page.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Openverse (Creative Commons search)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

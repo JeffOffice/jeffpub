@@ -20,7 +20,13 @@ A placeholder is an empty frame that saves a spot for a picture. Click **Insert 
 
 ## Find free pictures online
 
-Click **Insert > Illustrations > Online Pictures**. The **Online Pictures** pane lists free picture libraries, such as Openverse and Wikimedia Commons. Click a name to open that site in your web browser. JeffPub does not search for you. Download a picture, check its license, and insert the file with **Pictures**.
+Click **Insert > Illustrations > Online Pictures**. The **Online Pictures** pane searches two free libraries of openly licensed pictures: Openverse, which covers many collections, and Wikimedia Commons, the library of Wikipedia's pictures.
+
+1. Choose a library, type what you're looking for, such as "red barn", and press Enter.
+2. Click a picture to see who made it and its license. A license is the set of rules for using the picture. Most ask you to name the author.
+3. Click **Insert**. JeffPub puts the picture on the page and uses its title as its alt text. With **Add a credit under the picture** checked, a line such as "Red barn" by Pat Lee, CC BY 2.0 goes under it.
+
+Your search words go to the library you chose. Check that each picture's license fits how you'll use it.
 
 ## Crop a picture
 

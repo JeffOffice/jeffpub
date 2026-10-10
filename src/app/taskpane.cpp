@@ -3,6 +3,7 @@
 #include "app/appfuncs.h"
 #include "app/dialogs.h"
 #include "app/help.h"
+#include "app/onlinepictures.h"
 #include "app/icons.h"
 #include "app/mainwindow.h"
 #include "app/settings.h"
@@ -843,26 +844,7 @@ QWidget *TaskPane::create(const QString &name)
     if (name == "catalog") return new CatalogPane(m_win);
     if (name == "research") return new ResearchPane(m_win);
     if (name == "help") return new HelpView(m_win);
-    if (name == "online") {
-        auto *w = new QWidget();
-        auto *v = new QVBoxLayout(w);
-        auto *l = new QLabel(tr("Find free, openly licensed pictures in these libraries. Check each picture's license, download it, "
-                                "then use Insert > Pictures or drag the file onto the page."), w);
-        l->setWordWrap(true);
-        v->addWidget(l);
-        const QList<std::pair<QString, QString>> libraries{{tr("Openverse (Creative Commons search)"), QStringLiteral("https://openverse.org")},
-                                                           {QStringLiteral("Wikimedia Commons"), QStringLiteral("https://commons.wikimedia.org")},
-                                                           {QStringLiteral("Unsplash"), QStringLiteral("https://unsplash.com")},
-                                                           {QStringLiteral("Pexels"), QStringLiteral("https://www.pexels.com")},
-                                                           {QStringLiteral("Openclipart"), QStringLiteral("https://openclipart.org")}};
-        for (const auto &[label, url] : libraries) {
-            auto *b = new QLabel(QStringLiteral("<a href=\"%1\">%2</a>").arg(url, label), w);
-            b->setOpenExternalLinks(true);
-            v->addWidget(b);
-        }
-        v->addStretch(1);
-        return w;
-    }
+    if (name == "online") return new OnlinePicturesPane(m_win);
     return nullptr;
 }
 

@@ -2176,6 +2176,10 @@ void optionsDialog(QWidget *p, Editor *ed)
                                                             "Never your files, their names, or anything in them."));
     stats->setChecked(telemetry::enabled());
     gf->addRow(stats);
+    auto *updates = new QCheckBox(QCoreApplication::translate("Dialogs", "Check for updates when JeffPub starts"), gen);
+    updates->setObjectName(QStringLiteral("updates"));
+    updates->setChecked(st.value("updates/auto", true).toBool());
+    gf->addRow(updates);
     tabs->addTab(gen, QCoreApplication::translate("Dialogs", "General"));
     auto *proof = new QWidget();
     auto *pf = new QFormLayout(proof);
@@ -2256,6 +2260,7 @@ void optionsDialog(QWidget *p, Editor *ed)
     st.setValue("edit/dragText", dragText->isChecked());
     st.setValue("edit/hyphenate", hyphenate->isChecked());
     if (stats->isChecked() != telemetry::enabled()) telemetry::setEnabled(stats->isChecked());
+    st.setValue("updates/auto", updates->isChecked());
     ed->setView([&](ViewOptions &v) { v.spelling = asType->isChecked(); });
     // Every open window saves AutoRecover copies at the new interval.
     for (QWidget *w : QApplication::topLevelWidgets())

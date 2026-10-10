@@ -43,6 +43,7 @@
 #include "app/i18n.h"
 #include "app/keytips.h"
 #include "app/help.h"
+#include "app/onlinepictures.h"
 #include "app/focusring.h"
 #include "app/keyboardnav.h"
 #include "app/pagespane.h"
@@ -567,6 +568,83 @@ private Q_SLOTS:
         const jp::PageSetup back = jp::PageSetup::fromJson(ed->doc()->setup.toJson());
         QCOMPARE(back.firstPageNumber, 4);
         QCOMPARE(back.pageNumberFormat, QStringLiteral("ALPHA"));
+    }
+
+    // Online Pictures searches Openverse and Wikimedia Commons (it was a list
+    // of links), shows each picture's author and license, and inserts the one
+    // chosen with its title as alt text and a credit under it. Offline: the
+    // libraries' answers are canned, in the form their documentation gives.
+    void onlinePicturesSearchAndInsert()
+    {
+        // (Built here rather than written out: moc misreads raw string literals.)
+        auto ovResult = [](const char *id, const char *title, const char *creator, const char *lic, const char *ver, const char *url) {
+            return QJsonObject{{"id", id}, {"title", title}, {"creator", creator}, {"license", lic}, {"license_version", ver},
+                               {"license_url", QStringLiteral("https://creativecommons.org/licenses/%1/%2/").arg(QLatin1String(lic), QLatin1String(ver))},
+                               {"foreign_landing_url", QStringLiteral("https://example.org/page/%1").arg(QLatin1String(id))}, {"url", url},
+                               {"thumbnail", QStringLiteral("https://api.openverse.org/v1/images/%1/thumb/").arg(QLatin1String(id))}};
+        };
+        const QByteArray openverse = QJsonDocument(QJsonObject{{"result_count", 2}, {"results", QJsonArray{
+            ovResult("a1", "Red barn", "Pat Lee", "by", "2.0", "https://example.org/barn.png"),
+            ovResult("a2", "Blue sky", "", "cc0", "1.0", "https://example.org/sky.png")}}}).toJson();
+        const QList<jp::online::Picture> ov = jp::online::parseOpenverse(openverse);
+        QCOMPARE(ov.size(), 2);
+        QCOMPARE(ov[0].license, QStringLiteral("CC BY 2.0"));
+        QVERIFY(ov[0].needsCredit);
+        QCOMPARE(ov[1].license, QStringLiteral("CC0 1.0"));
+        QVERIFY(!ov[1].needsCredit);
+        QCOMPARE(jp::online::credit(ov[0]), QStringLiteral("“Red barn” by Pat Lee, CC BY 2.0"));
+        auto meta = [](const QJsonObject &fields) {
+            QJsonObject o;
+            for (auto it = fields.begin(); it != fields.end(); ++it) o[it.key()] = QJsonObject{{"value", it.value()}};
+            return o;
+        };
+        auto page = [](int index, const char *title, const char *url, const QJsonObject &ext) {
+            return QJsonObject{{"pageid", index * 10}, {"index", index}, {"title", title},
+                               {"imageinfo", QJsonArray{QJsonObject{{"url", url}, {"descriptionurl", QStringLiteral("https://commons.wikimedia.org/wiki/%1").arg(QLatin1String(title))},
+                                                                    {"thumburl", QStringLiteral("%1.thumb").arg(QLatin1String(url))}, {"extmetadata", ext}}}}};
+        };
+        const QByteArray commons = QJsonDocument(QJsonObject{{"query", QJsonObject{{"pages", QJsonObject{
+            {"20", page(2, "File:Second.jpg", "https://upload.wikimedia.org/2.jpg", meta({{"LicenseShortName", "Public domain"}, {"AttributionRequired", "false"}}))},
+            {"10", page(1, "File:First photo.jpg", "https://upload.wikimedia.org/1.jpg",
+                        meta({{"LicenseShortName", "CC BY-SA 4.0"}, {"Artist", "<a href=\"//x\">Sam <b>Rivera</b></a>"}, {"AttributionRequired", "true"}}))}}}}}}).toJson();
+        const QList<jp::online::Picture> wc = jp::online::parseCommons(commons);
+        QCOMPARE(wc.size(), 2);
+        QCOMPARE(wc[0].title, QStringLiteral("First photo"));   // the search's order, the name without "File:"
+        QCOMPARE(wc[0].creator, QStringLiteral("Sam Rivera"));
+        QVERIFY(wc[0].needsCredit);
+        QVERIFY(!wc[1].needsCredit);
+        QVERIFY(jp::online::searchUrl(jp::online::Openverse, QStringLiteral("red barn")).toString(QUrl::FullyEncoded).contains(QStringLiteral("q=red%20barn")));
+        // The pane, with the libraries answered from here.
+        QImage red(30, 20, QImage::Format_RGB32);
+        red.fill(Qt::red);
+        QByteArray png;
+        QBuffer buf(&png);
+        buf.open(QIODevice::WriteOnly);
+        red.save(&buf, "PNG");
+        QStringList asked;
+        const auto keep = jp::online::fetch;
+        jp::online::fetch = [&](const QUrl &u, QObject *, const jp::online::Done &done) {
+            asked << u.toString();
+            done(u.host() == QLatin1String("api.openverse.org") && u.path() == QLatin1String("/v1/images/") ? openverse : png, QString());
+        };
+        jp::MainWindow w;
+        w.showTaskPane(QStringLiteral("online"));
+        auto *pane = w.findChild<jp::OnlinePicturesPane *>();
+        QVERIFY(pane);
+        pane->search(QStringLiteral("barn"));
+        QCOMPARE(pane->results()->count(), 2);
+        QVERIFY(!pane->results()->item(0)->icon().isNull());   // its small copy came
+        QVERIFY(pane->creditBox()->isChecked());
+        pane->insertButton()->click();
+        jp::online::fetch = keep;
+        QVERIFY(asked.contains(QStringLiteral("https://example.org/barn.png")));
+        auto *pic = dynamic_cast<jp::PictureItem *>(w.editor()->single());
+        QVERIFY(pic);
+        QCOMPARE(pic->altText, QStringLiteral("Red barn"));
+        auto *cap = dynamic_cast<jp::TextItem *>(w.editor()->doc()->item(pic->caption));
+        QVERIFY(cap);
+        QCOMPARE(w.editor()->doc()->storyDoc(cap->storyId)->toPlainText(), QStringLiteral("“Red barn” by Pat Lee, CC BY 2.0"));
+        QCOMPARE(w.editor()->doc()->imageSize(pic->imageId), QSize(30, 20));
     }
 
     // A file whose style names point outside their section (made from

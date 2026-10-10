@@ -8,6 +8,7 @@ Your settings are in the **JeffPub Options** window. Click **File > Options** to
 - **User name** and **Initials** are saved as the author of new publications and shown in comments.
 - **Theme** is **Use system setting**, **Light**, or **Dark**. The change shows at once.
 - **Display language** is the language of JeffPub's own words. **Use system language** follows your computer. Other languages appear in this list when translations are available. A new language starts the next time you open JeffPub.
+- **Send anonymous usage statistics** and **Check for updates when JeffPub starts** are the same choices as on the **About** page (below).
 
 ## Proofing
 
@@ -36,7 +37,7 @@ These check boxes control spelling and typing help. See [Check spelling and hyph
 
 ## Updates, statistics, and your name
 
-Click **File > About** to find these.
+Click **File > About** to find these. The two check boxes are also on the **General** tab of **File > Options**.
 
 - **Check for Updates** looks for a newer version now. If one is out, an **Update Available** window shows what is new. Choose **Update Now**, **Later**, or **Skip This Version**.
 - **Check for updates automatically** makes JeffPub look each time it starts.
