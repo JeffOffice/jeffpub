@@ -184,6 +184,10 @@ void drawPlainText(QPainter *p, const QPointF &baseline, const QFont &font, cons
 double naturalLineEm(const QFont &f, const QString &requestedFamily);
 
 QTextCharFormat resolveCharFormat(const QTextCharFormat &f, const LayoutEnv &env);
+// The format ranges of a paragraph's display text with the letters of runs in
+// a missing, measured stock font cut into pieces that take the original's
+// widths (resolveCharFormat marks those runs); the layout does this itself.
+QVector<QTextLayout::FormatRange> applyLetterWidths(const QVector<QTextLayout::FormatRange> &in, const QString &disp);
 
 // The date and time formats Publisher offers (US English), in its order and
 // in Qt's letters: a .pub date field's format number is the place here plus 1.

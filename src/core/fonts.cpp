@@ -5,6 +5,7 @@
 #include <QFont>
 #include <QFontDatabase>
 #include <QFontInfo>
+#include <QGuiApplication>
 #include <QHash>
 #include <QImageReader>
 
@@ -436,6 +437,23 @@ static const StandInWidths *measuredStandIn(const QString &family)
     return *it ? &*w : nullptr;
 }
 
+// Whether a family is installed or an application font. The font database
+// takes about 0.2 ms to say, and layout asks it of every run: its answers are
+// kept until fonts are added or removed.
+static bool haveFamily(const QString &family)
+{
+    static QHash<QString, bool> cache;   // main thread only, like all layout
+    static bool watching = false;
+    if (!qGuiApp) return QFontDatabase::hasFamily(family);
+    if (!watching) {
+        QObject::connect(qGuiApp, &QGuiApplication::fontDatabaseChanged, qGuiApp, [] { cache.clear(); });
+        watching = true;
+    }
+    auto it = cache.constFind(family);
+    if (it == cache.constEnd()) it = cache.insert(family, QFontDatabase::hasFamily(family));
+    return *it;
+}
+
 // A style's measured value: bold italic falls back to bold, then italic or
 // bold to regular.
 template <class T>
@@ -449,7 +467,7 @@ static T byStyle(const T (&v)[4], bool bold, bool italic)
 
 int substituteStretch(const QString &family, bool bold, bool italic)
 {
-    if (QFontDatabase::hasFamily(family)) return 100;
+    if (haveFamily(family)) return 100;
     if (const StandInWidths *w = measuredStandIn(family))
         if (const int s = byStyle(w->stretch, bold, italic)) return s;
     return stretches().value(family, 100);
@@ -457,7 +475,7 @@ int substituteStretch(const QString &family, bool bold, bool italic)
 
 double substituteSpaceEm(const QString &family, bool bold, bool italic)
 {
-    if (QFontDatabase::hasFamily(family)) return 0;
+    if (haveFamily(family)) return 0;
     if (const StandInWidths *w = measuredStandIn(family))
         if (const double em = byStyle(w->space, bold, italic); em > 0) return em;
     // AG_Futura's spaces are half an em (word gaps in reference PDFs of
@@ -520,7 +538,7 @@ double substituteHeightScale(const QString &family, bool bold)
         {"Tw Cen MT Condensed Extra Bold", {"Oswald", 0.81, 0}},
         {"Wide Latin", {"Alfa Slab One", 0.872, 0}},
     };
-    if (QFontDatabase::hasFamily(family)) return 1;
+    if (haveFamily(family)) return 1;
     const auto h = t.constFind(family);
     if (h == t.constEnd()) return 1;
     static QHash<QString, bool> drawn;   // main thread only, like all layout
@@ -606,7 +624,7 @@ uint unicodeToSymbol(QChar c, QString *family)
 
 QString substituteFor(const QString &family)
 {
-    if (QFontDatabase::hasFamily(family)) return {};
+    if (haveFamily(family)) return {};
     return table().value(family);
 }
 

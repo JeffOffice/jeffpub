@@ -228,17 +228,22 @@ void drawUnderline(QPainter *p, const QTextLine &line, int s, int e, const QText
     case QTextCharFormat::DashDotDotLine: up.setStyle(Qt::DashDotDotLine); break;
     default: break;
     }
-    // Words only: under each run of letters, not the spaces between.
+    // Words only: under each run of letters, not the spaces between. A span
+    // runs from its left end to its right, whichever way the text reads.
     QVector<QPair<double, double>> spans;
+    auto span = [&](int from, int to) {
+        const double a = line.cursorToX(from), b = line.cursorToX(to);
+        return QPair<double, double>(std::min(a, b), std::max(a, b));
+    };
     if (kind & 2) {
         int k = s;
         while (k < e) {
             while (k < e && text[k].isSpace()) ++k;
             const int w0 = k;
             while (k < e && !text[k].isSpace()) ++k;
-            if (k > w0) spans.append({line.cursorToX(w0), line.cursorToX(k)});
+            if (k > w0) spans.append(span(w0, k));
         }
-    } else spans.append({line.cursorToX(s), line.cursorToX(e)});
+    } else spans.append(span(s, e));
     const double y = line.y() + line.ascent() + fm.underlinePos(), gap = up.widthF() * 2;
     p->save();
     p->setPen(up);
@@ -259,6 +264,34 @@ void drawUnderline(QPainter *p, const QTextLine &line, int s, int e, const QText
         if (kind & 1) p->drawLine(QLineF(sp.first, y + gap, sp.second, y + gap));   // double
     }
     p->restore();
+}
+
+// Whether two format ranges draw one underline: the same style, kind, and
+// color, and the same font but for the letter spacing applyLetterWidths gives
+// each piece of a run.
+bool sameUnderline(const QTextCharFormat &a, const QTextCharFormat &b)
+{
+    auto font = [](const QTextCharFormat &f) {
+        QFont x = f.font();
+        x.setLetterSpacing(QFont::AbsoluteSpacing, 0);
+        return x;
+    };
+    return a.underlineStyle() == b.underlineStyle() && a.intProperty(kOwnUnderline) == b.intProperty(kOwnUnderline) &&
+           a.intProperty(tp::UnderlineKind) == b.intProperty(tp::UnderlineKind) && a.underlineColor() == b.underlineColor() &&
+           a.foreground() == b.foreground() && font(a) == font(b);
+}
+
+// The part of a line [ls, le) that the underline of fmts[n] is drawn over:
+// with the neighboring ranges it is one underline with, so that a dashed
+// line's pattern runs on; empty where an earlier range of the line draws it.
+QPair<int, int> underlineSpan(const QList<QTextLayout::FormatRange> &fmts, int n, int ls, int le)
+{
+    auto joined = [&](int a, int b) { return fmts[a].start + fmts[a].length == fmts[b].start && sameUnderline(fmts[a].format, fmts[b].format); };
+    if (fmts[n].start >= le || fmts[n].start + fmts[n].length <= ls) return {0, 0};
+    if (n > 0 && fmts[n - 1].start + fmts[n - 1].length > ls && joined(n - 1, n)) return {0, 0};
+    int e = fmts[n].start + fmts[n].length;
+    for (int k = n; k + 1 < fmts.size() && e < le && joined(k, k + 1); ++k) e = fmts[k + 1].start + fmts[k + 1].length;
+    return {std::max(fmts[n].start, ls), std::min(e, le)};
 }
 
 QList<QTextLayout::FormatRange> fineRanges(const QVector<QTextLayout::FormatRange> &ranges)
@@ -313,14 +346,17 @@ void drawFine(QPainter *p, const QPointF &at, const QList<QGlyphRun> &runs)
 
 // How far to move a centered or right-aligned line so it aligns on its
 // letters: Publisher lets the spaces a line ends with hang outside, Qt
-// counts them whenever they fit. A line wider than its room stays as Qt
-// set it.
+// counts them whenever they fit. In a right-to-left paragraph the spaces
+// are at the letters' left, so it is the line set at the left (the end) that
+// hangs them, and one set at the right already ends on its letters. A line
+// wider than its room stays as Qt set it.
 double hangTrailingSpaces(const PtLine &line, const QString &disp, const QTextOption &opt, double width)
 {
     const Qt::Alignment al = opt.alignment();
     if (al & Qt::AlignJustify) return 0;
-    const bool center = al & Qt::AlignHCenter, right = (al & Qt::AlignRight) && opt.textDirection() != Qt::RightToLeft;
-    if (!center && !right) return 0;
+    const bool rtl = opt.textDirection() == Qt::RightToLeft;
+    const bool center = al & Qt::AlignHCenter, right = (al & Qt::AlignRight) && !rtl, toLeft = (al & Qt::AlignLeft) && rtl;
+    if (!center && !right && !toLeft) return 0;
     const int s = line.textStart(), e = std::min<int>(s + line.textLength(), disp.size());
     int k = e;
     auto hangs = [](QChar c) { return c.isSpace() && c.unicode() != 0x00A0 && c.unicode() != 0x202F; };
@@ -330,7 +366,7 @@ double hangTrailingSpaces(const PtLine &line, const QString &disp, const QTextOp
     const double ink = std::abs(b - a);
     if (ink > width) return 0;
     const double left = std::min(a, b) - line.position().x();
-    return (center ? (width - ink) / 2 : width - ink) - left;
+    return (center ? (width - ink) / 2 : right ? width - ink : 0) - left;
 }
 } // namespace
 
@@ -936,12 +972,12 @@ double originalAverageCharEm(const QString &family, bool bold, bool italic)
 // so a run is cut into pieces of (near) equal difference. Spaces keep theirs
 // (word spacing sets those). A stand-in already within 0.4% of the original on
 // letters and digits (Arimo for Arial) is left whole.
-static QVector<QTextLayout::FormatRange> applyLetterWidths(const QVector<QTextLayout::FormatRange> &in, const QString &disp)
+QVector<QTextLayout::FormatRange> applyLetterWidths(const QVector<QTextLayout::FormatRange> &in, const QString &disp)
 {
     QVector<QTextLayout::FormatRange> out;
     out.reserve(in.size());
-    static QHash<QString, double> advCache;     // stand-in advance per em, by font and letter
-    static QHash<QString, bool> needed;         // whether a font pairing needs it
+    static QHash<QString, double> advCache;     // stand-in advance per em, by font and letter (main thread only, like all layout)
+    static QHash<QString, bool> needed;         // whether a font pairing needs it (likewise)
     for (const auto &r : in) {
         const QString key = r.format.stringProperty(kLetterWidths);
         if (key.isEmpty() || r.length <= 0) { out << r; continue; }
@@ -952,6 +988,10 @@ static QVector<QTextLayout::FormatRange> applyLetterWidths(const QVector<QTextLa
         const double base = plain.letterSpacingType() == QFont::AbsoluteSpacing ? plain.letterSpacing() : 0;
         plain.setLetterSpacing(QFont::AbsoluteSpacing, 0);
         plain.setWordSpacing(0);
+        // Letters are measured as typed, whatever the run's capitals: a small
+        // capitals run's advances would be kept under the same font as the
+        // normal runs', which are set by them from then on.
+        plain.setCapitalization(QFont::MixedCase);
         const double em = plain.pointSizeF() / fontPointFactor();
         if (!(em > 0)) { out << r; continue; }
         const QString fk = emKey(plain) + QLatin1Char('|');
@@ -1008,6 +1048,17 @@ static QVector<QTextLayout::FormatRange> applyLetterWidths(const QVector<QTextLa
             want[i - r.start] = diff[i - r.start] - shift[i - r.start] + (next < end ? shift[next - r.start] : 0);
             if (kerning && next < end) want[i - r.start] += kerning->value(quint32(disp[i].unicode()) << 16 | disp[next].unicode()) * em;
         }
+        // A piece is shaped alone, so a cut may fall only between two
+        // characters the original's table measures, neither a surrogate, a
+        // combining mark, a joiner or variation selector, nor a letter that
+        // joins its neighbors: any other cut splits an emoji, parts an accent
+        // from its letter, or draws a joined letter on its own. The rest ride
+        // in a piece with their neighbors, at the stand-in's own widths.
+        auto cuttable = [&](QChar c) {
+            const char16_t u = c.unicode();
+            return table->contains(u) && !c.isSurrogate() && !c.isMark() && u != 0x200C && u != 0x200D && !(u >= 0xFE00 && u <= 0xFE0F) &&
+                   c.joiningType() == QChar::Joining_None;
+        };
         int pieceStart = r.start;
         double pieceDelta = 0, drift = 0;   // drift: how far the letters so far sit from their places
         bool started = false;
@@ -1021,12 +1072,15 @@ static QVector<QTextLayout::FormatRange> applyLetterWidths(const QVector<QTextLa
             if (kerning) x.format.setFontKerning(false);
             out << x;
         };
-        for (int i = r.start; i < end; ++i) {
+        for (int i = r.start, prev = -1; i < end; ++i) {
             if (transparent(disp[i])) continue;
             const double w = want[i - r.start];
+            const int before = prev;
+            prev = i;
             // A character joins the piece while every one stays within
-            // 0.001 em of its place; a new piece takes up the drift.
-            if (started && std::abs(drift + pieceDelta - w) <= 0.001 * em) {
+            // 0.001 em of its place, or where no cut may fall; a new piece
+            // takes up the drift.
+            if (started && (std::abs(drift + pieceDelta - w) <= 0.001 * em || !cuttable(disp[before]) || !cuttable(disp[i]))) {
                 drift += pieceDelta - w;
                 continue;
             }
@@ -2271,13 +2325,15 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
         p->scale(1 / kFine, 1 / kFine);
         if (!B->directGlyphs) {
             B->tl->draw(p, QPointF(0, 0), {}, QRectF(clip.topLeft() * kFine, clip.size() * kFine));
-            for (const auto &r : B->tl->formats()) {
+            const QList<QTextLayout::FormatRange> fmts = B->tl->formats();
+            for (int n = 0; n < fmts.size(); ++n) {
+                const auto &r = fmts[n];
                 if (!r.format.hasProperty(kOwnUnderline)) continue;
                 const QBrush br = r.format.hasProperty(QTextFormat::ForegroundBrush) ? r.format.foreground() : QBrush(Qt::black);
                 for (int i = 0; i < B->lines.size(); ++i) {
                     if (B->lines[i].frame != frame) continue;
                     const QTextLine line = B->tl->lineAt(i);
-                    const int s = std::max(r.start, line.textStart()), e = std::min(r.start + r.length, line.textStart() + line.textLength());
+                    const auto [s, e] = underlineSpan(fmts, n, line.textStart(), line.textStart() + line.textLength());
                     if (s < e) drawUnderline(p, line, s, e, r.format, br, B->disp);
                 }
             }
@@ -2290,7 +2346,8 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
                 const QTextLine line = B->tl->lineAt(i);
                 const int ls = line.textStart(), le = ls + line.textLength();
                 const double base = line.y() + line.ascent();
-                for (const auto &r : fmts) {
+                for (int n = 0; n < fmts.size(); ++n) {
+                    const auto &r = fmts[n];
                     const int s = std::max(r.start, ls), e = std::min(r.start + r.length, le);
                     if (s >= e) continue;
                     const QBrush br = r.format.hasProperty(QTextFormat::ForegroundBrush) ? r.format.foreground() : QBrush(Qt::black);
@@ -2314,7 +2371,8 @@ void StoryLayout::paint(QPainter *p, int frame, const PaintOptions &o) const
                         QPen pen(br, std::max(1.0, fm.lineWidth()));
                         pen.setCapStyle(Qt::FlatCap);
                         p->save();
-                        if (under) drawUnderline(p, line, s, e, cf, br, B->disp);
+                        if (under)
+                            if (const auto [us, ue] = underlineSpan(fmts, n, ls, le); us < ue) drawUnderline(p, line, us, ue, cf, br, B->disp);
                         p->setPen(pen);
                         if (through) p->drawLine(QLineF(x1, base - fm.strikeOutPos(), x2, base - fm.strikeOutPos()));
                         if (over) p->drawLine(QLineF(x1, base - fm.overlinePos(), x2, base - fm.overlinePos()));

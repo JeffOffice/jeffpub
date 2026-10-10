@@ -2399,6 +2399,89 @@ private Q_SLOTS:
         }
     }
 
+    // A missing stock font's run is cut into pieces of their own letter
+    // spacing, and a cut never parts characters that belong together: an
+    // emoji's two UTF-16 halves (drawn as two replacement diamonds), a letter
+    // and its combining accent (drawn beside it), or the letters of a joined
+    // script (the last drawn in its isolated form). Only two characters the
+    // original's table measures are ever cut apart.
+    void letterWidthPiecesKeepCharactersTogether()
+    {
+        const QString fam = QStringLiteral("Gill Sans MT");
+        if (QFontDatabase::hasFamily(fam)) QSKIP("Gill Sans MT is installed here");
+        QTextCharFormat cf;
+        cf.setFontFamilies(QStringList{fam});
+        cf.setFontPointSize(24);
+        const QTextCharFormat rf = jp::resolveCharFormat(cf, jp::LayoutEnv());
+        // Where the second and later pieces of a run of `text` start.
+        auto cuts = [&](const QString &text) {
+            QStringList at;
+            for (const auto &r : jp::applyLetterWidths({QTextLayout::FormatRange{0, int(text.size()), rf}}, text))
+                if (r.start > 0) at << QString::number(r.start);
+            return at;
+        };
+        auto cutAt = [&](const QString &text, int pos) { return cuts(text).contains(QString::number(pos)); };
+        // Plain letters do get a piece each, or nearly, so the rest proves something.
+        QVERIFY2(cuts(QStringLiteral("abcdefghij")).size() >= 3, qPrintable(cuts(QStringLiteral("abcdefghij")).join(',')));
+        // "ab", an emoji (two units), "cd".
+        const QString emoji = QStringLiteral("ab\U0001F600cd");
+        for (int pos : {2, 3, 4}) QVERIFY2(!cutAt(emoji, pos), qPrintable(QStringLiteral("cut at %1: %2").arg(pos).arg(cuts(emoji).join(','))));
+        // "re" and an accent, "sume" and an accent (decomposed).
+        const QString accents = QStringLiteral("re\u0301sume\u0301");
+        for (int pos : {2, 3, 7}) QVERIFY2(!cutAt(accents, pos), qPrintable(QStringLiteral("cut at %1: %2").arg(pos).arg(cuts(accents).join(','))));
+        // Four Arabic letters and a digit: nothing but the digit is measured.
+        const QString arabic = QStringLiteral("\u0645\u0643\u062A\u0628" "1");
+        QVERIFY2(cuts(arabic).isEmpty(), qPrintable(cuts(arabic).join(',')));
+        // A joiner, a non-joiner, and a variation selector hold letters together.
+        for (const QString &s : {QStringLiteral("a\u200Db"), QStringLiteral("a\u200Cb"), QStringLiteral("a\uFE0Fb")})
+            QVERIFY2(cuts(s).isEmpty(), qPrintable(cuts(s).join(',')));
+    }
+
+    // One run of true small capitals in a font mustn't change how that font's
+    // other runs are measured: the stand-in's advances were remembered by font
+    // alone, so every normal run after it was set by the small capitals'
+    // narrower letters (Impact: "banana band nab" came to 601 px for 475).
+    void smallCapitalsLeaveLaterRunsLetterWidths()
+    {
+        const QString fam = QStringLiteral("Rockwell Extra Bold");   // used by no other test, so this one measures it first
+        if (QFontDatabase::hasFamily(fam)) QSKIP("Rockwell Extra Bold is installed here");
+        const QHash<char16_t, double> *widths = jp::originalLetterWidths(fam, false, false);
+        QVERIFY(widths);
+        const QString text = QStringLiteral("banana band nab ");
+        for (bool smallCaps : {true, false}) {
+            QTextDocument doc;
+            QTextCursor c(&doc);
+            QTextCharFormat cf;
+            cf.setFontFamilies(QStringList{fam});
+            cf.setFontPointSize(12);
+            if (smallCaps) {
+                cf.setFontCapitalization(QFont::SmallCaps);
+                cf.setProperty(jp::tp::TrueSmallCaps, true);
+            }
+            c.insertText(text, cf);
+            jp::FrameSpec fs;
+            fs.size = QSizeF(1000, 100);
+            fs.insets = QMarginsF(0, 0, 0, 0);
+            fs.hyphenate = false;
+            jp::StoryLayout lay;
+            lay.build(&doc, {fs}, jp::LayoutEnv());
+            if (smallCaps) continue;   // laid out first only so that it is measured first
+            auto x = [&](int pos) {
+                int frame = -1;
+                QRectF r;
+                lay.caretRect(pos, &frame, &r);
+                return r.x();
+            };
+            double want = 0;
+            for (int i = 0; i < text.size(); ++i) {
+                want += widths->value(text[i].unicode()) * 12;
+                if (i + 1 < text.size() && text[i + 1] != QLatin1Char(' ')) continue;
+                const double got = x(i + 1) - x(0);
+                QVERIFY2(std::abs(got - want) < 0.1, qPrintable(QStringLiteral("after '%1': %2, Rockwell Extra Bold %3").arg(text[i]).arg(got).arg(want)));
+            }
+        }
+    }
+
     // Book Antiqua's lines are as Publisher spaces them, by the font's
     // Windows metrics (1.2427 em; bold 1.2056, its extra space above the
     // letters): a garage sale sign's two best-fit lines filled the box
@@ -2471,6 +2554,155 @@ private Q_SLOTS:
         QVERIFY2(std::abs(r - 300) < 0.01, qPrintable(QString::number(r)));
         layout(Qt::AlignLeft, &l, &r);
         QVERIFY(std::abs(l) < 0.01);
+    }
+
+    // The same in a right-to-left paragraph, where the spaces a line ends with
+    // sit on the left of its letters: aligned to the end (the left), the
+    // letters start at the margin and the spaces hang outside it; centered,
+    // the letters are centered; aligned to the start, they end at the right
+    // margin as they did. The spaces had pushed a line aligned to the end
+    // 33 points in.
+    void rightToLeftLinesHangTrailingSpaces()
+    {
+        // Where the Hebrew word's letters lie: x of the caret before the
+        // spaces (the letters' left end), and of the one before the letters.
+        auto layout = [](Qt::Alignment al, double *left, double *right) {
+            QTextDocument doc;
+            QTextCursor c(&doc);
+            QTextBlockFormat bf;
+            bf.setLayoutDirection(Qt::RightToLeft);
+            bf.setAlignment(al);
+            c.setBlockFormat(bf);
+            QTextCharFormat cf;
+            cf.setFontFamilies(QStringList{QStringLiteral("Arial")});
+            cf.setFontPointSize(24);
+            c.insertText(QStringLiteral("\u05E9\u05DC\u05D5\u05DD     "), cf);
+            jp::FrameSpec fs;
+            fs.size = QSizeF(300, 100);
+            fs.insets = QMarginsF(0, 0, 0, 0);
+            jp::StoryLayout lay;
+            lay.build(&doc, {fs}, jp::LayoutEnv());
+            int frame = -1;
+            QRectF r;
+            lay.caretRect(4, &frame, &r);
+            *left = r.x();
+            lay.caretRect(0, &frame, &r);
+            *right = r.x();
+        };
+        double l = 0, r = 0;
+        layout(Qt::AlignRight, &l, &r);   // the end of a right-to-left paragraph
+        QVERIFY2(std::abs(l) < 0.01, qPrintable(QStringLiteral("%1 .. %2").arg(l).arg(r)));
+        QVERIFY(r > 20 && r < 150);
+        layout(Qt::AlignHCenter, &l, &r);
+        QVERIFY2(std::abs(l - (300 - r)) < 0.01, qPrintable(QStringLiteral("%1 .. %2").arg(l).arg(r)));
+        layout(Qt::AlignLeft, &l, &r);    // the start
+        QVERIFY2(std::abs(r - 300) < 0.01, qPrintable(QStringLiteral("%1 .. %2").arg(l).arg(r)));
+    }
+
+    // Wave underlines, and the double and thick ones, are drawn under Hebrew
+    // and Arabic text too: a right-to-left run's two ends came the wrong way
+    // round, so the wave had no length and nothing was drawn.
+    void waveUnderlinesDrawUnderRightToLeftText()
+    {
+        // How many pixels below the baseline are not white: only the underline gets there.
+        auto inkBelow = [](const QString &text, Qt::LayoutDirection dir, QTextCharFormat::UnderlineStyle style, int kind) {
+            QTextDocument doc;
+            QTextCursor c(&doc);
+            QTextBlockFormat bf;
+            bf.setLayoutDirection(dir);
+            c.setBlockFormat(bf);
+            QTextCharFormat cf;
+            cf.setFontFamilies(QStringList{QStringLiteral("Arial")});
+            cf.setFontPointSize(24);
+            if (style != QTextCharFormat::NoUnderline) {
+                cf.setUnderlineStyle(style);
+                cf.setProperty(jp::tp::UnderlineKind, kind);
+            }
+            c.insertText(text, cf);
+            jp::FrameSpec fs;
+            fs.size = QSizeF(200, 60);
+            fs.insets = QMarginsF(0, 0, 0, 0);
+            jp::StoryLayout lay;
+            lay.build(&doc, {fs}, jp::LayoutEnv());
+            QImage img(800, 240, QImage::Format_RGB32);
+            img.fill(Qt::white);
+            QPainter p(&img);
+            p.scale(4, 4);
+            lay.paint(&p, 0, jp::PaintOptions());
+            p.end();
+            int ink = 0;
+            for (int y = int((lay.lineInfo(0).first().baseline + 1) * 4); y < img.height(); ++y)
+                for (int x = 0; x < img.width(); ++x)
+                    if (qGray(img.pixel(x, y)) < 200) ++ink;
+            return ink;
+        };
+        const QString hebrew = QStringLiteral("\u05E9\u05DC\u05D5\u05DD"), latin = QStringLiteral("wave");
+        for (Qt::LayoutDirection dir : {Qt::LeftToRight, Qt::RightToLeft}) {
+            QCOMPARE(inkBelow(hebrew, dir, QTextCharFormat::NoUnderline, 0), 0);   // nothing else reaches below the baseline
+            for (int kind : {1, 2, 4}) {
+                const int latinInk = inkBelow(latin, dir, QTextCharFormat::WaveUnderline, kind);
+                QVERIFY(latinInk > 100);
+                const int hebrewInk = inkBelow(hebrew, dir, QTextCharFormat::WaveUnderline, kind);
+                QVERIFY2(hebrewInk > 100, qPrintable(QStringLiteral("kind %1, direction %2: %3 pixels").arg(kind).arg(int(dir)).arg(hebrewInk)));
+            }
+        }
+    }
+
+    // A dashed underline is one line under the pieces a missing font's run is
+    // cut into, its dashes even from end to end: the pattern started over in
+    // each piece ("=====" on Impact came out ragged).
+    void dashedUnderlinesRunOnAcrossPieces()
+    {
+        const QString fam = QStringLiteral("Gill Sans MT");
+        if (QFontDatabase::hasFamily(fam)) QSKIP("Gill Sans MT is installed here");
+        QTextDocument doc;
+        QTextCursor c(&doc);
+        QTextCharFormat cf;
+        cf.setFontFamilies(QStringList{fam});
+        cf.setFontPointSize(24);
+        cf.setUnderlineStyle(QTextCharFormat::DashUnderline);
+        cf.setProperty(jp::tp::UnderlineKind, 2);
+        c.insertText(QStringLiteral("Wilhelminas"), cf);
+        jp::FrameSpec fs;
+        fs.size = QSizeF(400, 60);
+        fs.insets = QMarginsF(0, 0, 0, 0);
+        fs.hyphenate = false;
+        jp::StoryLayout lay;
+        lay.build(&doc, {fs}, jp::LayoutEnv());
+        QImage img(3200, 480, QImage::Format_RGB32);
+        img.fill(Qt::white);
+        QPainter p(&img);
+        p.scale(8, 8);
+        lay.paint(&p, 0, jp::PaintOptions());
+        p.end();
+        // The row under the baseline with the most ink is the underline.
+        int row = -1, best = 0;
+        for (int y = int((lay.lineInfo(0).first().baseline + 1) * 8); y < img.height(); ++y) {
+            int ink = 0;
+            for (int x = 0; x < img.width(); ++x) ink += qGray(img.pixel(x, y)) < 128;
+            if (ink > best) { best = ink; row = y; }
+        }
+        QVERIFY(row > 0);
+        // The dashes along it, their lengths and the gaps between.
+        QVector<int> dash, gap;
+        int runStart = -1, lastEnd = -1;
+        for (int x = 0; x <= img.width(); ++x) {
+            const bool on = x < img.width() && qGray(img.pixel(x, row)) < 128;
+            if (on && runStart < 0) {
+                runStart = x;
+                if (lastEnd >= 0) gap << x - lastEnd;
+            } else if (!on && runStart >= 0) {
+                dash << x - runStart;
+                lastEnd = x;
+                runStart = -1;
+            }
+        }
+        QVERIFY2(dash.size() >= 8, qPrintable(QString::number(dash.size())));
+        // (The first and last dashes may be cut short by the line's ends.)
+        const auto [dashLo, dashHi] = std::minmax_element(dash.cbegin() + 1, dash.cend() - 1);
+        QVERIFY2(*dashHi - *dashLo <= 2, qPrintable(QStringLiteral("dashes %1..%2 px").arg(*dashLo).arg(*dashHi)));
+        const auto [gapLo, gapHi] = std::minmax_element(gap.cbegin(), gap.cend());
+        QVERIFY2(*gapHi - *gapLo <= 2, qPrintable(QStringLiteral("gaps %1..%2 px").arg(*gapLo).arg(*gapHi)));
     }
 
     // A line break (Shift+Enter) goes into a .pub as \n, as Publisher's own
@@ -3959,6 +4191,36 @@ private Q_SLOTS:
             const double width = x(text.size()) - x(0);
             QVERIFY2(std::abs(width - ems * 10) < ems * 10 * 0.002, qPrintable(QStringLiteral("%1: %2 pt, not %3").arg(bold ? "bold" : "regular").arg(width).arg(ems * 10)));
         }
+    }
+
+    // A font's stand-in is looked up once, not on every layout of every run
+    // (asking the font database costs 0.2 ms here), and is looked up again
+    // when fonts are added or removed.
+    void substituteForIsRemembered()
+    {
+        const QString fam = QStringLiteral("Gill Sans MT");
+        if (QFontDatabase::hasFamily(fam)) QSKIP("Gill Sans MT is installed here");
+        QVERIFY(!jp::substituteFor(fam).isEmpty());
+        QElapsedTimer timer;
+        timer.start();
+        int found = 0;
+        for (int i = 0; i < 1000; ++i) found += !jp::substituteFor(fam).isEmpty();
+        QCOMPARE(found, 1000);
+        QVERIFY2(timer.elapsed() < 50, qPrintable(QStringLiteral("1,000 lookups took %1 ms").arg(timer.elapsed())));
+        // Fonts coming and going (a bundled font renamed "Arial" stands in for an installed Arial).
+        if (QFontDatabase::hasFamily(QStringLiteral("Arial"))) QSKIP("Arial is installed here");
+        QVERIFY(!jp::substituteFor(QStringLiteral("Arial")).isEmpty());
+        QFile f(QStringLiteral(JP_TEST_DATA "/../../resources/fonts/Arimo-Regular.ttf"));
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QByteArray font = f.readAll();
+        font.replace(QByteArray("\x00" "A\x00r\x00i\x00m\x00o", 10), QByteArray("\x00" "A\x00r\x00i\x00" "a\x00l", 10));
+        font.replace(QByteArray("Arimo"), QByteArray("Arial"));
+        const int id = QFontDatabase::addApplicationFontFromData(font);
+        QVERIFY(id >= 0);
+        const bool installed = jp::substituteFor(QStringLiteral("Arial")).isEmpty();
+        QFontDatabase::removeApplicationFont(id);
+        QVERIFY(installed);
+        QVERIFY(!jp::substituteFor(QStringLiteral("Arial")).isEmpty());
     }
 
     // Franklin Gothic Heavy, the missing font Publisher's own designs use
