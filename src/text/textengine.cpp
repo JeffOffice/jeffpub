@@ -432,8 +432,9 @@ QTextCharFormat resolveCharFormat(const QTextCharFormat &f, const LayoutEnv &env
             r.setFontLetterSpacing(kern + track);
         }
     }
-    // A missing font's word spaces, where its stand-in's differ.
-    if (f.hasProperty(QTextFormat::FontFamilies) && !f.hasProperty(QTextFormat::FontWordSpacing)) {
+    // A missing font's word spaces, where its stand-in's differ (a measured
+    // one's are set with its letters, in applyLetterWidths).
+    if (f.hasProperty(QTextFormat::FontFamilies) && !f.hasProperty(QTextFormat::FontWordSpacing) && !r.hasProperty(kLetterWidths)) {
         const QStringList fams = f.fontFamilies().toStringList();
         if (const double want = fams.isEmpty() ? 0 : substituteSpaceEm(fams.first(), f.fontWeight() >= QFont::DemiBold, f.fontItalic()); want > 0) {
             const QFont rf = r.font();
@@ -949,6 +950,7 @@ static QVector<QTextLayout::FormatRange> applyLetterWidths(const QVector<QTextLa
         if (!table || (plain.letterSpacingType() == QFont::PercentageSpacing && plain.letterSpacing() != 0 && plain.letterSpacing() != 100)) { out << r; continue; }
         const double base = plain.letterSpacingType() == QFont::AbsoluteSpacing ? plain.letterSpacing() : 0;
         plain.setLetterSpacing(QFont::AbsoluteSpacing, 0);
+        plain.setWordSpacing(0);
         const double em = plain.pointSizeF() / fontPointFactor();
         if (!(em > 0)) { out << r; continue; }
         const QString fk = emKey(plain) + QLatin1Char('|');
@@ -970,44 +972,67 @@ static QVector<QTextLayout::FormatRange> applyLetterWidths(const QVector<QTextLa
                 if (auto t = table->constFind(c); t != table->constEnd()) worst = std::max(worst, std::abs(*t - adv(QChar(c)) / em));
             nit = needed.insert(nk, worst > 0.004);
         }
-        if (!*nit) { out << r; continue; }
-        // Spaces stay in the piece before them (fewer pieces); that piece's
-        // word spacing takes its letters' correction back off them, so
-        // spaces keep their own width.
-        const double baseWord = r.format.fontWordSpacing();
+        const auto space = table->constFind(u' ');
+        if (!*nit) {
+            // Letters alike: only the space, by word spacing.
+            QTextLayout::FormatRange x = r;
+            if (space != table->constEnd()) x.format.setFontWordSpacing(r.format.fontWordSpacing() + *space * em - adv(QLatin1Char(' ')));
+            out << x;
+            continue;
+        }
+        // Each stand-in letter sits centered in the original's width, the
+        // difference split before and after it, so a narrower letter leaves
+        // even gaps on both sides (the first letter of a run starts where
+        // the original's does). Spaces take the original's width too, by
+        // letter spacing: word spacing does nothing on macOS. want[j]: the
+        // space after character j.
+        const int end = std::min(r.start + r.length, int(disp.size()));
+        auto transparent = [](QChar c) { return c.unicode() == 0x00AD || c.unicode() == 0x200B || c.unicode() == 0xFFFC; };
+        QVector<double> diff(end - r.start, 0.0), shift(end - r.start, 0.0), want(end - r.start, 0.0);
+        bool first = true;
+        for (int i = r.start; i < end; ++i) {
+            const QChar c = disp[i];
+            if (transparent(c)) continue;
+            if (auto t = table->constFind(c.unicode()); t != table->constEnd()) diff[i - r.start] = *t * em - adv(c);
+            if (!first && !c.isSpace()) shift[i - r.start] = diff[i - r.start] / 2;
+            first = false;
+        }
+        for (int i = r.start, next = -1; i < end; ++i) {
+            if (transparent(disp[i])) continue;
+            next = i + 1;
+            while (next < end && transparent(disp[next])) ++next;
+            want[i - r.start] = diff[i - r.start] - shift[i - r.start] + (next < end ? shift[next - r.start] : 0);
+        }
         int pieceStart = r.start;
-        double pieceDelta = 0, drift = 0;   // drift: how far the letters so far sit from the original's places
+        double pieceDelta = 0, drift = 0;   // drift: how far the letters so far sit from their places
         bool started = false;
-        auto flush = [&](int end) {
-            if (end <= pieceStart) return;
+        auto flush = [&](int to) {
+            if (to <= pieceStart) return;
             QTextLayout::FormatRange x = r;
             x.start = pieceStart;
-            x.length = end - pieceStart;
+            x.length = to - pieceStart;
             x.format.setFontLetterSpacingType(QFont::AbsoluteSpacing);
             x.format.setFontLetterSpacing(base + pieceDelta);
-            if (pieceDelta != 0) x.format.setFontWordSpacing(baseWord - pieceDelta);
             out << x;
         };
-        for (int i = r.start; i < r.start + r.length && i < disp.size(); ++i) {
-            const QChar c = disp[i];
-            if (c.isSpace() || c.unicode() == 0x00AD || c.unicode() == 0x200B || c.unicode() == 0xFFFC) continue;
-            double d = 0;
-            if (auto t = table->constFind(c.unicode()); t != table->constEnd()) d = *t * em - adv(c);
-            // A letter joins the piece while every letter stays within
+        for (int i = r.start; i < end; ++i) {
+            if (transparent(disp[i])) continue;
+            const double w = want[i - r.start];
+            // A character joins the piece while every one stays within
             // 0.001 em of its place; a new piece takes up the drift.
-            if (started && std::abs(drift + pieceDelta - d) <= 0.001 * em) {
-                drift += pieceDelta - d;
+            if (started && std::abs(drift + pieceDelta - w) <= 0.001 * em) {
+                drift += pieceDelta - w;
                 continue;
             }
             if (started) {
                 flush(i);
                 pieceStart = i;
             }
-            pieceDelta = d - drift;
+            pieceDelta = w - drift;
             drift = 0;
             started = true;
         }
-        flush(std::min(r.start + r.length, int(disp.size())));
+        flush(end);
     }
     return out;
 }

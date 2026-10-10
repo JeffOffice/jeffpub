@@ -881,7 +881,7 @@ private Q_SLOTS:
         QTextCharFormat cf;
         cf.setFontFamilies(QStringList{fam});
         cf.setFontPointSize(12);   // below automatic kerning
-        const QString text = QStringLiteral("Wilhelmina 2047");
+        const QString text = QStringLiteral("Wilhelmina 2047 ");
         c.insertText(text, cf);
         jp::FrameSpec fs;
         fs.size = QSizeF(1000, 100);
@@ -895,9 +895,12 @@ private Q_SLOTS:
             lay.caretRect(pos, &frame, &r);
             return r.x();
         };
+        // Each letter is centered in the original's width, so words (and
+        // the spaces after them) start and end where the original's do.
         double want = 0;
         for (int i = 0; i < text.size(); ++i) {
             want += widths->value(text[i].unicode()) * 12;
+            if (i + 1 < text.size() && text[i + 1] != QLatin1Char(' ')) continue;
             const double got = x(i + 1) - x(0);
             QVERIFY2(std::abs(got - want) < 0.015, qPrintable(QStringLiteral("after '%1': %2, Gill Sans MT %3").arg(text[i]).arg(got).arg(want)));
         }
@@ -1903,32 +1906,30 @@ private Q_SLOTS:
     void standInWidthsMatchOriginals()
     {
         if (QFontDatabase::hasFamily(QStringLiteral("Gill Sans MT"))) QSKIP("Gill Sans MT is installed: its own widths are used");
-#ifdef Q_OS_MACOS
-        QSKIP("the Mac keeps the stand-ins' own widths for now");
-#endif
-        {
-            QFont drawn(QStringLiteral("Gill Sans MT"));
-            drawn.setFamilies({QStringLiteral("Gill Sans MT")});
-            if (QFontInfo(drawn).family() != QLatin1String("Cabin")) QSKIP("Gill Sans MT is drawn by this system's own Gill Sans, at its own widths");
-        }
         const QString text = QStringLiteral("Defense Force volunteers serve their state");
         // The phrase's width in Gill Sans MT (ems), regular and bold.
         for (const auto &[bold, ems] : {std::pair{false, 17.388}, std::pair{true, 19.855}}) {
-            jp::LayoutEnv env;
+            QTextDocument doc;
+            QTextCursor c(&doc);
             QTextCharFormat f;
             f.setFontFamilies(QStringList{QStringLiteral("Gill Sans MT")});
             f.setFontPointSize(10);
             if (bold) f.setFontWeight(QFont::Bold);
-            const QTextCharFormat r = jp::resolveCharFormat(f, env);
-            QTextLayout tl(text, r.font());
-            tl.beginLayout();
-            QTextLine line = tl.createLine();
-            line.setLineWidth(10000);
-            tl.endLayout();
-            const double width = line.naturalTextWidth();
-            QVERIFY2(std::abs(width - ems * 10) < ems * 10 * 0.015, qPrintable(QStringLiteral("%1: %2 pt, not %3").arg(bold ? "bold" : "regular").arg(width).arg(ems * 10)));
-            const double space = line.cursorToX(8) - line.cursorToX(7);
-            QVERIFY2(std::abs(space - 2.78) < 0.1, qPrintable(QString::number(space)));
+            c.insertText(text, f);
+            jp::FrameSpec fs;
+            fs.size = QSizeF(10000, 100);
+            fs.insets = QMarginsF(0, 0, 0, 0);
+            fs.hyphenate = false;
+            jp::StoryLayout lay;
+            lay.build(&doc, {fs}, jp::LayoutEnv());
+            auto x = [&](int pos) {
+                int frame = -1;
+                QRectF r;
+                lay.caretRect(pos, &frame, &r);
+                return r.x();
+            };
+            const double width = x(text.size()) - x(0);
+            QVERIFY2(std::abs(width - ems * 10) < ems * 10 * 0.002, qPrintable(QStringLiteral("%1: %2 pt, not %3").arg(bold ? "bold" : "regular").arg(width).arg(ems * 10)));
         }
     }
 
